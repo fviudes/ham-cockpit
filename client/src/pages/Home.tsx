@@ -1,13 +1,13 @@
 /*
  * Home Page — ESP32 CI-V Gateway
  * Design: Blueprint Técnico
- * Apresentação do firmware v4.0 MINIMAL com hero, features e CTA
+ * Apresentação do firmware v3.1 QUAD com 4 saídas CI-V físicas
  */
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import {
   Wifi, Bluetooth, Server, Settings, Radio, Network,
-  Download, ChevronRight, Cpu, Zap, BookOpen, Code
+  Download, ChevronRight, Cpu, Zap, BookOpen, Code, Plus
 } from "lucide-react";
 import NavBar from "@/components/NavBar";
 
@@ -40,26 +40,26 @@ export default function Home() {
               <div className="flex items-center gap-2 mb-4">
                 <Cpu size={20} className="text-[#4fc3f7]" />
                 <span className="text-xs font-['IBM_Plex_Mono'] text-[#4fc3f7]/60 tracking-widest uppercase">
-                  Firmware Open Source — v4.0 MINIMAL
+                  Firmware Open Source — v3.1 QUAD
                 </span>
               </div>
               <h1 className="font-['Space_Grotesk'] font-bold text-5xl leading-tight text-white mb-4">
                 Gateway CI-V <span className="text-[#4fc3f7]">Icom</span> para ESP32
               </h1>
               <p className="text-[#94a3b8] text-lg leading-relaxed font-['IBM_Plex_Sans'] mb-8">
-                Firmware ultra-otimizado para ESP32 com integração do protocolo CI-V da Icom, Bluetooth SPP, WiFi AP com DHCP, interface web de configuração e API REST. Compilado com WebServer nativa — apenas 450 KB, cabe em qualquer ESP32 de 4 MB.
+                Firmware ultra-otimizado para ESP32 com suporte a <strong className="text-[#FFB300]">4 saídas CI-V físicas</strong>, Bluetooth SPP para controle remoto, configuração persistente via NVS e comandos via Serial. Apenas <strong className="text-[#FFB300]">140 KB</strong>, cabe em qualquer ESP32 de 4 MB.
               </p>
-              <div className="flex gap-3 flex-wrap">
-                <Link href="/codigo-fonte">
-                  <a className="inline-flex items-center gap-2 px-6 py-3 bg-[#4fc3f7] text-[#0d1b2a] font-bold rounded hover:bg-[#81d4fa] transition-colors">
-                    <Download size={16} />
-                    Download v4.0 MINIMAL
+              <div className="flex gap-4 flex-wrap">
+                <Link href="/docs">
+                  <a className="inline-flex items-center gap-2 px-6 py-3 bg-[#4fc3f7] text-[#0d1b2a] font-bold rounded-lg hover:bg-[#80d8ff] transition-colors">
+                    <BookOpen size={18} />
+                    Documentação
                   </a>
                 </Link>
-                <Link href="/documentacao">
-                  <a className="inline-flex items-center gap-2 px-6 py-3 border border-[#4fc3f7] text-[#4fc3f7] font-bold rounded hover:bg-[rgba(79,195,247,0.1)] transition-colors">
-                    <BookOpen size={16} />
-                    Documentação
+                <Link href="/code">
+                  <a className="inline-flex items-center gap-2 px-6 py-3 border border-[#4fc3f7] text-[#4fc3f7] font-bold rounded-lg hover:bg-[#4fc3f7]/10 transition-colors">
+                    <Code size={18} />
+                    Ver Código
                   </a>
                 </Link>
               </div>
@@ -68,180 +68,227 @@ export default function Home() {
         </section>
 
         {/* Features Section */}
-        <section className="py-16 bg-[rgba(79,195,247,0.02)] border-y border-[rgba(79,195,247,0.1)]">
+        <section className="py-20 border-t border-[#4fc3f7]/20">
           <div className="container">
-            <motion.div initial="hidden" animate="visible" variants={fadeUp} className="mb-12">
-              <span className="text-xs font-['IBM_Plex_Mono'] text-[#4fc3f7]/60 tracking-widest uppercase">
-                02 — Funcionalidades
-              </span>
-              <h2 className="font-['Space_Grotesk'] font-bold text-3xl text-white mt-2">
+            <motion.div
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              variants={fadeUp}
+              className="mb-12"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[#FFB300] font-['IBM_Plex_Mono'] text-sm font-bold">01</span>
+                <span className="text-[#4fc3f7]/60 font-['IBM_Plex_Mono'] text-xs tracking-widest uppercase">Funcionalidades</span>
+              </div>
+              <h2 className="font-['Space_Grotesk'] font-bold text-4xl text-white">
                 Tudo que você precisa em um único firmware
               </h2>
             </motion.div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {[
                 {
                   icon: Bluetooth,
-                  label: "Bluetooth SPP",
-                  desc: "Conecte aplicativos de controle remoto via Bluetooth Classic (RigControl, SDR Touch, etc.)",
+                  title: "Bluetooth SPP",
+                  desc: "Controle remoto via aplicativos de controle CI-V (RigControl, SDR Touch, etc.)",
                 },
                 {
-                  icon: Wifi,
-                  label: "WiFi AP",
-                  desc: "Crie sua própria rede WiFi (ESP32-CIV-GW) com IP estático configurável",
-                },
-                {
-                  icon: Zap,
-                  label: "Servidor DHCP",
-                  desc: "Clientes WiFi recebem IP automaticamente no intervalo configurado",
-                },
-                {
-                  icon: Radio,
-                  label: "Protocolo CI-V",
-                  desc: "Bridge bidirecional com radios Icom (8 modelos pré-configurados)",
+                  icon: Plus,
+                  title: "4 Saídas CI-V Físicas",
+                  desc: "Conecte até 4 rádios Icom diferentes simultaneamente via GPIO do ESP32",
                 },
                 {
                   icon: Settings,
-                  label: "Web Config",
-                  desc: "Interface minimalista mas completa via navegador — 4 abas de configuração",
+                  title: "Configuração Persistente",
+                  desc: "Todas as configurações salvas em NVS (Non-Volatile Storage) do ESP32",
                 },
                 {
-                  icon: Server,
-                  label: "Persistência NVS",
-                  desc: "Todas as configurações salvas na memória Flash — sobrevivem a reinicializações",
+                  icon: Radio,
+                  title: "Protocolo CI-V Icom",
+                  desc: "Bridge bidirecional entre Bluetooth e porta CI-V com suporte a 8 modelos",
                 },
-              ].map((f, i) => (
-                <motion.div key={i} custom={i} initial="hidden" animate="visible" variants={fadeUp}>
-                  <div className="p-4 border border-[rgba(79,195,247,0.15)] rounded-sm bg-[rgba(26,39,68,0.3)] hover:bg-[rgba(26,39,68,0.5)] transition-colors">
-                    <div className="flex items-start gap-3">
-                      <f.icon size={20} className="text-[#4fc3f7] flex-shrink-0 mt-1" />
-                      <div>
-                        <h3 className="font-['Space_Grotesk'] font-semibold text-white mb-1">{f.label}</h3>
-                        <p className="text-xs text-[#94a3b8] font-['IBM_Plex_Sans']">{f.desc}</p>
-                      </div>
+                {
+                  icon: Zap,
+                  title: "Comandos via Serial",
+                  desc: "Configure tudo via Monitor Serial sem necessidade de interface web",
+                },
+                {
+                  icon: Cpu,
+                  title: "Ultra-Otimizado",
+                  desc: "Apenas 140 KB de tamanho, cabe em qualquer ESP32 de 4 MB",
+                },
+              ].map((feature, i) => (
+                <motion.div
+                  key={i}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true }}
+                  variants={fadeUp}
+                  custom={i}
+                  className="p-6 border border-[#4fc3f7]/30 rounded-lg bg-[#0d1b2a]/50 hover:border-[#4fc3f7] transition-colors"
+                >
+                  <feature.icon className="text-[#4fc3f7] mb-3" size={24} />
+                  <h3 className="font-['Space_Grotesk'] font-bold text-white mb-2">{feature.title}</h3>
+                  <p className="text-[#94a3b8] text-sm font-['IBM_Plex_Sans']">{feature.desc}</p>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Pinagem Section */}
+        <section className="py-20 border-t border-[#4fc3f7]/20 bg-[#0a1118]">
+          <div className="container">
+            <motion.div
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              variants={fadeUp}
+              className="mb-12"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[#FFB300] font-['IBM_Plex_Mono'] text-sm font-bold">02</span>
+                <span className="text-[#4fc3f7]/60 font-['IBM_Plex_Mono'] text-xs tracking-widest uppercase">Pinagem</span>
+              </div>
+              <h2 className="font-['Space_Grotesk'] font-bold text-4xl text-white">
+                4 Saídas CI-V Físicas
+              </h2>
+            </motion.div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {[
+                { port: "PORT 1", uart: "UART1", rx: "GPIO 9", tx: "GPIO 10" },
+                { port: "PORT 2", uart: "UART2", rx: "GPIO 16", tx: "GPIO 17" },
+                { port: "PORT 3", uart: "UART0", rx: "GPIO 3", tx: "GPIO 1" },
+                { port: "PORT 4", uart: "GPIO", rx: "GPIO 14", tx: "GPIO 15" },
+              ].map((port, i) => (
+                <motion.div
+                  key={i}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true }}
+                  variants={fadeUp}
+                  custom={i}
+                  className="p-6 border border-[#4fc3f7]/30 rounded-lg bg-[#0d1b2a]/50"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-['Space_Grotesk'] font-bold text-[#4fc3f7] text-lg">{port.port}</h3>
+                    <span className="text-[#94a3b8] text-xs font-['IBM_Plex_Mono']">{port.uart}</span>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[#94a3b8] font-['IBM_Plex_Sans']">RX:</span>
+                      <span className="text-white font-['IBM_Plex_Mono'] font-bold">{port.rx}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[#94a3b8] font-['IBM_Plex_Sans']">TX:</span>
+                      <span className="text-white font-['IBM_Plex_Mono'] font-bold">{port.tx}</span>
                     </div>
                   </div>
                 </motion.div>
               ))}
             </div>
+
+            <motion.div
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              variants={fadeUp}
+              className="mt-8 p-4 bg-[#FFB300]/10 border border-[#FFB300]/30 rounded-lg"
+            >
+              <p className="text-[#FFB300] font-['IBM_Plex_Sans'] text-sm">
+                <strong>⚠️ Importante:</strong> Use um conversor de nível lógico 3.3V↔5V para cada porta CI-V para proteger o ESP32 contra tensões de 5V dos rádios Icom.
+              </p>
+            </motion.div>
           </div>
         </section>
 
-        {/* Specs Section */}
-        <section className="py-16">
+        {/* Versões Section */}
+        <section className="py-20 border-t border-[#4fc3f7]/20">
           <div className="container">
-            <motion.div initial="hidden" animate="visible" variants={fadeUp} className="mb-12">
-              <span className="text-xs font-['IBM_Plex_Mono'] text-[#4fc3f7]/60 tracking-widest uppercase">
-                03 — Especificações Técnicas
-              </span>
-              <h2 className="font-['Space_Grotesk'] font-bold text-3xl text-white mt-2">
-                Ultra-Otimizado com WebServer Nativa
+            <motion.div
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              variants={fadeUp}
+              className="mb-12"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[#FFB300] font-['IBM_Plex_Mono'] text-sm font-bold">03</span>
+                <span className="text-[#4fc3f7]/60 font-['IBM_Plex_Mono'] text-xs tracking-widest uppercase">Versões</span>
+              </div>
+              <h2 className="font-['Space_Grotesk'] font-bold text-4xl text-white">
+                Escolha a versão ideal para seu caso
               </h2>
             </motion.div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {[
-                {
-                  label: "Tamanho do Firmware",
-                  value: "~450 KB",
-                  detail: "v4.0 MINIMAL — 37% do espaço disponível",
-                },
-                {
-                  label: "Memória RAM Usada",
-                  value: "~28 KB",
-                  detail: "Deixa ~300 KB livres para aplicações",
-                },
-                {
-                  label: "Bibliotecas",
-                  value: "Apenas 1",
-                  detail: "ArduinoJson 6.21.0 — sem ESPAsyncWebServer",
-                },
-              ].map((s, i) => (
-                <motion.div key={i} custom={i} initial="hidden" animate="visible" variants={fadeUp}>
-                  <div className="text-center p-6 border border-[rgba(79,195,247,0.15)] rounded-sm bg-[rgba(26,39,68,0.3)]">
-                    <div className="text-3xl font-bold text-[#4fc3f7] mb-2">{s.value}</div>
-                    <div className="font-['Space_Grotesk'] font-semibold text-white mb-1">{s.label}</div>
-                    <div className="text-xs text-[#94a3b8] font-['IBM_Plex_Sans']">{s.detail}</div>
-                  </div>
+                { v: "1.0", size: "150 KB", features: "Bluetooth + CI-V", color: "border-[#4fc3f7]/30" },
+                { v: "2.0", size: "220 KB", features: "WiFi + Bluetooth + WebServer", color: "border-[#4fc3f7]/30" },
+                { v: "2.1", size: "180 KB", features: "WiFi + Bluetooth (sem Web)", color: "border-[#4fc3f7]/30" },
+                { v: "3.1 QUAD", size: "140 KB", features: "4 Saídas CI-V + Bluetooth", color: "border-[#FFB300]" },
+              ].map((ver, i) => (
+                <motion.div
+                  key={i}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true }}
+                  variants={fadeUp}
+                  custom={i}
+                  className={`p-6 border ${ver.color} rounded-lg bg-[#0d1b2a]/50 ${ver.v === "3.1 QUAD" ? "ring-2 ring-[#FFB300]/50" : ""}`}
+                >
+                  <h3 className="font-['Space_Grotesk'] font-bold text-white text-xl mb-2">v{ver.v}</h3>
+                  <p className="text-[#4fc3f7] font-['IBM_Plex_Mono'] text-sm font-bold mb-2">{ver.size}</p>
+                  <p className="text-[#94a3b8] text-xs font-['IBM_Plex_Sans']">{ver.features}</p>
                 </motion.div>
               ))}
             </div>
           </div>
         </section>
 
-        {/* Modelos Icom Suportados */}
-        <section className="py-16 bg-[rgba(79,195,247,0.02)] border-y border-[rgba(79,195,247,0.1)]">
+        {/* Modelos Suportados */}
+        <section className="py-20 border-t border-[#4fc3f7]/20 bg-[#0a1118]">
           <div className="container">
-            <motion.div initial="hidden" animate="visible" variants={fadeUp} className="mb-12">
-              <span className="text-xs font-['IBM_Plex_Mono'] text-[#4fc3f7]/60 tracking-widest uppercase">
-                04 — Modelos Icom Suportados
-              </span>
-              <h2 className="font-['Space_Grotesk'] font-bold text-3xl text-white mt-2">
+            <motion.div
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              variants={fadeUp}
+              className="mb-12"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[#FFB300] font-['IBM_Plex_Mono'] text-sm font-bold">04</span>
+                <span className="text-[#4fc3f7]/60 font-['IBM_Plex_Mono'] text-xs tracking-widest uppercase">Modelos Icom</span>
+              </div>
+              <h2 className="font-['Space_Grotesk'] font-bold text-4xl text-white">
                 8 Modelos Pré-Configurados
               </h2>
             </motion.div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {["IC-7300", "IC-7100", "IC-7610", "IC-705", "IC-9700", "IC-746PRO", "IC-756PRO", "IC-910H"].map(
-                (model, i) => (
-                  <motion.div key={i} custom={i} initial="hidden" animate="visible" variants={fadeUp}>
-                    <div className="p-4 text-center border border-[rgba(79,195,247,0.15)] rounded-sm bg-[rgba(26,39,68,0.3)]">
-                      <div className="font-['IBM_Plex_Mono'] font-semibold text-[#4fc3f7]">{model}</div>
-                    </div>
-                  </motion.div>
-                )
-              )}
-            </div>
-          </div>
-        </section>
 
-        {/* Quick Start */}
-        <section className="py-16">
-          <div className="container">
-            <motion.div initial="hidden" animate="visible" variants={fadeUp} className="mb-12">
-              <span className="text-xs font-['IBM_Plex_Mono'] text-[#4fc3f7]/60 tracking-widest uppercase">
-                05 — Início Rápido
-              </span>
-              <h2 className="font-['Space_Grotesk'] font-bold text-3xl text-white mt-2">
-                5 Passos para Começar
-              </h2>
-            </motion.div>
-            <div className="space-y-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
-                {
-                  step: "1",
-                  title: "Remova ESPAsyncWebServer",
-                  desc: "Desinstale ESPAsyncWebServer, AsyncTCP e ArduinoJson antigo via Gerenciador de Bibliotecas",
-                },
-                {
-                  step: "2",
-                  title: "Instale ArduinoJson",
-                  desc: "Instale ArduinoJson versão 6.21.0 via Gerenciador de Bibliotecas",
-                },
-                {
-                  step: "3",
-                  title: "Download do Firmware",
-                  desc: "Baixe ESP32_CIV_Gateway_Minimal.ino e abra no Arduino IDE",
-                },
-                {
-                  step: "4",
-                  title: "Compile e Upload",
-                  desc: "Selecione ESP32 Dev Module, partição Default 4MB, e faça upload",
-                },
-                {
-                  step: "5",
-                  title: "Configure",
-                  desc: "Acesse http://192.168.4.1 e configure Bluetooth e CI-V",
-                },
-              ].map((item, i) => (
-                <motion.div key={i} custom={i} initial="hidden" animate="visible" variants={fadeUp}>
-                  <div className="flex gap-4 p-4 border border-[rgba(79,195,247,0.15)] rounded-sm bg-[rgba(26,39,68,0.3)]">
-                    <div className="w-8 h-8 flex items-center justify-center rounded-sm bg-[rgba(79,195,247,0.15)] text-[#4fc3f7] font-bold flex-shrink-0">
-                      {item.step}
-                    </div>
-                    <div>
-                      <h3 className="font-['Space_Grotesk'] font-semibold text-white">{item.title}</h3>
-                      <p className="text-xs text-[#94a3b8] font-['IBM_Plex_Sans']">{item.desc}</p>
-                    </div>
-                  </div>
+                { model: "IC-7300", addr: "0x94" },
+                { model: "IC-7100", addr: "0x18" },
+                { model: "IC-7610", addr: "0x76" },
+                { model: "IC-705", addr: "0x98" },
+                { model: "IC-9700", addr: "0x88" },
+                { model: "IC-7000", addr: "0x70" },
+                { model: "IC-706", addr: "0x48" },
+                { model: "IC-2730", addr: "0x39" },
+              ].map((model, i) => (
+                <motion.div
+                  key={i}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true }}
+                  variants={fadeUp}
+                  custom={i}
+                  className="p-4 border border-[#4fc3f7]/30 rounded-lg bg-[#0d1b2a]/50 text-center"
+                >
+                  <p className="font-['Space_Grotesk'] font-bold text-white mb-1">{model.model}</p>
+                  <p className="text-[#4fc3f7] font-['IBM_Plex_Mono'] text-xs">{model.addr}</p>
                 </motion.div>
               ))}
             </div>
@@ -249,41 +296,31 @@ export default function Home() {
         </section>
 
         {/* CTA Section */}
-        <section className="py-20 border-t border-[rgba(79,195,247,0.1)]">
-          <div className="container text-center">
-            <motion.div initial="hidden" animate="visible" variants={fadeUp}>
-              <h2 className="font-['Space_Grotesk'] font-bold text-3xl text-white mb-4">
-                Pronto para Começar?
+        <section className="py-20 border-t border-[#4fc3f7]/20">
+          <div className="container">
+            <motion.div
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              variants={fadeUp}
+              className="text-center max-w-2xl mx-auto"
+            >
+              <h2 className="font-['Space_Grotesk'] font-bold text-4xl text-white mb-4">
+                Comece Agora
               </h2>
-              <p className="text-[#94a3b8] text-lg mb-8 font-['IBM_Plex_Sans'] max-w-xl mx-auto">
-                Baixe a versão v4.0 MINIMAL, remova ESPAsyncWebServer, instale ArduinoJson, e faça upload. Leva menos de 5 minutos!
+              <p className="text-[#94a3b8] text-lg font-['IBM_Plex_Sans'] mb-8">
+                Acesse a documentação completa para instalar e configurar o firmware no seu ESP32.
               </p>
-              <div className="flex gap-4 justify-center flex-wrap">
-                <Link href="/codigo-fonte">
-                  <a className="inline-flex items-center gap-2 px-8 py-4 bg-[#4fc3f7] text-[#0d1b2a] font-bold text-lg rounded hover:bg-[#81d4fa] transition-colors">
-                    <Download size={20} />
-                    Download v4.0 MINIMAL
-                  </a>
-                </Link>
-                <Link href="/documentacao">
-                  <a className="inline-flex items-center gap-2 px-8 py-4 border border-[#4fc3f7] text-[#4fc3f7] font-bold text-lg rounded hover:bg-[rgba(79,195,247,0.1)] transition-colors">
-                    <BookOpen size={20} />
-                    Guia de Instalação
-                  </a>
-                </Link>
-              </div>
+              <Link href="/docs">
+                <a className="inline-flex items-center gap-2 px-8 py-4 bg-[#4fc3f7] text-[#0d1b2a] font-bold rounded-lg hover:bg-[#80d8ff] transition-colors">
+                  <Download size={20} />
+                  Baixar Firmware v3.1 QUAD
+                  <ChevronRight size={20} />
+                </a>
+              </Link>
             </motion.div>
           </div>
         </section>
-
-        {/* Footer */}
-        <footer className="border-t border-[rgba(79,195,247,0.08)] py-6 mt-auto">
-          <div className="container text-center">
-            <p className="text-xs text-[#94a3b8] font-['IBM_Plex_Mono']">
-              ESP32 CI-V Gateway v4.0 MINIMAL — Firmware Open Source — MIT License
-            </p>
-          </div>
-        </footer>
       </div>
     </div>
   );

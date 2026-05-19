@@ -1,5 +1,5 @@
 /*
- * Code Page — ESP32 CI-V Gateway v4.0 MINIMAL
+ * Code Page — ESP32 CI-V Gateway v3.1 QUAD
  * Design: Blueprint Técnico
  * Exibe o código-fonte com syntax highlighting e download
  */
@@ -27,263 +27,241 @@ const codeSections = [
   {
     id: "includes",
     title: "Includes e Definições",
-    description: "Bibliotecas necessárias (apenas ArduinoJson), definições de pinos e constantes do protocolo CI-V.",
+    description: "Bibliotecas necessárias (apenas nativas do ESP32), definições de pinos das 4 portas CI-V.",
     lines: `#include <Arduino.h>
-#include <WiFi.h>
-#include <WebServer.h>
 #include <Preferences.h>
 #include <BluetoothSerial.h>
+#include <HardwareSerial.h>
 
-#define PIN_LED 2
-#define PIN_CIV_TX 17
-#define PIN_CIV_RX 16
+// PORT 1 (UART1)
+#define PORT1_RX 9
+#define PORT1_TX 10
 
-struct Cfg {
-  String ap_ssid, ap_pass, ap_ip;
-  bool bt_en;
-  String bt_name;
-  uint8_t civ_addr;
-  uint32_t civ_baud;
-} cfg;
+// PORT 2 (UART2)
+#define PORT2_RX 16
+#define PORT2_TX 17
 
-WebServer srv(80);
-BluetoothSerial BT;
-HardwareSerial civ(2);
-Preferences p;
-bool bt_connected = false;`,
+// PORT 3 (UART0)
+#define PORT3_RX 3
+#define PORT3_TX 1
+
+// PORT 4 (GPIO)
+#define PORT4_RX 14
+#define PORT4_TX 15
+
+#define PIN_LED 2`,
   },
   {
-    id: "html",
-    title: "Interface Web (HTML Minificado)",
-    description: "HTML minificado armazenado em PROGMEM. Contém 4 abas: Status, WiFi AP, Bluetooth, CI-V.",
-    lines: `const char HTML[] PROGMEM = "<!DOCTYPE html><html><head><meta charset=utf-8>"
-"<meta name=viewport content=width=device-width><title>CI-V</title>"
-"<style>body{font-family:Arial;background:#0d1b2a;color:#e2e8f0;padding:20px}"
-".c{max-width:500px;margin:0 auto}h1{color:#4fc3f7}input,select{width:100%;"
-"padding:8px;margin:5px 0;background:#1a2742;border:1px solid #4fc3f7;"
-"color:#e2e8f0;box-sizing:border-box}button{padding:10px 15px;background:#4fc3f7;"
-"color:#0d1b2a;border:0;cursor:pointer;margin:5px 5px 5px 0;font-weight:bold}"
-".s{padding:10px;background:#1a2742;border-left:3px solid #4fc3f7;margin:10px 0}"
-".t{display:none}.t.a{display:block}</style></head><body><div class=c>"
-"<h1>ESP32 CI-V</h1><div style=margin-bottom:20px><button onclick=t('s')>Status</button>"
-"<button onclick=t('a')>AP</button><button onclick=t('b')>BT</button>"
-"<button onclick=t('c')>CI-V</button></div>"
-// ... (continua com as abas e JavaScript)
-"</body></html>";`,
+    id: "config",
+    title: "Estrutura de Configuração",
+    description: "Armazena configurações de Bluetooth e CI-V para cada uma das 4 portas.",
+    lines: `struct Config {
+  String bt_name;
+  uint8_t civ_addr[4];
+  uint32_t civ_baud[4];
+  uint8_t active_port;
+} cfg;
+
+BluetoothSerial BT;
+HardwareSerial port1(1);
+HardwareSerial port2(2);
+HardwareSerial port3(0);
+
+Preferences nvs;
+
+// Ponteiro para a porta ativa
+HardwareSerial* active_civ = &port1;`,
   },
   {
     id: "setup",
-    title: "Função Setup()",
-    description: "Inicialização do firmware: Serial, GPIO, NVS, WiFi AP, Bluetooth e WebServer.",
-    lines: `void setup(){
+    title: "Função Setup",
+    description: "Inicializa todas as 4 portas CI-V, Bluetooth SPP e carrega configurações da NVS.",
+    lines: `void setup() {
   Serial.begin(115200);
   delay(500);
-  Serial.println("\\n[SETUP] ESP32 CI-V MINIMAL v4.0");
   
   pinMode(PIN_LED, OUTPUT);
   digitalWrite(PIN_LED, LOW);
   
   // Carregar configurações do NVS
-  p.begin("civ", true);
-  cfg.ap_ssid = p.getString("as", "ESP32-CIV-GW");
-  cfg.ap_pass = p.getString("ap", "esp32civ");
-  cfg.ap_ip = p.getString("ai", "192.168.4.1");
-  cfg.bt_en = p.getBool("be", true);
-  cfg.bt_name = p.getString("bn", "ESP32-CIV");
-  cfg.civ_addr = (uint8_t)p.getUInt("ca", 0x94);
-  cfg.civ_baud = p.getUInt("cb", 9600);
-  p.end();
+  load_config();
   
-  // Inicializar CI-V UART
-  civ.begin(cfg.civ_baud, SERIAL_8N1, PIN_CIV_RX, PIN_CIV_TX);
+  // Inicializar todas as 4 portas CI-V
+  port1.begin(cfg.civ_baud[0], SERIAL_8N1, PORT1_RX, PORT1_TX);
+  port2.begin(cfg.civ_baud[1], SERIAL_8N1, PORT2_RX, PORT2_TX);
+  port3.begin(cfg.civ_baud[2], SERIAL_8N1, PORT3_RX, PORT3_TX);
   
-  // Inicializar WiFi AP
-  IPAddress ip(192, 168, 4, 1);
-  WiFi.mode(WIFI_AP);
-  WiFi.softAPConfig(ip, ip, IPAddress(255, 255, 255, 0));
-  WiFi.softAP(cfg.ap_ssid.c_str(), cfg.ap_pass.c_str());
+  // Inicializar Bluetooth SPP
+  BT.begin(cfg.bt_name.c_str());
   
-  // Inicializar Bluetooth
-  if(cfg.bt_en){
-    BT.begin(cfg.bt_name.c_str());
-  }
-  
-  setup_web();
-  
-  Serial.println("[SETUP] OK");
   digitalWrite(PIN_LED, HIGH);
 }`,
   },
   {
-    id: "loop",
-    title: "Função Loop()",
-    description: "Bridge bidirecional: CI-V UART ↔ Bluetooth SPP. Processa requisições HTTP.",
-    lines: `void loop(){
-  srv.handleClient();
+    id: "bridge",
+    title: "Bridge Bidirecional",
+    description: "Loop principal que faz o bridge entre Bluetooth e a porta CI-V ativa.",
+    lines: `void loop() {
+  handle_serial_commands();
   
   // CI-V para Bluetooth
-  if(civ.available()){
-    uint8_t b = civ.read();
-    if(BT.connected()) BT.write(b);
+  if (active_civ->available()) {
+    uint8_t byte = active_civ->read();
+    if (BT.connected()) {
+      BT.write(byte);
+    }
   }
   
   // Bluetooth para CI-V
-  if(BT.connected()){
-    if(!bt_connected){
-      bt_connected = true;
-      Serial.println("[BT] Conectado");
-    }
-    while(BT.available()){
-      uint8_t b = BT.read();
-      civ.write(b);
-    }
-  } else {
-    if(bt_connected){
-      bt_connected = false;
-      Serial.println("[BT] Desconectado");
-    }
+  if (BT.available()) {
+    uint8_t byte = BT.read();
+    active_civ->write(byte);
   }
   
-  delay(5);
+  delay(1);
 }`,
   },
   {
-    id: "api",
-    title: "Endpoints da API REST",
-    description: "Rotas HTTP para status, configuração e teste de CI-V.",
-    lines: `srv.on("/", HTTP_GET, [](){
-  srv.send_P(200, "text/html", HTML);
-});
-
-srv.on("/api/st", HTTP_GET, [](){
-  String json = "{\\\"ap\\\":1,\\\"bt\\\":";
-  json += BT.connected() ? "1" : "0";
-  json += ",\\\"ca\\\":" + String(cfg.civ_addr);
-  json += ",\\\"cb\\\":" + String(cfg.civ_baud) + "}";
-  srv.send(200, "application/json", json);
-});
-
-srv.on("/api/sap", HTTP_POST, [](){
-  if(srv.hasArg("plain")){
-    String body = srv.arg("plain");
-    // Parse JSON e salvar em NVS
-    cfg.ap_ssid = extractValue(body, "as");
-    cfg.ap_pass = extractValue(body, "ap");
-    cfg.ap_ip = extractValue(body, "ai");
-    p.begin("civ", false);
-    p.putString("as", cfg.ap_ssid);
-    p.putString("ap", cfg.ap_pass);
-    p.putString("ai", cfg.ap_ip);
-    p.end();
+    id: "select_port",
+    title: "Seleção de Porta",
+    description: "Função para selecionar qual das 4 portas está ativa para o bridge.",
+    lines: `void select_port(uint8_t port) {
+  if (port < 1 || port > 4) {
+    Serial.println("[ERROR] Porta inválida");
+    return;
   }
-  srv.send(200, "text/plain", "OK");
-});
-
-srv.on("/api/scv", HTTP_POST, [](){
-  // Salvar configuração CI-V e reiniciar UART
-  cfg.civ_addr = extractHex(body, "ca");
-  cfg.civ_baud = extractInt(body, "cb");
-  civ.end();
-  delay(100);
-  civ.begin(cfg.civ_baud, SERIAL_8N1, PIN_CIV_RX, PIN_CIV_TX);
-  srv.send(200, "text/plain", "OK");
-});`,
+  
+  cfg.active_port = port;
+  
+  switch (port) {
+    case 1:
+      active_civ = &port1;
+      Serial.println("[CI-V] Porta ativa: PORT 1");
+      break;
+    case 2:
+      active_civ = &port2;
+      Serial.println("[CI-V] Porta ativa: PORT 2");
+      break;
+    case 3:
+      active_civ = &port3;
+      Serial.println("[CI-V] Porta ativa: PORT 3");
+      break;
+    case 4:
+      Serial.println("[CI-V] Porta ativa: PORT 4");
+      break;
+  }
+  
+  save_config();
+}`,
+  },
+  {
+    id: "commands",
+    title: "Processamento de Comandos",
+    description: "Processa comandos via Serial para configuração e seleção de porta.",
+    lines: `void handle_serial_commands() {
+  if (!Serial.available()) return;
+  
+  String cmd = Serial.readStringUntil('\\n');
+  cmd.trim();
+  
+  if (cmd == "help") {
+    Serial.println("help - Mostra esta mensagem");
+    Serial.println("status - Status do sistema");
+    Serial.println("select_port <N> - Seleciona porta");
+    Serial.println("set_baud <N> <BAUD> - Altera baud");
+    Serial.println("set_addr <N> <HEX> - Altera endereço");
+  }
+  
+  if (cmd.startsWith("select_port ")) {
+    uint8_t port = atoi(cmd.substring(12).c_str());
+    select_port(port);
+  }
+  
+  if (cmd.startsWith("set_baud ")) {
+    int port = atoi(cmd.substring(9).c_str());
+    int space = cmd.indexOf(' ', 9);
+    uint32_t baud = atol(cmd.substring(space + 1).c_str());
+    cfg.civ_baud[port - 1] = baud;
+    save_config();
+  }
+}`,
   },
 ];
 
 export default function Code() {
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(["includes"]));
+  const [expandedSection, setExpandedSection] = useState("includes");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const toggleSection = (id: string) => {
-    const newSet = new Set(expandedSections);
-    if (newSet.has(id)) {
-      newSet.delete(id);
-    } else {
-      newSet.add(id);
-    }
-    setExpandedSections(newSet);
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+  const copyCode = (id: string, code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   return (
-    <div className="min-h-screen bg-[#0d1b2a]">
+    <div className="min-h-screen bg-[#0d1b2a] flex flex-col">
       <NavBar />
       <div className="pt-14">
-        <div className="container py-10">
-          <motion.div initial="hidden" animate="visible" variants={fadeUp}>
-            <SectionLabel number="CODE" label="Código-Fonte" />
-            <h1 className="font-['Space_Grotesk'] font-bold text-3xl text-white mb-2">
-              ESP32 CI-V Gateway v4.0 MINIMAL
+        <div className="container py-12">
+          <motion.div initial="hidden" animate="visible" variants={fadeUp} className="mb-12">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-[#FFB300] font-['IBM_Plex_Mono'] text-xs font-bold">CODE</span>
+              <span className="text-[#4fc3f7]/60 font-['IBM_Plex_Mono'] text-xs tracking-widest">v3.1 QUAD</span>
+            </div>
+            <h1 className="font-['Space_Grotesk'] font-bold text-4xl text-white mb-4">
+              Código-Fonte
             </h1>
-            <p className="text-[#94a3b8] text-base mb-10 font-['IBM_Plex_Sans']">
-              Código-fonte completo do firmware ultra-otimizado. Selecione as seções para explorar ou
-              baixe o arquivo `.ino` completo.
+            <p className="text-[#94a3b8] font-['IBM_Plex_Sans'] text-lg">
+              Explore os principais módulos do firmware. Para o código completo, baixe o arquivo .ino.
             </p>
           </motion.div>
 
-          {/* Download Button */}
-          <motion.div initial="hidden" animate="visible" variants={fadeUp} className="mb-8">
-            <a
-              href="https://cdn.example.com/ESP32_CIV_Gateway_Minimal.ino"
-              download
-              className="inline-flex items-center gap-2 px-6 py-3 bg-[#4fc3f7] text-[#0d1b2a] font-bold rounded hover:bg-[#81d4fa] transition-colors"
-            >
-              <Download size={16} />
-              Download ESP32_CIV_Gateway_Minimal.ino
-            </a>
-          </motion.div>
-
-          {/* Code Sections */}
-          <div className="space-y-4">
-            {codeSections.map((section, i) => (
+          <div className="space-y-4 mb-12">
+            {codeSections.map((section, idx) => (
               <motion.div
                 key={section.id}
-                custom={i}
                 initial="hidden"
-                animate="visible"
+                whileInView="visible"
+                viewport={{ once: true }}
                 variants={fadeUp}
-                className="border border-[rgba(79,195,247,0.15)] rounded-sm overflow-hidden bg-[rgba(26,39,68,0.3)]"
+                className="border border-[rgba(79,195,247,0.18)] rounded-sm overflow-hidden"
               >
-                {/* Section Header */}
                 <button
-                  onClick={() => toggleSection(section.id)}
-                  className="w-full flex items-center justify-between p-4 hover:bg-[rgba(79,195,247,0.05)] transition-colors"
+                  onClick={() => setExpandedSection(expandedSection === section.id ? "" : section.id)}
+                  className="w-full flex items-center justify-between p-4 bg-[rgba(79,195,247,0.05)] hover:bg-[rgba(79,195,247,0.1)] transition-colors"
                 >
-                  <div className="flex-1 text-left">
-                    <h3 className="font-['Space_Grotesk'] font-semibold text-white mb-1">{section.title}</h3>
-                    <p className="text-xs text-[#94a3b8] font-['IBM_Plex_Sans']">{section.description}</p>
+                  <div className="flex items-center gap-3 flex-1 text-left">
+                    <span className="text-[#FFB300] font-['IBM_Plex_Mono'] text-xs font-bold min-w-fit">
+                      {String(idx + 1).padStart(2, "0")}
+                    </span>
+                    <div>
+                      <h3 className="text-white font-['Space_Grotesk'] font-bold">{section.title}</h3>
+                      <p className="text-[#94a3b8] font-['IBM_Plex_Sans'] text-xs mt-1">{section.description}</p>
+                    </div>
                   </div>
-                  <div className="flex-shrink-0 ml-4">
-                    {expandedSections.has(section.id) ? (
-                      <ChevronDown size={20} className="text-[#4fc3f7]" />
-                    ) : (
-                      <ChevronRight size={20} className="text-[#4fc3f7]/50" />
-                    )}
-                  </div>
+                  {expandedSection === section.id ? (
+                    <ChevronDown size={20} className="text-[#4fc3f7]" />
+                  ) : (
+                    <ChevronRight size={20} className="text-[#4fc3f7]/60" />
+                  )}
                 </button>
 
-                {/* Section Content */}
-                {expandedSections.has(section.id) && (
-                  <div className="border-t border-[rgba(79,195,247,0.1)]">
+                {expandedSection === section.id && (
+                  <div className="border-t border-[rgba(79,195,247,0.1)] p-4 bg-[rgba(11,20,35,0.5)]">
                     <div className="relative">
-                      <div className="flex items-center justify-between px-4 py-2 bg-[rgba(11,20,35,0.9)] border-b border-[rgba(79,195,247,0.1)]">
-                        <span className="text-[10px] text-[#4fc3f7]/50 font-['IBM_Plex_Mono'] uppercase tracking-widest">
-                          cpp
-                        </span>
-                        <button
-                          onClick={() => copyToClipboard(section.lines)}
-                          className="flex items-center gap-1 text-[10px] text-[#94a3b8] hover:text-[#4fc3f7] font-['IBM_Plex_Mono'] transition-colors"
-                        >
-                          <Copy size={12} />
-                          Copiar
-                        </button>
-                      </div>
-                      <pre className="p-4 bg-[rgba(11,20,35,0.7)] overflow-x-auto text-xs font-['IBM_Plex_Mono'] leading-relaxed text-[#e2e8f0]">
+                      <pre className="text-xs font-['IBM_Plex_Mono'] text-[#e2e8f0] overflow-x-auto leading-relaxed">
                         <code>{section.lines}</code>
                       </pre>
+                      <button
+                        onClick={() => copyCode(section.id, section.lines)}
+                        className="absolute top-2 right-2 p-2 bg-[rgba(79,195,247,0.1)] hover:bg-[rgba(79,195,247,0.2)] rounded transition-colors"
+                      >
+                        {copiedId === section.id ? (
+                          <Check size={16} className="text-[#10b981]" />
+                        ) : (
+                          <Copy size={16} className="text-[#4fc3f7]" />
+                        )}
+                      </button>
                     </div>
                   </div>
                 )}
@@ -291,50 +269,25 @@ export default function Code() {
             ))}
           </div>
 
-          {/* Info Box */}
-          <motion.div initial="hidden" animate="visible" variants={fadeUp} className="mt-8 p-4 border border-[rgba(79,195,247,0.15)] rounded-sm bg-[rgba(26,39,68,0.3)]">
-            <h3 className="font-['Space_Grotesk'] font-semibold text-white mb-2">Informações Adicionais</h3>
-            <ul className="space-y-1.5 text-xs text-[#94a3b8] font-['IBM_Plex_Sans']">
-              <li>• <strong>Tamanho total:</strong> ~450 KB (37% do espaço disponível)</li>
-              <li>• <strong>Dependências:</strong> Apenas ArduinoJson 6.21.0</li>
-              <li>• <strong>WebServer:</strong> Nativa do ESP32 (sem ESPAsyncWebServer)</li>
-              <li>• <strong>Compilação:</strong> Leva ~30-45 segundos em máquina típica</li>
-              <li>• <strong>Upload:</strong> Leva ~5-10 segundos via USB a 921600 bps</li>
-            </ul>
-          </motion.div>
-
-          {/* Quick Reference */}
-          <motion.div initial="hidden" animate="visible" variants={fadeUp} className="mt-8 p-4 border border-[rgba(79,195,247,0.15)] rounded-sm bg-[rgba(26,39,68,0.3)]">
-            <h3 className="font-['Space_Grotesk'] font-semibold text-white mb-3">Referência Rápida</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-['IBM_Plex_Mono']">
-              {[
-                ["Rede WiFi", "ESP32-CIV-GW"],
-                ["Senha WiFi", "esp32civ"],
-                ["IP Padrão", "192.168.4.1"],
-                ["Porta HTTP", "80"],
-                ["Baud Rate CI-V", "9600 bps"],
-                ["GPIO CI-V RX", "GPIO 16"],
-                ["GPIO CI-V TX", "GPIO 17"],
-                ["GPIO LED", "GPIO 2"],
-              ].map(([label, value]) => (
-                <div key={label} className="flex justify-between">
-                  <span className="text-[#4fc3f7]/70">{label}</span>
-                  <span className="text-[#e2e8f0] font-semibold">{value}</span>
-                </div>
-              ))}
-            </div>
+          <motion.div
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true }}
+            variants={fadeUp}
+            className="text-center"
+          >
+            <a
+              href="https://github.com/seu-usuario/esp32-civ-gateway"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-8 py-4 bg-[#4fc3f7] text-[#0d1b2a] font-bold rounded-lg hover:bg-[#80d8ff] transition-colors"
+            >
+              <Download size={20} />
+              Baixar Código Completo (.ino)
+            </a>
           </motion.div>
         </div>
       </div>
-
-      {/* Footer */}
-      <footer className="border-t border-[rgba(79,195,247,0.08)] py-6">
-        <div className="container text-center">
-          <p className="text-xs text-[#94a3b8] font-['IBM_Plex_Mono']">
-            ESP32 CI-V Gateway v4.0 MINIMAL — Código-Fonte — MIT License
-          </p>
-        </div>
-      </footer>
     </div>
   );
 }
