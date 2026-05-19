@@ -1,0 +1,35 @@
+{
+  "build_command": "pnpm run build",
+  "capabilities": [],
+  "dev_command": "pnpm run dev",
+  "env_vars": {},
+  "experiments": null,
+  "git_remote": {
+    "repo_url": "s3://vida-prod-gitrepo/webdev-git/310519663676318426/3yxnxmtQW9QeDjDTDDhyGY",
+    "access_key_id": "ASIAZV3A2ECZJWQUIA2M",
+    "secret_access_key": "A3WiZbGLypbvYmTzKK0LlzTNf4Ml+5mYekfoRjxa",
+    "session_token": "IQoJb3JpZ2luX2VjEBEaCXVzLWVhc3QtMSJHMEUCIQDFfPHkcdhpSIATH71i2Fu5hykxd4AVw59aUwvJIsOkTAIgRkYQ2mgQhcsUDkC0gmdI/C7RsvXjLBSrhbHRqdksB40q/wMI2v//////////ARAEGgw2NjUzODYwOTg4NjYiDB51P2bK4kwmgcghkCrTA40f8ycq+o0cRUsICpNMM+KrzdQRCPf8fVnp5w+XNV7bqsg1JnUJYOnvaBumUEce6DHBWljwoIqPFaYKQATfKpl/HUe1C5+VjmSDD+EiF3CPWpqPONKtF9VoG+AMsOhMpZuuwp+nkFO8SAdwv3Cz/Vlc0PVvRxB06lHO3rSed4pfau71s6gm6r/4ZFFqAmugi7FoCX/EaUxK284qgmrwwTXOcaS5wQi/tcrKDy0S1Tr45mUA1IKQRN2Hn29hycPeyusfimeYgiimS2pvfjpMrYkk6L7leAoBHM2ecxLVLaPwObOrO4apT4GcLTREdo9bCELh4LOfEAWuv7EBJHOrYAa7SyyKUdKSkfMG7Xp5083d3oOA7W7MXt/KshOSPYAGyzMRksVQP9NWEIrv2wweGxCltlUnsed21wXBesAeGEhJQYhtU0B5RQeIzwvgodZI2/gba7rzbfQmphD2DXK6prIKfoEDyxKsnuA2MHiw3wST2iBLICp5ebKJoMGmFMGxp+2y/FXMvtG+Zp+BT6COjnp9nXxBzBHpfHZOkGzCQN9otM2s0pufCbBk1nt5hJ85pUDuU1un7tzgeicom6x+QwmQqYJWHjMjiQG5N8ft6DkCRMjcMJCistAGOp0BIXR+JF75kYtKOgKvzT6IVBHZDUnsZm77pIG/XpUFcnVcPLpG7ivf+LhJ9luglsTde9wDnVfIbAkOCFGRuJfU6nE+JCmkxOpFQRv91ZqUn3c8Ws3HJeoXPAWGK6evtfEEXALcRgVeQCnrRpRl56tIY5p07F4x0BjcRJOpeNUqZs5c35lLrqcUiIv5dMeGkdLZiWvtSTzAQripLY9q9g==",
+    "expiration": "2026-05-20T04:34:24.000Z"
+  },
+  "name": "site-esp32-civ",
+  "path": "/home/ubuntu/site-esp32-civ",
+  "port": 3000,
+  "secrets": {
+    "BUILT_IN_FORGE_API_KEY": "NngRDMo8hWjBoMoTAdvgrJ",
+    "BUILT_IN_FORGE_API_URL": "https://forge.manus.ai",
+    "JWT_SECRET": "gYiJGhQCFPRGicS5FuY3XD",
+    "OAUTH_SERVER_URL": "https://api.manus.im",
+    "OWNER_NAME": "Luiz Fernando Garcia",
+    "OWNER_OPEN_ID": "NLLnSLLsA4tqv5psZcGsmb",
+    "VITE_ANALYTICS_ENDPOINT": "https://manus-analytics.com",
+    "VITE_ANALYTICS_WEBSITE_ID": "ad720b3b-c8be-411d-bd59-b4c4e9fe9fa3",
+    "VITE_APP_ID": "3yxnxmtQW9QeDjDTDDhyGY",
+    "VITE_APP_LOGO": "",
+    "VITE_APP_TITLE": "ESP32 CI-V Configurator",
+    "VITE_FRONTEND_FORGE_API_KEY": "LcPCLXfPNsCFGxNtWB8cNr",
+    "VITE_FRONTEND_FORGE_API_URL": "https://forge.manus.ai",
+    "VITE_OAUTH_PORTAL_URL": "https://manus.im"
+  },
+  "template_id": "web-static",
+  "test_command": "pnpm test"
+}
