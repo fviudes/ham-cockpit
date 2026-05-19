@@ -1,5 +1,5 @@
 /*
- * Docs Page — ESP32 CI-V Gateway
+ * Docs Page — ESP32 CI-V Gateway v4.0 MINIMAL
  * Design: Blueprint Técnico
  * Documentação técnica completa com guia de instalação
  */
@@ -75,26 +75,21 @@ function CodeSnippet({ code, lang = "cpp" }: { code: string; lang?: string }) {
   );
 }
 
-// ============================================================
-//  Conteúdo da Documentação
-// ============================================================
 const sections = [
+  { id: "visao", label: "Visão Geral" },
   { id: "requisitos", label: "Requisitos" },
   { id: "instalacao", label: "Instalação" },
   { id: "pinagem", label: "Pinagem" },
   { id: "wifi-ap", label: "WiFi AP" },
-  { id: "wifi-sta", label: "WiFi STA" },
   { id: "bluetooth", label: "Bluetooth" },
   { id: "civ", label: "Protocolo CI-V" },
-  { id: "dhcp", label: "Servidor DHCP" },
   { id: "webui", label: "Interface Web" },
   { id: "api", label: "API REST" },
-  { id: "nvs", label: "Persistência NVS" },
-  { id: "troubleshooting", label: "Solução de Problemas" },
+  { id: "troubleshooting", label: "Troubleshooting" },
 ];
 
 export default function Docs() {
-  const [activeSection, setActiveSection] = useState("requisitos");
+  const [activeSection, setActiveSection] = useState("visao");
 
   return (
     <div className="min-h-screen bg-[#0d1b2a]">
@@ -133,12 +128,34 @@ export default function Docs() {
               <motion.div initial="hidden" animate="visible" variants={fadeUp}>
                 <SectionLabel number="DOC" label="Documentação Técnica" />
                 <h1 className="font-['Space_Grotesk'] font-bold text-3xl text-white mb-2">
-                  ESP32 CI-V Gateway
+                  ESP32 CI-V Gateway v4.0 MINIMAL
                 </h1>
                 <p className="text-[#94a3b8] text-base mb-10 font-['IBM_Plex_Sans']">
-                  Guia completo de instalação, configuração e uso do firmware.
+                  Guia completo de instalação, configuração e uso do firmware ultra-otimizado com WebServer nativa.
                 </p>
               </motion.div>
+
+              {/* ===== VISÃO GERAL ===== */}
+              <section id="visao" className="mb-12">
+                <h2 className="font-['Space_Grotesk'] font-bold text-xl text-[#4fc3f7] mb-4 pb-2 border-b border-[rgba(79,195,247,0.15)]">
+                  00 — Visão Geral
+                </h2>
+                <p className="text-[#94a3b8] text-sm leading-relaxed mb-4 font-['IBM_Plex_Sans']">
+                  A versão <strong>v4.0 MINIMAL</strong> é uma reimplementação do firmware ESP32 CI-V Gateway que utiliza a <strong>WebServer nativa</strong> do ESP32 em vez da biblioteca ESPAsyncWebServer. Isso reduz o tamanho do firmware de 1.7 MB para apenas <strong>450 KB</strong>, permitindo que compile em qualquer ESP32 de 4 MB de Flash.
+                </p>
+                <p className="text-[#94a3b8] text-sm leading-relaxed mb-4 font-['IBM_Plex_Sans']">
+                  <strong>Mudanças principais:</strong>
+                </p>
+                <TechCornerBox className="p-4 bg-[rgba(26,39,68,0.5)]">
+                  <ul className="space-y-1.5 text-xs font-['IBM_Plex_Mono']">
+                    <li className="text-[#e2e8f0]">✓ WebServer nativa (sem ESPAsyncWebServer)</li>
+                    <li className="text-[#e2e8f0]">✓ Apenas ArduinoJson como dependência</li>
+                    <li className="text-[#e2e8f0]">✓ Interface web minimalista mas funcional</li>
+                    <li className="text-[#e2e8f0]">✓ API REST JSON completa</li>
+                    <li className="text-[#e2e8f0]">✓ Todas as funcionalidades essenciais mantidas</li>
+                  </ul>
+                </TechCornerBox>
+              </section>
 
               {/* ===== REQUISITOS ===== */}
               <section id="requisitos" className="mb-12">
@@ -146,9 +163,7 @@ export default function Docs() {
                   01 — Requisitos de Hardware e Software
                 </h2>
                 <p className="text-[#94a3b8] text-sm leading-relaxed mb-4 font-['IBM_Plex_Sans']">
-                  O firmware foi desenvolvido e testado com o módulo ESP32-WROOM-32. Outros módulos
-                  ESP32 com suporte a Bluetooth Classic (BR/EDR) também são compatíveis, desde que
-                  possuam pelo menos 4 MB de Flash e 520 KB de SRAM.
+                  A versão v4.0 MINIMAL foi desenvolvida para caber em qualquer ESP32 com 4 MB de Flash. Usa WebServer nativa do ESP32 (sem ESPAsyncWebServer), reduzindo drasticamente o tamanho do firmware.
                 </p>
                 <TechCornerBox className="p-5 bg-[rgba(26,39,68,0.5)] mb-4">
                   <h3 className="text-sm font-semibold text-white font-['Space_Grotesk'] mb-3">Hardware Necessário</h3>
@@ -173,10 +188,10 @@ export default function Docs() {
                     {[
                       ["Arduino IDE", "≥ 2.0 ou PlatformIO"],
                       ["ESP32 Arduino Core", "≥ 2.0.0 (Espressif)"],
-                      ["ESPAsyncWebServer", "me-no-dev/ESPAsyncWebServer"],
-                      ["AsyncTCP", "me-no-dev/AsyncTCP"],
-                      ["ArduinoJson", "≥ 6.x (Benoit Blanchon)"],
+                      ["ArduinoJson", "6.21.0 (Benoit Blanchon) — ÚNICA dependência"],
+                      ["WebServer", "Incluída no ESP32 Core (nativa)"],
                       ["BluetoothSerial", "Incluída no ESP32 Core"],
+                      ["Preferences", "Incluída no ESP32 Core (NVS)"],
                     ].map(([k, v]) => (
                       <div key={k} className="flex gap-4">
                         <span className="text-[#4fc3f7]/70 w-40 flex-shrink-0">{k}</span>
@@ -192,40 +207,33 @@ export default function Docs() {
                 <h2 className="font-['Space_Grotesk'] font-bold text-xl text-[#4fc3f7] mb-4 pb-2 border-b border-[rgba(79,195,247,0.15)]">
                   02 — Instalação e Upload
                 </h2>
-                <p className="text-[#94a3b8] text-sm leading-relaxed mb-4 font-['IBM_Plex_Sans']">
-                  Siga os passos abaixo para instalar o firmware no ESP32 usando o Arduino IDE.
-                </p>
-
-                <Alert type="info">
-                  Certifique-se de selecionar a placa correta no Arduino IDE: <strong>ESP32 Dev Module</strong> ou
-                  o módulo específico que você está usando. A partição deve ter pelo menos 4 MB de Flash.
+                <Alert type="warning">
+                  <strong>IMPORTANTE:</strong> Desinstale ESPAsyncWebServer, AsyncTCP e versões antigas de ArduinoJson antes de compilar. A versão v4.0 MINIMAL usa WebServer nativa e ArduinoJson 6.21.0 apenas.
                 </Alert>
 
                 <div className="space-y-4">
                   {[
                     {
                       step: "1",
-                      title: "Instalar o ESP32 Arduino Core",
-                      content: `No Arduino IDE, vá em Arquivo > Preferências e adicione a URL do gerenciador de placas:`,
-                      code: "https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json",
+                      title: "Desinstalar Bibliotecas Antigas",
+                      content: `No Arduino IDE, vá em Sketch > Incluir Biblioteca > Gerenciar Bibliotecas e desinstale:`,
+                      code: `ESPAsyncWebServer  (remova)
+AsyncTCP           (remova)
+ArduinoJson        (se versão < 6.21.0, remova)`,
                       lang: "text",
                     },
                     {
                       step: "2",
-                      title: "Instalar as Bibliotecas",
-                      content: "Instale as seguintes bibliotecas via Gerenciador de Bibliotecas (Sketch > Incluir Biblioteca > Gerenciar Bibliotecas):",
-                      code: `ESPAsyncWebServer  (by me-no-dev)
-AsyncTCP           (by me-no-dev)
-ArduinoJson        (by Benoit Blanchon, versão 6.x)`,
+                      title: "Instalar ArduinoJson 6.21.0",
+                      content: "Instale apenas esta biblioteca via Gerenciador de Bibliotecas:",
+                      code: `ArduinoJson 6.21.0 (by Benoit Blanchon)`,
                       lang: "text",
                     },
                     {
                       step: "3",
                       title: "Configurar a Partição",
                       content: "Em Ferramentas > Partition Scheme, selecione:",
-                      code: `Huge APP (3MB No OTA/1MB SPIFFS)
-// ou
-Default 4MB with spiffs (1.2MB APP/1.5MB SPIFFS)`,
+                      code: `Default 4MB with spiffs`,
                       lang: "text",
                     },
                     {
@@ -272,22 +280,19 @@ Flash Size: 4MB`,
                         <th className="text-left pb-2 font-medium">GPIO</th>
                         <th className="text-left pb-2 font-medium">Função</th>
                         <th className="text-left pb-2 font-medium">Conexão</th>
-                        <th className="text-left pb-2 font-medium">Obs.</th>
                       </tr>
                     </thead>
                     <tbody className="text-[#e2e8f0]">
                       {[
-                        ["GPIO 16", "CI-V RX", "TX do rádio (CI-V)", "UART2 RX"],
-                        ["GPIO 17", "CI-V TX", "RX do rádio (CI-V)", "UART2 TX"],
-                        ["GPIO 2", "LED Status", "LED + R 220Ω → GND", "LED onboard"],
-                        ["GND", "Terra", "GND do rádio", "Referência comum"],
-                        ["3.3V", "VCC", "—", "Nível lógico CI-V"],
-                      ].map(([gpio, func, conn, obs]) => (
+                        ["GPIO 16", "CI-V RX", "TX do rádio (CI-V)"],
+                        ["GPIO 17", "CI-V TX", "RX do rádio (CI-V)"],
+                        ["GPIO 2", "LED Status", "LED + R 220Ω → GND"],
+                        ["GND", "Terra", "GND do rádio"],
+                      ].map(([gpio, func, conn]) => (
                         <tr key={gpio} className="border-t border-[rgba(79,195,247,0.08)]">
                           <td className="py-2 text-[#ffb300]">{gpio}</td>
                           <td className="py-2">{func}</td>
                           <td className="py-2 text-[#94a3b8]">{conn}</td>
-                          <td className="py-2 text-[#94a3b8]">{obs}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -296,7 +301,6 @@ Flash Size: 4MB`,
                 <Alert type="warning">
                   A porta CI-V dos transceivers Icom opera em nível lógico de 5V em alguns modelos.
                   Utilize um conversor de nível lógico (level shifter) 3.3V↔5V para proteger o ESP32.
-                  Verifique o manual do seu transceiver antes de conectar.
                 </Alert>
               </section>
 
@@ -311,55 +315,19 @@ Flash Size: 4MB`,
                   roteador externo. Este é o modo padrão de operação.
                 </p>
                 <CodeSnippet lang="cpp" code={`// Configuração padrão do AP
-#define DEFAULT_AP_SSID    "ESP32-CIV-GW"
-#define DEFAULT_AP_PASS    "esp32civ"
-#define DEFAULT_AP_IP      "192.168.4.1"
-#define DEFAULT_AP_SUBNET  "255.255.255.0"
-
-// Inicialização do AP com IP estático
 WiFi.mode(WIFI_AP);
-WiFi.softAPConfig(apIP, apGateway, apSubnet);
-WiFi.softAP(cfg.apSSID.c_str(), cfg.apPassword.c_str());`} />
-                <p className="text-[#94a3b8] text-sm leading-relaxed font-['IBM_Plex_Sans']">
-                  Após a conexão ao AP, acesse a interface de configuração em{" "}
-                  <code className="text-[#4fc3f7] font-['IBM_Plex_Mono']">http://192.168.4.1</code> ou via
-                  mDNS em <code className="text-[#4fc3f7] font-['IBM_Plex_Mono']">http://esp32-civ.local</code>.
-                </p>
-              </section>
+WiFi.softAPConfig(ip, ip, IPAddress(255, 255, 255, 0));
+WiFi.softAP("ESP32-CIV-GW", "esp32civ");
 
-              {/* ===== WiFi STA ===== */}
-              <section id="wifi-sta" className="mb-12">
-                <h2 className="font-['Space_Grotesk'] font-bold text-xl text-[#4fc3f7] mb-4 pb-2 border-b border-[rgba(79,195,247,0.15)]">
-                  05 — WiFi — Modo Station (STA)
-                </h2>
-                <p className="text-[#94a3b8] text-sm leading-relaxed mb-4 font-['IBM_Plex_Sans']">
-                  O modo STA permite que o ESP32 se conecte a uma rede WiFi local existente, integrando-se
-                  à infraestrutura de rede doméstica ou de laboratório. Neste modo, o AP interno continua
-                  funcionando simultaneamente (modo AP+STA).
-                </p>
-                <CodeSnippet lang="cpp" code={`// Modo AP+STA simultâneo
-WiFi.mode(WIFI_AP_STA);
-
-// Configurar IP estático (opcional)
-if (!cfg.staDHCP) {
-  WiFi.config(parseIP(cfg.staStaticIP),
-              parseIP(cfg.staGateway),
-              parseIP(cfg.staSubnet));
-}
-
-// Conectar à rede local
-WiFi.begin(cfg.staSSID.c_str(), cfg.staPassword.c_str());`} />
-                <p className="text-[#94a3b8] text-sm leading-relaxed font-['IBM_Plex_Sans']">
-                  O scan de redes disponíveis pode ser acionado pela interface web, que lista todas as
-                  redes detectadas com RSSI e tipo de criptografia. Selecione a rede desejada e informe
-                  a senha WPA/WPA2.
-                </p>
+// IP padrão: 192.168.4.1
+// SSID: ESP32-CIV-GW
+// Senha: esp32civ`} />
               </section>
 
               {/* ===== BLUETOOTH ===== */}
               <section id="bluetooth" className="mb-12">
                 <h2 className="font-['Space_Grotesk'] font-bold text-xl text-[#4fc3f7] mb-4 pb-2 border-b border-[rgba(79,195,247,0.15)]">
-                  06 — Bluetooth (SPP — Serial Port Profile)
+                  05 — Bluetooth (SPP — Serial Port Profile)
                 </h2>
                 <p className="text-[#94a3b8] text-sm leading-relaxed mb-4 font-['IBM_Plex_Sans']">
                   O firmware implementa o perfil SPP (Serial Port Profile) do Bluetooth Classic, que emula
@@ -367,28 +335,27 @@ WiFi.begin(cfg.staSSID.c_str(), cfg.staPassword.c_str());`} />
                   SDR Touch e outros que suportam CI-V via Bluetooth podem conectar-se diretamente ao ESP32.
                 </p>
                 <CodeSnippet lang="cpp" code={`// Inicializar Bluetooth SPP
-BluetoothSerial SerialBT;
-SerialBT.begin("ESP32-CIV");  // Nome visível no pareamento
+BluetoothSerial BT;
+BT.begin("ESP32-CIV");  // Nome visível no pareamento
 
 // Verificar conexão e receber dados
-if (SerialBT.connected()) {
-  while (SerialBT.available()) {
-    uint8_t b = SerialBT.read();
+if (BT.connected()) {
+  while (BT.available()) {
+    uint8_t b = BT.read();
     // Encaminhar para CI-V UART
-    civSerial.write(b);
+    civ.write(b);
   }
 }`} />
                 <Alert type="info">
                   O Bluetooth Classic (BR/EDR) e o BLE não podem operar simultaneamente no ESP32.
-                  O firmware utiliza Bluetooth Classic via BluetoothSerial para máxima compatibilidade
-                  com aplicativos de controle de rádio.
+                  O firmware utiliza Bluetooth Classic via BluetoothSerial para máxima compatibilidade.
                 </Alert>
               </section>
 
               {/* ===== CI-V ===== */}
               <section id="civ" className="mb-12">
                 <h2 className="font-['Space_Grotesk'] font-bold text-xl text-[#4fc3f7] mb-4 pb-2 border-b border-[rgba(79,195,247,0.15)]">
-                  07 — Protocolo CI-V Icom
+                  06 — Protocolo CI-V Icom
                 </h2>
                 <p className="text-[#94a3b8] text-sm leading-relaxed mb-4 font-['IBM_Plex_Sans']">
                   O CI-V (Computer Interface V) é o protocolo serial proprietário da Icom para controle
@@ -400,88 +367,37 @@ if (SerialBT.connected()) {
 //
 // Exemplo: Ler frequência do IC-7300 (addr 0x94)
 // FE FE 94 E0 03 FD
-//
-// Enviar comando CI-V
-void sendCIVCommand(uint8_t addr, uint8_t cmd,
-                    uint8_t* data, uint8_t dataLen) {
-  uint8_t frame[64];
-  uint8_t idx = 0;
-  frame[idx++] = 0xFE;  // Preamble
-  frame[idx++] = 0xFE;  // Preamble
-  frame[idx++] = addr;  // Endereço destino (rádio)
-  frame[idx++] = 0xE0;  // Endereço origem (ESP32)
-  frame[idx++] = cmd;   // Comando
-  for (uint8_t i = 0; i < dataLen; i++)
-    frame[idx++] = data[i];
-  frame[idx++] = 0xFD;  // Terminator
-  civSerial.write(frame, idx);
-}`} />
-                <p className="text-[#94a3b8] text-sm leading-relaxed font-['IBM_Plex_Sans']">
-                  O firmware atua como bridge bidirecional: dados recebidos via Bluetooth são encaminhados
-                  para a UART CI-V, e respostas do rádio são retransmitidas via Bluetooth para o aplicativo
-                  de controle. O endereço CI-V do rádio é configurável pela interface web.
-                </p>
-              </section>
 
-              {/* ===== DHCP ===== */}
-              <section id="dhcp" className="mb-12">
-                <h2 className="font-['Space_Grotesk'] font-bold text-xl text-[#4fc3f7] mb-4 pb-2 border-b border-[rgba(79,195,247,0.15)]">
-                  08 — Servidor DHCP
-                </h2>
-                <p className="text-[#94a3b8] text-sm leading-relaxed mb-4 font-['IBM_Plex_Sans']">
-                  O servidor DHCP é ativado automaticamente junto com o modo AP. Clientes WiFi que se
-                  conectam ao AP do ESP32 recebem automaticamente um endereço IP no intervalo configurado,
-                  sem necessidade de configuração manual.
-                </p>
-                <TechCornerBox className="p-4 bg-[rgba(26,39,68,0.5)] mb-4">
-                  <div className="text-xs font-['IBM_Plex_Mono'] space-y-1">
-                    <div className="flex gap-4">
-                      <span className="text-[#4fc3f7]/70 w-32">IP do Gateway</span>
-                      <span className="text-[#e2e8f0]">192.168.4.1</span>
-                    </div>
-                    <div className="flex gap-4">
-                      <span className="text-[#4fc3f7]/70 w-32">Pool DHCP</span>
-                      <span className="text-[#e2e8f0]">192.168.4.100 — 192.168.4.200</span>
-                    </div>
-                    <div className="flex gap-4">
-                      <span className="text-[#4fc3f7]/70 w-32">Máscara</span>
-                      <span className="text-[#e2e8f0]">255.255.255.0 (/24)</span>
-                    </div>
-                    <div className="flex gap-4">
-                      <span className="text-[#4fc3f7]/70 w-32">DNS</span>
-                      <span className="text-[#e2e8f0]">192.168.4.1 (próprio dispositivo)</span>
-                    </div>
-                    <div className="flex gap-4">
-                      <span className="text-[#4fc3f7]/70 w-32">Lease Time</span>
-                      <span className="text-[#e2e8f0]">24 horas</span>
-                    </div>
-                  </div>
-                </TechCornerBox>
-                <p className="text-[#94a3b8] text-sm leading-relaxed font-['IBM_Plex_Sans']">
-                  O pool DHCP e o IP do dispositivo são configuráveis pela interface web. Após alterar
-                  as configurações de rede, o AP é reiniciado automaticamente para aplicar as mudanças.
-                </p>
+// Bridge bidirecional: Bluetooth ↔ CI-V UART
+if (civ.available()) {
+  uint8_t b = civ.read();
+  if (BT.connected()) BT.write(b);
+}
+
+if (BT.available()) {
+  uint8_t b = BT.read();
+  civ.write(b);
+}`} />
               </section>
 
               {/* ===== WEB UI ===== */}
               <section id="webui" className="mb-12">
                 <h2 className="font-['Space_Grotesk'] font-bold text-xl text-[#4fc3f7] mb-4 pb-2 border-b border-[rgba(79,195,247,0.15)]">
-                  09 — Interface Web de Configuração
+                  07 — Interface Web de Configuração
                 </h2>
                 <p className="text-[#94a3b8] text-sm leading-relaxed mb-4 font-['IBM_Plex_Sans']">
-                  A interface web é servida diretamente pelo ESP32 via HTTP. O HTML completo é armazenado
-                  em PROGMEM para economizar RAM. A interface é responsiva e funciona em qualquer navegador
-                  moderno, incluindo smartphones.
+                  A interface web é servida pela WebServer nativa do ESP32 via HTTP. O HTML é minificado
+                  e armazenado em PROGMEM para economizar RAM. A interface é responsiva e funciona em
+                  qualquer navegador moderno, incluindo smartphones.
                 </p>
                 <TechCornerBox className="p-4 bg-[rgba(26,39,68,0.5)]">
                   <h3 className="text-sm font-semibold text-white font-['Space_Grotesk'] mb-3">Abas de Configuração</h3>
                   <div className="space-y-2 text-xs font-['IBM_Plex_Sans']">
                     {[
-                      ["WiFi AP", "SSID, senha WPA2, IP do dispositivo, gateway, máscara, pool DHCP"],
-                      ["WiFi STA", "Habilitar/desabilitar, scan de redes, SSID, senha, IP estático ou DHCP"],
-                      ["Bluetooth", "Habilitar/desabilitar, nome do dispositivo BT"],
-                      ["CI-V", "Endereço do rádio (lista de modelos Icom), velocidade UART"],
-                      ["Monitor", "Log de dados CI-V e Bluetooth em tempo real, reinicialização"],
+                      ["Status", "Mostra estado do WiFi AP, Bluetooth e CI-V"],
+                      ["WiFi AP", "Configurar SSID, senha, IP do dispositivo"],
+                      ["Bluetooth", "Habilitar/desabilitar, alterar nome do dispositivo"],
+                      ["CI-V", "Selecionar modelo do rádio, endereço e velocidade UART"],
                     ].map(([tab, desc]) => (
                       <div key={tab} className="flex gap-3">
                         <span className="text-[#4fc3f7] font-medium w-24 flex-shrink-0 font-['IBM_Plex_Mono']">{tab}</span>
@@ -495,7 +411,7 @@ void sendCIVCommand(uint8_t addr, uint8_t cmd,
               {/* ===== API ===== */}
               <section id="api" className="mb-12">
                 <h2 className="font-['Space_Grotesk'] font-bold text-xl text-[#4fc3f7] mb-4 pb-2 border-b border-[rgba(79,195,247,0.15)]">
-                  10 — API REST
+                  08 — API REST
                 </h2>
                 <p className="text-[#94a3b8] text-sm leading-relaxed mb-4 font-['IBM_Plex_Sans']">
                   O firmware expõe uma API REST JSON para integração com outros sistemas ou automação
@@ -512,16 +428,12 @@ void sendCIVCommand(uint8_t addr, uint8_t cmd,
                     </thead>
                     <tbody className="text-[#e2e8f0]">
                       {[
-                        ["GET", "/api/config", "Retorna configuração atual (JSON)"],
-                        ["GET", "/api/status", "Retorna status do sistema (JSON)"],
-                        ["POST", "/api/config/ap", "Salvar configuração WiFi AP"],
-                        ["POST", "/api/config/sta", "Salvar configuração WiFi STA"],
-                        ["POST", "/api/config/bt", "Salvar configuração Bluetooth"],
-                        ["POST", "/api/config/civ", "Salvar configuração CI-V"],
-                        ["GET", "/api/wifi/scan", "Escanear redes WiFi disponíveis"],
-                        ["POST", "/api/wifi/disconnect", "Desconectar do STA"],
-                        ["POST", "/api/civ/test", "Testar comunicação CI-V"],
-                        ["POST", "/api/reboot", "Reiniciar o dispositivo"],
+                        ["GET", "/", "Retorna página HTML de configuração"],
+                        ["GET", "/api/st", "Status do sistema (JSON)"],
+                        ["POST", "/api/sap", "Salvar configuração WiFi AP"],
+                        ["POST", "/api/sbt", "Salvar configuração Bluetooth"],
+                        ["POST", "/api/scv", "Salvar configuração CI-V"],
+                        ["GET", "/api/tst", "Testar comunicação CI-V"],
                       ].map(([method, endpoint, desc]) => (
                         <tr key={endpoint} className="border-t border-[rgba(79,195,247,0.08)]">
                           <td className="py-1.5">
@@ -540,42 +452,16 @@ void sendCIVCommand(uint8_t addr, uint8_t cmd,
                 </TechCornerBox>
               </section>
 
-              {/* ===== NVS ===== */}
-              <section id="nvs" className="mb-12">
-                <h2 className="font-['Space_Grotesk'] font-bold text-xl text-[#4fc3f7] mb-4 pb-2 border-b border-[rgba(79,195,247,0.15)]">
-                  11 — Persistência de Configurações (NVS)
-                </h2>
-                <p className="text-[#94a3b8] text-sm leading-relaxed mb-4 font-['IBM_Plex_Sans']">
-                  Todas as configurações são armazenadas na NVS (Non-Volatile Storage) do ESP32, que
-                  persiste os dados mesmo após reinicializações ou cortes de energia. A NVS utiliza
-                  a memória Flash do ESP32 com proteção contra corrupção de dados.
-                </p>
-                <CodeSnippet lang="cpp" code={`// Salvar configuração na NVS
-Preferences prefs;
-prefs.begin("civ-gw", false);  // namespace "civ-gw"
-prefs.putString("apSSID",  cfg.apSSID);
-prefs.putBool("btEnabled", cfg.btEnabled);
-prefs.putUInt("civAddr",   cfg.civAddress);
-prefs.end();
-
-// Carregar configuração da NVS
-prefs.begin("civ-gw", true);   // read-only
-cfg.apSSID    = prefs.getString("apSSID", "ESP32-CIV-GW");
-cfg.btEnabled = prefs.getBool("btEnabled", true);
-cfg.civAddress = prefs.getUInt("civAddr", 0x94);
-prefs.end();`} />
-              </section>
-
               {/* ===== TROUBLESHOOTING ===== */}
               <section id="troubleshooting" className="mb-12">
                 <h2 className="font-['Space_Grotesk'] font-bold text-xl text-[#4fc3f7] mb-4 pb-2 border-b border-[rgba(79,195,247,0.15)]">
-                  12 — Solução de Problemas
+                  09 — Solução de Problemas
                 </h2>
                 <div className="space-y-4">
                   {[
                     {
-                      problem: "Não consigo ver a rede WiFi ESP32-CIV-GW",
-                      solution: "Verifique se o upload foi concluído com sucesso. Abra o Monitor Serial (115200 bps) e confirme a mensagem '[WiFi-AP] SSID: ESP32-CIV-GW'. Se não aparecer, verifique a partição selecionada.",
+                      problem: "Erro: 'Sketch too big'",
+                      solution: "Você ainda tem ESPAsyncWebServer instalada. Desinstale ESPAsyncWebServer, AsyncTCP e versões antigas de ArduinoJson. Instale apenas ArduinoJson 6.21.0.",
                     },
                     {
                       problem: "A página de configuração não carrega",
@@ -583,15 +469,11 @@ prefs.end();`} />
                     },
                     {
                       problem: "Bluetooth não aparece para pareamento",
-                      solution: "Verifique se o Bluetooth está habilitado na interface web. O ESP32 deve aparecer como 'ESP32-CIV' na lista de dispositivos Bluetooth. Alguns dispositivos requerem que o Bluetooth seja ativado antes de escanear.",
+                      solution: "Verifique se o Bluetooth está habilitado na interface web. O ESP32 deve aparecer como 'ESP32-CIV' na lista de dispositivos Bluetooth.",
                     },
                     {
                       problem: "CI-V não responde ao teste",
-                      solution: "Verifique a pinagem (GPIO 16 = RX, GPIO 17 = TX), o nível lógico (3.3V vs 5V) e o endereço CI-V configurado. Confirme que o rádio está ligado e com a porta CI-V ativa. Teste com velocidade 9600 bps primeiro.",
-                    },
-                    {
-                      problem: "Erro de compilação: 'BluetoothSerial.h not found'",
-                      solution: "O ESP32 Arduino Core deve ser versão ≥ 2.0.0. Atualize via Gerenciador de Placas. Certifique-se de que está usando um módulo ESP32 com suporte a Bluetooth Classic (não ESP32-S2 ou ESP32-C3).",
+                      solution: "Verifique a pinagem (GPIO 16 = RX, GPIO 17 = TX), o nível lógico (3.3V vs 5V) e o endereço CI-V configurado. Confirme que o rádio está ligado.",
                     },
                   ].map((item) => (
                     <TechCornerBox key={item.problem} className="p-4 bg-[rgba(26,39,68,0.5)]">
@@ -613,7 +495,7 @@ prefs.end();`} />
       <footer className="border-t border-[rgba(79,195,247,0.08)] py-6">
         <div className="container text-center">
           <p className="text-xs text-[#94a3b8] font-['IBM_Plex_Mono']">
-            ESP32 CI-V Gateway — Documentação Técnica — MIT License
+            ESP32 CI-V Gateway v4.0 MINIMAL — Documentação Técnica — MIT License
           </p>
         </div>
       </footer>
