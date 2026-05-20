@@ -1,13 +1,13 @@
 /*
  * Home Page — ESP32 CI-V Gateway
  * Design: Blueprint Técnico
- * Apresentação do firmware v1.0 COMPLETO com Bluetooth + WiFi AP + WebServer + 4 saídas CI-V
+ * Apresentação do firmware v3.1 QUAD com 4 saídas CI-V físicas
  */
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import {
   Wifi, Bluetooth, Server, Settings, Radio, Network,
-  Download, ChevronRight, Cpu, Zap, BookOpen, Code, Plus, Globe, Lock
+  Download, ChevronRight, Cpu, Zap, BookOpen, Code, Plus
 } from "lucide-react";
 import NavBar from "@/components/NavBar";
 
@@ -40,14 +40,14 @@ export default function Home() {
               <div className="flex items-center gap-2 mb-4">
                 <Cpu size={20} className="text-[#4fc3f7]" />
                 <span className="text-xs font-['IBM_Plex_Mono'] text-[#4fc3f7]/60 tracking-widest uppercase">
-                  Firmware Open Source — v1.0 COMPLETO
+                  Firmware Open Source — v3.1 QUAD
                 </span>
               </div>
               <h1 className="font-['Space_Grotesk'] font-bold text-5xl leading-tight text-white mb-4">
                 Gateway CI-V <span className="text-[#4fc3f7]">Icom</span> para ESP32
               </h1>
               <p className="text-[#94a3b8] text-lg leading-relaxed font-['IBM_Plex_Sans'] mb-8">
-                Firmware completo para ESP32 com suporte a <strong className="text-[#FFB300]">Bluetooth SPP</strong>, <strong className="text-[#FFB300]">WiFi AP</strong>, <strong className="text-[#FFB300]">WebServer</strong>, <strong className="text-[#FFB300]">4 saídas CI-V físicas</strong>, configuração persistente via NVS e API REST JSON. Otimizado para ESP32 com 8 MB de Flash.
+                Firmware ultra-otimizado para ESP32 com suporte a <strong className="text-[#FFB300]">4 saídas CI-V físicas</strong>, Bluetooth SPP para controle remoto, configuração persistente via NVS e comandos via Serial. Apenas <strong className="text-[#FFB300]">140 KB</strong>, cabe em qualquer ESP32 de 4 MB.
               </p>
               <div className="flex gap-4 flex-wrap">
                 <Link href="/docs">
@@ -94,16 +94,6 @@ export default function Home() {
                   desc: "Controle remoto via aplicativos de controle CI-V (RigControl, SDR Touch, etc.)",
                 },
                 {
-                  icon: Wifi,
-                  title: "WiFi Access Point",
-                  desc: "Cria rede WiFi própria com DHCP integrado para configuração remota",
-                },
-                {
-                  icon: Server,
-                  title: "WebServer Integrado",
-                  desc: "Interface web de configuração em tempo real via navegador",
-                },
-                {
                   icon: Plus,
                   title: "4 Saídas CI-V Físicas",
                   desc: "Conecte até 4 rádios Icom diferentes simultaneamente via GPIO do ESP32",
@@ -125,8 +115,8 @@ export default function Home() {
                 },
                 {
                   icon: Cpu,
-                  title: "API REST JSON",
-                  desc: "Endpoints HTTP para integração com aplicações externas",
+                  title: "Ultra-Otimizado",
+                  desc: "Apenas 140 KB de tamanho, cabe em qualquer ESP32 de 4 MB",
                 },
               ].map((feature, i) => (
                 <motion.div
@@ -147,7 +137,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Arquitetura Section */}
+        {/* Pinagem Section */}
         <section className="py-20 border-t border-[#4fc3f7]/20 bg-[#0a1118]">
           <div className="container">
             <motion.div
@@ -159,107 +149,6 @@ export default function Home() {
             >
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-[#FFB300] font-['IBM_Plex_Mono'] text-sm font-bold">02</span>
-                <span className="text-[#4fc3f7]/60 font-['IBM_Plex_Mono'] text-xs tracking-widest uppercase">Arquitetura</span>
-              </div>
-              <h2 className="font-['Space_Grotesk'] font-bold text-4xl text-white">
-                Topologia de Rede e Conectividade
-              </h2>
-            </motion.div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Network Topology */}
-              <motion.div
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true }}
-                variants={fadeUp}
-                className="p-6 border border-[#4fc3f7]/30 rounded-lg bg-[#0d1b2a]/50"
-              >
-                <h3 className="font-['Space_Grotesk'] font-bold text-[#4fc3f7] mb-4">Topologia de Rede</h3>
-                <div className="space-y-4 text-sm font-['IBM_Plex_Sans']">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[#4fc3f7]/20 flex items-center justify-center">
-                      <Wifi size={16} className="text-[#4fc3f7]" />
-                    </div>
-                    <div>
-                      <p className="text-white font-bold">WiFi AP</p>
-                      <p className="text-[#94a3b8] text-xs">SSID: ESP32-CIV | IP: 192.168.4.1</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[#4fc3f7]/20 flex items-center justify-center">
-                      <Bluetooth size={16} className="text-[#4fc3f7]" />
-                    </div>
-                    <div>
-                      <p className="text-white font-bold">Bluetooth SPP</p>
-                      <p className="text-[#94a3b8] text-xs">Pareamento aberto | Sem senha</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[#4fc3f7]/20 flex items-center justify-center">
-                      <Server size={16} className="text-[#4fc3f7]" />
-                    </div>
-                    <div>
-                      <p className="text-white font-bold">WebServer</p>
-                      <p className="text-[#94a3b8] text-xs">http://192.168.4.1 | API REST</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-[#4fc3f7]/20 flex items-center justify-center">
-                      <Radio size={16} className="text-[#4fc3f7]" />
-                    </div>
-                    <div>
-                      <p className="text-white font-bold">CI-V Bridge</p>
-                      <p className="text-[#94a3b8] text-xs">4 portas UART | Bidirecional</p>
-                    </div>
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Conexão Física */}
-              <motion.div
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true }}
-                variants={fadeUp}
-                className="p-6 border border-[#4fc3f7]/30 rounded-lg bg-[#0d1b2a]/50"
-              >
-                <h3 className="font-['Space_Grotesk'] font-bold text-[#4fc3f7] mb-4">Conexão Física</h3>
-                <div className="space-y-3 text-sm font-['IBM_Plex_Sans']">
-                  <div className="p-3 bg-[#0a1118] border border-[#4fc3f7]/20 rounded">
-                    <p className="text-[#FFB300] font-bold">ESP32 ↔ Rádio Icom</p>
-                    <p className="text-[#94a3b8] text-xs mt-1">Conversor 3.3V ↔ 5V (obrigatório)</p>
-                  </div>
-                  <div className="p-3 bg-[#0a1118] border border-[#4fc3f7]/20 rounded">
-                    <p className="text-[#FFB300] font-bold">Smartphone/Tablet</p>
-                    <p className="text-[#94a3b8] text-xs mt-1">Conecta via Bluetooth SPP ou WiFi</p>
-                  </div>
-                  <div className="p-3 bg-[#0a1118] border border-[#4fc3f7]/20 rounded">
-                    <p className="text-[#FFB300] font-bold">Computador</p>
-                    <p className="text-[#94a3b8] text-xs mt-1">Acessa WebServer em 192.168.4.1</p>
-                  </div>
-                  <div className="p-3 bg-[#0a1118] border border-[#4fc3f7]/20 rounded">
-                    <p className="text-[#FFB300] font-bold">Monitor Serial</p>
-                    <p className="text-[#94a3b8] text-xs mt-1">Configuração via comandos (115200 bps)</p>
-                  </div>
-                </div>
-              </motion.div>
-            </div>
-          </div>
-        </section>
-
-        {/* Pinagem Section */}
-        <section className="py-20 border-t border-[#4fc3f7]/20">
-          <div className="container">
-            <motion.div
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true }}
-              variants={fadeUp}
-              className="mb-12"
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-[#FFB300] font-['IBM_Plex_Mono'] text-sm font-bold">03</span>
                 <span className="text-[#4fc3f7]/60 font-['IBM_Plex_Mono'] text-xs tracking-widest uppercase">Pinagem</span>
               </div>
               <h2 className="font-['Space_Grotesk'] font-bold text-4xl text-white">
@@ -315,6 +204,50 @@ export default function Home() {
           </div>
         </section>
 
+        {/* Versões Section */}
+        <section className="py-20 border-t border-[#4fc3f7]/20">
+          <div className="container">
+            <motion.div
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true }}
+              variants={fadeUp}
+              className="mb-12"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[#FFB300] font-['IBM_Plex_Mono'] text-sm font-bold">03</span>
+                <span className="text-[#4fc3f7]/60 font-['IBM_Plex_Mono'] text-xs tracking-widest uppercase">Versões</span>
+              </div>
+              <h2 className="font-['Space_Grotesk'] font-bold text-4xl text-white">
+                Escolha a versão ideal para seu caso
+              </h2>
+            </motion.div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[
+                { v: "1.0", size: "150 KB", features: "Bluetooth + CI-V", color: "border-[#4fc3f7]/30" },
+                { v: "2.0", size: "220 KB", features: "WiFi + Bluetooth + WebServer", color: "border-[#4fc3f7]/30" },
+                { v: "2.1", size: "180 KB", features: "WiFi + Bluetooth (sem Web)", color: "border-[#4fc3f7]/30" },
+                { v: "3.1 QUAD", size: "140 KB", features: "4 Saídas CI-V + Bluetooth", color: "border-[#FFB300]" },
+              ].map((ver, i) => (
+                <motion.div
+                  key={i}
+                  initial="hidden"
+                  whileInView="visible"
+                  viewport={{ once: true }}
+                  variants={fadeUp}
+                  custom={i}
+                  className={`p-6 border ${ver.color} rounded-lg bg-[#0d1b2a]/50 ${ver.v === "3.1 QUAD" ? "ring-2 ring-[#FFB300]/50" : ""}`}
+                >
+                  <h3 className="font-['Space_Grotesk'] font-bold text-white text-xl mb-2">v{ver.v}</h3>
+                  <p className="text-[#4fc3f7] font-['IBM_Plex_Mono'] text-sm font-bold mb-2">{ver.size}</p>
+                  <p className="text-[#94a3b8] text-xs font-['IBM_Plex_Sans']">{ver.features}</p>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* Modelos Suportados */}
         <section className="py-20 border-t border-[#4fc3f7]/20 bg-[#0a1118]">
           <div className="container">
@@ -362,82 +295,8 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Especificações */}
-        <section className="py-20 border-t border-[#4fc3f7]/20">
-          <div className="container">
-            <motion.div
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true }}
-              variants={fadeUp}
-              className="mb-12"
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-[#FFB300] font-['IBM_Plex_Mono'] text-sm font-bold">05</span>
-                <span className="text-[#4fc3f7]/60 font-['IBM_Plex_Mono'] text-xs tracking-widest uppercase">Especificações</span>
-              </div>
-              <h2 className="font-['Space_Grotesk'] font-bold text-4xl text-white">
-                Detalhes Técnicos
-              </h2>
-            </motion.div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <motion.div
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true }}
-                variants={fadeUp}
-                className="p-6 border border-[#4fc3f7]/30 rounded-lg bg-[#0d1b2a]/50"
-              >
-                <h3 className="font-['Space_Grotesk'] font-bold text-[#FFB300] mb-4">Hardware</h3>
-                <ul className="space-y-2 text-sm text-[#94a3b8] font-['IBM_Plex_Sans']">
-                  <li>• ESP32 (8 MB Flash recomendado)</li>
-                  <li>• 4 Portas UART</li>
-                  <li>• Bluetooth SPP</li>
-                  <li>• WiFi 802.11 b/g/n</li>
-                  <li>• LED Status (GPIO 2)</li>
-                </ul>
-              </motion.div>
-
-              <motion.div
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true }}
-                variants={fadeUp}
-                className="p-6 border border-[#4fc3f7]/30 rounded-lg bg-[#0d1b2a]/50"
-              >
-                <h3 className="font-['Space_Grotesk'] font-bold text-[#FFB300] mb-4">Software</h3>
-                <ul className="space-y-2 text-sm text-[#94a3b8] font-['IBM_Plex_Sans']">
-                  <li>• Arduino IDE 2.0+</li>
-                  <li>• ESP32 Core 2.0.11+</li>
-                  <li>• ArduinoJson 6.21.0</li>
-                  <li>• Bibliotecas nativas</li>
-                  <li>• NVS Storage</li>
-                </ul>
-              </motion.div>
-
-              <motion.div
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true }}
-                variants={fadeUp}
-                className="p-6 border border-[#4fc3f7]/30 rounded-lg bg-[#0d1b2a]/50"
-              >
-                <h3 className="font-['Space_Grotesk'] font-bold text-[#FFB300] mb-4">Conectividade</h3>
-                <ul className="space-y-2 text-sm text-[#94a3b8] font-['IBM_Plex_Sans']">
-                  <li>• Bluetooth: SPP (pareamento)</li>
-                  <li>• WiFi: AP + DHCP</li>
-                  <li>• WebServer: HTTP</li>
-                  <li>• Serial: 115200 bps</li>
-                  <li>• API: REST JSON</li>
-                </ul>
-              </motion.div>
-            </div>
-          </div>
-        </section>
-
         {/* CTA Section */}
-        <section className="py-20 border-t border-[#4fc3f7]/20 bg-[#0a1118]">
+        <section className="py-20 border-t border-[#4fc3f7]/20">
           <div className="container">
             <motion.div
               initial="hidden"
@@ -450,12 +309,12 @@ export default function Home() {
                 Comece Agora
               </h2>
               <p className="text-[#94a3b8] text-lg font-['IBM_Plex_Sans'] mb-8">
-                Acesse a documentação completa para instalar e configurar o firmware no seu ESP32 com 8 MB de Flash.
+                Acesse a documentação completa para instalar e configurar o firmware no seu ESP32.
               </p>
               <Link href="/docs">
                 <a className="inline-flex items-center gap-2 px-8 py-4 bg-[#4fc3f7] text-[#0d1b2a] font-bold rounded-lg hover:bg-[#80d8ff] transition-colors">
                   <Download size={20} />
-                  Baixar Firmware v1.0 COMPLETO
+                  Baixar Firmware v3.1 QUAD
                   <ChevronRight size={20} />
                 </a>
               </Link>
