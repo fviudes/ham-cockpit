@@ -1,7 +1,7 @@
 /*
- * Docs Page — ESP32 CI-V Gateway v3.1 QUAD
+ * Docs Page — ESP32 CI-V Gateway v1.0 COMPLETO
  * Design: Blueprint Técnico
- * Documentação técnica completa com guia de instalação e 4 saídas CI-V
+ * Documentação técnica completa com guia de instalação
  */
 import { useState } from "react";
 import { motion } from "framer-motion";
@@ -80,9 +80,10 @@ const sections = [
   { id: "requisitos", label: "Requisitos" },
   { id: "instalacao", label: "Instalação" },
   { id: "pinagem", label: "Pinagem" },
-  { id: "comandos", label: "Comandos" },
+  { id: "webserver", label: "WebServer" },
+  { id: "comandos", label: "Comandos Serial" },
+  { id: "api", label: "API REST" },
   { id: "modelos", label: "Modelos Icom" },
-  { id: "troubleshooting", label: "Troubleshooting" },
 ];
 
 export default function Docs() {
@@ -96,206 +97,250 @@ export default function Docs() {
           <motion.div initial="hidden" animate="visible" variants={fadeUp} className="mb-8">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-[#FFB300] font-['IBM_Plex_Mono'] text-xs font-bold">DOCS</span>
-              <span className="text-[#4fc3f7]/60 font-['IBM_Plex_Mono'] text-xs tracking-widest">v3.1 QUAD</span>
+              <span className="text-[#4fc3f7]/60 font-['IBM_Plex_Mono'] text-xs tracking-widest">v1.0 COMPLETO</span>
             </div>
-            <h1 className="font-['Space_Grotesk'] font-bold text-4xl text-white">
-              Documentação Técnica
-            </h1>
+            <h1 className="font-['Space_Grotesk'] font-bold text-5xl text-white">Documentação Técnica</h1>
           </motion.div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Sidebar */}
-            <div className="lg:col-span-1">
-              <div className="sticky top-20">
-                <TechCornerBox className="p-4">
-                  <nav className="space-y-2">
-                    {sections.map((section) => (
-                      <button
-                        key={section.id}
-                        onClick={() => setActiveSection(section.id)}
-                        className={`w-full text-left px-3 py-2 text-sm font-['IBM_Plex_Sans'] transition-colors ${
-                          activeSection === section.id
-                            ? "text-[#4fc3f7] bg-[rgba(79,195,247,0.1)]"
-                            : "text-[#94a3b8] hover:text-[#4fc3f7]"
-                        }`}
-                      >
-                        {section.label}
-                      </button>
-                    ))}
-                  </nav>
-                </TechCornerBox>
+            <motion.div initial="hidden" animate="visible" variants={fadeUp} className="lg:col-span-1">
+              <div className="sticky top-20 p-4 border border-[rgba(79,195,247,0.18)] rounded-sm bg-[#0a1118]">
+                <p className="text-[10px] text-[#4fc3f7]/60 font-['IBM_Plex_Mono'] uppercase tracking-widest mb-4">Seções</p>
+                <div className="space-y-2">
+                  {sections.map((section) => (
+                    <button
+                      key={section.id}
+                      onClick={() => setActiveSection(section.id)}
+                      className={`w-full text-left px-3 py-2 rounded-sm text-sm transition-colors font-['IBM_Plex_Sans'] ${
+                        activeSection === section.id
+                          ? "bg-[#4fc3f7]/20 text-[#4fc3f7]"
+                          : "text-[#94a3b8] hover:text-[#4fc3f7]"
+                      }`}
+                    >
+                      {section.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            </motion.div>
 
             {/* Content */}
-            <div className="lg:col-span-3">
+            <motion.div initial="hidden" animate="visible" variants={fadeUp} className="lg:col-span-3 space-y-8">
               {/* Visão Geral */}
               {activeSection === "visao" && (
-                <motion.div initial="hidden" animate="visible" variants={fadeUp} className="space-y-6">
+                <TechCornerBox className="p-6">
                   <SectionLabel number="01" label="Visão Geral" />
-                  <p className="text-[#94a3b8] font-['IBM_Plex_Sans'] leading-relaxed">
-                    O <strong className="text-[#e2e8f0]">ESP32 CI-V Gateway v3.1 QUAD</strong> é um firmware ultra-otimizado que transforma um ESP32 em um gateway de controle para rádios Icom. Suporta até <strong className="text-[#FFB300]">4 saídas CI-V físicas</strong> simultâneas, permitindo controlar múltiplos rádios via Bluetooth SPP.
+                  <h2 className="font-['Space_Grotesk'] font-bold text-2xl text-white mb-4">O que é o ESP32 CI-V Gateway?</h2>
+                  <p className="text-[#94a3b8] font-['IBM_Plex_Sans'] mb-4">
+                    O ESP32 CI-V Gateway é um firmware completo que transforma um microcontrolador ESP32 em um gateway de controle remoto para rádios Icom. Ele oferece múltiplas formas de conectividade: Bluetooth SPP, WiFi Access Point e WebServer integrado.
                   </p>
-                  <div className="grid grid-cols-2 gap-4 mt-6">
-                    <TechCornerBox className="p-4">
-                      <p className="text-[#4fc3f7] font-['IBM_Plex_Mono'] text-xs font-bold mb-1">Tamanho</p>
-                      <p className="text-white font-['Space_Grotesk'] font-bold text-lg">140 KB</p>
-                      <p className="text-[#94a3b8] text-xs mt-1">11% do espaço disponível</p>
-                    </TechCornerBox>
-                    <TechCornerBox className="p-4">
-                      <p className="text-[#4fc3f7] font-['IBM_Plex_Mono'] text-xs font-bold mb-1">Saídas CI-V</p>
-                      <p className="text-white font-['Space_Grotesk'] font-bold text-lg">4 Portas</p>
-                      <p className="text-[#94a3b8] text-xs mt-1">UART1, UART2, UART0, GPIO</p>
-                    </TechCornerBox>
-                  </div>
-                </motion.div>
+                  <h3 className="font-['Space_Grotesk'] font-bold text-white mb-3">Funcionalidades Principais:</h3>
+                  <ul className="space-y-2 text-sm text-[#94a3b8] font-['IBM_Plex_Sans']">
+                    <li>✓ Bluetooth SPP para controle remoto via smartphone/tablet</li>
+                    <li>✓ WiFi Access Point com DHCP integrado</li>
+                    <li>✓ WebServer com interface de configuração</li>
+                    <li>✓ 4 Saídas CI-V Físicas para múltiplos rádios</li>
+                    <li>✓ Protocolo CI-V Icom com bridge bidirecional</li>
+                    <li>✓ Configuração persistente via NVS</li>
+                    <li>✓ API REST JSON para integração</li>
+                    <li>✓ Comandos via Serial para configuração avançada</li>
+                  </ul>
+                </TechCornerBox>
               )}
 
               {/* Requisitos */}
               {activeSection === "requisitos" && (
-                <motion.div initial="hidden" animate="visible" variants={fadeUp} className="space-y-6">
+                <TechCornerBox className="p-6">
                   <SectionLabel number="02" label="Requisitos" />
-                  <div className="space-y-4">
-                    <div>
-                      <h3 className="text-white font-['Space_Grotesk'] font-bold mb-2">Hardware</h3>
-                      <ul className="space-y-2 text-[#94a3b8] font-['IBM_Plex_Sans'] text-sm">
-                        <li>• ESP32 DevKit com 4 MB de Flash</li>
-                        <li>• Cabo USB para programação</li>
-                        <li>• 4x Conversor de nível lógico 3.3V↔5V (recomendado)</li>
-                        <li>• Conectores para CI-V dos rádios</li>
-                      </ul>
-                    </div>
-                    <div>
-                      <h3 className="text-white font-['Space_Grotesk'] font-bold mb-2">Software</h3>
-                      <ul className="space-y-2 text-[#94a3b8] font-['IBM_Plex_Sans'] text-sm">
-                        <li>• Arduino IDE ≥ 2.0</li>
-                        <li>• ESP32 Arduino Core ≥ 2.0.0</li>
-                        <li>• Nenhuma biblioteca externa necessária</li>
-                      </ul>
-                    </div>
-                  </div>
+                  <h2 className="font-['Space_Grotesk'] font-bold text-2xl text-white mb-4">Requisitos de Hardware e Software</h2>
+                  
+                  <h3 className="font-['Space_Grotesk'] font-bold text-[#FFB300] mb-3">Hardware</h3>
+                  <ul className="space-y-2 text-sm text-[#94a3b8] font-['IBM_Plex_Sans'] mb-6">
+                    <li>• ESP32 com 8 MB de Flash (recomendado)</li>
+                    <li>• Cabo USB para programação</li>
+                    <li>• Conversor de nível lógico 3.3V ↔ 5V (4x, para cada porta CI-V)</li>
+                    <li>• Cabos de conexão para rádios Icom</li>
+                  </ul>
+
+                  <h3 className="font-['Space_Grotesk'] font-bold text-[#FFB300] mb-3">Software</h3>
+                  <ul className="space-y-2 text-sm text-[#94a3b8] font-['IBM_Plex_Sans'] mb-6">
+                    <li>• Arduino IDE 2.0 ou superior</li>
+                    <li>• ESP32 Arduino Core 2.0.11 ou superior</li>
+                    <li>• ArduinoJson 6.21.0</li>
+                  </ul>
+
                   <Alert type="warning">
-                    Remova todas as bibliotecas externas (ESPAsyncWebServer, AsyncTCP, ArduinoJson) antes de compilar.
+                    <strong>Importante:</strong> O firmware foi otimizado para ESP32 com 8 MB de Flash. Se você usar um ESP32 com 4 MB, será necessário usar uma versão reduzida sem WebServer.
                   </Alert>
-                </motion.div>
+                </TechCornerBox>
               )}
 
               {/* Instalação */}
               {activeSection === "instalacao" && (
-                <motion.div initial="hidden" animate="visible" variants={fadeUp} className="space-y-6">
+                <TechCornerBox className="p-6">
                   <SectionLabel number="03" label="Instalação" />
-                  <div className="space-y-4">
-                    <div>
-                      <h3 className="text-white font-['Space_Grotesk'] font-bold mb-3">Passo 1: Configurar Arduino IDE</h3>
-                      <CodeSnippet code={`Ferramentas:
-  Placa: ESP32 Dev Module
-  Upload Speed: 921600
-  CPU Frequency: 240 MHz
-  Flash Size: 4MB
-  Partition Scheme: Default 4MB with spiffs
-  Port: COM3 (ou sua porta)`} lang="config" />
-                    </div>
-                    <div>
-                      <h3 className="text-white font-['Space_Grotesk'] font-bold mb-3">Passo 2: Abrir Arquivo</h3>
-                      <p className="text-[#94a3b8] font-['IBM_Plex_Sans'] text-sm mb-2">
-                        File → Open → ESP32_CIV_v3_1_Quad.ino
-                      </p>
-                    </div>
-                    <div>
-                      <h3 className="text-white font-['Space_Grotesk'] font-bold mb-3">Passo 3: Compilar</h3>
-                      <CodeSnippet code={`Sketch → Compile
+                  <h2 className="font-['Space_Grotesk'] font-bold text-2xl text-white mb-4">Passo a Passo de Instalação</h2>
+                  
+                  <h3 className="font-['Space_Grotesk'] font-bold text-[#FFB300] mb-3">Passo 1: Instalar Arduino IDE</h3>
+                  <p className="text-sm text-[#94a3b8] font-['IBM_Plex_Sans'] mb-4">
+                    Baixe e instale a Arduino IDE 2.0+ em: https://www.arduino.cc/en/software
+                  </p>
 
-Resultado esperado:
-Sketch uses 135678 bytes (10%) of program storage space.
-Global variables use 28456 bytes (8%) of dynamic memory.`} lang="terminal" />
-                    </div>
-                    <div>
-                      <h3 className="text-white font-['Space_Grotesk'] font-bold mb-3">Passo 4: Upload</h3>
-                      <p className="text-[#94a3b8] font-['IBM_Plex_Sans'] text-sm">
-                        Sketch → Upload
-                      </p>
-                    </div>
-                  </div>
+                  <h3 className="font-['Space_Grotesk'] font-bold text-[#FFB300] mb-3">Passo 2: Adicionar ESP32 Board</h3>
+                  <p className="text-sm text-[#94a3b8] font-['IBM_Plex_Sans'] mb-2">
+                    No Arduino IDE, vá para: <strong>File → Preferences</strong>
+                  </p>
+                  <p className="text-sm text-[#94a3b8] font-['IBM_Plex_Sans'] mb-4">
+                    Adicione esta URL em "Additional Boards Manager URLs":
+                  </p>
+                  <CodeSnippet code="https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json" lang="url" />
+
+                  <h3 className="font-['Space_Grotesk'] font-bold text-[#FFB300] mb-3">Passo 3: Instalar Bibliotecas</h3>
+                  <p className="text-sm text-[#94a3b8] font-['IBM_Plex_Sans'] mb-2">
+                    Vá para: <strong>Tools → Manage Libraries</strong>
+                  </p>
+                  <p className="text-sm text-[#94a3b8] font-['IBM_Plex_Sans'] mb-4">
+                    Procure e instale: <strong>ArduinoJson</strong> (versão 6.21.0)
+                  </p>
+
+                  <h3 className="font-['Space_Grotesk'] font-bold text-[#FFB300] mb-3">Passo 4: Fazer Upload</h3>
+                  <ol className="space-y-2 text-sm text-[#94a3b8] font-['IBM_Plex_Sans'] mb-4">
+                    <li>1. Abra o arquivo: <strong>ESP32_CIV_Gateway_Complete_v1.0.ino</strong></li>
+                    <li>2. Selecione a placa: <strong>Tools → Board → ESP32 → ESP32 Dev Module</strong></li>
+                    <li>3. Selecione a porta COM do ESP32</li>
+                    <li>4. Clique em: <strong>Sketch → Upload</strong></li>
+                  </ol>
+
                   <Alert type="success">
-                    Se o percentual for menor que 50%, está pronto para upload!
+                    Quando o upload terminar, você verá a mensagem "Leaving... Hard resetting via RTS pin..." no console.
                   </Alert>
-                </motion.div>
+                </TechCornerBox>
               )}
 
               {/* Pinagem */}
               {activeSection === "pinagem" && (
-                <motion.div initial="hidden" animate="visible" variants={fadeUp} className="space-y-6">
+                <TechCornerBox className="p-6">
                   <SectionLabel number="04" label="Pinagem" />
-                  <p className="text-[#94a3b8] font-['IBM_Plex_Sans'] text-sm mb-4">
-                    O ESP32 possui 4 saídas CI-V físicas independentes, cada uma em um UART diferente:
-                  </p>
-                  <div className="space-y-3">
+                  <h2 className="font-['Space_Grotesk'] font-bold text-2xl text-white mb-4">Pinagem das 4 Saídas CI-V</h2>
+                  
+                  <div className="space-y-4 mb-6">
                     {[
                       { port: "PORT 1", uart: "UART1", rx: "GPIO 9", tx: "GPIO 10" },
                       { port: "PORT 2", uart: "UART2", rx: "GPIO 16", tx: "GPIO 17" },
                       { port: "PORT 3", uart: "UART0", rx: "GPIO 3", tx: "GPIO 1" },
                       { port: "PORT 4", uart: "GPIO", rx: "GPIO 14", tx: "GPIO 15" },
                     ].map((p, i) => (
-                      <TechCornerBox key={i} className="p-4">
-                        <div className="flex justify-between items-start mb-3">
-                          <div>
-                            <p className="text-[#4fc3f7] font-['IBM_Plex_Mono'] text-xs font-bold">{p.port}</p>
-                            <p className="text-[#94a3b8] font-['IBM_Plex_Mono'] text-xs">{p.uart}</p>
-                          </div>
-                        </div>
-                        <div className="space-y-1 text-sm font-['IBM_Plex_Mono']">
-                          <p className="text-[#e2e8f0]">RX: <span className="text-[#FFB300]">{p.rx}</span></p>
-                          <p className="text-[#e2e8f0]">TX: <span className="text-[#FFB300]">{p.tx}</span></p>
-                        </div>
-                      </TechCornerBox>
+                      <div key={i} className="p-4 bg-[#0a1118] border border-[#4fc3f7]/20 rounded-sm">
+                        <p className="font-['Space_Grotesk'] font-bold text-[#4fc3f7] mb-2">{p.port} ({p.uart})</p>
+                        <p className="text-sm text-[#94a3b8] font-['IBM_Plex_Sans']">RX: <strong>{p.rx}</strong> | TX: <strong>{p.tx}</strong></p>
+                      </div>
                     ))}
                   </div>
+
                   <Alert type="warning">
-                    Use um conversor de nível lógico 3.3V↔5V para cada porta CI-V para proteger o ESP32 contra tensões de 5V dos rádios Icom.
+                    <strong>Importante:</strong> Use um conversor de nível lógico 3.3V ↔ 5V para cada porta CI-V. O ESP32 opera em 3.3V e os rádios Icom em 5V.
                   </Alert>
-                </motion.div>
+
+                  <h3 className="font-['Space_Grotesk'] font-bold text-[#FFB300] mb-3">Outros Pinos</h3>
+                  <ul className="space-y-2 text-sm text-[#94a3b8] font-['IBM_Plex_Sans']">
+                    <li>• GPIO 2: LED Status (indica sistema ativo)</li>
+                    <li>• GND: Terra (conectar ao rádio)</li>
+                    <li>• 5V: Alimentação (se necessário)</li>
+                  </ul>
+                </TechCornerBox>
               )}
 
-              {/* Comandos */}
+              {/* WebServer */}
+              {activeSection === "webserver" && (
+                <TechCornerBox className="p-6">
+                  <SectionLabel number="05" label="WebServer" />
+                  <h2 className="font-['Space_Grotesk'] font-bold text-2xl text-white mb-4">Interface Web de Configuração</h2>
+                  
+                  <h3 className="font-['Space_Grotesk'] font-bold text-[#FFB300] mb-3">Acessar o WebServer</h3>
+                  <ol className="space-y-2 text-sm text-[#94a3b8] font-['IBM_Plex_Sans'] mb-6">
+                    <li>1. Conecte seu computador/smartphone à rede WiFi: <strong>ESP32-CIV</strong></li>
+                    <li>2. Abra um navegador web</li>
+                    <li>3. Acesse: <strong>http://192.168.4.1</strong></li>
+                  </ol>
+
+                  <h3 className="font-['Space_Grotesk'] font-bold text-[#FFB300] mb-3">Abas de Configuração</h3>
+                  <ul className="space-y-3 text-sm text-[#94a3b8] font-['IBM_Plex_Sans']">
+                    <li><strong>Status:</strong> Mostra status do Bluetooth, WiFi, IP e porta ativa</li>
+                    <li><strong>WiFi:</strong> Configurar SSID e senha da rede</li>
+                    <li><strong>Bluetooth:</strong> Alterar nome do dispositivo Bluetooth</li>
+                    <li><strong>CI-V:</strong> Selecionar porta ativa, baud rate e endereço</li>
+                  </ul>
+
+                  <Alert type="info">
+                    Todas as configurações são salvas automaticamente no NVS (Non-Volatile Storage) e persistem após reinicialização.
+                  </Alert>
+                </TechCornerBox>
+              )}
+
+              {/* Comandos Serial */}
               {activeSection === "comandos" && (
-                <motion.div initial="hidden" animate="visible" variants={fadeUp} className="space-y-6">
-                  <SectionLabel number="05" label="Comandos Serial" />
-                  <p className="text-[#94a3b8] font-['IBM_Plex_Sans'] text-sm mb-4">
-                    Configure o dispositivo via Monitor Serial (115200 bps) usando os seguintes comandos:
+                <TechCornerBox className="p-6">
+                  <SectionLabel number="06" label="Comandos Serial" />
+                  <h2 className="font-['Space_Grotesk'] font-bold text-2xl text-white mb-4">Configuração via Monitor Serial</h2>
+                  
+                  <h3 className="font-['Space_Grotesk'] font-bold text-[#FFB300] mb-3">Abrir Monitor Serial</h3>
+                  <p className="text-sm text-[#94a3b8] font-['IBM_Plex_Sans'] mb-4">
+                    Arduino IDE: <strong>Tools → Serial Monitor</strong> (velocidade: 115200 bps)
                   </p>
-                  <div className="space-y-4">
-                    <TechCornerBox className="p-4">
-                      <p className="text-[#4fc3f7] font-['IBM_Plex_Mono'] text-xs font-bold mb-2">help</p>
-                      <p className="text-[#94a3b8] font-['IBM_Plex_Sans'] text-sm">Lista todos os comandos disponíveis</p>
-                    </TechCornerBox>
-                    <TechCornerBox className="p-4">
-                      <p className="text-[#4fc3f7] font-['IBM_Plex_Mono'] text-xs font-bold mb-2">status</p>
-                      <p className="text-[#94a3b8] font-['IBM_Plex_Sans'] text-sm">Mostra status do sistema (Bluetooth, CI-V)</p>
-                    </TechCornerBox>
-                    <TechCornerBox className="p-4">
-                      <p className="text-[#4fc3f7] font-['IBM_Plex_Mono'] text-xs font-bold mb-2">select_port &lt;N&gt;</p>
-                      <p className="text-[#94a3b8] font-['IBM_Plex_Sans'] text-sm">Seleciona a porta ativa (1-4)</p>
-                    </TechCornerBox>
-                    <TechCornerBox className="p-4">
-                      <p className="text-[#4fc3f7] font-['IBM_Plex_Mono'] text-xs font-bold mb-2">set_baud &lt;N&gt; &lt;BAUD&gt;</p>
-                      <p className="text-[#94a3b8] font-['IBM_Plex_Sans'] text-sm">Altera baud rate da porta N (9600, 19200, 38400)</p>
-                    </TechCornerBox>
-                    <TechCornerBox className="p-4">
-                      <p className="text-[#4fc3f7] font-['IBM_Plex_Mono'] text-xs font-bold mb-2">set_addr &lt;N&gt; &lt;HEX&gt;</p>
-                      <p className="text-[#94a3b8] font-['IBM_Plex_Sans'] text-sm">Altera endereço CI-V da porta N (ex: 0x94)</p>
-                    </TechCornerBox>
+
+                  <h3 className="font-['Space_Grotesk'] font-bold text-[#FFB300] mb-3">Comandos Disponíveis</h3>
+                  <div className="space-y-3 mb-6">
+                    {[
+                      { cmd: "help", desc: "Lista todos os comandos" },
+                      { cmd: "status", desc: "Mostra status do sistema" },
+                      { cmd: "config", desc: "Mostra configuração atual" },
+                      { cmd: "ports", desc: "Mostra pinagem das 4 portas" },
+                      { cmd: "select_port <N>", desc: "Seleciona porta (1-4)" },
+                      { cmd: "set_bt <NAME>", desc: "Alterar nome do Bluetooth" },
+                      { cmd: "set_baud <N> <BAUD>", desc: "Alterar baud rate (9600, 19200, 38400)" },
+                      { cmd: "set_addr <N> <HEX>", desc: "Alterar endereço CI-V (ex: 0x94)" },
+                      { cmd: "reboot", desc: "Reiniciar o ESP32" },
+                    ].map((item, i) => (
+                      <div key={i} className="p-3 bg-[#0a1118] border border-[#4fc3f7]/20 rounded-sm">
+                        <p className="font-['IBM_Plex_Mono'] text-[#4fc3f7] text-sm mb-1">{item.cmd}</p>
+                        <p className="text-xs text-[#94a3b8] font-['IBM_Plex_Sans']">{item.desc}</p>
+                      </div>
+                    ))}
                   </div>
-                </motion.div>
+
+                  <h3 className="font-['Space_Grotesk'] font-bold text-[#FFB300] mb-3">Exemplo de Uso</h3>
+                  <CodeSnippet code="help\nconfig\nselect_port 1\nset_baud 1 19200\nset_addr 1 0x94\nstatus" lang="serial" />
+                </TechCornerBox>
+              )}
+
+              {/* API REST */}
+              {activeSection === "api" && (
+                <TechCornerBox className="p-6">
+                  <SectionLabel number="07" label="API REST" />
+                  <h2 className="font-['Space_Grotesk'] font-bold text-2xl text-white mb-4">Endpoints da API JSON</h2>
+                  
+                  <h3 className="font-['Space_Grotesk'] font-bold text-[#FFB300] mb-3">GET /api/config</h3>
+                  <p className="text-sm text-[#94a3b8] font-['IBM_Plex_Sans'] mb-2">Retorna a configuração atual</p>
+                  <CodeSnippet code="curl http://192.168.4.1/api/config" lang="bash" />
+
+                  <h3 className="font-['Space_Grotesk'] font-bold text-[#FFB300] mb-3">GET /api/status</h3>
+                  <p className="text-sm text-[#94a3b8] font-['IBM_Plex_Sans'] mb-2">Retorna o status do sistema</p>
+                  <CodeSnippet code="curl http://192.168.4.1/api/status" lang="bash" />
+
+                  <h3 className="font-['Space_Grotesk'] font-bold text-[#FFB300] mb-3">POST /api/save</h3>
+                  <p className="text-sm text-[#94a3b8] font-['IBM_Plex_Sans'] mb-2">Salva nova configuração</p>
+                  <CodeSnippet code='curl -X POST http://192.168.4.1/api/save \\\n  -H "Content-Type: application/json" \\\n  -d \'{"wifi_ssid":"MySSID","wifi_pass":"password","bt_name":"ESP32-CIV","active_port":1,"civ_baud":9600}\'' lang="bash" />
+                </TechCornerBox>
               )}
 
               {/* Modelos Icom */}
               {activeSection === "modelos" && (
-                <motion.div initial="hidden" animate="visible" variants={fadeUp} className="space-y-6">
-                  <SectionLabel number="06" label="Modelos Icom Suportados" />
-                  <p className="text-[#94a3b8] font-['IBM_Plex_Sans'] text-sm mb-4">
-                    O firmware suporta 8 modelos Icom pré-configurados. Use o comando <code className="text-[#FFB300]">set_addr &lt;PORT&gt; &lt;HEX&gt;</code> para alterar:
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
+                <TechCornerBox className="p-6">
+                  <SectionLabel number="08" label="Modelos Icom" />
+                  <h2 className="font-['Space_Grotesk'] font-bold text-2xl text-white mb-4">Endereços CI-V Pré-Configurados</h2>
+                  
+                  <div className="grid grid-cols-2 gap-3 mb-6">
                     {[
                       { model: "IC-7300", addr: "0x94" },
                       { model: "IC-7100", addr: "0x18" },
@@ -306,48 +351,19 @@ Global variables use 28456 bytes (8%) of dynamic memory.`} lang="terminal" />
                       { model: "IC-706", addr: "0x48" },
                       { model: "IC-2730", addr: "0x39" },
                     ].map((m, i) => (
-                      <TechCornerBox key={i} className="p-3">
-                        <p className="text-white font-['Space_Grotesk'] font-bold text-sm">{m.model}</p>
-                        <p className="text-[#4fc3f7] font-['IBM_Plex_Mono'] text-xs mt-1">{m.addr}</p>
-                      </TechCornerBox>
+                      <div key={i} className="p-3 bg-[#0a1118] border border-[#4fc3f7]/20 rounded-sm">
+                        <p className="font-['Space_Grotesk'] font-bold text-white">{m.model}</p>
+                        <p className="text-xs text-[#4fc3f7] font-['IBM_Plex_Mono']">{m.addr}</p>
+                      </div>
                     ))}
                   </div>
-                </motion.div>
-              )}
 
-              {/* Troubleshooting */}
-              {activeSection === "troubleshooting" && (
-                <motion.div initial="hidden" animate="visible" variants={fadeUp} className="space-y-6">
-                  <SectionLabel number="07" label="Troubleshooting" />
-                  <div className="space-y-4">
-                    <div>
-                      <h3 className="text-white font-['Space_Grotesk'] font-bold mb-2">❌ "Sketch too big"</h3>
-                      <p className="text-[#94a3b8] font-['IBM_Plex_Sans'] text-sm mb-2">
-                        Você ainda tem bibliotecas externas instaladas.
-                      </p>
-                      <ol className="text-[#94a3b8] font-['IBM_Plex_Sans'] text-sm space-y-1 ml-4">
-                        <li>1. Desinstale ESPAsyncWebServer, AsyncTCP, ArduinoJson</li>
-                        <li>2. Limpe o cache: File → Preferences → Clear cache</li>
-                        <li>3. Feche e reabra o Arduino IDE</li>
-                        <li>4. Compile novamente</li>
-                      </ol>
-                    </div>
-                    <div>
-                      <h3 className="text-white font-['Space_Grotesk'] font-bold mb-2">❌ Bluetooth não aparece</h3>
-                      <p className="text-[#94a3b8] font-['IBM_Plex_Sans'] text-sm">
-                        Abra Monitor Serial (115200 bps) e verifique se aparece: <code className="text-[#FFB300]">[BT] ✓ Nome: ESP32-CIV</code>
-                      </p>
-                    </div>
-                    <div>
-                      <h3 className="text-white font-['Space_Grotesk'] font-bold mb-2">❌ CI-V não responde</h3>
-                      <p className="text-[#94a3b8] font-['IBM_Plex_Sans'] text-sm">
-                        Verifique: pinagem correta, nível lógico 3.3V↔5V, baud rate correto, endereço CI-V correto.
-                      </p>
-                    </div>
-                  </div>
-                </motion.div>
+                  <Alert type="info">
+                    Para usar um modelo não listado, consulte a documentação do rádio para encontrar o endereço CI-V correto.
+                  </Alert>
+                </TechCornerBox>
               )}
-            </div>
+            </motion.div>
           </div>
         </div>
       </div>
