@@ -48,23 +48,7 @@ export default function NavBar() {
           >
             Documentação
           </button>
-          <button
-            onClick={() => navigate("/code")}
-            className={`font-['IBM_Plex_Sans'] text-sm transition-colors ${
-              isActive("/code")
-                ? "text-[#4fc3f7]"
-                : "text-[#94a3b8] hover:text-[#4fc3f7]"
-            }`}
-          >
-            Código-Fonte
-          </button>
-          <a
-            href="/ESP32_CIV_Gateway_Complete_v1.0.ino"
-            download
-            className="px-4 py-2 bg-[#4fc3f7] text-[#0d1b2a] font-bold rounded text-sm hover:bg-[#80d8ff] transition-colors"
-          >
-            Download .ino
-          </a>
+
         </div>
       </div>
     </nav>

@@ -43,14 +43,6 @@ export default function Home() {
               Firmware ultra-otimizado para ESP32 com suporte a <strong>4 saídas CI-V físicas</strong>, Bluetooth SPP para controle remoto, configuração persistente via NVS e comandos via Serial. Apenas <strong>1.2 MB</strong>, cabe em qualquer ESP32 de 8 MB.
             </p>
             <div className="flex gap-4">
-              <a
-                href="/ESP32_CIV_Gateway_Complete_v1.0.ino"
-                download
-                className="inline-flex items-center gap-2 px-8 py-4 bg-[#4fc3f7] text-[#0d1b2a] font-bold rounded-lg hover:bg-[#80d8ff] transition-all hover:scale-105 active:scale-95"
-              >
-                <Download size={20} />
-                Baixar .ino (1.2 MB)
-              </a>
               <button
                 onClick={() => navigate("/docs")}
                 className="inline-flex items-center gap-2 px-8 py-4 border border-[#4fc3f7] text-[#4fc3f7] font-bold rounded-lg hover:bg-[rgba(79,195,247,0.1)] transition-colors"
@@ -230,25 +222,11 @@ export default function Home() {
               Baixe o firmware, siga o guia de instalação e configure seu ESP32 em menos de 10 minutos
             </p>
             <div className="flex gap-4 justify-center flex-wrap">
-              <a
-                href="/ESP32_CIV_Gateway_Complete_v1.0.ino"
-                download
-                className="inline-flex items-center gap-2 px-8 py-4 bg-[#4fc3f7] text-[#0d1b2a] font-bold rounded-lg hover:bg-[#80d8ff] transition-all hover:scale-105 active:scale-95"
-              >
-                <Download size={20} />
-                Baixar Firmware
-              </a>
               <button
                 onClick={() => navigate("/docs")}
                 className="inline-flex items-center gap-2 px-8 py-4 border border-[#4fc3f7] text-[#4fc3f7] font-bold rounded-lg hover:bg-[rgba(79,195,247,0.1)] transition-colors"
               >
                 Ler Documentação
-              </button>
-              <button
-                onClick={() => navigate("/code")}
-                className="inline-flex items-center gap-2 px-8 py-4 border border-[#FFB300] text-[#FFB300] font-bold rounded-lg hover:bg-[rgba(255,179,0,0.1)] transition-colors"
-              >
-                Ver Código-Fonte
               </button>
             </div>
           </motion.div>
