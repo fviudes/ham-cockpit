@@ -1,15 +1,3 @@
-/*
- * ============================================================
- *  ESP32 CI-V Gateway — Design System
- *  Filosofia: "Blueprint Técnico"
- *  Movimento: Technical Blueprint / Engineering Drafting
- *  Background: #0D1B2A (azul-marinho profundo)
- *  Primary: #4FC3F7 (azul ciano — linhas de blueprint)
- *  Accent: #FFB300 (âmbar — destaques e alertas)
- *  Fonts: Space Grotesk (títulos) + IBM Plex Sans (corpo) + IBM Plex Mono (código)
- * ============================================================
- */
-
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -55,77 +43,83 @@
 }
 
 :root {
-  --radius: 0.375rem;
+  --primary: var(--color-blue-700);
+  --primary-foreground: var(--color-blue-50);
+  --sidebar-primary: var(--color-blue-600);
+  --sidebar-primary-foreground: var(--color-blue-50);
+  --chart-1: var(--color-blue-300);
+  --chart-2: var(--color-blue-500);
+  --chart-3: var(--color-blue-600);
+  --chart-4: var(--color-blue-700);
+  --chart-5: var(--color-blue-800);
+  --radius: 0.65rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.235 0.015 65);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.235 0.015 65);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.235 0.015 65);
+  --secondary: oklch(0.98 0.001 286.375);
+  --secondary-foreground: oklch(0.4 0.015 65);
+  --muted: oklch(0.967 0.001 286.375);
+  --muted-foreground: oklch(0.552 0.016 285.938);
+  --accent: oklch(0.967 0.001 286.375);
+  --accent-foreground: oklch(0.141 0.005 285.823);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(0.92 0.004 286.32);
+  --input: oklch(0.92 0.004 286.32);
+  --ring: oklch(0.623 0.214 259.815);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.235 0.015 65);
+  --sidebar-accent: oklch(0.967 0.001 286.375);
+  --sidebar-accent-foreground: oklch(0.141 0.005 285.823);
+  --sidebar-border: oklch(0.92 0.004 286.32);
+  --sidebar-ring: oklch(0.623 0.214 259.815);
+}
 
-  /* Blueprint dark theme */
-  --background: oklch(0.14 0.03 240);
-  --foreground: oklch(0.92 0.01 220);
-
-  --card: oklch(0.18 0.035 240);
-  --card-foreground: oklch(0.92 0.01 220);
-
-  --popover: oklch(0.18 0.035 240);
-  --popover-foreground: oklch(0.92 0.01 220);
-
-  /* Cyan primary */
-  --primary: oklch(0.72 0.14 210);
-  --primary-foreground: oklch(0.12 0.03 240);
-
-  /* Amber accent */
-  --accent: oklch(0.78 0.17 75);
-  --accent-foreground: oklch(0.12 0.03 240);
-
-  --secondary: oklch(0.22 0.04 240);
-  --secondary-foreground: oklch(0.85 0.01 220);
-
-  --muted: oklch(0.22 0.04 240);
-  --muted-foreground: oklch(0.58 0.04 230);
-
-  --destructive: oklch(0.65 0.22 25);
-  --destructive-foreground: oklch(0.98 0 0);
-
-  --border: oklch(0.28 0.05 240);
-  --input: oklch(0.22 0.04 240);
-  --ring: oklch(0.72 0.14 210);
-
-  --chart-1: oklch(0.72 0.14 210);
-  --chart-2: oklch(0.78 0.17 75);
-  --chart-3: oklch(0.65 0.18 150);
-  --chart-4: oklch(0.70 0.15 280);
-  --chart-5: oklch(0.60 0.20 25);
-
-  --sidebar: oklch(0.16 0.035 240);
-  --sidebar-foreground: oklch(0.92 0.01 220);
-  --sidebar-primary: oklch(0.72 0.14 210);
-  --sidebar-primary-foreground: oklch(0.12 0.03 240);
-  --sidebar-accent: oklch(0.22 0.04 240);
-  --sidebar-accent-foreground: oklch(0.92 0.01 220);
-  --sidebar-border: oklch(0.28 0.05 240);
-  --sidebar-ring: oklch(0.72 0.14 210);
-
-  /* Custom blueprint vars */
-  --cyan: #4fc3f7;
-  --amber: #ffb300;
-  --green: #10b981;
-  --grid-color: rgba(79, 195, 247, 0.06);
-  --grid-size: 40px;
+.dark {
+  --primary: var(--color-blue-700);
+  --primary-foreground: var(--color-blue-50);
+  --sidebar-primary: var(--color-blue-500);
+  --sidebar-primary-foreground: var(--color-blue-50);
+  --background: oklch(0.141 0.005 285.823);
+  --foreground: oklch(0.85 0.005 65);
+  --card: oklch(0.21 0.006 285.885);
+  --card-foreground: oklch(0.85 0.005 65);
+  --popover: oklch(0.21 0.006 285.885);
+  --popover-foreground: oklch(0.85 0.005 65);
+  --secondary: oklch(0.24 0.006 286.033);
+  --secondary-foreground: oklch(0.7 0.005 65);
+  --muted: oklch(0.274 0.006 286.033);
+  --muted-foreground: oklch(0.705 0.015 286.067);
+  --accent: oklch(0.274 0.006 286.033);
+  --accent-foreground:  oklch(0.92 0.005 65);
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.985 0 0);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.488 0.243 264.376);
+  --chart-1: var(--color-blue-300);
+  --chart-2: var(--color-blue-500);
+  --chart-3: var(--color-blue-600);
+  --chart-4: var(--color-blue-700);
+  --chart-5: var(--color-blue-800);
+  --sidebar: oklch(0.21 0.006 285.885);
+  --sidebar-foreground: oklch(0.85 0.005 65);
+  --sidebar-accent: oklch(0.274 0.006 286.033);
+  --sidebar-accent-foreground:  oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.488 0.243 264.376);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
-
   body {
     @apply bg-background text-foreground;
-    font-family: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
-    background-color: #0d1b2a;
-    background-image:
-      linear-gradient(rgba(79, 195, 247, 0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(79, 195, 247, 0.04) 1px, transparent 1px);
-    background-size: var(--grid-size) var(--grid-size);
   }
-
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
   [type="button"]:not(:disabled),
@@ -137,22 +131,27 @@
   input[type="radio"]:not(:disabled) {
     @apply cursor-pointer;
   }
-
-  h1, h2, h3, h4, h5, h6 {
-    font-family: 'Space Grotesk', 'IBM Plex Sans', sans-serif;
-  }
-
-  code, pre, .font-mono {
-    font-family: 'IBM Plex Mono', 'Fira Code', monospace;
-  }
 }
 
 @layer components {
+  /**
+   * Custom container utility that centers content and adds responsive padding.
+   *
+   * This overrides Tailwind's default container behavior to:
+   * - Auto-center content (mx-auto)
+   * - Add responsive horizontal padding
+   * - Set max-width for large screens
+   *
+   * Usage: <div className="container">...</div>
+   *
+   * For custom widths, use max-w-* utilities directly:
+   * <div className="max-w-6xl mx-auto px-4">...</div>
+   */
   .container {
     width: 100%;
     margin-left: auto;
     margin-right: auto;
-    padding-left: 1rem;
+    padding-left: 1rem; /* 16px - mobile padding */
     padding-right: 1rem;
   }
 
@@ -163,116 +162,16 @@
 
   @media (min-width: 640px) {
     .container {
-      padding-left: 1.5rem;
+      padding-left: 1.5rem; /* 24px - tablet padding */
       padding-right: 1.5rem;
     }
   }
 
   @media (min-width: 1024px) {
     .container {
-      padding-left: 2rem;
+      padding-left: 2rem; /* 32px - desktop padding */
       padding-right: 2rem;
-      max-width: 1280px;
+      max-width: 1280px; /* Standard content width */
     }
   }
-
-  /* Blueprint section numbering */
-  .section-number {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.7rem;
-    color: var(--cyan);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    opacity: 0.7;
-  }
-
-  /* Technical border style */
-  .tech-border {
-    border: 1px solid rgba(79, 195, 247, 0.2);
-    position: relative;
-  }
-
-  .tech-border::before {
-    content: '';
-    position: absolute;
-    top: -1px; left: -1px;
-    width: 12px; height: 12px;
-    border-top: 2px solid var(--cyan);
-    border-left: 2px solid var(--cyan);
-  }
-
-  .tech-border::after {
-    content: '';
-    position: absolute;
-    bottom: -1px; right: -1px;
-    width: 12px; height: 12px;
-    border-bottom: 2px solid var(--cyan);
-    border-right: 2px solid var(--cyan);
-  }
-
-  /* Code block styling */
-  .code-block {
-    background: oklch(0.11 0.025 240);
-    border: 1px solid rgba(79, 195, 247, 0.15);
-    border-radius: 4px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.875rem;
-    line-height: 1.6;
-    overflow-x: auto;
-  }
-
-  /* LED indicator */
-  .led {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    display: inline-block;
-  }
-
-  .led-green {
-    background: #10b981;
-    box-shadow: 0 0 8px #10b981;
-    animation: pulse-green 2s infinite;
-  }
-
-  .led-amber {
-    background: #ffb300;
-    box-shadow: 0 0 8px #ffb300;
-  }
-
-  .led-red {
-    background: #ef4444;
-    box-shadow: 0 0 8px #ef4444;
-  }
-
-  .led-off {
-    background: rgba(255,255,255,0.1);
-  }
-
-  @keyframes pulse-green {
-    0%, 100% { opacity: 1; box-shadow: 0 0 8px #10b981; }
-    50% { opacity: 0.6; box-shadow: 0 0 4px #10b981; }
-  }
-
-  /* Feature card hover */
-  .feature-card {
-    transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1),
-                border-color 0.2s ease,
-                box-shadow 0.2s ease;
-  }
-
-  .feature-card:hover {
-    transform: translateY(-2px);
-    border-color: rgba(79, 195, 247, 0.4);
-    box-shadow: 0 8px 32px rgba(79, 195, 247, 0.08);
-  }
-
-  /* Syntax highlight colors */
-  .token-keyword { color: #c792ea; }
-  .token-type    { color: #4fc3f7; }
-  .token-string  { color: #c3e88d; }
-  .token-comment { color: #546e7a; font-style: italic; }
-  .token-number  { color: #f78c6c; }
-  .token-func    { color: #82aaff; }
-  .token-macro   { color: #ffb300; }
 }

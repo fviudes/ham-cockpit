@@ -1,17 +1,19 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
+
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <title>ESP32 CI-V Gateway — Firmware & Documentação</title>
-    <meta name="description" content="Firmware completo para ESP32 com Bluetooth, WiFi AP/STA, servidor DHCP, protocolo CI-V Icom e página de configuração embarcada. Para radioamadores e desenvolvedores." />
-    <meta name="keywords" content="ESP32, CI-V, Icom, Bluetooth, WiFi, DHCP, Arduino, radioamador, ham radio" />
-    <meta property="og:title" content="ESP32 CI-V Gateway" />
-    <meta property="og:description" content="Firmware Arduino para ESP32 com integração CI-V Icom, Bluetooth, WiFi e servidor DHCP." />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <title>{{project_title}}</title>    
+    <!-- THIS IS THE START OF A COMMENT BLOCK, BLOCK TO BE DELETED: Google Fonts here, example:
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    THIS IS THE END OF A COMMENT BLOCK, BLOCK TO BE DELETED -->
   </head>
+
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
@@ -20,4 +22,5 @@
       src="%VITE_ANALYTICS_ENDPOINT%/umami"
       data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"></script>
   </body>
+
 </html>
