@@ -31,7 +31,7 @@
 #include <BLEClient.h>
 
 // ===================== HARDWARE =====================
-#define FIRMWARE_VERSION "1.0.1"
+#define FIRMWARE_VERSION "1.0.2"
 #define PIN_LED 2
 #define PORT1_RX 16
 #define PORT1_TX 17
@@ -184,7 +184,7 @@ enum CIVCmd {
   C_F_READ = 0x03, C_F_SET = 0x07,
   C_M_READ = 0x04, C_M_SET = 0x06,
   C_PTT_READ = 0x1C, C_PTT_ON = 0x1C, C_PTT_OFF = 0x1C,
-  C_PWR_ON = 0x24, C_PWR_OFF = 0x24, C_PWR_READ = 0x1A,
+  C_PWR_ON = 0x18, C_PWR_OFF = 0x18, C_PWR_READ = 0x1A,
   C_AGC_READ = 0x16, C_AGC_SET = 0x16,
   C_PRE_READ = 0x16, C_PRE_OFF = 0x16, C_PRE_ON = 0x16, C_PRE_ON2 = 0x16,
   C_ATT_READ = 0x11, C_ATT_OFF = 0x11, C_ATT_ON = 0x11,
@@ -611,8 +611,19 @@ void set_ptt(bool on) {
 }
 
 void set_pwr(bool on) {
-  uint8_t d[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,on?C_PWR_ON:C_PWR_OFF,on?0x01:0x00,CIV_END};
-  send_civ(d,sizeof(d));
+  if(on){
+    // 18 01 = Power ON (wake from standby/shutdown)
+    uint8_t d[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,0x18,0x01,CIV_END};
+    send_civ(d,sizeof(d));
+  } else {
+    // 1A 05 0073 00 = Set Power OFF mode to Standby (nao Shutdown)
+    uint8_t s[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,0x1A,0x05,0x00,0x73,0x00,CIV_END};
+    send_civ(s,sizeof(s));
+    delay(50);
+    // 18 00 = Enter Standby
+    uint8_t d[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,0x18,0x00,CIV_END};
+    send_civ(d,sizeof(d));
+  }
   ic5_pwr=on;
   Serial.printf("[CI-V] Power: %s\n", on?"ON":"OFF");
 }
@@ -952,7 +963,7 @@ button:hover{background:#80d8ff}
 .slider{width:100%;margin:4px 0}
 .slider-val{color:#4fc3f7;font-size:11px;text-align:right}
 </style></head><body>
-<h1>&#9881; ESP32 CI-V Gateway <span style="font-size:12px;color:#94a3b8">v1.0.1</span></h1>
+<h1>&#9881; ESP32 CI-V Gateway <span style="font-size:12px;color:#94a3b8">v1.0.2</span></h1>
 <div class="tabs" id="tabbar">
 <button class="tab active" data-tab="radio" onclick="st(this)">Radio</button>
 <button class="tab" data-tab="ic705" onclick="st(this)">IC-705</button>
@@ -997,7 +1008,7 @@ button:hover{background:#80d8ff}
 <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">
 <button class="btn-green btn-sm" onclick="civ('ptt',1)">PTT ON</button>
 <button class="btn-red btn-sm" onclick="civ('ptt',0)">PTT OFF</button>
-<button class="btn-outline btn-sm" onclick="civ('pwr',0)">Desligar</button>
+<button class="btn-outline btn-sm" onclick="civ('pwr',0)">Standby</button>
 <button class="btn-outline btn-sm" onclick="civ('pwr',1)">Ligar</button>
 </div>
 
@@ -1183,7 +1194,7 @@ button:hover{background:#80d8ff}
 <button onclick="addUser()">Adicionar</button></div>
 </div>
 <div class="card"><h2>Atualização de Firmware</h2>
-<p style="font-size:11px;color:#94a3b8">Versão atual: <strong id="fwver">v1.0.1</strong></p>
+<p style="font-size:11px;color:#94a3b8">Versão atual: <strong id="fwver">v1.0.2</strong></p>
 <input type="file" id="fwfile" accept=".bin" style="display:none">
 <div style="display:flex;gap:4px;margin-top:6px">
 <button onclick="document.getElementById('fwfile').click()">Selecionar</button>
@@ -1281,7 +1292,15 @@ function carregarCfg(){
       document.getElementById('ssn').value=d.ssn||'';document.getElementById('sd1').value=d.sd1||'';document.getElementById('sd2').value=d.sd2||'';
       document.getElementById('ap').value=d.ap||1;document.getElementById('cb').value=d.cb||19200;document.getElementById('ca').value=d.ca||'0x94';
       document.getElementById('ipf').style.display=d.dh!==false?'none':'block';
-    }catch(e){}
+      // Preferencias de log (mesmo /api/config)
+      if(d.lBLE!=undefined)document.getElementById('lb_BLE').checked=d.lBLE==1;
+      if(d.lCIV!=undefined)document.getElementById('lb_CIV').checked=d.lCIV==1;
+      if(d.lIC705!=undefined)document.getElementById('lb_IC705').checked=d.lIC705==1;
+      if(d.lWiFi!=undefined)document.getElementById('lb_WiFi').checked=d.lWiFi==1;
+      if(d.lSYS!=undefined)document.getElementById('lb_SYS').checked=d.lSYS==1;
+      if(d.lERRO!=undefined)document.getElementById('lb_ERRO').checked=d.lERRO==1;
+      carregarLogs();
+    }catch(e){carregarLogs();}
   };
   x.send();
 }
@@ -1635,11 +1654,10 @@ function sair(){
 }
 
 carregar();
-carregarCfg();
-carregarRedes();
-carregarBT();
-carregarLogPref();
-setInterval(carregar,2000);
+setTimeout(carregarCfg,300);
+setTimeout(carregarRedes,600);
+setTimeout(carregarBT,900);
+setInterval(carregar,5000);
 </script></body></html>
 )rawliteral";
   srv.send(200,"text/html",h);
