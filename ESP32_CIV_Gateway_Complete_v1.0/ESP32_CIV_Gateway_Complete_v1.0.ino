@@ -1,15 +1,17 @@
 /*
- * ESP32 CI-V Gateway v1.0
- * Gateway CI-V para Icom IC-705 via BLE + 4 portas fisicas
+ * ESP32 CAT/CI-V/BT Gateway v1.0.3
+ * Gateway CI-V para Icom IC-705 via BLE + controle SPE Expert via RS232
  *
  * Recursos:
  * - Conexao BLE Central ao IC-705 com handshake de pareamento
  * - Polling de frequencia, modo, PTT, banda, AGC, preamp, att, S-meter
  * - Controle completo: liga/desliga, PTT, frequencia, modo, banda, AGC, preamp
- * - 4 portas CI-V fisicas (UART1, UART2, UART3, GPIO)
- * - Bridge bidirecional entre IC-705 e portas fisicas
- * - Interface Web completa com dashboard de controle remoto
- * - API REST para todos os comandos CI-V
+ * - 4 portas fisicas (UART1, UART2, UART3, RS232)
+ * - Suporte SPE Expert 1.3K-FA via protocolo proprietario (PORT4 RS232)
+ * - Protocolo selecionavel por porta: CI-V ou SPE Expert
+ * - Bridge bidirecional entre IC-705 e portas CI-V
+ * - Interface Web com dashboard IC-705 + SPE Expert
+ * - API REST para comandos CI-V e SPE
  * - WiFi AP + STA simultaneo
  * - BLE NUS (peripheral) para apps smartphone
  *
@@ -31,7 +33,7 @@
 #include <BLEClient.h>
 
 // ===================== HARDWARE =====================
-#define FIRMWARE_VERSION "1.0.2"
+#define FIRMWARE_VERSION "1.0.3"
 #define PIN_LED 2
 #define PORT1_RX 16
 #define PORT1_TX 17
@@ -44,6 +46,68 @@
 #define DEFAULT_BAUD 19200
 #define SERIAL_BAUD 115200
 #define WIFI_CLIENT_TIMEOUT 15000
+
+// ===================== PROTOCOL TYPES =====================
+#define PROTO_CIV 0
+#define PROTO_SPE 1
+#define PROTO_YAESU 2
+#define PROTO_KENWOOD 3
+
+// ===================== SPE CONSTANTS =====================
+#define SPE_SYN 0x55
+#define SPE_ACK 0xAA
+#define SPE_CMD_INPUT 0x01
+#define SPE_CMD_BAND_M 0x02
+#define SPE_CMD_BAND_P 0x03
+#define SPE_CMD_ANT 0x04
+#define SPE_CMD_L_M 0x05
+#define SPE_CMD_L_P 0x06
+#define SPE_CMD_C_M 0x07
+#define SPE_CMD_C_P 0x08
+#define SPE_CMD_TUNE 0x09
+#define SPE_CMD_OFF 0x0A
+#define SPE_CMD_POWER 0x0B
+#define SPE_CMD_DISPLAY 0x0C
+#define SPE_CMD_OPERATE 0x0D
+#define SPE_CMD_CAT 0x0E
+#define SPE_CMD_LEFT 0x0F
+#define SPE_CMD_RIGHT 0x10
+#define SPE_CMD_SET 0x11
+#define SPE_CMD_BL_ON 0x82
+#define SPE_CMD_BL_OFF 0x83
+#define SPE_CMD_STATUS 0x90
+#define SPE_BAUD_DEFAULT 9600
+
+// ===================== YAESU CAT CONSTANTS =====================
+#define YAESU_BAUD_DEFAULT 38400
+#define YS_BUF_LEN 128
+#define YS_CMD_MAX 32
+// Modos Yaesu (MD command P2 values)
+#define YS_MODE_LSB 1
+#define YS_MODE_USB 2
+#define YS_MODE_CWU 3
+#define YS_MODE_FM 4
+#define YS_MODE_AM 5
+#define YS_MODE_RTTYL 6
+#define YS_MODE_CWL 7
+#define YS_MODE_DATAL 8
+#define YS_MODE_RTTYU 9
+#define YS_MODE_DATAFM 0x0A
+#define YS_MODE_FMN 0x0B
+#define YS_MODE_DATAU 0x0C
+#define YS_MODE_AMN 0x0D
+#define YS_MODE_PSK 0x0E
+
+// ===================== KENWOOD CAT CONSTANTS =====================
+// Modos Kenwood (MD command)
+#define KW_MODE_LSB 1
+#define KW_MODE_USB 2
+#define KW_MODE_CW 3
+#define KW_MODE_FM 4
+#define KW_MODE_AM 5
+#define KW_MODE_FSK 6
+#define KW_MODE_CWR 7
+#define KW_MODE_FSR 9
 
 // ===================== BLE UUIDs =====================
 #define IC705_SVC  "14cf8001-1ec2-d408-1b04-2eb270f14203"
@@ -94,6 +158,9 @@ struct Config {
   uint8_t civ_addr[4] = {0x94,0x94,0x94,0x94};
   uint32_t civ_baud[4] = {DEFAULT_BAUD,DEFAULT_BAUD,DEFAULT_BAUD,DEFAULT_BAUD};
   uint8_t active_port = 1;
+  uint8_t port_proto[4] = {PROTO_CIV,PROTO_CIV,PROTO_CIV,PROTO_CIV};
+  uint32_t spe_baud[4] = {SPE_BAUD_DEFAULT,SPE_BAUD_DEFAULT,SPE_BAUD_DEFAULT,SPE_BAUD_DEFAULT};
+  bool port_enabled[4] = {true,true,true,true};
 } cfg;
 
 WebServer srv(80);
@@ -167,6 +234,41 @@ unsigned long last_poll = 0, last_smeter = 0;
 bool pending_cmd = false;
 uint8_t pending_buf[32]; int pending_len = 0;
 
+// ===================== YAESU STATUS =====================
+uint8_t ys_rxbuf[YS_BUF_LEN]; int ys_rxlen = 0;
+unsigned long last_ys_poll = 0;
+// Yaesu usa as mesmas variaveis ic5_* para o Radio tab,
+// mas precisamos de alguns buffers e timers adicionais
+bool ys_connected = false;
+char ys_last_cmd[YS_CMD_MAX] = "";
+unsigned long ys_last_tx = 0;
+
+// ===================== SPE STATUS =====================
+#define SPE_BUF_LEN 128
+uint8_t spe_rxbuf[SPE_BUF_LEN];
+int spe_rxlen = 0;
+bool spe_poll_pending = false;
+unsigned long last_spe_poll = 0;
+
+bool spe_op = false;
+bool spe_tx = false;
+char spe_bank = 'A';
+int spe_input = 1;
+int spe_band = 0;
+int spe_ant = 0;
+char spe_pwr_level = 'L';
+int spe_pout = 0;
+float spe_swr_atu = 0;
+float spe_swr_ant = 0;
+float spe_vpa = 0;
+float spe_ipa = 0;
+int spe_temp_up = 0;
+int spe_temp_lw = 0;
+int spe_temp_cmb = 0;
+char spe_warn = 'N';
+char spe_alarm = 'N';
+char spe_id[4] = "13K";
+
 // WiFi scan
 // Multi-WiFi: ate 10 redes salvas com prioridade
 #define MAX_WIFI_NETS 10
@@ -230,6 +332,33 @@ void h_root(); void h_cfg(); void h_sts(); void h_scan(); void h_save(); void h_
 void h_wifi_nets();
 void h_ble_scan();
 void h_bt_devices();
+void h_sysinfo();
+
+// SPE functions
+void sp_init();
+void sp_send_cmd(uint8_t cmd);
+void sp_send_bytes(uint8_t* data, int len);
+void sp_poll();
+void sp_read();
+bool sp_is_active();
+void spe_set_op(bool on);
+void spe_set_pwr();
+void spe_set_input(int i);
+void spe_tune();
+
+// Yaesu functions
+void ys_send(const char* cmd);
+void ys_read();
+void ys_poll();
+void ys_parse();
+bool ys_is_active();
+
+// Kenwood functions (mesmo formato ASCII que Yaesu)
+void kw_send(const char* cmd);
+void kw_read();
+void kw_poll();
+void kw_parse();
+bool kw_is_active();
 
 // ===================== BLE CALLBACKS =====================
 class ICCB : public BLEClientCallbacks {
@@ -298,7 +427,9 @@ class IC5AdvCB : public BLEAdvertisedDeviceCallbacks {
 //   bt_p  - string - BLE pairing passkey
 //   bd_X - uint32 - baud rate for port X (0-3)
 //   ad_X - uint8  - CI-V address for port X (0-3)
-#define NVS_VER 2
+//   pp_X - uint8  - protocol for port X (0=CI-V, 1=SPE)
+//   sb_X - uint32 - SPE baud for port X
+#define NVS_VER 3
 
 void load_cfg() {
   nvs.begin("civ-gw",false);
@@ -318,6 +449,8 @@ void load_cfg() {
   if(ip)cfg.sta_ip=IPAddress(ip); if(gw)cfg.sta_gw=IPAddress(gw);
   cfg.sta_sn=IPAddress(sm); cfg.sta_d1=IPAddress(d1); cfg.sta_d2=IPAddress(d2);
   for(int i=0;i<4;i++){char k1[16],k2[16];snprintf(k1,16,"bd_%d",i);snprintf(k2,16,"ad_%d",i);cfg.civ_baud[i]=nvs.getULong(k1,DEFAULT_BAUD);cfg.civ_addr[i]=nvs.getUChar(k2,0x94);}
+  // Carregar protocolos das portas e baud SPE
+  for(int i=0;i<4;i++){char kp[16],kb[16],ke[16];snprintf(kp,16,"pp_%d",i);snprintf(kb,16,"sb_%d",i);snprintf(ke,16,"pe_%d",i);cfg.port_proto[i]=nvs.getUChar(kp,PROTO_CIV);cfg.spe_baud[i]=nvs.getULong(kb,SPE_BAUD_DEFAULT);cfg.port_enabled[i]=nvs.getBool(ke,true);}
   // Inicializa endereco CI-V do IC-705
   civ_ic705_addr = cfg.cat_addr;
   // Carregar ultimo endereco do IC-705
@@ -360,6 +493,8 @@ void save_cfg() {
   nvs.putUChar("ca_a",cfg.cat_addr); nvs.putUChar("ra_a",cfg.radio_addr);
   nvs.putULong("st_i",(uint32_t)cfg.sta_ip); nvs.putULong("st_g",(uint32_t)cfg.sta_gw); nvs.putULong("st_m",(uint32_t)cfg.sta_sn); nvs.putULong("st_1",(uint32_t)cfg.sta_d1); nvs.putULong("st_2",(uint32_t)cfg.sta_d2);
   for(int i=0;i<4;i++){char k1[16],k2[16];snprintf(k1,16,"bd_%d",i);snprintf(k2,16,"ad_%d",i);nvs.putULong(k1,cfg.civ_baud[i]);nvs.putUChar(k2,cfg.civ_addr[i]);}
+  // Salvar protocolos das portas e baud SPE
+  for(int i=0;i<4;i++){char kp[16],kb[16],ke[16];snprintf(kp,16,"pp_%d",i);snprintf(kb,16,"sb_%d",i);snprintf(ke,16,"pe_%d",i);nvs.putUChar(kp,cfg.port_proto[i]);nvs.putULong(kb,cfg.spe_baud[i]);nvs.putBool(ke,cfg.port_enabled[i]);}
   // Salvar lista de redes WiFi
   nvs.putUChar("wn_c",(uint8_t)wifi_net_count);
   for(int i=0;i<wifi_net_count;i++){char ks[16],kp[16];snprintf(ks,16,"wn_%d_s",i);snprintf(kp,16,"wn_%d_p",i);nvs.putString(ks,wifi_nets[i].ssid);nvs.putString(kp,wifi_nets[i].pass);}
@@ -583,6 +718,17 @@ void poll_ic5() {
 }
 
 void set_freq(uint64_t f) {
+  if(kw_is_active()) {
+    char cmd[20]; snprintf(cmd,20,"FA%011llu",f);
+    kw_send(cmd); ic5_freq=f; Serial.printf("[KW] FA %llu\n",f); return;
+  }
+  if(ys_is_active()) {
+    char cmd[16]; snprintf(cmd,16,"FA%09llu",f);
+    ys_send(cmd);
+    ic5_freq=f;
+    Serial.printf("[YS] FA %llu\n",f);
+    return;
+  }
   Serial.printf("[CMD] set_freq chamado com %llu\n",f);
   uint8_t d[13]; int i=0;
   d[i++]=CIV_PRE; d[i++]=CIV_PRE; d[i++]=civ_ic705_addr; d[i++]=CIV_CTRL; d[i++]=0x00;
@@ -594,7 +740,22 @@ void set_freq(uint64_t f) {
 }
 
 void set_mode(uint8_t m) {
-  // FE FE 98 E0 06 <mode> <filter> FD
+  if(kw_is_active()) {
+    uint8_t km=2;
+    switch(m) { case 0: km=1; break; case 1: km=2; break; case 2: km=5; break; case 3: km=3; break; case 5: km=4; break; }
+    char cmd[8]; snprintf(cmd,8,"MD%d",km); kw_send(cmd);
+    ic5_mode=m; strcpy(ic5_mode_str,m<sizeof(mode_names)/sizeof(mode_names[0])&&mode_names[m][0]?mode_names[m]:"?");
+    Serial.printf("[KW] Mode: %s\n", ic5_mode_str); return;
+  }
+  if(ys_is_active()) {
+    uint8_t ym = 2;
+    switch(m) { case 0: ym=1; break; case 1: ym=2; break; case 2: ym=5; break; case 3: ym=3; break; case 5: ym=4; break; }
+    char cmd[8]; snprintf(cmd,8,"MD0%X",ym); ys_send(cmd);
+    ic5_mode=m;
+    if(m<sizeof(mode_names)/sizeof(mode_names[0])&&mode_names[m][0]) strcpy(ic5_mode_str,mode_names[m]);
+    else snprintf(ic5_mode_str,8,"M%02X",m);
+    Serial.printf("[YS] Modo: %s\n", ic5_mode_str); return;
+  }
   uint8_t d[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,C_M_SET,m,0x01,CIV_END};
   send_civ(d,sizeof(d));
   ic5_mode=m;
@@ -604,6 +765,8 @@ void set_mode(uint8_t m) {
 }
 
 void set_ptt(bool on) {
+  if(kw_is_active()) { kw_send(on?"TX0":"RX"); ic5_ptt=on; Serial.printf("[KW] PTT: %s\n", on?"TX":"RX"); return; }
+  if(ys_is_active()) { ys_send(on?"MX1":"MX0"); ic5_ptt=on; Serial.printf("[YS] PTT: %s\n", on?"TX":"RX"); return; }
   uint8_t d[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,C_PTT_ON,on?0x01:0x00,CIV_END};
   send_civ(d,sizeof(d));
   ic5_ptt=on;
@@ -611,18 +774,17 @@ void set_ptt(bool on) {
 }
 
 void set_pwr(bool on) {
+  if(kw_is_active()) { kw_send(on?"PS1":"PS0"); ic5_pwr=on; Serial.printf("[KW] Power: %s\n", on?"ON":"OFF"); return; }
+  if(ys_is_active()) { ys_send(on?"PS1":"PS0"); ic5_pwr=on; Serial.printf("[YS] Power: %s\n", on?"ON":"OFF"); return; }
   if(on){
-    // 18 01 = Power ON (wake from standby/shutdown)
     uint8_t d[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,0x18,0x01,CIV_END};
     send_civ(d,sizeof(d));
   } else {
-    // 1A 05 0073 00 = Set Power OFF mode to Standby (nao Shutdown)
-    uint8_t s[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,0x1A,0x05,0x00,0x73,0x00,CIV_END};
-    send_civ(s,sizeof(s));
-    delay(50);
-    // 18 00 = Enter Standby
-    uint8_t d[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,0x18,0x00,CIV_END};
+    uint8_t d[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,0x1A,0x05,0x00,0x73,0x01,CIV_END};
     send_civ(d,sizeof(d));
+    delay(50);
+    uint8_t d2[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,0x18,0x00,CIV_END};
+    send_civ(d2,sizeof(d2));
   }
   ic5_pwr=on;
   Serial.printf("[CI-V] Power: %s\n", on?"ON":"OFF");
@@ -649,12 +811,16 @@ void set_att(uint8_t v) {
 }
 
 void set_rf(uint8_t v) {
+  if(kw_is_active()) { char cmd[8]; snprintf(cmd,8,"RG%03u",v); kw_send(cmd); ic5_rf=v; Serial.printf("[KW] RF: %u\n",v); return; }
+  if(ys_is_active()) { char cmd[8]; snprintf(cmd,8,"RG%03u",v); ys_send(cmd); ic5_rf=v; Serial.printf("[YS] RF: %u\n",v); return; }
   uint8_t d[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,C_RF_SET,0x12,v,CIV_END};
   send_civ(d,sizeof(d)); ic5_rf=v;
   Serial.printf("[CI-V] RF Gain: %u\n", v);
 }
 
 void set_af(uint8_t v) {
+  if(kw_is_active()) { char cmd[8]; snprintf(cmd,8,"AG0%03u",v); kw_send(cmd); ic5_af=v; Serial.printf("[KW] AF: %u\n",v); return; }
+  if(ys_is_active()) { char cmd[8]; snprintf(cmd,8,"AG0%03u",v); ys_send(cmd); ic5_af=v; Serial.printf("[YS] AF: %u\n",v); return; }
   uint8_t d[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,C_AF_SET,0x14,v,CIV_END};
   send_civ(d,sizeof(d)); ic5_af=v;
   Serial.printf("[CI-V] AF Gain: %u\n", v);
@@ -726,10 +892,370 @@ void proc_ic5() {
   rxrdy=false;
 }
 
+// ===================== SPE PROTOCOL =====================
+void sp_send_bytes(uint8_t* data, int len) {
+  uint8_t p = cfg.active_port;
+  if(cfg.port_proto[p-1] != PROTO_SPE) return;
+  if(p != 4) return;
+  p3.write(data, len);
+  p3.flush();
+}
+
+void sp_send_cmd(uint8_t cmd) {
+  uint8_t pkt[] = {SPE_SYN, SPE_SYN, SPE_SYN, 0x01, cmd, cmd};
+  sp_send_bytes(pkt, sizeof(pkt));
+  Serial.printf("[SPE] Cmd: 0x%02X\n", cmd);
+}
+
+void sp_poll() {
+  if(!sp_is_active()) return;
+  unsigned long now = millis();
+  if(now - last_spe_poll < 2000) return;
+  last_spe_poll = now;
+  sp_send_cmd(SPE_CMD_STATUS);
+  spe_poll_pending = true;
+}
+
+void sp_read() {
+  uint8_t p = cfg.active_port;
+  if(cfg.port_proto[p-1] != PROTO_SPE) return;
+  if(p != 4) return;
+
+  while(p3.available()) {
+    uint8_t b = p3.read();
+    if(spe_rxlen < SPE_BUF_LEN) { spe_rxbuf[spe_rxlen++] = b; }
+  }
+  if(spe_rxlen < 6) return;
+
+  int syn_off = -1;
+  for(int i = 0; i < spe_rxlen - 2; i++) {
+    if(spe_rxbuf[i] == SPE_ACK && spe_rxbuf[i+1] == SPE_ACK && spe_rxbuf[i+2] == SPE_ACK) {
+      syn_off = i; break;
+    }
+  }
+  if(syn_off < 0) { spe_rxlen = 0; return; }
+
+  int pay_len = spe_rxbuf[syn_off + 3];
+  int total = syn_off + 4 + pay_len + 4;
+
+  if(spe_rxlen < total) return;
+
+  uint8_t* data_start = spe_rxbuf + syn_off + 4;
+  uint16_t sum = 0;
+  for(int i = 0; i < pay_len; i++) sum += data_start[i];
+
+  if(data_start[pay_len + 2] != 0x0D || data_start[pay_len + 3] != 0x0A) { spe_rxlen = 0; return; }
+
+  if(pay_len >= 67) {
+    char buf[68];
+    memcpy(buf, data_start, 67);
+    buf[67] = 0;
+    char* fields[19];
+    int fc = 0;
+    char* pp = buf;
+    fields[fc++] = pp;
+    while(*pp && fc < 19) {
+      if(*pp == ',') { *pp = 0; fields[fc++] = pp + 1; }
+      pp++;
+    }
+    if(fc >= 19) {
+      strncpy(spe_id, fields[0], 3); spe_id[3] = 0;
+      spe_op = (fields[1][0] == 'O');
+      spe_tx = (fields[2][0] == 'T');
+      spe_bank = fields[3][0];
+      spe_input = atoi(fields[4]);
+      spe_band = atoi(fields[5]);
+      spe_ant = fields[6][0] - '0';
+      spe_pwr_level = fields[8][0];
+      spe_pout = atoi(fields[9]);
+      spe_swr_atu = atof(fields[10]);
+      spe_swr_ant = atof(fields[11]);
+      spe_vpa = atof(fields[12]);
+      spe_ipa = atof(fields[13]);
+      spe_temp_up = atoi(fields[14]);
+      spe_temp_lw = atoi(fields[15]);
+      spe_temp_cmb = atoi(fields[16]);
+      spe_warn = fields[17][0];
+      spe_alarm = fields[18][0];
+      Serial.printf("[SPE] %s OP=%c TX=%c %s Pout=%d SWR=%.2f V=%.1f I=%.1f T=%d\n",
+        spe_id, fields[1][0], fields[2][0], fields[8], spe_pout, spe_swr_ant, spe_vpa, spe_ipa, spe_temp_up);
+    }
+  }
+  spe_rxlen = 0;
+  spe_poll_pending = false;
+}
+
+bool sp_is_active() {
+  uint8_t p = cfg.active_port;
+  if(p < 1 || p > 4) return false;
+  return (cfg.port_proto[p-1] == PROTO_SPE);
+}
+
+void spe_set_op(bool on) {
+  sp_send_cmd(on ? SPE_CMD_OPERATE : SPE_CMD_OFF);
+  spe_op = on;
+  addLog("SPE", on ? "OPERATE" : "STANDBY");
+}
+
+void spe_set_pwr() {
+  sp_send_cmd(SPE_CMD_POWER);
+  addLog("SPE", "Power toggle (L/M/H)");
+}
+
+void spe_set_input(int i) {
+  if(i < 1 || i > 2) return;
+  sp_send_cmd(SPE_CMD_INPUT);
+  if(i == 2) { delay(80); sp_send_cmd(SPE_CMD_INPUT); }
+  spe_input = i;
+  addLog("SPE", "Input %d", i);
+}
+
+void spe_tune() {
+  sp_send_cmd(SPE_CMD_TUNE);
+  addLog("SPE", "TUNE");
+}
+
+void sp_init() {
+  uint8_t p = cfg.active_port;
+  if(cfg.port_proto[p-1] == PROTO_SPE) {
+    p3.end();
+    p3.begin(cfg.spe_baud[3], SERIAL_8N1, PORT4_RX, PORT4_TX);
+    addLog("SPE","PORT4 RS232 %u baud", cfg.spe_baud[3]);
+    Serial.printf("[SPE] PORT4 RS232: %u baud\n", cfg.spe_baud[3]);
+  }
+}
+
+// ===================== YAESU CAT =====================
+HardwareSerial* ys_port() {
+  uint8_t p = cfg.active_port;
+  if(p < 1 || p > 4) return NULL;
+  return gp(p);
+}
+
+void ys_send(const char* cmd) {
+  auto p = ys_port();
+  if(!p) return;
+  int sl = strlen(cmd);
+  if(sl >= YS_CMD_MAX) return;
+  strcpy(ys_last_cmd, cmd);
+  p->print(cmd);
+  p->print(';');
+  p->flush();
+  ys_last_tx = millis();
+  if(log_enabled.civ) Serial.printf("[YS] >> %s;\n", cmd);
+}
+
+void ys_read() {
+  auto p = ys_port();
+  if(!p) return;
+  while(p->available() && ys_rxlen < YS_BUF_LEN - 1) {
+    char c = p->read();
+    if(c == ';') {
+      ys_rxbuf[ys_rxlen] = 0;
+      ys_parse();
+      ys_rxlen = 0;
+      ys_connected = true;
+    } else if(c >= 0x20 && c <= 0x7E) {
+      ys_rxbuf[ys_rxlen++] = c;
+    }
+  }
+  if(ys_rxlen >= YS_BUF_LEN - 1) ys_rxlen = 0;
+  // Timeout: se passou 500ms sem resposta, descarta buffer
+  if(ys_rxlen > 0 && millis() - ys_last_tx > 500) ys_rxlen = 0;
+}
+
+void ys_parse() {
+  char* buf = (char*)ys_rxbuf;
+  int len = strlen(buf);
+  if(len < 2) return;
+
+  if(log_enabled.civ) Serial.printf("[YS] << %s\n", buf);
+
+  // FA resposta: FA000030000-470000000;
+  if(strncmp(buf, "FA", 2) == 0 && len >= 12) {
+    char fstr[16]; memcpy(fstr, buf+2, 9); fstr[9] = 0;
+    ic5_freq = atoll(fstr);
+  }
+  // MD resposta: MD0x;
+  else if(strncmp(buf, "MD", 2) == 0 && len >= 4) {
+    uint8_t m = (uint8_t)strtol(buf+3, NULL, 16);
+    ic5_mode = m;
+    const char* yn[] = {"","LSB","USB","CW-U","FM","AM","RTTY-L","CW-L","DATA-L","RTTY-U","DATA-FM","FM-N","DATA-U","AM-N","PSK"};
+    if(m < sizeof(yn)/sizeof(yn[0]) && yn[m][0]) strcpy(ic5_mode_str, yn[m]);
+    else snprintf(ic5_mode_str, 8, "M%02X", m);
+  }
+  // MX resposta: MX0; ou MX1;
+  else if(strncmp(buf, "MX", 2) == 0 && len >= 3) {
+    ic5_ptt = (buf[2] == '1');
+  }
+  // SM resposta: SM0xxx;
+  else if(strncmp(buf, "SM", 2) == 0 && len >= 6) {
+    ic5_smeter = atoi(buf+3);
+  }
+  // IF resposta (30 bytes): IFxxxxxxxxx...;
+  else if(strncmp(buf, "IF", 2) == 0 && len >= 30) {
+    // P1 (5 bytes): freq
+    char fstr[16]; memcpy(fstr, buf+2, 9); fstr[9] = 0;
+    ic5_freq = atoll(fstr);
+    // P6 (1 byte): mode hex
+    uint8_t m = (uint8_t)strtol(buf+27, NULL, 16);
+    ic5_mode = m;
+    const char* yn[] = {"","LSB","USB","CW-U","FM","AM","RTTY-L","CW-L","DATA-L","RTTY-U","DATA-FM","FM-N","DATA-U","AM-N","PSK"};
+    if(m < sizeof(yn)/sizeof(yn[0]) && yn[m][0]) strcpy(ic5_mode_str, yn[m]);
+    else snprintf(ic5_mode_str, 8, "M%02X", m);
+  }
+  // TX resposta: TX0; TX1; TX2;
+  else if(strncmp(buf, "TX", 2) == 0 && len >= 3) {
+    ic5_ptt = (buf[2] == '1' || buf[2] == '2');
+  }
+  // AG resposta: AG0xxx;
+  else if(strncmp(buf, "AG", 2) == 0 && len >= 6) {
+    if(buf[2] == '0') ic5_af = atoi(buf+3);
+  }
+  // RG resposta: RGxxx;
+  else if(strncmp(buf, "RG", 2) == 0 && len >= 5) {
+    ic5_rf = atoi(buf+2);
+  }
+}
+
+void ys_poll() {
+  if(!ys_is_active()) return;
+  unsigned long now = millis();
+  if(now - last_ys_poll < 1000) return;
+  last_ys_poll = now;
+  // Polling em sequencia: FA, SM0, MX, MD0
+  static int step = 0;
+  switch(step) {
+    case 0: ys_send("FA"); break;
+    case 1: ys_send("SM0"); break;
+    case 2: ys_send("MX"); break;
+    case 3: ys_send("MD0"); break;
+  }
+  step = (step + 1) % 4;
+}
+
+bool ys_is_active() {
+  uint8_t p = cfg.active_port;
+  if(p < 1 || p > 4) return false;
+  return (cfg.port_proto[p-1] == PROTO_YAESU);
+}
+
+// ===================== KENWOOD CAT =====================
+// Reusa o mesmo buffer e funcao de envio ASCII do Yaesu
+// pois ambos usam formato: cmd + params + ;
+
+void kw_send(const char* cmd) {
+  auto p = ys_port();
+  if(!p) return;
+  p->print(cmd);
+  p->print(';');
+  p->flush();
+  ys_last_tx = millis();
+  if(log_enabled.civ) Serial.printf("[KW] >> %s;\n", cmd);
+}
+
+void kw_read() {
+  auto p = ys_port();
+  if(!p) return;
+  while(p->available() && ys_rxlen < YS_BUF_LEN - 1) {
+    char c = p->read();
+    // Erro Kenwood: ?, E
+    if(c == '?') { Serial.println("[KW] Erro: ? (syntax)"); ys_rxlen=0; continue; }
+    if(c == 'E') { Serial.println("[KW] Erro: E (comm)"); ys_rxlen=0; continue; }
+    if(c == 'O') { Serial.println("[KW] Erro: O (busy)"); ys_rxlen=0; continue; }
+    if(c == ';') {
+      ys_rxbuf[ys_rxlen] = 0;
+      kw_parse();
+      ys_rxlen = 0;
+      ys_connected = true;
+    } else if(c >= 0x20 && c <= 0x7E) {
+      ys_rxbuf[ys_rxlen++] = c;
+    }
+  }
+  if(ys_rxlen >= YS_BUF_LEN - 1) ys_rxlen = 0;
+  if(ys_rxlen > 0 && millis() - ys_last_tx > 500) ys_rxlen = 0;
+}
+
+void kw_parse() {
+  char* buf = (char*)ys_rxbuf;
+  int len = strlen(buf);
+  if(len < 2) return;
+  if(log_enabled.civ) Serial.printf("[KW] << %s\n", buf);
+
+  // FA resposta: FA00000000000; (11 digitos)
+  if(strncmp(buf,"FA",2)==0 && len >= 14) {
+    char f[16]; memcpy(f,buf+2,11); f[11]=0;
+    ic5_freq = atoll(f);
+  }
+  // FB: mesma coisa
+  else if(strncmp(buf,"FB",2)==0 && len >= 14) {
+    char f[16]; memcpy(f,buf+2,11); f[11]=0;
+    ic5_freq = atoll(f);
+  }
+  // MD resposta: MDx; (x=1-9)
+  else if(strncmp(buf,"MD",2)==0 && len >= 3) {
+    uint8_t m = buf[2]-'0';
+    ic5_mode = m;
+    const char* kn[]={"","LSB","USB","CW","FM","AM","FSK","CWR","","FSR"};
+    if(m<10 && kn[m][0]) strcpy(ic5_mode_str,kn[m]);
+    else snprintf(ic5_mode_str,8,"M%d",m);
+  }
+  // SM resposta: SM0xxxx; (0000-0020)
+  else if(strncmp(buf,"SM",2)==0 && len >= 7) {
+    int v = atoi(buf+3);
+    ic5_smeter = v * 255 / 20; // normaliza 0-20 para 0-255
+  }
+  // PC resposta: PCxxx;
+  else if(strncmp(buf,"PC",2)==0 && len >= 5) {
+    ic5_pwr = atoi(buf+2) > 0 ? 1 : 0;
+  }
+  // IF resposta (37 chars): IFxxxxxxxxxxx.....;
+  else if(strncmp(buf,"IF",2)==0 && len >= 30) {
+    char f[16]; memcpy(f,buf+2,11); f[11]=0;
+    ic5_freq = atoll(f);
+    uint8_t m = buf[28]-'0'; // mode at pos 29 (0-indexed: 28)
+    ic5_mode = m;
+    const char* kn[]={"","LSB","USB","CW","FM","AM","FSK","CWR","","FSR"};
+    if(m<10 && kn[m][0]) strcpy(ic5_mode_str,kn[m]);
+    else snprintf(ic5_mode_str,8,"M%d",m);
+    ic5_ptt = (buf[27] == '1'); // RX/TX at pos 28 (0-indexed: 27)
+  }
+  // AG resposta: AG0xxx;
+  else if(strncmp(buf,"AG",2)==0 && len >= 6) {
+    if(buf[2]=='0') ic5_af = atoi(buf+3);
+  }
+  // RG resposta: RGxxx;
+  else if(strncmp(buf,"RG",2)==0 && len >= 5) {
+    ic5_rf = atoi(buf+2);
+  }
+}
+
+void kw_poll() {
+  if(!kw_is_active()) return;
+  unsigned long now = millis();
+  if(now - last_ys_poll < 1000) return;
+  last_ys_poll = now;
+  static int step = 0;
+  switch(step) {
+    case 0: kw_send("FA"); break;
+    case 1: kw_send("SM0"); break;
+    case 2: kw_send("IF"); break; // IF ja inclui freq, modo, RX/TX
+    case 3: kw_send("MD"); break;
+  }
+  step = (step + 1) % 4;
+}
+
+bool kw_is_active() {
+  uint8_t p = cfg.active_port;
+  if(p < 1 || p > 4) return false;
+  return (cfg.port_proto[p-1] == PROTO_KENWOOD);
+}
+
 // ===================== BRIDGES =====================
 void bridge_ic5p() {
   if(!ic5con||!ic5civ||!rxrdy||!cfg.cat_enabled) return;
   uint8_t p=cfg.cat_port?cfg.cat_port:cfg.active_port;
+  if(cfg.port_proto[p-1]>=PROTO_SPE){ rxrdy=false; return; }
   auto dp=gp(p);
   if(dp&&p!=4){ for(int i=0;i<rxlen;i++) dp->write(rxbuf[i]); }
   rxrdy=false;
@@ -737,6 +1263,7 @@ void bridge_ic5p() {
 void bridge_pic5() {
   if(!ic5con||!ic5civ) return;
   uint8_t p=cfg.cat_port?cfg.cat_port:cfg.active_port;
+  if(cfg.port_proto[p-1]>=PROTO_SPE) return;
   auto sp=gp(p);
   if(!sp||p==4||!sp->available()) return;
   uint8_t b[128]; int l=0;
@@ -746,6 +1273,7 @@ void bridge_pic5() {
 void bridge_nusp() {
   if(!nuscon||!nuslen) return;
   uint8_t p=cfg.cat_port?cfg.cat_port:cfg.active_port;
+  if(cfg.port_proto[p-1]>=PROTO_SPE){ nuslen=0; return; }
   auto dp=gp(p);
   if(dp&&p!=4){ for(int i=0;i<nuslen;i++) dp->write(nusbuf[i]); }
   nuslen=0;
@@ -753,6 +1281,7 @@ void bridge_nusp() {
 void bridge_pnus() {
   if(!nuscon||!nustx) return;
   uint8_t p=cfg.cat_port?cfg.cat_port:cfg.active_port;
+  if(cfg.port_proto[p-1]>=PROTO_SPE) return;
   auto sp=gp(p);
   if(!sp||p==4||!sp->available()) return;
   uint8_t b[128]; int l=0;
@@ -833,9 +1362,21 @@ void sel_port(uint8_t p) {
   if(p<1||p>4)return;
   cfg.active_port=p;
   switch(p){case 1:act_civ=&p1;break;case 2:act_civ=&p2;break;case 3:act_civ=&p3;break;}
-  Serial.printf("[CI-V] Porta: PORT %d\n",p);
+  const char* pn[] = {"CIV","SPE","YS","KW"};
+  uint8_t pt = cfg.port_proto[p-1];
+  Serial.printf("[CI-V] Porta: PORT %d Proto: %s\n",p,pt<4?pn[pt]:"?");
 }
 void rst_port(uint8_t p) {
+  if(cfg.port_proto[p-1]==PROTO_SPE){ sp_init(); return; }
+  if(cfg.port_proto[p-1]==PROTO_YAESU||cfg.port_proto[p-1]==PROTO_KENWOOD){
+    uint32_t bd = cfg.spe_baud[p-1] ? cfg.spe_baud[p-1] : YAESU_BAUD_DEFAULT;
+    switch(p){
+      case 1:p1.end();p1.begin(bd,SERIAL_8N1,PORT1_RX,PORT1_TX);break;
+      case 2:p2.end();p2.begin(bd,SERIAL_8N1,PORT2_RX,PORT2_TX);break;
+      case 3:p3.end();p3.begin(bd,SERIAL_8N1,PORT3_RX,PORT3_TX);break;
+    }
+    return;
+  }
   switch(p){case 1:p1.end();p1.begin(cfg.civ_baud[0],SERIAL_8N1,PORT1_RX,PORT1_TX);break;case 2:p2.end();p2.begin(cfg.civ_baud[1],SERIAL_8N1,PORT2_RX,PORT2_TX);break;case 3:p3.end();p3.begin(cfg.civ_baud[2],SERIAL_8N1,PORT3_RX,PORT3_TX);break;}
 }
 
@@ -850,15 +1391,24 @@ void serial_cmd() {
     Serial.println("agc <0-3>,pre <0-2>,att <0|1>,rfg <0-255>,afg <0-255>");
     Serial.println("split <0|1>,selport <1-4>,set_bt <N>,set_baud <N> <B>");
     Serial.println("set_addr <N> <HEX>,reboot,factory");
+    Serial.println("=== SPE ===");
+    Serial.println("spe_op <0|1>,spe_pwr,spe_input <1|2>,spe_tune,spe_sts");
   } else if(c=="sts"||c=="status"){
+    if(sp_is_active()){
+      Serial.printf("SPE %s: OP=%d TX=%d PWR=%c Pout=%d SWR=%.2f V=%.1f I=%.1f T=%d\n",spe_id,spe_op,spe_tx,spe_pwr_level,spe_pout,spe_swr_ant,spe_vpa,spe_ipa,spe_temp_up);
+    }
     Serial.printf("IC705: %s CI-V:%s Freq:%llu Mode:%s PTT:%s PWR:%s\n",ic5con?"CON":"---",ic5civ?"OK":"---",ic5_freq,ic5_mode_str,ic5_ptt?"TX":"RX",ic5_pwr?"ON":"OFF");
     Serial.printf("AGC:%u PRE:%u ATT:%u RF:%u AF:%u S:%u Split:%u\n",ic5_agc,ic5_pre,ic5_att,ic5_rf,ic5_af,ic5_smeter,ic5_split);
     Serial.printf("AP: %s (%s) STA: %s\n",cfg.ap_ssid.c_str(),WiFi.softAPIP().toString().c_str(),sta_con?("CON "+WiFi.localIP().toString()).c_str():"---");
   } else if(c=="cfg"||c=="config"){
     Serial.printf("AP:%s STA:%s DHCP:%s BLE:%s CAT:%s Porta:%d\n",cfg.ap_ssid.c_str(),cfg.sta_ssid.c_str(),cfg.sta_dhcp?"S":"N",cfg.bt_name.c_str(),cfg.cat_enabled?"S":"N",cfg.cat_port);
-    for(int i=0;i<4;i++)Serial.printf("PORT%d: Baud=%u Addr=0x%02X\n",i+1,cfg.civ_baud[i],cfg.civ_addr[i]);
+    for(int i=0;i<4;i++){
+      const char* pns[]={"CIV","SPE","YS","KW"};
+      uint8_t pt=cfg.port_proto[i];
+      Serial.printf("PORT%d: Proto=%s Baud=%u Addr=0x%02X\n",i+1,pt<4?pns[pt]:"?",cfg.civ_baud[i],cfg.civ_addr[i]);
+    }
   } else if(c=="ports"){
-    Serial.println("PORT1: RX16 TX17\nPORT2: RX18 TX19\nPORT3: RX20 TX21\nPORT4: RX14 TX15");
+    Serial.println("PORT1: RX16 TX17 (CIV)\nPORT2: RX18 TX19 (CIV)\nPORT3: RX20 TX21 (CIV)\nPORT4: RX14 TX15 (SPE RS232)");
   } else if(c=="scan"){wifi_scan();Serial.println("[WiFi] Scan");delay(3000);wifi_chk();}
   else if(c=="ic5con"){scan_ic5();}
   else if(c=="ic5disc"){if(ic5cli)ic5cli->disconnect();}
@@ -878,6 +1428,14 @@ void serial_cmd() {
     int s=c.indexOf(' ',9);if(s>0){int p=atoi(c.substring(9,s).c_str());uint32_t b=atol(c.substring(s+1).c_str());if(p>=1&&p<=4){cfg.civ_baud[p-1]=b;save_cfg();if(p==cfg.active_port)rst_port(p);}}
   } else if(c.startsWith("set_addr ")){
     int s=c.indexOf(' ',9);if(s>0){int p=atoi(c.substring(9,s).c_str());String a=c.substring(s+1);if(p>=1&&p<=4){cfg.civ_addr[p-1]=(uint8_t)strtol(a.c_str(),NULL,16);save_cfg();}}
+  } else if(c.startsWith("spe_op ")){spe_set_op(atoi(c.substring(7).c_str())==1);}
+  else if(c=="spe_pwr"){spe_set_pwr();}
+  else if(c.startsWith("spe_input ")){spe_set_input(atoi(c.substring(10).c_str()));}
+  else if(c=="spe_tune"){spe_tune();}
+  else if(c=="spe_sts"){
+    Serial.printf("SPE: %s OP=%d TX=%d Bank=%c Input=%d Band=%d Ant=%d PWR=%c Pout=%d SWR_ATU=%.2f SWR_ANT=%.2f V=%.1f I=%.1f T_up=%d T_lw=%d T_cmb=%d W=%c A=%c\n",
+      spe_id, spe_op, spe_tx, spe_bank, spe_input, spe_band, spe_ant, spe_pwr_level,
+      spe_pout, spe_swr_atu, spe_swr_ant, spe_vpa, spe_ipa, spe_temp_up, spe_temp_lw, spe_temp_cmb, spe_warn, spe_alarm);
   } else if(c=="reboot"){Serial.println("Reboot");delay(500);ESP.restart();}
   else if(c=="factory"){nvs.begin("civ-gw",false);nvs.clear();nvs.end();Serial.println("Factory reset");}
 }
@@ -891,6 +1449,7 @@ void setup_ws() {
   srv.on("/api/wifi_nets",HTTP_GET,h_wifi_nets);
   srv.on("/api/ble_scan",HTTP_GET,h_ble_scan);
   srv.on("/api/bt_devices",HTTP_GET,h_bt_devices);
+  srv.on("/api/sysinfo",HTTP_GET,h_sysinfo);
   srv.on("/api/login",HTTP_POST,h_login);
   srv.on("/api/logout",HTTP_GET,h_logout);
   srv.on("/api/update",HTTP_POST,[](){
@@ -916,12 +1475,47 @@ void setup_ws() {
   Serial.printf("[HTTP] http://%s/\n",WiFi.softAPIP().toString().c_str());
 }
 
+// ===================== SYSINFO =====================
+// Contadores para diagnostico
+unsigned long req_count = 0;
+unsigned long last_req_reset = 0;
+unsigned long loop_iters = 0;
+unsigned long last_loop_check = 0;
+unsigned long last_loop_iters = 0;
+unsigned long max_loop_iters = 1;
+int cpu_pct = 0;
+
+void h_sysinfo() {
+  if(!checkAuth()){srv.send(401,"application/json","{\"success\":false}");return;}
+  req_count++;
+  StaticJsonDocument<512> d;
+  uint32_t ps=ESP.getPsramSize(), fs=ESP.getFreePsram();
+  d["heap_total"]=ESP.getHeapSize(); d["heap_free"]=ESP.getFreeHeap();
+  d["psram_total"]=ps; d["psram_free"]=fs;
+  d["psram_pct"]=ps?(fs*100/ps):0;
+  d["flash_size"]=ESP.getFlashChipSize();
+  d["sketch_size"]=ESP.getSketchSize(); d["sketch_free"]=ESP.getFreeSketchSpace();
+  d["chip"]=ESP.getChipModel(); d["chip_rev"]=ESP.getChipRevision();
+  d["cpu_mhz"]=ESP.getCpuFreqMHz();
+  d["uptime_ms"]=millis();
+  d["uptime_s"]=millis()/1000;
+  d["wifi_rssi"]=WiFi.RSSI(); d["wifi_mac"]=WiFi.macAddress();
+  d["wifi_ap_ip"]=WiFi.softAPIP().toString();
+  d["wifi_sta_ip"]=sta_con?WiFi.localIP().toString():"";
+  d["wifi_gw"]=sta_con?WiFi.gatewayIP().toString():"";
+  d["wifi_mask"]=sta_con?WiFi.subnetMask().toString():"";
+  d["wifi_dns1"]=sta_con?WiFi.dnsIP().toString():"";
+  d["wifi_ssid"]=WiFi.SSID();
+  d["cpu_pct"]=cpu_pct; d["fw_ver"]=FIRMWARE_VERSION; d["req_count"]=req_count;
+  String r; serializeJson(d,r); srv.send(200,"application/json",r);
+}
+
 void h_root() {
   if(!checkAuth()){srv.sendHeader("Location","/login");srv.send(302,"text/plain","");return;}
-  String h=R"rawliteral(
+  srv.send_P(200,"text/html",(PGM_P)R"rawliteral(
 <!DOCTYPE html><html lang="pt-BR"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ESP32 CI-V Gateway</title>
+<title>ESP32 CAT/CI-V/BT Gateway</title>
 <link href="https://fonts.cdnfonts.com/css/ds-digital" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -963,19 +1557,21 @@ button:hover{background:#80d8ff}
 .slider{width:100%;margin:4px 0}
 .slider-val{color:#4fc3f7;font-size:11px;text-align:right}
 </style></head><body>
-<h1>&#9881; ESP32 CI-V Gateway <span style="font-size:12px;color:#94a3b8">v1.0.2</span></h1>
+<h1>&#9881; ESP32 CAT/CI-V/BT Gateway <span style="font-size:12px;color:#94a3b8">v1.0.3</span></h1>
 <div class="tabs" id="tabbar">
 <button class="tab active" data-tab="radio" onclick="st(this)">Radio</button>
 <button class="tab" data-tab="ic705" onclick="st(this)">IC-705</button>
+<button class="tab" data-tab="spe" onclick="st(this)">SPE</button>
 <button class="tab" data-tab="wifi" onclick="st(this)">WiFi</button>
 <button class="tab" data-tab="bluetooth" onclick="st(this)">Bluetooth</button>
-<button class="tab" data-tab="civ" onclick="st(this)">CI-V</button>
+<button class="tab" data-tab="civ" onclick="st(this)">CAT / CI-V</button>
 <button class="tab" data-tab="logs" onclick="st(this)">Logs</button>
 <button class="tab" data-tab="admin" onclick="st(this)">Admin</button>
+<button class="tab" data-tab="status" onclick="st(this)">Status</button>
 </div>
 
 <div id="tb-radio">
-<h2>Painel de Controle IC-705</h2>
+<h2>Painel de Controle Icom Radio</h2>
 <div class="card">
 <div class="grid">
 <div class="gitem"><div class="glabel">Frequencia</div><div class="gval freq" id="v_freq">---</div></div>
@@ -1106,6 +1702,110 @@ button:hover{background:#80d8ff}
 </div>
 </div>
 
+<div id="tb-spe" style="display:none">
+<h2>SPE Expert Amplifier <span style="font-size:10px;color:#94a3b8">(PORT4 RS232)</span></h2>
+
+<!-- LCD Display Frame -->
+<div class="card" style="background:#000;border:2px solid #1a3a5a;border-radius:6px;padding:12px;margin-bottom:8px">
+  <div style="background:#001020;border:1px solid #0a2a4a;border-radius:4px;padding:10px;font-family:'DS-Digital','Courier New',monospace">
+
+    <!-- Top bar: ID + Status + TX/RX + Bank -->
+    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #0a2a4a;padding-bottom:4px;margin-bottom:6px">
+      <span style="color:#4fc3f7;font-size:12px;font-weight:bold" id="s_spe_id">13K</span>
+      <span style="font-size:11px;padding:1px 6px;border-radius:2px;font-weight:bold" id="s_spe_op_display">STBY</span>
+      <span style="font-size:11px;padding:1px 6px;border-radius:2px;font-weight:bold" id="s_spe_tx_display">RX</span>
+      <span style="color:#94a3b8;font-size:11px" id="s_spe_bank_display">BNK A</span>
+    </div>
+
+    <!-- Main: Output Power + Power Level -->
+    <div style="display:flex;justify-content:space-between;align-items:baseline;padding:4px 0">
+      <div>
+        <span style="color:#555;font-size:9px">RF OUT</span>
+        <div><span style="color:#FFB300;font-size:32px;font-weight:bold;letter-spacing:2px" id="s_spe_pout_display">0</span><span style="color:#FFB300;font-size:16px"> W</span></div>
+      </div>
+      <div style="text-align:right">
+        <span style="color:#555;font-size:9px">PWR</span>
+        <div><span style="color:#4fc3f7;font-size:22px;font-weight:bold" id="s_spe_pwr_display">L</span></div>
+      </div>
+    </div>
+
+    <!-- Row 1: SWR ATU / SWR ANT / V PA / I PA -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;border-top:1px solid #0a2a4a;border-bottom:1px solid #0a2a4a;padding:4px 0;margin:4px 0">
+      <div><span style="color:#555;font-size:8px">SWR ATU</span><div style="color:#4fc3f7;font-size:16px;font-weight:bold" id="s_spe_swr_atu_display">0.00</div></div>
+      <div><span style="color:#555;font-size:8px">SWR ANT</span><div style="color:#4fc3f7;font-size:16px;font-weight:bold" id="s_spe_swr_display">0.00</div></div>
+      <div><span style="color:#555;font-size:8px">V PA</span><div style="color:#10b981;font-size:16px;font-weight:bold" id="s_spe_vpa_display">0.0</div></div>
+      <div><span style="color:#555;font-size:8px">I PA</span><div style="color:#10b981;font-size:16px;font-weight:bold" id="s_spe_ipa_display">0.0</div></div>
+    </div>
+
+    <!-- Row 2: Band / Ant / Input / Temp -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;padding:2px 0">
+      <div><span style="color:#555;font-size:8px">BAND</span><div style="color:#e2e8f0;font-size:13px;font-weight:bold" id="s_spe_band_display">---</div></div>
+      <div><span style="color:#555;font-size:8px">ANT</span><div style="color:#e2e8f0;font-size:13px;font-weight:bold" id="s_spe_ant_display">-</div></div>
+      <div><span style="color:#555;font-size:8px">INPUT</span><div style="color:#e2e8f0;font-size:13px;font-weight:bold" id="s_spe_input_display">1</div></div>
+      <div><span style="color:#555;font-size:8px">TEMP</span><div style="color:#f87171;font-size:13px;font-weight:bold" id="s_spe_temp_display">0</div></div>
+    </div>
+
+    <!-- Alarm / Warning -->
+    <div id="spe_alarm_box_display" style="display:none;margin-top:4px;padding:3px 6px;background:rgba(239,68,68,0.2);border:1px solid #ef4444;border-radius:2px;font-size:11px;color:#ef4444;text-align:center;font-weight:bold">
+      ALARM: <span id="spe_alarm_txt_display"></span>
+    </div>
+    <div id="spe_warn_box_display" style="display:none;margin-top:2px;padding:3px 6px;background:rgba(255,179,0,0.15);border:1px solid #FFB300;border-radius:2px;font-size:11px;color:#FFB300;text-align:center;font-weight:bold">
+      WARN: <span id="spe_warn_txt_display"></span>
+    </div>
+  </div>
+</div>
+
+<!-- Two-button panels side by side -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px">
+
+<!-- Left Panel -->
+<div class="card" style="padding:8px">
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px">
+<button class="btn-sm" onclick="speCmd('input',1)">Input</button>
+<button class="btn-sm" onclick="speCmd('lm','')">&larr; L</button>
+<button class="btn-sm" onclick="speCmd('lp','')">L &rarr;</button>
+
+<button class="btn-sm" onclick="speCmd('ant','')">Antena</button>
+<button class="btn-sm" onclick="speCmd('cm','')">&larr; C</button>
+<button class="btn-sm" onclick="speCmd('cp','')">C &rarr;</button>
+
+<button class="btn-sm" onclick="speCmd('bm','')">&larr; Band-</button>
+<button class="btn-sm" onclick="speCmd('bp','')">Band+ &rarr;</button>
+<button class="btn-sm" onclick="speCmd('tune','')">Tunner</button>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px;margin-top:3px">
+<div style="text-align:center"><span id="spe_led_al" class="spe-led" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#333;vertical-align:middle"></span> <span style="font-size:9px;color:#94a3b8">AL</span></div>
+<div style="text-align:center"><span id="spe_led_tune" class="spe-led" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#333;vertical-align:middle"></span> <span style="font-size:9px;color:#94a3b8">Tune</span></div>
+<div style="text-align:center"><span id="spe_led_off" class="spe-led" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;vertical-align:middle"></span> <span style="font-size:9px;color:#94a3b8">Off</span></div>
+</div>
+</div>
+
+<!-- Right Panel -->
+<div class="card" style="padding:8px">
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px">
+<button class="btn-sm" onclick="speCmd('left','')">&larr; &uarr;</button>
+<button class="btn-sm" onclick="speCmd('up','')">&darr; &rarr;</button>
+<button class="btn-sm" onclick="speCmd('op',1)">On</button>
+
+<button class="btn-sm" onclick="speCmd('catkey','')">Cat</button>
+<button class="btn-sm" onclick="speCmd('disp','')">Disp</button>
+<button class="btn-sm" onclick="speCmd('op',0)">Off</button>
+
+<button class="btn-sm" onclick="speCmd('setkey','')">Set</button>
+<button class="btn-sm" onclick="speCmd('spwr',1)">PWR</button>
+<button class="btn-sm" onclick="speCmd('op',1)">OP</button>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px;margin-top:3px">
+<div style="text-align:center"><span id="spe_led_on" class="spe-led" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#333;vertical-align:middle"></span> <span style="font-size:9px;color:#94a3b8">ON</span></div>
+<div style="text-align:center"><span id="spe_led_op" class="spe-led" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#333;vertical-align:middle"></span> <span style="font-size:9px;color:#94a3b8">OP</span></div>
+<div style="text-align:center"><span id="spe_led_tx" class="spe-led" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#333;vertical-align:middle"></span> <span style="font-size:9px;color:#94a3b8">TX</span></div>
+</div>
+</div>
+
+</div>
+
+</div>
+
 <div id="tb-wifi" style="display:none"><h2>WiFi</h2>
 <div class="card">
 <h2>AP</h2><label>SSID</label><input type="text" id="aps"><label>Senha</label><input type="password" id="app"><button onclick="sAP()">Salvar AP</button>
@@ -1194,7 +1894,7 @@ button:hover{background:#80d8ff}
 <button onclick="addUser()">Adicionar</button></div>
 </div>
 <div class="card"><h2>Atualização de Firmware</h2>
-<p style="font-size:11px;color:#94a3b8">Versão atual: <strong id="fwver">v1.0.2</strong></p>
+<p style="font-size:11px;color:#94a3b8">Versão atual: <strong id="fwver">v1.0.3</strong></p>
 <input type="file" id="fwfile" accept=".bin" style="display:none">
 <div style="display:flex;gap:4px;margin-top:6px">
 <button onclick="document.getElementById('fwfile').click()">Selecionar</button>
@@ -1208,17 +1908,104 @@ button:hover{background:#80d8ff}
 </div>
 </div>
 
-<div id="tb-civ" style="display:none"><h2>CI-V</h2>
+<div id="tb-status" style="display:none">
+<h2>Status do Sistema</h2>
 <div class="card">
-<label>Porta Ativa</label><select id="ap"><option value="1">PORT1</option><option value="2">PORT2</option><option value="3">PORT3</option><option value="4">PORT4</option></select>
-<label>Baud</label><select id="cb"><option value="9600">9600</option><option value="19200">19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
-<label>Endereco</label><select id="ca">
-<option value="0x94">IC-7300</option><option value="0x18">IC-7100</option><option value="0x76">IC-7610</option>
-<option value="0x98">IC-705</option><option value="0x88">IC-9700</option><option value="0x70">IC-7000</option>
-<option value="0x48">IC-706</option><option value="0x39">IC-2730</option>
-</select>
-<button onclick="sCIV()">Salvar</button>
+<h2>Hardware</h2>
+<div class="grid3">
+<div class="gitem"><div class="glabel">Chip</div><div class="gval" id="s_chip">---</div></div>
+<div class="gitem"><div class="glabel">CPU</div><div class="gval" id="s_cpu">--- MHz</div></div>
+<div class="gitem"><div class="glabel">Firmware</div><div class="gval" id="s_fwver">---</div></div>
 </div>
+</div>
+<div class="card">
+<h2>Mem&oacute;ria</h2>
+<div class="grid3">
+<div class="gitem"><div class="glabel">RAM</div><div class="gval" id="s_ram">---</div></div>
+<div class="gitem"><div class="glabel">PSRAM</div><div class="gval" id="s_psram">---</div></div>
+<div class="gitem"><div class="glabel">Flash</div><div class="gval" id="s_flash">---</div></div>
+</div>
+<div style="margin-top:6px"><label>RAM</label>
+<div style="height:8px;background:#1a2a3a;border-radius:4px"><div id="s_ram_bar" style="height:100%;width:0%;background:linear-gradient(90deg,#10b981,#4fc3f7,#FFB300,#ef4444);border-radius:4px;transition:width .3s"></div></div></div>
+<div style="margin-top:4px"><label>PSRAM</label>
+<div style="height:8px;background:#1a2a3a;border-radius:4px"><div id="s_psram_bar" style="height:100%;width:0%;background:linear-gradient(90deg,#10b981,#4fc3f7,#FFB300,#ef4444);border-radius:4px;transition:width .3s"></div></div></div>
+</div>
+<div class="card">
+<h2>Processador</h2>
+<div><label>CPU: <span id="s_cpu_pct" style="color:#4fc3f7;font-weight:bold">0%</span></label>
+<div style="height:12px;background:#1a2a3a;border-radius:6px;overflow:hidden">
+<div id="s_cpu_bar" style="height:100%;width:0%;border-radius:6px;transition:width .3s"></div>
+</div></div>
+</div>
+<div class="card">
+<h2>Rede</h2>
+<div class="grid3">
+<div class="gitem"><div class="glabel">AP IP</div><div class="gval" style="font-size:12px" id="s_apip">---</div></div>
+<div class="gitem"><div class="glabel">STA IP</div><div class="gval" style="font-size:12px" id="s_staip">---</div></div>
+<div class="gitem"><div class="glabel">MAC</div><div class="gval" style="font-size:12px" id="s_mac">---</div></div>
+<div class="gitem"><div class="glabel">Gateway</div><div class="gval" style="font-size:12px" id="s_gw">---</div></div>
+<div class="gitem"><div class="glabel">M&aacute;scara</div><div class="gval" style="font-size:12px" id="s_mask">---</div></div>
+<div class="gitem"><div class="glabel">DNS</div><div class="gval" style="font-size:12px" id="s_dns">---</div></div>
+</div>
+<div class="grid3" style="margin-top:4px">
+<div class="gitem"><div class="glabel">RSSI</div><div class="gval" id="s_rssi">---</div></div>
+<div class="gitem"><div class="glabel">SSID</div><div class="gval" style="font-size:12px" id="s_ssid">---</div></div>
+<div class="gitem"><div class="glabel">Requisi&ccedil;&otilde;es</div><div class="gval" id="s_req">---</div></div>
+</div>
+</div>
+<div class="card">
+<h2>Uptime</h2>
+<div class="gval" style="text-align:center;font-size:18px" id="s_uptime">---</div>
+</div>
+</div>
+
+<div id="tb-civ" style="display:none"><h2>CAT / CI-V</h2>
+<label>Porta Ativa</label><select id="ap" style="margin-bottom:6px"><option value="1">PORT1</option><option value="2">PORT2</option><option value="3">PORT3</option><option value="4">PORT4</option></select>
+<button onclick="sCIV()" style="margin-bottom:8px">Salvar Todas</button>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px" id="ports-grid">
+  <script>
+  // Gerado dinamicamente pelo carregarCfg()
+  </script>
+</div>
+
+<div id="port-cards-container"></div>
+
+<script>
+function buildPortCards(d){
+  var html='';
+  var protos=['CI-V','SPE','Yaesu','Kenwood'];
+  var addrOpts=['0x94','0x18','0x76','0x98','0x88','0x70','0x48','0x39'];
+  var addrLabels=['IC-7300','IC-7100','IC-7610','IC-705','IC-9700','IC-7000','IC-706','IC-2730'];
+  for(var i=0;i<4;i++){
+    var p=d.ports?d.ports[i]:{en:true,pr:0,ba:19200,ad:'0x94'};
+    html+='<div class="card" style="padding:8px;border-color:'+(p.en?'rgba(79,195,247,0.3)':'rgba(239,68,68,0.3)')+'">';
+    html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
+    html+='<strong style="color:#FFB300;font-size:12px">PORT '+(i+1)+'</strong>';
+    html+='<label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="'+i+'" '+(p.en?'checked':'')+'> Enable</label>';
+    html+='</div>';
+    html+='<label style="font-size:9px">Protocolo</label>';
+    html+='<select class="pp" data-idx="'+i+'" onchange="protoChange2(this,'+i+')" style="font-size:10px;padding:3px 4px">';
+    for(var pi=0;pi<protos.length;pi++)html+='<option value="'+pi+'" '+(p.pr==pi?'selected':'')+'>'+protos[pi]+'</option>';
+    html+='</select>';
+    html+='<label style="font-size:9px">Baud</label>';
+    html+='<select class="pb" data-idx="'+i+'" style="font-size:10px;padding:3px 4px">';
+    var bds=[9600,19200,38400,57600,115200];
+    for(var bi=0;bi<bds.length;bi++)html+='<option value="'+bds[bi]+'" '+(p.ba==bds[bi]?'selected':'')+'>'+bds[bi]+'</option>';
+    html+='</select>';
+    html+='<div class="civ-addr-row-'+i+'" style="'+(p.pr==0?'':'display:none')+'">';
+    html+='<label style="font-size:9px">Endere&ccedil;o CI-V</label>';
+    html+='<select class="pa" data-idx="'+i+'" style="font-size:10px;padding:3px 4px">';
+    for(var ai=0;ai<addrOpts.length;ai++)html+='<option value="'+addrOpts[ai]+'" '+(p.ad==addrOpts[ai]?'selected':'')+'>'+addrLabels[ai]+'</option>';
+    html+='</select></div></div>';
+  }
+  document.getElementById('port-cards-container').innerHTML='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">'+html+'</div>';
+}
+function protoChange2(el,idx){
+  var rows=document.querySelectorAll('.civ-addr-row-'+idx);
+  for(var r=0;r<rows.length;r++)rows[r].style.display=el.value=='0'?'block':'none';
+}
+</script>
 </div>
 
 <div id="toast" class="toast"></div>
@@ -1232,9 +2019,17 @@ function st(el){
   document.getElementById('tb-'+tab).style.display='block';
   el.classList.add('active');
   if(tab=='radio'||tab=='ic705'||tab=='bluetooth'){carregar();carregarBT();}
+  if(tab=='spe'){carregarSPE();}
   if(tab=='wifi'){carregar();listarRedes();carregarRedes();}
   if(tab=='logs')carregarLogPref();
   if(tab=='admin')carregarUsers();
+  if(tab=='status'){
+    carregarSysinfo();
+    if(window._stInt)clearInterval(window._stInt);
+    window._stInt=setInterval(carregarSysinfo,1000);
+  } else {
+    if(window._stInt){clearInterval(window._stInt);window._stInt=null;}
+  }
 }
 function toast(m,t){
   var d=document.getElementById('toast');
@@ -1274,6 +2069,131 @@ function carregar(){
   };
   x.send();
 }
+function carregarSPE(){
+  var x=new XMLHttpRequest();
+  x.open('GET','/api/status',true);
+  x.onload=function(){
+    try{
+      var d=JSON.parse(x.responseText);
+      if(!d.spe_active){
+        var v='---';['s_spe_id','s_spe_id2'].forEach(function(i){var e=document.getElementById(i);if(e)e.textContent=v;});
+        ['s_spe_pout','s_spe_pout2','s_spe_pout_display'].forEach(function(i){var e=document.getElementById(i);if(e)e.textContent=v;});
+        return;
+      }
+      var bands=['160m','80m','60m','40m','30m','20m','17m','15m','12m','10m','6m','4m'];
+      var bi=d.spe_band;var bn=(bi>=0&&bi<bands.length)?bands[bi]:'B'+bi;
+      var pout=d.spe_pout||0;
+      // LCD Display
+      document.getElementById('s_spe_id').textContent=d.spe_id||'13K';
+      var opEl=document.getElementById('s_spe_op_display');
+      if(d.spe_op){opEl.textContent='OPERATE';opEl.style.color='#10b981';opEl.style.background='rgba(16,185,129,0.2)';}
+      else{opEl.textContent='STBY';opEl.style.color='#ef4444';opEl.style.background='rgba(239,68,68,0.2)';}
+      var txEl=document.getElementById('s_spe_tx_display');
+      if(d.spe_tx){txEl.textContent='TX';txEl.style.color='#ef4444';txEl.style.background='rgba(239,68,68,0.2)';}
+      else{txEl.textContent='RX';txEl.style.color='#10b981';txEl.style.background='rgba(16,185,129,0.2)';}
+      document.getElementById('s_spe_bank_display').textContent='BNK '+d.spe_bank;
+      document.getElementById('s_spe_pout_display').textContent=pout;
+      document.getElementById('s_spe_pwr_display').textContent=d.spe_pwr_level||'L';
+      document.getElementById('s_spe_swr_atu_display').textContent=(d.spe_swr_atu||0).toFixed(2);
+      document.getElementById('s_spe_swr_display').textContent=(d.spe_swr_ant||0).toFixed(2);
+      document.getElementById('s_spe_vpa_display').textContent=(d.spe_vpa||0).toFixed(1);
+      document.getElementById('s_spe_ipa_display').textContent=(d.spe_ipa||0).toFixed(1);
+      document.getElementById('s_spe_band_display').textContent=bn;
+      document.getElementById('s_spe_ant_display').textContent=d.spe_ant||'-';
+      document.getElementById('s_spe_input_display').textContent=d.spe_input||1;
+      document.getElementById('s_spe_temp_display').textContent=(d.spe_temp_up||0)+'C';
+      // Alarm/Warning boxes
+      var alBox=document.getElementById('spe_alarm_box_display'),alTxt=document.getElementById('spe_alarm_txt_display');
+      if(d.spe_alarm&&d.spe_alarm!='N'&&d.spe_alarm!='n'){alBox.style.display='block';alTxt.textContent=d.spe_alarm;}
+      else alBox.style.display='none';
+      var wrBox=document.getElementById('spe_warn_box_display'),wrTxt=document.getElementById('spe_warn_txt_display');
+      if(d.spe_warn&&d.spe_warn!='N'&&d.spe_warn!='n'){wrBox.style.display='block';wrTxt.textContent=d.spe_warn;}
+      else wrBox.style.display='none';
+      // Status Cards (abaixo do display)
+      document.getElementById('s_spe_id2').textContent=d.spe_id||'---';
+      document.getElementById('s_spe_op2').innerHTML=d.spe_op?'<span class="badge bg-green">OPERATE</span>':'<span class="badge bg-red">STBY</span>';
+      document.getElementById('s_spe_tx2').innerHTML=d.spe_tx?'<span class="badge bg-red">TX</span>':'<span class="badge bg-green">RX</span>';
+      document.getElementById('s_spe_pout2').textContent=pout+' W';
+      document.getElementById('s_spe_swr2').textContent=(d.spe_swr_ant||0).toFixed(2);
+      document.getElementById('s_spe_pwr2').textContent=d.spe_pwr_level||'---';
+      document.getElementById('s_spe_vpa2').textContent=(d.spe_vpa||0).toFixed(1)+'V';
+      document.getElementById('s_spe_ipa2').textContent=(d.spe_ipa||0).toFixed(1)+'A';
+      document.getElementById('s_spe_temp2').textContent=(d.spe_temp_up||0)+' C';
+      // LEDs
+      var ledOn=function(id,on){var e=document.getElementById(id);if(e)e.style.background=on?'#10b981':'#333';};
+      var al=d.spe_alarm||'N';ledOn('spe_led_al',al!='N'&&al!='n');
+      ledOn('spe_led_off',!d.spe_op);
+      ledOn('spe_led_on',d.spe_op);
+      ledOn('spe_led_op',d.spe_op);
+      ledOn('spe_led_tx',d.spe_tx);
+      var wn=d.spe_warn||'N';ledOn('spe_led_tune',wn=='W'||wn=='K');
+    }catch(e){}
+  };
+  x.send();
+}
+function speCmd(c,v){
+  var d={};d[c]=v;
+  var x=new XMLHttpRequest();
+  x.open('POST','/api/civ',true);
+  x.setRequestHeader('Content-Type','application/json');
+  x.onload=function(){try{var r=JSON.parse(x.responseText);toast(r.success?'OK':'Erro',r.success?'ok':'err');}catch(e){toast('Erro','err');}};
+  x.send(JSON.stringify(d));
+  setTimeout(carregarSPE,500);
+}
+function carregarSysinfo(){
+  var x=new XMLHttpRequest();
+  x.open('GET','/api/sysinfo',true);
+  x.onload=function(){
+    try{
+      var d=JSON.parse(x.responseText);
+      document.getElementById('s_chip').textContent=(d.chip||'?')+' rev.'+(d.chip_rev||0);
+      document.getElementById('s_cpu').textContent=(d.cpu_mhz||'?')+' MHz';
+      document.getElementById('s_fwver').textContent=d.fw_ver||'---';
+      // RAM
+      var ramUso=((d.heap_total||1)-(d.heap_free||0))/(d.heap_total||1)*100;
+      document.getElementById('s_ram').textContent=fmtBytes(d.heap_free)+' / '+fmtBytes(d.heap_total);
+      document.getElementById('s_ram_bar').style.width=Math.round(ramUso)+'%';
+      // PSRAM
+      var psUso=((d.psram_total||1)-(d.psram_free||0))/(d.psram_total||1)*100;
+      document.getElementById('s_psram').textContent=fmtBytes(d.psram_free)+' / '+fmtBytes(d.psram_total);
+      document.getElementById('s_psram_bar').style.width=Math.round(psUso)+'%';
+      // Flash
+      document.getElementById('s_flash').textContent=fmtBytes(d.sketch_free)+' livre ('+fmtBytes(d.flash_size)+')';
+      // Rede
+      document.getElementById('s_apip').textContent=d.wifi_ap_ip||'---';
+      document.getElementById('s_staip').textContent=d.wifi_sta_ip||'---';
+      document.getElementById('s_mac').textContent=d.wifi_mac||'---';
+      document.getElementById('s_gw').textContent=d.wifi_gw||'---';
+      document.getElementById('s_mask').textContent=d.wifi_mask||'---';
+      document.getElementById('s_dns').textContent=d.wifi_dns1||'---';
+      document.getElementById('s_rssi').textContent=d.wifi_rssi?d.wifi_rssi+' dBm':'---';
+      document.getElementById('s_ssid').textContent=d.wifi_ssid||'---';
+      document.getElementById('s_req').textContent=d.req_count||0;
+      // CPU
+      var cp=d.cpu_pct||0;
+      document.getElementById('s_cpu_pct').textContent=cp+'%';
+      var bar=document.getElementById('s_cpu_bar');
+      bar.style.width=cp+'%';
+      bar.style.background=cp<30?'#10b981':cp<60?'#FFB300':'#ef4444';
+      // Uptime
+      var up=d.uptime_s||0;
+      var dd=Math.floor(up/86400);up%=86400;
+      var hh=Math.floor(up/3600);up%=3600;
+      var mm=Math.floor(up/60);var ss=up%60;
+      document.getElementById('s_uptime').textContent=dd+'d '+('0'+hh).slice(-2)+'h '+('0'+mm).slice(-2)+'m '+('0'+ss).slice(-2)+'s';
+    }catch(e){}
+  };
+  x.send();
+}
+function fmtBytes(b){
+  if(!b||b<1024)return (b||0)+'B';
+  if(b<1048576)return (b/1024).toFixed(1)+'KB';
+  return (b/1048576).toFixed(1)+'MB';
+}
+function protoChange(el){
+  var v=el.value;
+  document.getElementById('civ_addr_row').style.display=(v=='0')?'block':'none';
+}
 function carregarCfg(){
   var x=new XMLHttpRequest();
   x.open('GET','/api/config',true);
@@ -1290,7 +2210,8 @@ function carregarCfg(){
       document.getElementById('dhcp').checked=d.dh!==false;
       document.getElementById('sip').value=d.sip||'';document.getElementById('sgw').value=d.sgw||'';
       document.getElementById('ssn').value=d.ssn||'';document.getElementById('sd1').value=d.sd1||'';document.getElementById('sd2').value=d.sd2||'';
-      document.getElementById('ap').value=d.ap||1;document.getElementById('cb').value=d.cb||19200;document.getElementById('ca').value=d.ca||'0x94';
+      document.getElementById('ap').value=d.ap||1;
+      if(window.buildPortCards)buildPortCards(d);
       document.getElementById('ipf').style.display=d.dh!==false?'none':'block';
       // Preferencias de log (mesmo /api/config)
       if(d.lBLE!=undefined)document.getElementById('lb_BLE').checked=d.lBLE==1;
@@ -1488,7 +2409,21 @@ function cancelarRede(){document.getElementById('rede-edit').style.display='none
 function subirRede(idx){envia('/api/save',{wn_move:idx,wn_dir:-1});setTimeout(carregarRedes,500);}
 function descerRede(idx){envia('/api/save',{wn_move:idx,wn_dir:1});setTimeout(carregarRedes,500);}
 function excluirRede(idx){envia('/api/save',{wn_del:idx});setTimeout(carregarRedes,500);}
-function sCIV(){envia('/api/save',{ap:parseInt(document.getElementById('ap').value),cb:parseInt(document.getElementById('cb').value),ca:document.getElementById('ca').value});}
+function sCIV(){
+  var ap=parseInt(document.getElementById('ap').value);
+  var data={ap:ap};
+  for(var i=0;i<4;i++){
+    var enEl=document.querySelector('.pe[data-idx="'+i+'"]');
+    var prEl=document.querySelector('.pp[data-idx="'+i+'"]');
+    var baEl=document.querySelector('.pb[data-idx="'+i+'"]');
+    var adEl=document.querySelector('.pa[data-idx="'+i+'"]');
+    if(enEl)data['pe'+i]=enEl.checked?1:0;
+    if(prEl)data['pp'+i]=parseInt(prEl.value);
+    if(baEl)data['pb'+i]=parseInt(baEl.value);
+    if(adEl)data['pa'+i]=adEl.value;
+  }
+  envia('/api/save',data);
+}
 function listarRedes(networks){
   var s=document.getElementById('sta_sel');s.innerHTML='<option value="">--</option>';
   if(!networks)return;
@@ -1658,9 +2593,12 @@ setTimeout(carregarCfg,300);
 setTimeout(carregarRedes,600);
 setTimeout(carregarBT,900);
 setInterval(carregar,5000);
-</script></body></html>
-)rawliteral";
-  srv.send(200,"text/html",h);
+</script>
+<div style="text-align:center;padding:12px;font-size:10px;color:#555;border-top:1px solid rgba(79,195,247,0.1);margin-top:12px">
+Copyright &copy; ForceIT by PR2PT &mdash; <a href="http://forceit.com.br" style="color:#4fc3f7;text-decoration:none" target="_blank">forceit.com.br</a> &mdash; <a href="https://hamportal.cc" style="color:#4fc3f7;text-decoration:none" target="_blank">hamportal.cc</a>
+</div>
+</body></html>
+)rawliteral");
 }
 
 void h_cfg() {
@@ -1674,13 +2612,22 @@ void h_cfg() {
   JsonArray usr=d.createNestedArray("users");
   for(int i=0;i<user_count;i++){JsonObject o=usr.createNestedObject();o["n"]=users[i].name;}
   d["bn"]=cfg.bt_name; d["btn"]=cfg.bt_name; d["btp"]=cfg.bt_pass; d["ce"]=cfg.cat_enabled; d["cp"]=cfg.cat_port;
-  d["ap"]=cfg.active_port; d["cb"]=cfg.civ_baud[cfg.active_port-1]; d["ca"]="0x"+String(cfg.civ_addr[cfg.active_port-1],HEX);
+  d["ap"]=cfg.active_port; d["pp"]=cfg.port_proto[cfg.active_port-1];
+  uint8_t pt_=cfg.port_proto[cfg.active_port-1];
+  d["cb"]=(pt_>=PROTO_SPE)?cfg.spe_baud[cfg.active_port-1]:cfg.civ_baud[cfg.active_port-1];
+  d["ca"]="0x"+String(cfg.civ_addr[cfg.active_port-1],HEX);
+  // Dados de todas as portas
+  JsonArray pa=d.createNestedArray("ports");
+  for(int i=0;i<4;i++){
+    JsonObject po=pa.createNestedObject();
+    po["en"]=cfg.port_enabled[i]; po["pr"]=cfg.port_proto[i]; po["ba"]=cfg.civ_baud[i]; po["ad"]="0x"+String(cfg.civ_addr[i],HEX);
+  }
   String r; serializeJson(d,r); srv.send(200,"application/json",r);
 }
 
 void h_sts() {
   if(!checkAuth()){srv.send(401,"application/json","{\"success\":false}");return;}
-  StaticJsonDocument<512> d;
+  StaticJsonDocument<1024> d;
   d["ic5con"]=ic5con; d["ic5civ"]=ic5civ; d["ic5pair"]=ic5pair;
   d["freq"]=ic5_freq; d["mode"]=ic5_mode_str; d["ptt"]=ic5_ptt; d["pwr"]=ic5_pwr;
   d["mode_num"]=ic5_mode; d["filt"]=ic5_filt; d["split"]=ic5_split;
@@ -1689,6 +2636,17 @@ void h_sts() {
   d["rf"]=ic5_rf; d["af"]=ic5_af; d["smeter"]=ic5_smeter;
   d["ap_ip"]=WiFi.softAPIP().toString(); d["sta_con"]=sta_con;
   d["sta_ip"]=sta_con?WiFi.localIP().toString():"";
+  // SPE fields apenas quando ativo (reduz resposta JSON)
+  d["spe_active"]=sp_is_active();
+  if(sp_is_active()){
+    d["spe_id"]=spe_id; d["spe_op"]=spe_op; d["spe_tx"]=spe_tx;
+    d["spe_pout"]=spe_pout; d["spe_pwr_level"]=String(spe_pwr_level);
+    d["spe_swr_atu"]=spe_swr_atu; d["spe_swr_ant"]=spe_swr_ant;
+    d["spe_vpa"]=spe_vpa; d["spe_ipa"]=spe_ipa;
+    d["spe_temp_up"]=spe_temp_up; d["spe_input"]=spe_input;
+    d["spe_band"]=spe_band; d["spe_ant"]=spe_ant;
+    d["spe_warn"]=String(spe_warn); d["spe_alarm"]=String(spe_alarm);
+  }
   String r; serializeJson(d,r); srv.send(200,"application/json",r);
 }
 
@@ -1835,8 +2793,23 @@ void h_save() {
   if(d.containsKey("ce"))cfg.cat_enabled=d["ce"].as<bool>();
   if(d.containsKey("cp"))cfg.cat_port=d["cp"].as<uint8_t>();
   if(d.containsKey("ap"))sel_port(d["ap"].as<uint8_t>());
-  if(d.containsKey("cb")){cfg.civ_baud[cfg.active_port-1]=d["cb"].as<uint32_t>();rst_port(cfg.active_port);}
+  if(d.containsKey("cb")){
+    uint32_t b=d["cb"].as<uint32_t>();
+    uint8_t pt=cfg.port_proto[cfg.active_port-1];
+    if(pt==PROTO_SPE||pt==PROTO_YAESU||pt==PROTO_KENWOOD) cfg.spe_baud[cfg.active_port-1]=b;
+    else cfg.civ_baud[cfg.active_port-1]=b;
+    rst_port(cfg.active_port);
+  }
   if(d.containsKey("ca")){String a=d["ca"].as<String>();cfg.civ_addr[cfg.active_port-1]=(uint8_t)strtol(a.c_str(),NULL,16);}
+  if(d.containsKey("pp")){cfg.port_proto[cfg.active_port-1]=d["pp"].as<uint8_t>();rst_port(cfg.active_port);}
+  // Per-port settings (from port cards)
+  for(int i=0;i<4;i++){
+    char ke[8],kp[8],kb[8],ka[8]; snprintf(ke,8,"pe%d",i); snprintf(kp,8,"pp%d",i); snprintf(kb,8,"pb%d",i); snprintf(ka,8,"pa%d",i);
+    if(d.containsKey(ke)) cfg.port_enabled[i]=d[ke].as<int>()==1;
+    if(d.containsKey(kp)) cfg.port_proto[i]=d[kp].as<uint8_t>();
+    if(d.containsKey(kb)) cfg.civ_baud[i]=d[kb].as<uint32_t>();
+    if(d.containsKey(ka)){String a=d[ka].as<String>();cfg.civ_addr[i]=(uint8_t)strtol(a.c_str(),NULL,16);}
+  }
   save_cfg();
 
   if(d.containsKey("disc_ic5")&&d["disc_ic5"].as<bool>()){if(ic5cli)ic5cli->disconnect();srv.send(200,"application/json","{\"success\":true}");return;}
@@ -1912,15 +2885,36 @@ void h_civ_cmd() {
   else if(d.containsKey("rfg"))set_rf(d["rfg"].as<uint8_t>());
   else if(d.containsKey("afg"))set_af(d["afg"].as<uint8_t>());
   else if(d.containsKey("split"))set_split(d["split"].as<int>()==1);
+  // SPE commands
+  else if(d.containsKey("op")){if(sp_is_active())spe_set_op(d["op"].as<int>()==1);}
+  else if(d.containsKey("spwr")){if(sp_is_active())spe_set_pwr();}
+  else if(d.containsKey("input")){if(sp_is_active())spe_set_input(d["input"].as<int>());}
+  else if(d.containsKey("tune")){if(sp_is_active())spe_tune();}
+  else if(d.containsKey("ant")){if(sp_is_active())sp_send_cmd(SPE_CMD_ANT);}
+  else if(d.containsKey("lm")){if(sp_is_active())sp_send_cmd(SPE_CMD_L_M);}
+  else if(d.containsKey("lp")){if(sp_is_active())sp_send_cmd(SPE_CMD_L_P);}
+  else if(d.containsKey("cm")){if(sp_is_active())sp_send_cmd(SPE_CMD_C_M);}
+  else if(d.containsKey("cp")){if(sp_is_active())sp_send_cmd(SPE_CMD_C_P);}
+  else if(d.containsKey("bm")){if(sp_is_active())sp_send_cmd(SPE_CMD_BAND_M);}
+  else if(d.containsKey("bp")){if(sp_is_active())sp_send_cmd(SPE_CMD_BAND_P);}
+  else if(d.containsKey("left")){if(sp_is_active())sp_send_cmd(SPE_CMD_LEFT);}
+  else if(d.containsKey("right")){if(sp_is_active())sp_send_cmd(SPE_CMD_RIGHT);}
+  else if(d.containsKey("up")){if(sp_is_active())sp_send_cmd(SPE_CMD_L_P);}
+  else if(d.containsKey("down")){if(sp_is_active())sp_send_cmd(SPE_CMD_L_M);}
+  else if(d.containsKey("catkey")){if(sp_is_active())sp_send_cmd(SPE_CMD_CAT);}
+  else if(d.containsKey("disp")){if(sp_is_active())sp_send_cmd(SPE_CMD_DISPLAY);}
+  else if(d.containsKey("setkey")){if(sp_is_active())sp_send_cmd(SPE_CMD_SET);}
+  else if(d.containsKey("blon")){if(sp_is_active())sp_send_cmd(SPE_CMD_BL_ON);}
+  else if(d.containsKey("bloff")){if(sp_is_active())sp_send_cmd(SPE_CMD_BL_OFF);}
 
   srv.send(200,"application/json","{\"success\":true}");
 }
 
 void h_login_page() {
-  String h=R"rawliteral(
+  srv.send_P(200,"text/html",(PGM_P)R"rawliteral(
 <!DOCTYPE html><html><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ESP32 CI-V Gateway - Login</title>
+<title>ESP32 CAT/CI-V/BT Gateway - Login</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:Arial,sans-serif;background:#0d1b2a;color:#e2e8f0;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:20px}
@@ -1933,7 +2927,7 @@ button:hover{background:#80d8ff}
 #erro{color:#ef4444;font-size:13px;margin-top:8px;display:none}
 </style></head><body>
 <div class="card">
-<h1>ESP32 CI-V Gateway</h1>
+<h1>ESP32 CAT/CI-V/BT Gateway</h1>
 <input type="text" id="user" placeholder="Usuário" autocomplete="off">
 <input type="password" id="pass" placeholder="Senha">
 <button onclick="entrar()">Entrar</button>
@@ -1952,8 +2946,7 @@ document.getElementById('user').focus();
 document.getElementById('user').addEventListener('keydown',function(e){if(e.key=='Enter')document.getElementById('pass').focus()});
 document.getElementById('pass').addEventListener('keydown',function(e){if(e.key=='Enter')entrar()});
 </script></body></html>
-)rawliteral";
-  srv.send(200,"text/html",h);
+)rawliteral");
 }
 
 void h_404(){srv.send(404,"application/json","{\"error\":\"Not found\"}");}
@@ -2013,15 +3006,16 @@ void setup() {
   // Aguarda Serial Monitor conectar (ate 5s)
   for(int i=0;i<5;i++){delay(1000);Serial.printf("\n[BOOT] Aguardando Serial... %ds\n",5-i);if(Serial)break;}
 
-  Serial.println("\n=== ESP32 CI-V Gateway v" FIRMWARE_VERSION " ===\n");
+  Serial.println("\n=== ESP32 CAT/CI-V/BT Gateway v" FIRMWARE_VERSION " ===\n");
   Serial.println("[BOOT] Iniciando...");
   load_cfg();
 
   p1.begin(cfg.civ_baud[0],SERIAL_8N1,PORT1_RX,PORT1_TX);
   p2.begin(cfg.civ_baud[1],SERIAL_8N1,PORT2_RX,PORT2_TX);
   p3.begin(cfg.civ_baud[2],SERIAL_8N1,PORT3_RX,PORT3_TX);
-  Serial.println("[CI-V] 3 portas UART");
+  Serial.println("[CI-V] 3 portas UART + 1 SPE RS232");
   sel_port(cfg.active_port);
+  sp_init();
 
   // Inicializa BLE primeiro (necessario para IC-705 e NUS)
   setup_nus();
@@ -2054,6 +3048,7 @@ void setup() {
 
 // ===================== LOOP =====================
 void loop() {
+  loop_iters++;
   srv.handleClient();
   serial_cmd();
   wifi_chk();
@@ -2094,7 +3089,7 @@ void loop() {
   }
 
   if(cfg.cat_enabled){
-    // Diagnostico da conexao IC-705 a cada 10s
+    // Diagnostico da conexao IC-705 a cada 30s
     static unsigned long last_diag=0;
     if(millis()-last_diag>30000){
       last_diag=millis();
@@ -2106,8 +3101,37 @@ void loop() {
     bridge_pic5();
   }
 
+  // SPE polling (quando porta ativa for SPE)
+  if(sp_is_active()){
+    sp_poll();
+    sp_read();
+  }
+
+  // Yaesu polling
+  if(ys_is_active()){
+    ys_poll();
+    ys_read();
+  }
+
+  // Kenwood polling
+  if(kw_is_active()){
+    kw_poll();
+    kw_read();
+  }
+
   bridge_nusp();
   bridge_pnus();
+
+  // Calculo de CPU
+  static unsigned long last_cpu_check = 0;
+  unsigned long now = millis();
+  if(now - last_cpu_check >= 1000) {
+    unsigned long cur = loop_iters - last_loop_iters;
+    if(cur > max_loop_iters) max_loop_iters = cur;
+    cpu_pct = max_loop_iters > 0 ? 100 - (cur * 100 / max_loop_iters) : 0;
+    last_loop_iters = loop_iters;
+    last_cpu_check = now;
+  }
 
   delay(1);
 }
