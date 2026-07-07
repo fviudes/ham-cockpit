@@ -2126,8 +2126,8 @@ var ramUso=((d.heap_total||1)-(d.heap_free||0))/(d.heap_total||1)*100;
 document.getElementById('s_ram').textContent=fmtBytes(d.heap_free)+' / '+fmtBytes(d.heap_total);
 document.getElementById('s_ram_bar').style.width=Math.round(ramUso)+'%';
 var psUso=((d.psram_total||1)-(d.psram_free||0))/(d.psram_total||1)*100;
-document.getElementById('s_psram').textContent=fmtBytes(d.psram_free)+' / '+fmtBytes(d.psram_total);
-document.getElementById('s_psram_bar').style.width=Math.round(psUso)+'%';
+document.getElementById('s_psram').textContent=(d.psram_total?fmtBytes(d.psram_free)+' / '+fmtBytes(d.psram_total):'N/A');
+if(d.psram_total){document.getElementById('s_psram_bar').style.width=Math.round(psUso)+'%';}else{document.getElementById('s_psram_bar').style.width='0%';}
 document.getElementById('s_flash').textContent=fmtBytes(d.sketch_free)+' livre ('+fmtBytes(d.flash_size)+')';
 document.getElementById('s_apip').textContent=d.wifi_ap_ip||'---';
 document.getElementById('s_staip').textContent=d.wifi_sta_ip||'---';
