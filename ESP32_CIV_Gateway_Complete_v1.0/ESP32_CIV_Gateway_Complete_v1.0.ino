@@ -904,7 +904,7 @@ void sp_send_bytes(uint8_t* data, int len) {
 void sp_send_cmd(uint8_t cmd) {
   uint8_t pkt[] = {SPE_SYN, SPE_SYN, SPE_SYN, 0x01, cmd, cmd};
   sp_send_bytes(pkt, sizeof(pkt));
-  Serial.printf("[SPE] Cmd: 0x%02X\n", cmd);
+  // Serial.printf("[SPE] Cmd: 0x%02X\n", cmd);
 }
 
 void sp_poll() {
@@ -1021,7 +1021,6 @@ void sp_init() {
     p3.end();
     p3.begin(cfg.spe_baud[3], SERIAL_8N1, PORT4_RX, PORT4_TX);
     addLog("SPE","PORT4 RS232 %u baud", cfg.spe_baud[3]);
-    Serial.printf("[SPE] PORT4 RS232: %u baud\n", cfg.spe_baud[3]);
   }
 }
 
@@ -1569,7 +1568,6 @@ button:hover{background:#80d8ff}
 <button class="tab" data-tab="admin" onclick="st(this)">Admin</button>
 <button class="tab" data-tab="status" onclick="st(this)">Status</button>
 </div>
-
 <div id="tb-radio">
 <h2>Painel de Controle Icom Radio</h2>
 <div class="card">
@@ -1598,7 +1596,6 @@ button:hover{background:#80d8ff}
 <div class="gitem"><div class="glabel">PRE/ATT</div><div class="gval" id="v_pre">---</div></div>
 </div>
 </div>
-
 <div class="card">
 <h2>Controles</h2>
 <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">
@@ -1607,7 +1604,6 @@ button:hover{background:#80d8ff}
 <button class="btn-outline btn-sm" onclick="civ('pwr',0)">Standby</button>
 <button class="btn-outline btn-sm" onclick="civ('pwr',1)">Ligar</button>
 </div>
-
 <div style="display:flex;gap:4px;flex-wrap:wrap">
 <span style="color:#94a3b8;font-size:10px;line-height:24px">Banda:</span>
 <button class="btn-sm" onclick="civ('freq','28000000')">10m</button>
@@ -1617,7 +1613,6 @@ button:hover{background:#80d8ff}
 <button class="btn-sm" onclick="civ('freq','14200000')">20m</button>
 <button class="btn-sm" onclick="civ('freq','21000000')">15m</button>
 </div>
-
 <div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">
 <span style="color:#94a3b8;font-size:10px;line-height:24px">Modo:</span>
 <button class="btn-sm" onclick="civ('mode',1)">USB</button>
@@ -1626,7 +1621,6 @@ button:hover{background:#80d8ff}
 <button class="btn-sm" onclick="civ('mode',3)">CW</button>
 <button class="btn-sm" onclick="civ('mode',2)">AM</button>
 </div>
-
 <div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">
 <span style="color:#94a3b8;font-size:10px;line-height:24px">AGC:</span>
 <button class="btn-sm" onclick="civ('agc',0)">OFF</button>
@@ -1642,7 +1636,6 @@ button:hover{background:#80d8ff}
 <button class="btn-sm" onclick="civ('att',1)">ON</button>
 </div>
 </div>
-
 <div class="card">
 <h2>Ganhos</h2>
 <div><label>RF Gain: <span class="slider-val" id="v_rf">50</span></label>
@@ -1652,7 +1645,6 @@ button:hover{background:#80d8ff}
 <input type="range" class="slider" min="0" max="255" value="50" id="sl_af" oninput="document.getElementById('v_af').textContent=this.value"></div>
 <button class="btn-sm" onclick="civ('afg',document.getElementById('sl_af').value)">Aplicar AF</button>
 </div>
-
 <div class="card">
 <h2>Frequencia Manual</h2>
 <div style="display:flex;gap:4px">
@@ -1661,7 +1653,6 @@ button:hover{background:#80d8ff}
 </div>
 </div>
 </div>
-
 <div id="tb-ic705" style="display:none">
 <h2>IC-705 CAT over BLE</h2>
 <div class="card">
@@ -1701,74 +1692,55 @@ button:hover{background:#80d8ff}
 <button onclick="saveIC5()">Salvar</button>
 </div>
 </div>
-
 <div id="tb-spe" style="display:none">
 <h2>SPE Expert Amplifier <span style="font-size:10px;color:#94a3b8">(PORT4 RS232)</span></h2>
-
-<!-- LCD Display Frame -->
 <div class="card" style="background:#000;border:2px solid #1a3a5a;border-radius:6px;padding:12px;margin-bottom:8px">
-  <div style="background:#001020;border:1px solid #0a2a4a;border-radius:4px;padding:10px;font-family:'DS-Digital','Courier New',monospace">
-
-    <!-- Top bar: ID + Status + TX/RX + Bank -->
-    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #0a2a4a;padding-bottom:4px;margin-bottom:6px">
-      <span style="color:#4fc3f7;font-size:12px;font-weight:bold" id="s_spe_id">13K</span>
-      <span style="font-size:11px;padding:1px 6px;border-radius:2px;font-weight:bold" id="s_spe_op_display">STBY</span>
-      <span style="font-size:11px;padding:1px 6px;border-radius:2px;font-weight:bold" id="s_spe_tx_display">RX</span>
-      <span style="color:#94a3b8;font-size:11px" id="s_spe_bank_display">BNK A</span>
-    </div>
-
-    <!-- Main: Output Power + Power Level -->
-    <div style="display:flex;justify-content:space-between;align-items:baseline;padding:4px 0">
-      <div>
-        <span style="color:#555;font-size:9px">RF OUT</span>
-        <div><span style="color:#FFB300;font-size:32px;font-weight:bold;letter-spacing:2px" id="s_spe_pout_display">0</span><span style="color:#FFB300;font-size:16px"> W</span></div>
-      </div>
-      <div style="text-align:right">
-        <span style="color:#555;font-size:9px">PWR</span>
-        <div><span style="color:#4fc3f7;font-size:22px;font-weight:bold" id="s_spe_pwr_display">L</span></div>
-      </div>
-    </div>
-
-    <!-- Row 1: SWR ATU / SWR ANT / V PA / I PA -->
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;border-top:1px solid #0a2a4a;border-bottom:1px solid #0a2a4a;padding:4px 0;margin:4px 0">
-      <div><span style="color:#555;font-size:8px">SWR ATU</span><div style="color:#4fc3f7;font-size:16px;font-weight:bold" id="s_spe_swr_atu_display">0.00</div></div>
-      <div><span style="color:#555;font-size:8px">SWR ANT</span><div style="color:#4fc3f7;font-size:16px;font-weight:bold" id="s_spe_swr_display">0.00</div></div>
-      <div><span style="color:#555;font-size:8px">V PA</span><div style="color:#10b981;font-size:16px;font-weight:bold" id="s_spe_vpa_display">0.0</div></div>
-      <div><span style="color:#555;font-size:8px">I PA</span><div style="color:#10b981;font-size:16px;font-weight:bold" id="s_spe_ipa_display">0.0</div></div>
-    </div>
-
-    <!-- Row 2: Band / Ant / Input / Temp -->
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;padding:2px 0">
-      <div><span style="color:#555;font-size:8px">BAND</span><div style="color:#e2e8f0;font-size:13px;font-weight:bold" id="s_spe_band_display">---</div></div>
-      <div><span style="color:#555;font-size:8px">ANT</span><div style="color:#e2e8f0;font-size:13px;font-weight:bold" id="s_spe_ant_display">-</div></div>
-      <div><span style="color:#555;font-size:8px">INPUT</span><div style="color:#e2e8f0;font-size:13px;font-weight:bold" id="s_spe_input_display">1</div></div>
-      <div><span style="color:#555;font-size:8px">TEMP</span><div style="color:#f87171;font-size:13px;font-weight:bold" id="s_spe_temp_display">0</div></div>
-    </div>
-
-    <!-- Alarm / Warning -->
-    <div id="spe_alarm_box_display" style="display:none;margin-top:4px;padding:3px 6px;background:rgba(239,68,68,0.2);border:1px solid #ef4444;border-radius:2px;font-size:11px;color:#ef4444;text-align:center;font-weight:bold">
-      ALARM: <span id="spe_alarm_txt_display"></span>
-    </div>
-    <div id="spe_warn_box_display" style="display:none;margin-top:2px;padding:3px 6px;background:rgba(255,179,0,0.15);border:1px solid #FFB300;border-radius:2px;font-size:11px;color:#FFB300;text-align:center;font-weight:bold">
-      WARN: <span id="spe_warn_txt_display"></span>
-    </div>
-  </div>
+<div style="background:#001020;border:1px solid #0a2a4a;border-radius:4px;padding:10px;font-family:'DS-Digital','Courier New',monospace">
+<div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #0a2a4a;padding-bottom:4px;margin-bottom:6px">
+<span style="color:#4fc3f7;font-size:12px;font-weight:bold" id="s_spe_id">13K</span>
+<span style="font-size:11px;padding:1px 6px;border-radius:2px;font-weight:bold" id="s_spe_op_display">STBY</span>
+<span style="font-size:11px;padding:1px 6px;border-radius:2px;font-weight:bold" id="s_spe_tx_display">RX</span>
+<span style="color:#94a3b8;font-size:11px" id="s_spe_bank_display">BNK A</span>
 </div>
-
-<!-- Two-button panels side by side -->
+<div style="display:flex;justify-content:space-between;align-items:baseline;padding:4px 0">
+<div>
+<span style="color:#555;font-size:9px">RF OUT</span>
+<div><span style="color:#FFB300;font-size:32px;font-weight:bold;letter-spacing:2px" id="s_spe_pout_display">0</span><span style="color:#FFB300;font-size:16px"> W</span></div>
+</div>
+<div style="text-align:right">
+<span style="color:#555;font-size:9px">PWR</span>
+<div><span style="color:#4fc3f7;font-size:22px;font-weight:bold" id="s_spe_pwr_display">L</span></div>
+</div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;border-top:1px solid #0a2a4a;border-bottom:1px solid #0a2a4a;padding:4px 0;margin:4px 0">
+<div><span style="color:#555;font-size:8px">SWR ATU</span><div style="color:#4fc3f7;font-size:16px;font-weight:bold" id="s_spe_swr_atu_display">0.00</div></div>
+<div><span style="color:#555;font-size:8px">SWR ANT</span><div style="color:#4fc3f7;font-size:16px;font-weight:bold" id="s_spe_swr_display">0.00</div></div>
+<div><span style="color:#555;font-size:8px">V PA</span><div style="color:#10b981;font-size:16px;font-weight:bold" id="s_spe_vpa_display">0.0</div></div>
+<div><span style="color:#555;font-size:8px">I PA</span><div style="color:#10b981;font-size:16px;font-weight:bold" id="s_spe_ipa_display">0.0</div></div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px;padding:2px 0">
+<div><span style="color:#555;font-size:8px">BAND</span><div style="color:#e2e8f0;font-size:13px;font-weight:bold" id="s_spe_band_display">---</div></div>
+<div><span style="color:#555;font-size:8px">ANT</span><div style="color:#e2e8f0;font-size:13px;font-weight:bold" id="s_spe_ant_display">-</div></div>
+<div><span style="color:#555;font-size:8px">INPUT</span><div style="color:#e2e8f0;font-size:13px;font-weight:bold" id="s_spe_input_display">1</div></div>
+<div><span style="color:#555;font-size:8px">TEMP</span><div style="color:#f87171;font-size:13px;font-weight:bold" id="s_spe_temp_display">0</div></div>
+</div>
+<div id="spe_alarm_box_display" style="display:none;margin-top:4px;padding:3px 6px;background:rgba(239,68,68,0.2);border:1px solid #ef4444;border-radius:2px;font-size:11px;color:#ef4444;text-align:center;font-weight:bold">
+ALARM: <span id="spe_alarm_txt_display"></span>
+</div>
+<div id="spe_warn_box_display" style="display:none;margin-top:2px;padding:3px 6px;background:rgba(255,179,0,0.15);border:1px solid #FFB300;border-radius:2px;font-size:11px;color:#FFB300;text-align:center;font-weight:bold">
+WARN: <span id="spe_warn_txt_display"></span>
+</div>
+</div>
+</div>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px">
-
-<!-- Left Panel -->
 <div class="card" style="padding:8px">
 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px">
 <button class="btn-sm" onclick="speCmd('input',1)">Input</button>
 <button class="btn-sm" onclick="speCmd('lm','')">&larr; L</button>
 <button class="btn-sm" onclick="speCmd('lp','')">L &rarr;</button>
-
 <button class="btn-sm" onclick="speCmd('ant','')">Antena</button>
 <button class="btn-sm" onclick="speCmd('cm','')">&larr; C</button>
 <button class="btn-sm" onclick="speCmd('cp','')">C &rarr;</button>
-
 <button class="btn-sm" onclick="speCmd('bm','')">&larr; Band-</button>
 <button class="btn-sm" onclick="speCmd('bp','')">Band+ &rarr;</button>
 <button class="btn-sm" onclick="speCmd('tune','')">Tunner</button>
@@ -1779,18 +1751,14 @@ button:hover{background:#80d8ff}
 <div style="text-align:center"><span id="spe_led_off" class="spe-led" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ef4444;vertical-align:middle"></span> <span style="font-size:9px;color:#94a3b8">Off</span></div>
 </div>
 </div>
-
-<!-- Right Panel -->
 <div class="card" style="padding:8px">
 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px">
 <button class="btn-sm" onclick="speCmd('left','')">&larr; &uarr;</button>
 <button class="btn-sm" onclick="speCmd('up','')">&darr; &rarr;</button>
 <button class="btn-sm" onclick="speCmd('op',1)">On</button>
-
 <button class="btn-sm" onclick="speCmd('catkey','')">Cat</button>
 <button class="btn-sm" onclick="speCmd('disp','')">Disp</button>
 <button class="btn-sm" onclick="speCmd('op',0)">Off</button>
-
 <button class="btn-sm" onclick="speCmd('setkey','')">Set</button>
 <button class="btn-sm" onclick="speCmd('spwr',1)">PWR</button>
 <button class="btn-sm" onclick="speCmd('op',1)">OP</button>
@@ -1801,11 +1769,8 @@ button:hover{background:#80d8ff}
 <div style="text-align:center"><span id="spe_led_tx" class="spe-led" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#333;vertical-align:middle"></span> <span style="font-size:9px;color:#94a3b8">TX</span></div>
 </div>
 </div>
-
 </div>
-
 </div>
-
 <div id="tb-wifi" style="display:none"><h2>WiFi</h2>
 <div class="card">
 <h2>AP</h2><label>SSID</label><input type="text" id="aps"><label>Senha</label><input type="password" id="app"><button onclick="sAP()">Salvar AP</button>
@@ -1835,7 +1800,6 @@ button:hover{background:#80d8ff}
 <button onclick="sIP()">Salvar IP</button>
 </div>
 </div>
-
 <div id="tb-bluetooth" style="display:none"><h2>Bluetooth</h2>
 <div class="card">
 <h2>Configuracao BLE</h2>
@@ -1865,7 +1829,6 @@ button:hover{background:#80d8ff}
 <div id="bt-saved-list"></div>
 </div>
 </div>
-
 <div id="tb-logs" style="display:none"><h2>Logs do Sistema</h2>
 <div class="card">
 <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
@@ -1880,7 +1843,6 @@ button:hover{background:#80d8ff}
 <div id="loglist" style="max-height:400px;overflow-y:auto;font-family:monospace;font-size:10px;line-height:1.4;background:#0a1118;padding:6px;border-radius:3px"></div>
 </div>
 </div>
-
 <div id="tb-admin" style="display:none"><h2>Administração <button class="btn-sm btn-outline" onclick="sair()" style="float:right">Sair</button></h2>
 <div class="card"><h2>Alterar Senha</h2>
 <label>Usuário</label><input type="text" id="au_user">
@@ -1907,7 +1869,6 @@ button:hover{background:#80d8ff}
 </div>
 </div>
 </div>
-
 <div id="tb-status" style="display:none">
 <h2>Status do Sistema</h2>
 <div class="card">
@@ -1958,637 +1919,638 @@ button:hover{background:#80d8ff}
 <div class="gval" style="text-align:center;font-size:18px" id="s_uptime">---</div>
 </div>
 </div>
-
 <div id="tb-civ" style="display:none"><h2>CAT / CI-V</h2>
 <label>Porta Ativa</label><select id="ap" style="margin-bottom:6px"><option value="1">PORT1</option><option value="2">PORT2</option><option value="3">PORT3</option><option value="4">PORT4</option></select>
 <button onclick="sCIV()" style="margin-bottom:8px">Salvar Todas</button>
-
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px" id="ports-grid">
-  <script>
-  // Gerado dinamicamente pelo carregarCfg()
-  </script>
+<div class="card" style="padding:8px">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+<strong style="color:#FFB300;font-size:12px">PORT 1</strong>
+<label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="0" checked> Enable</label></div>
+<label style="font-size:9px">Protocolo</label>
+<select class="pp" data-idx="0" onchange="protoChange2(this,0)" style="font-size:10px;padding:3px 4px">
+<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option></select>
+<label style="font-size:9px">Baud</label>
+<select class="pb" data-idx="0" style="font-size:10px;padding:3px 4px">
+<option value="9600">9600</option><option value="19200" selected>19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
+<div class="civ-addr-row-0"><label style="font-size:9px">Endere&ccedil;o CI-V</label>
+<select class="pa" data-idx="0" style="font-size:10px;padding:3px 4px">
+<option value="0x94">IC-7300</option><option value="0x18">IC-7100</option><option value="0x76">IC-7610</option>
+<option value="0x98" selected>IC-705</option><option value="0x88">IC-9700</option><option value="0x70">IC-7000</option>
+<option value="0x48">IC-706</option><option value="0x39">IC-2730</option></select></div></div>
+<div class="card" style="padding:8px">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+<strong style="color:#FFB300;font-size:12px">PORT 2</strong>
+<label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="1" checked> Enable</label></div>
+<label style="font-size:9px">Protocolo</label>
+<select class="pp" data-idx="1" onchange="protoChange2(this,1)" style="font-size:10px;padding:3px 4px">
+<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option></select>
+<label style="font-size:9px">Baud</label>
+<select class="pb" data-idx="1" style="font-size:10px;padding:3px 4px">
+<option value="9600">9600</option><option value="19200" selected>19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
+<div class="civ-addr-row-1"><label style="font-size:9px">Endere&ccedil;o CI-V</label>
+<select class="pa" data-idx="1" style="font-size:10px;padding:3px 4px">
+<option value="0x94">IC-7300</option><option value="0x18">IC-7100</option><option value="0x76">IC-7610</option>
+<option value="0x98" selected>IC-705</option><option value="0x88">IC-9700</option><option value="0x70">IC-7000</option>
+<option value="0x48">IC-706</option><option value="0x39">IC-2730</option></select></div></div>
+<div class="card" style="padding:8px">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+<strong style="color:#FFB300;font-size:12px">PORT 3</strong>
+<label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="2" checked> Enable</label></div>
+<label style="font-size:9px">Protocolo</label>
+<select class="pp" data-idx="2" onchange="protoChange2(this,2)" style="font-size:10px;padding:3px 4px">
+<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option></select>
+<label style="font-size:9px">Baud</label>
+<select class="pb" data-idx="2" style="font-size:10px;padding:3px 4px">
+<option value="9600">9600</option><option value="19200" selected>19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
+<div class="civ-addr-row-2"><label style="font-size:9px">Endere&ccedil;o CI-V</label>
+<select class="pa" data-idx="2" style="font-size:10px;padding:3px 4px">
+<option value="0x94">IC-7300</option><option value="0x18">IC-7100</option><option value="0x76">IC-7610</option>
+<option value="0x98" selected>IC-705</option><option value="0x88">IC-9700</option><option value="0x70">IC-7000</option>
+<option value="0x48">IC-706</option><option value="0x39">IC-2730</option></select></div></div>
+<div class="card" style="padding:8px">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+<strong style="color:#FFB300;font-size:12px">PORT 4</strong>
+<label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="3" checked> Enable</label></div>
+<label style="font-size:9px">Protocolo</label>
+<select class="pp" data-idx="3" onchange="protoChange2(this,3)" style="font-size:10px;padding:3px 4px">
+<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option></select>
+<label style="font-size:9px">Baud</label>
+<select class="pb" data-idx="3" style="font-size:10px;padding:3px 4px">
+<option value="9600">9600</option><option value="19200" selected>19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
+<div class="civ-addr-row-3"><label style="font-size:9px">Endere&ccedil;o CI-V</label>
+<select class="pa" data-idx="3" style="font-size:10px;padding:3px 4px">
+<option value="0x94">IC-7300</option><option value="0x18">IC-7100</option><option value="0x76">IC-7610</option>
+<option value="0x98" selected>IC-705</option><option value="0x88">IC-9700</option><option value="0x70">IC-7000</option>
+<option value="0x48">IC-706</option><option value="0x39">IC-2730</option></select></div></div>
 </div>
-
-<div id="port-cards-container"></div>
-
-<script>
-function buildPortCards(d){
-  if(!d||!d.ports){document.getElementById('port-cards-container').innerHTML='<p style="color:#ef4444;font-size:11px">Erro ao carregar portas</p>';return;}
-  var html='';
-  var protos=['CI-V','SPE','Yaesu','Kenwood'];
-  var addrOpts=['0x94','0x18','0x76','0x98','0x88','0x70','0x48','0x39'];
-  var addrLabels=['IC-7300','IC-7100','IC-7610','IC-705','IC-9700','IC-7000','IC-706','IC-2730'];
-  for(var i=0;i<4;i++){
-    var p=d.ports[i]||{en:true,pr:0,ba:19200,ad:'0x94'};
-    html+='<div class="card" style="padding:8px;border-color:'+(p.en?'rgba(79,195,247,0.3)':'rgba(239,68,68,0.3)')+'">';
-    html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
-    html+='<strong style="color:#FFB300;font-size:12px">PORT '+(i+1)+'</strong>';
-    html+='<label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="'+i+'" '+(p.en?'checked':'')+'> Enable</label>';
-    html+='</div>';
-    html+='<label style="font-size:9px">Protocolo</label>';
-    html+='<select class="pp" data-idx="'+i+'" onchange="protoChange2(this,'+i+')" style="font-size:10px;padding:3px 4px">';
-    for(var pi=0;pi<protos.length;pi++)html+='<option value="'+pi+'" '+(p.pr==pi?'selected':'')+'>'+protos[pi]+'</option>';
-    html+='</select>';
-    html+='<label style="font-size:9px">Baud</label>';
-    html+='<select class="pb" data-idx="'+i+'" style="font-size:10px;padding:3px 4px">';
-    var bds=[9600,19200,38400,57600,115200];
-    for(var bi=0;bi<bds.length;bi++)html+='<option value="'+bds[bi]+'" '+(p.ba==bds[bi]?'selected':'')+'>'+bds[bi]+'</option>';
-    html+='</select>';
-    html+='<div class="civ-addr-row-'+i+'" style="'+(p.pr==0?'':'display:none')+'">';
-    html+='<label style="font-size:9px">Endere&ccedil;o CI-V</label>';
-    html+='<select class="pa" data-idx="'+i+'" style="font-size:10px;padding:3px 4px">';
-    for(var ai=0;ai<addrOpts.length;ai++)html+='<option value="'+addrOpts[ai]+'" '+(p.ad==addrOpts[ai]?'selected':'')+'>'+addrLabels[ai]+'</option>';
-    html+='</select></div></div>';
-  }
-  document.getElementById('port-cards-container').innerHTML='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">'+html+'</div>';
-}
-function protoChange2(el,idx){
-  var rows=document.querySelectorAll('.civ-addr-row-'+idx);
-  for(var r=0;r<rows.length;r++)rows[r].style.display=el.value=='0'?'block':'none';
-}
-</script>
 </div>
-
 <div id="toast" class="toast"></div>
 <script>
 function st(el){
-  var tab=el.getAttribute('data-tab');
-  var tabs=document.querySelectorAll('.tab');
-  for(var i=0;i<tabs.length;i++)tabs[i].classList.remove('active');
-  var conts=document.querySelectorAll('[id^="tb-"]');
-  for(var i=0;i<conts.length;i++)conts[i].style.display='none';
-  document.getElementById('tb-'+tab).style.display='block';
-  el.classList.add('active');
-  if(tab=='radio'||tab=='ic705'||tab=='bluetooth'){carregar();carregarBT();}
-  if(tab=='spe'){carregarSPE();}
-  if(tab=='wifi'){carregar();listarRedes();carregarRedes();}
-  if(tab=='logs')carregarLogPref();
-  if(tab=='admin')carregarUsers();
-  if(tab=='status'){
-    carregarSysinfo();
-    if(window._stInt)clearInterval(window._stInt);
-    window._stInt=setInterval(carregarSysinfo,1000);
-  } else {
-    if(window._stInt){clearInterval(window._stInt);window._stInt=null;}
-  }
+var tab=el.getAttribute('data-tab');
+var tabs=document.querySelectorAll('.tab');
+for(var i=0;i<tabs.length;i++)tabs[i].classList.remove('active');
+var conts=document.querySelectorAll('[id^="tb-"]');
+for(var i=0;i<conts.length;i++)conts[i].style.display='none';
+document.getElementById('tb-'+tab).style.display='block';
+el.classList.add('active');
+if(tab=='radio'||tab=='ic705'||tab=='bluetooth'){carregar();carregarBT();}
+if(tab=='spe'){carregarSPE();}
+if(tab=='wifi'){carregar();listarRedes();carregarRedes();}
+if(tab=='logs')carregarLogPref();
+if(tab=='admin')carregarUsers();
+if(tab=='status'){
+carregarSysinfo();
+if(window._stInt)clearInterval(window._stInt);
+window._stInt=setInterval(carregarSysinfo,1000);
+} else {
+if(window._stInt){clearInterval(window._stInt);window._stInt=null;}
+}
 }
 function toast(m,t){
-  var d=document.getElementById('toast');
-  d.textContent=m;d.className='toast '+t;
-  setTimeout(function(){d.className='toast';},2500);
+var d=document.getElementById('toast');
+d.textContent=m;d.className='toast '+t;
+setTimeout(function(){d.className='toast';},2500);
 }
 function carregar(){
-  var x=new XMLHttpRequest();
-  x.open('GET','/api/status',true);
-  x.onload=function(){
-    try{
-      var d=JSON.parse(x.responseText);
-      var fhz=parseInt(d.freq)||0;var fm=Math.floor(fhz/1000000);var fk=Math.floor((fhz%1000000)/1000);var fh=fhz%1000;document.getElementById('v_freq').textContent=fhz?fm+'.'+('000'+fk).slice(-3)+'.'+('000'+fh).slice(-3)+' Hz':'---';
-      document.getElementById('v_mode').textContent=d.mode||'---';
-      document.getElementById('v_ptt').innerHTML='<span class="badge '+(d.ptt?'bg-red':'bg-green')+'">'+(d.ptt?'TX':'RX')+'</span>';
-      var sm=d.smeter||0;
-      var dbm=-127+sm*114/255;
-      var sUnit='S0';
-      if(dbm>-73){var ov=Math.round((dbm+73)/-10)*-10;sUnit='S9+'+(ov<0?0:ov)+'dB';}
-      else if(dbm>-127){var sv=Math.round((127+dbm)/6);sUnit='S'+Math.min(9,Math.max(0,sv));}
-      document.getElementById('stxt').textContent=d.pwr?'---':sUnit;
-      document.getElementById('stxt2').textContent=d.pwr?'TX':Math.round(dbm)+' dBm';
-      document.getElementById('sbar').style.width=Math.min(sm/255*100,100)+'%';
-      document.getElementById('v_pwr').innerHTML='<span class="badge '+(d.pwr?'bg-green':'bg-red')+'">'+(d.pwr?'ON':'OFF')+'</span>';
-      document.getElementById('v_split').innerHTML='<span class="badge '+(d.split?'bg-green':'bg-red')+'">'+(d.split?'ON':'OFF')+'</span>';
-      var agcN=['OFF','FAST','MID','SLOW'];document.getElementById('v_agc').textContent=d.agc!==undefined?agcN[d.agc]||'---':'---';
-      var preN=['OFF','ON1','ON2'];document.getElementById('v_pre').textContent=(d.pre!==undefined?preN[d.pre]||'---':'---')+' / '+(d.att?'ATT':'');
-      document.getElementById('v_rf').textContent=d.rf||'50';document.getElementById('sl_rf').value=d.rf||'50';
-      document.getElementById('v_af').textContent=d.af||'50';document.getElementById('sl_af').value=d.af||'50';
-      document.getElementById('s_ic5').innerHTML=d.ic5con?'<span class="badge bg-green">CON</span>':'<span class="badge bg-red">---</span>';
-      document.getElementById('s_civ').innerHTML=d.ic5civ?'<span class="badge bg-green">OK</span>':'<span class="badge bg-red">---</span>';
-      document.getElementById('s_pair').innerHTML=d.ic5pair?'<span class="badge bg-green">OK</span>':'<span class="badge bg-red">---</span>';
-      document.getElementById('sbtn').textContent=d.btn||'---';
-      document.getElementById('sbtcon').innerHTML=d.nuscon?'<span class="badge bg-green">Conectado</span>':'<span class="badge bg-red">Aguardando</span>';
-      document.getElementById('sbtp').textContent=d.btp||'----';
-    }catch(e){}
-  };
-  x.send();
+var x=new XMLHttpRequest();
+x.open('GET','/api/status',true);
+x.onload=function(){
+try{
+var d=JSON.parse(x.responseText);
+var fhz=parseInt(d.freq)||0;var fm=Math.floor(fhz/1000000);var fk=Math.floor((fhz%1000000)/1000);var fh=fhz%1000;document.getElementById('v_freq').textContent=fhz?fm+'.'+('000'+fk).slice(-3)+'.'+('000'+fh).slice(-3)+' Hz':'---';
+document.getElementById('v_mode').textContent=d.mode||'---';
+document.getElementById('v_ptt').innerHTML='<span class="badge '+(d.ptt?'bg-red':'bg-green')+'">'+(d.ptt?'TX':'RX')+'</span>';
+var sm=d.smeter||0;
+var dbm=-127+sm*114/255;
+var sUnit='S0';
+if(dbm>-73){var ov=Math.round((dbm+73)/-10)*-10;sUnit='S9+'+(ov<0?0:ov)+'dB';}
+else if(dbm>-127){var sv=Math.round((127+dbm)/6);sUnit='S'+Math.min(9,Math.max(0,sv));}
+document.getElementById('stxt').textContent=d.pwr?'---':sUnit;
+document.getElementById('stxt2').textContent=d.pwr?'TX':Math.round(dbm)+' dBm';
+document.getElementById('sbar').style.width=Math.min(sm/255*100,100)+'%';
+document.getElementById('v_pwr').innerHTML='<span class="badge '+(d.pwr?'bg-green':'bg-red')+'">'+(d.pwr?'ON':'OFF')+'</span>';
+document.getElementById('v_split').innerHTML='<span class="badge '+(d.split?'bg-green':'bg-red')+'">'+(d.split?'ON':'OFF')+'</span>';
+var agcN=['OFF','FAST','MID','SLOW'];document.getElementById('v_agc').textContent=d.agc!==undefined?agcN[d.agc]||'---':'---';
+var preN=['OFF','ON1','ON2'];document.getElementById('v_pre').textContent=(d.pre!==undefined?preN[d.pre]||'---':'---')+' / '+(d.att?'ATT':'');
+document.getElementById('v_rf').textContent=d.rf||'50';document.getElementById('sl_rf').value=d.rf||'50';
+document.getElementById('v_af').textContent=d.af||'50';document.getElementById('sl_af').value=d.af||'50';
+document.getElementById('s_ic5').innerHTML=d.ic5con?'<span class="badge bg-green">CON</span>':'<span class="badge bg-red">---</span>';
+document.getElementById('s_civ').innerHTML=d.ic5civ?'<span class="badge bg-green">OK</span>':'<span class="badge bg-red">---</span>';
+document.getElementById('s_pair').innerHTML=d.ic5pair?'<span class="badge bg-green">OK</span>':'<span class="badge bg-red">---</span>';
+document.getElementById('sbtn').textContent=d.btn||'---';
+document.getElementById('sbtcon').innerHTML=d.nuscon?'<span class="badge bg-green">Conectado</span>':'<span class="badge bg-red">Aguardando</span>';
+document.getElementById('sbtp').textContent=d.btp||'----';
+}catch(e){}
+};
+x.send();
 }
 function carregarSPE(){
-  var x=new XMLHttpRequest();
-  x.open('GET','/api/status',true);
-  x.onload=function(){
-    try{
-      var d=JSON.parse(x.responseText);
-      if(!d.spe_active){
-        var v='---';['s_spe_id','s_spe_id2'].forEach(function(i){var e=document.getElementById(i);if(e)e.textContent=v;});
-        ['s_spe_pout','s_spe_pout2','s_spe_pout_display'].forEach(function(i){var e=document.getElementById(i);if(e)e.textContent=v;});
-        return;
-      }
-      var bands=['160m','80m','60m','40m','30m','20m','17m','15m','12m','10m','6m','4m'];
-      var bi=d.spe_band;var bn=(bi>=0&&bi<bands.length)?bands[bi]:'B'+bi;
-      var pout=d.spe_pout||0;
-      // LCD Display
-      document.getElementById('s_spe_id').textContent=d.spe_id||'13K';
-      var opEl=document.getElementById('s_spe_op_display');
-      if(d.spe_op){opEl.textContent='OPERATE';opEl.style.color='#10b981';opEl.style.background='rgba(16,185,129,0.2)';}
-      else{opEl.textContent='STBY';opEl.style.color='#ef4444';opEl.style.background='rgba(239,68,68,0.2)';}
-      var txEl=document.getElementById('s_spe_tx_display');
-      if(d.spe_tx){txEl.textContent='TX';txEl.style.color='#ef4444';txEl.style.background='rgba(239,68,68,0.2)';}
-      else{txEl.textContent='RX';txEl.style.color='#10b981';txEl.style.background='rgba(16,185,129,0.2)';}
-      document.getElementById('s_spe_bank_display').textContent='BNK '+d.spe_bank;
-      document.getElementById('s_spe_pout_display').textContent=pout;
-      document.getElementById('s_spe_pwr_display').textContent=d.spe_pwr_level||'L';
-      document.getElementById('s_spe_swr_atu_display').textContent=(d.spe_swr_atu||0).toFixed(2);
-      document.getElementById('s_spe_swr_display').textContent=(d.spe_swr_ant||0).toFixed(2);
-      document.getElementById('s_spe_vpa_display').textContent=(d.spe_vpa||0).toFixed(1);
-      document.getElementById('s_spe_ipa_display').textContent=(d.spe_ipa||0).toFixed(1);
-      document.getElementById('s_spe_band_display').textContent=bn;
-      document.getElementById('s_spe_ant_display').textContent=d.spe_ant||'-';
-      document.getElementById('s_spe_input_display').textContent=d.spe_input||1;
-      document.getElementById('s_spe_temp_display').textContent=(d.spe_temp_up||0)+'C';
-      // Alarm/Warning boxes
-      var alBox=document.getElementById('spe_alarm_box_display'),alTxt=document.getElementById('spe_alarm_txt_display');
-      if(d.spe_alarm&&d.spe_alarm!='N'&&d.spe_alarm!='n'){alBox.style.display='block';alTxt.textContent=d.spe_alarm;}
-      else alBox.style.display='none';
-      var wrBox=document.getElementById('spe_warn_box_display'),wrTxt=document.getElementById('spe_warn_txt_display');
-      if(d.spe_warn&&d.spe_warn!='N'&&d.spe_warn!='n'){wrBox.style.display='block';wrTxt.textContent=d.spe_warn;}
-      else wrBox.style.display='none';
-      // Status Cards (abaixo do display)
-      document.getElementById('s_spe_id2').textContent=d.spe_id||'---';
-      document.getElementById('s_spe_op2').innerHTML=d.spe_op?'<span class="badge bg-green">OPERATE</span>':'<span class="badge bg-red">STBY</span>';
-      document.getElementById('s_spe_tx2').innerHTML=d.spe_tx?'<span class="badge bg-red">TX</span>':'<span class="badge bg-green">RX</span>';
-      document.getElementById('s_spe_pout2').textContent=pout+' W';
-      document.getElementById('s_spe_swr2').textContent=(d.spe_swr_ant||0).toFixed(2);
-      document.getElementById('s_spe_pwr2').textContent=d.spe_pwr_level||'---';
-      document.getElementById('s_spe_vpa2').textContent=(d.spe_vpa||0).toFixed(1)+'V';
-      document.getElementById('s_spe_ipa2').textContent=(d.spe_ipa||0).toFixed(1)+'A';
-      document.getElementById('s_spe_temp2').textContent=(d.spe_temp_up||0)+' C';
-      // LEDs
-      var ledOn=function(id,on){var e=document.getElementById(id);if(e)e.style.background=on?'#10b981':'#333';};
-      var al=d.spe_alarm||'N';ledOn('spe_led_al',al!='N'&&al!='n');
-      ledOn('spe_led_off',!d.spe_op);
-      ledOn('spe_led_on',d.spe_op);
-      ledOn('spe_led_op',d.spe_op);
-      ledOn('spe_led_tx',d.spe_tx);
-      var wn=d.spe_warn||'N';ledOn('spe_led_tune',wn=='W'||wn=='K');
-    }catch(e){}
-  };
-  x.send();
+var x=new XMLHttpRequest();
+x.open('GET','/api/status',true);
+x.onload=function(){
+try{
+var d=JSON.parse(x.responseText);
+if(!d.spe_active){
+var v='---';['s_spe_id','s_spe_id2'].forEach(function(i){var e=document.getElementById(i);if(e)e.textContent=v;});
+['s_spe_pout','s_spe_pout2','s_spe_pout_display'].forEach(function(i){var e=document.getElementById(i);if(e)e.textContent=v;});
+return;
+}
+var bands=['160m','80m','60m','40m','30m','20m','17m','15m','12m','10m','6m','4m'];
+var bi=d.spe_band;var bn=(bi>=0&&bi<bands.length)?bands[bi]:'B'+bi;
+var pout=d.spe_pout||0;
+document.getElementById('s_spe_id').textContent=d.spe_id||'13K';
+var opEl=document.getElementById('s_spe_op_display');
+if(d.spe_op){opEl.textContent='OPERATE';opEl.style.color='#10b981';opEl.style.background='rgba(16,185,129,0.2)';}
+else{opEl.textContent='STBY';opEl.style.color='#ef4444';opEl.style.background='rgba(239,68,68,0.2)';}
+var txEl=document.getElementById('s_spe_tx_display');
+if(d.spe_tx){txEl.textContent='TX';txEl.style.color='#ef4444';txEl.style.background='rgba(239,68,68,0.2)';}
+else{txEl.textContent='RX';txEl.style.color='#10b981';txEl.style.background='rgba(16,185,129,0.2)';}
+document.getElementById('s_spe_bank_display').textContent='BNK '+d.spe_bank;
+document.getElementById('s_spe_pout_display').textContent=pout;
+document.getElementById('s_spe_pwr_display').textContent=d.spe_pwr_level||'L';
+document.getElementById('s_spe_swr_atu_display').textContent=(d.spe_swr_atu||0).toFixed(2);
+document.getElementById('s_spe_swr_display').textContent=(d.spe_swr_ant||0).toFixed(2);
+document.getElementById('s_spe_vpa_display').textContent=(d.spe_vpa||0).toFixed(1);
+document.getElementById('s_spe_ipa_display').textContent=(d.spe_ipa||0).toFixed(1);
+document.getElementById('s_spe_band_display').textContent=bn;
+document.getElementById('s_spe_ant_display').textContent=d.spe_ant||'-';
+document.getElementById('s_spe_input_display').textContent=d.spe_input||1;
+document.getElementById('s_spe_temp_display').textContent=(d.spe_temp_up||0)+'C';
+var alBox=document.getElementById('spe_alarm_box_display'),alTxt=document.getElementById('spe_alarm_txt_display');
+if(d.spe_alarm&&d.spe_alarm!='N'&&d.spe_alarm!='n'){alBox.style.display='block';alTxt.textContent=d.spe_alarm;}
+else alBox.style.display='none';
+var wrBox=document.getElementById('spe_warn_box_display'),wrTxt=document.getElementById('spe_warn_txt_display');
+if(d.spe_warn&&d.spe_warn!='N'&&d.spe_warn!='n'){wrBox.style.display='block';wrTxt.textContent=d.spe_warn;}
+else wrBox.style.display='none';
+document.getElementById('s_spe_id2').textContent=d.spe_id||'---';
+document.getElementById('s_spe_op2').innerHTML=d.spe_op?'<span class="badge bg-green">OPERATE</span>':'<span class="badge bg-red">STBY</span>';
+document.getElementById('s_spe_tx2').innerHTML=d.spe_tx?'<span class="badge bg-red">TX</span>':'<span class="badge bg-green">RX</span>';
+document.getElementById('s_spe_pout2').textContent=pout+' W';
+document.getElementById('s_spe_swr2').textContent=(d.spe_swr_ant||0).toFixed(2);
+document.getElementById('s_spe_pwr2').textContent=d.spe_pwr_level||'---';
+document.getElementById('s_spe_vpa2').textContent=(d.spe_vpa||0).toFixed(1)+'V';
+document.getElementById('s_spe_ipa2').textContent=(d.spe_ipa||0).toFixed(1)+'A';
+document.getElementById('s_spe_temp2').textContent=(d.spe_temp_up||0)+' C';
+var ledOn=function(id,on){var e=document.getElementById(id);if(e)e.style.background=on?'#10b981':'#333';};
+var al=d.spe_alarm||'N';ledOn('spe_led_al',al!='N'&&al!='n');
+ledOn('spe_led_off',!d.spe_op);
+ledOn('spe_led_on',d.spe_op);
+ledOn('spe_led_op',d.spe_op);
+ledOn('spe_led_tx',d.spe_tx);
+var wn=d.spe_warn||'N';ledOn('spe_led_tune',wn=='W'||wn=='K');
+}catch(e){}
+};
+x.send();
 }
 function speCmd(c,v){
-  var d={};d[c]=v;
-  var x=new XMLHttpRequest();
-  x.open('POST','/api/civ',true);
-  x.setRequestHeader('Content-Type','application/json');
-  x.onload=function(){try{var r=JSON.parse(x.responseText);toast(r.success?'OK':'Erro',r.success?'ok':'err');}catch(e){toast('Erro','err');}};
-  x.send(JSON.stringify(d));
-  setTimeout(carregarSPE,500);
+var d={};d[c]=v;
+var x=new XMLHttpRequest();
+x.open('POST','/api/civ',true);
+x.setRequestHeader('Content-Type','application/json');
+x.onload=function(){try{var r=JSON.parse(x.responseText);toast(r.success?'OK':'Erro',r.success?'ok':'err');}catch(e){toast('Erro','err');}};
+x.send(JSON.stringify(d));
+setTimeout(carregarSPE,500);
 }
 function carregarSysinfo(){
-  var x=new XMLHttpRequest();
-  x.open('GET','/api/sysinfo',true);
-  x.onload=function(){
-    try{
-      var d=JSON.parse(x.responseText);
-      document.getElementById('s_chip').textContent=(d.chip||'?')+' rev.'+(d.chip_rev||0);
-      document.getElementById('s_cpu').textContent=(d.cpu_mhz||'?')+' MHz';
-      document.getElementById('s_fwver').textContent=d.fw_ver||'---';
-      // RAM
-      var ramUso=((d.heap_total||1)-(d.heap_free||0))/(d.heap_total||1)*100;
-      document.getElementById('s_ram').textContent=fmtBytes(d.heap_free)+' / '+fmtBytes(d.heap_total);
-      document.getElementById('s_ram_bar').style.width=Math.round(ramUso)+'%';
-      // PSRAM
-      var psUso=((d.psram_total||1)-(d.psram_free||0))/(d.psram_total||1)*100;
-      document.getElementById('s_psram').textContent=fmtBytes(d.psram_free)+' / '+fmtBytes(d.psram_total);
-      document.getElementById('s_psram_bar').style.width=Math.round(psUso)+'%';
-      // Flash
-      document.getElementById('s_flash').textContent=fmtBytes(d.sketch_free)+' livre ('+fmtBytes(d.flash_size)+')';
-      // Rede
-      document.getElementById('s_apip').textContent=d.wifi_ap_ip||'---';
-      document.getElementById('s_staip').textContent=d.wifi_sta_ip||'---';
-      document.getElementById('s_mac').textContent=d.wifi_mac||'---';
-      document.getElementById('s_gw').textContent=d.wifi_gw||'---';
-      document.getElementById('s_mask').textContent=d.wifi_mask||'---';
-      document.getElementById('s_dns').textContent=d.wifi_dns1||'---';
-      document.getElementById('s_rssi').textContent=d.wifi_rssi?d.wifi_rssi+' dBm':'---';
-      document.getElementById('s_ssid').textContent=d.wifi_ssid||'---';
-      document.getElementById('s_req').textContent=d.req_count||0;
-      // CPU
-      var cp=d.cpu_pct||0;
-      document.getElementById('s_cpu_pct').textContent=cp+'%';
-      var bar=document.getElementById('s_cpu_bar');
-      bar.style.width=cp+'%';
-      bar.style.background=cp<30?'#10b981':cp<60?'#FFB300':'#ef4444';
-      // Uptime
-      var up=d.uptime_s||0;
-      var dd=Math.floor(up/86400);up%=86400;
-      var hh=Math.floor(up/3600);up%=3600;
-      var mm=Math.floor(up/60);var ss=up%60;
-      document.getElementById('s_uptime').textContent=dd+'d '+('0'+hh).slice(-2)+'h '+('0'+mm).slice(-2)+'m '+('0'+ss).slice(-2)+'s';
-    }catch(e){}
-  };
-  x.send();
+var x=new XMLHttpRequest();
+x.open('GET','/api/sysinfo',true);
+x.onload=function(){
+try{
+var d=JSON.parse(x.responseText);
+document.getElementById('s_chip').textContent=(d.chip||'?')+' rev.'+(d.chip_rev||0);
+document.getElementById('s_cpu').textContent=(d.cpu_mhz||'?')+' MHz';
+document.getElementById('s_fwver').textContent=d.fw_ver||'---';
+var ramUso=((d.heap_total||1)-(d.heap_free||0))/(d.heap_total||1)*100;
+document.getElementById('s_ram').textContent=fmtBytes(d.heap_free)+' / '+fmtBytes(d.heap_total);
+document.getElementById('s_ram_bar').style.width=Math.round(ramUso)+'%';
+var psUso=((d.psram_total||1)-(d.psram_free||0))/(d.psram_total||1)*100;
+document.getElementById('s_psram').textContent=fmtBytes(d.psram_free)+' / '+fmtBytes(d.psram_total);
+document.getElementById('s_psram_bar').style.width=Math.round(psUso)+'%';
+document.getElementById('s_flash').textContent=fmtBytes(d.sketch_free)+' livre ('+fmtBytes(d.flash_size)+')';
+document.getElementById('s_apip').textContent=d.wifi_ap_ip||'---';
+document.getElementById('s_staip').textContent=d.wifi_sta_ip||'---';
+document.getElementById('s_mac').textContent=d.wifi_mac||'---';
+document.getElementById('s_gw').textContent=d.wifi_gw||'---';
+document.getElementById('s_mask').textContent=d.wifi_mask||'---';
+document.getElementById('s_dns').textContent=d.wifi_dns1||'---';
+document.getElementById('s_rssi').textContent=d.wifi_rssi?d.wifi_rssi+' dBm':'---';
+document.getElementById('s_ssid').textContent=d.wifi_ssid||'---';
+document.getElementById('s_req').textContent=d.req_count||0;
+var cp=d.cpu_pct||0;
+document.getElementById('s_cpu_pct').textContent=cp+'%';
+var bar=document.getElementById('s_cpu_bar');
+bar.style.width=cp+'%';
+bar.style.background=cp<30?'#10b981':cp<60?'#FFB300':'#ef4444';
+var up=d.uptime_s||0;
+var dd=Math.floor(up/86400);up%=86400;
+var hh=Math.floor(up/3600);up%=3600;
+var mm=Math.floor(up/60);var ss=up%60;
+document.getElementById('s_uptime').textContent=dd+'d '+('0'+hh).slice(-2)+'h '+('0'+mm).slice(-2)+'m '+('0'+ss).slice(-2)+'s';
+}catch(e){}
+};
+x.send();
 }
 function fmtBytes(b){
-  if(!b||b<1024)return (b||0)+'B';
-  if(b<1048576)return (b/1024).toFixed(1)+'KB';
-  return (b/1048576).toFixed(1)+'MB';
+if(!b||b<1024)return (b||0)+'B';
+if(b<1048576)return (b/1024).toFixed(1)+'KB';
+return (b/1048576).toFixed(1)+'MB';
 }
-function protoChange(el){
-  var v=el.value;
-  document.getElementById('civ_addr_row').style.display=(v=='0')?'block':'none';
+function protoChange2(el,idx){
+var rows=document.querySelectorAll('.civ-addr-row-'+idx);
+for(var r=0;r<rows.length;r++)rows[r].style.display=el.value=='0'?'block':'none';
 }
 function carregarCfg(){
-  var x=new XMLHttpRequest();
-  x.open('GET','/api/config',true);
-  x.onload=function(){
-    try{
-      var d=JSON.parse(x.responseText);
-      document.getElementById('ce').checked=d.ce!==false;document.getElementById('cp').value=d.cp||0;
-      document.getElementById('bn').value=d.bn||'';
-      document.getElementById('btn').value=d.btn||'';
-      document.getElementById('btp').value=d.btp||'1234';
-      if(d.ca705)document.getElementById('ca_addr').value=d.ca705;
-      document.getElementById('aps').value=d.aps||'';document.getElementById('app').value=d.app||'';
-      document.getElementById('stas').value=d.stas||'';document.getElementById('stap').value=d.stap||'';
-      document.getElementById('dhcp').checked=d.dh!==false;
-      document.getElementById('sip').value=d.sip||'';document.getElementById('sgw').value=d.sgw||'';
-      document.getElementById('ssn').value=d.ssn||'';document.getElementById('sd1').value=d.sd1||'';document.getElementById('sd2').value=d.sd2||'';
-      document.getElementById('ap').value=d.ap||1;
-      if(window.buildPortCards)buildPortCards(d);
-      document.getElementById('ipf').style.display=d.dh!==false?'none':'block';
-      // Preferencias de log (mesmo /api/config)
-      if(d.lBLE!=undefined)document.getElementById('lb_BLE').checked=d.lBLE==1;
-      if(d.lCIV!=undefined)document.getElementById('lb_CIV').checked=d.lCIV==1;
-      if(d.lIC705!=undefined)document.getElementById('lb_IC705').checked=d.lIC705==1;
-      if(d.lWiFi!=undefined)document.getElementById('lb_WiFi').checked=d.lWiFi==1;
-      if(d.lSYS!=undefined)document.getElementById('lb_SYS').checked=d.lSYS==1;
-      if(d.lERRO!=undefined)document.getElementById('lb_ERRO').checked=d.lERRO==1;
-      carregarLogs();
-    }catch(e){carregarLogs();}
-  };
-  x.send();
+var x=new XMLHttpRequest();
+x.open('GET','/api/config',true);
+x.onload=function(){
+try{
+var d=JSON.parse(x.responseText);
+document.getElementById('ce').checked=d.ce!==false;document.getElementById('cp').value=d.cp||0;
+document.getElementById('bn').value=d.bn||'';
+document.getElementById('btn').value=d.btn||'';
+document.getElementById('btp').value=d.btp||'1234';
+if(d.ca705)document.getElementById('ca_addr').value=d.ca705;
+document.getElementById('aps').value=d.aps||'';document.getElementById('app').value=d.app||'';
+document.getElementById('stas').value=d.stas||'';document.getElementById('stap').value=d.stap||'';
+document.getElementById('dhcp').checked=d.dh!==false;
+document.getElementById('sip').value=d.sip||'';document.getElementById('sgw').value=d.sgw||'';
+document.getElementById('ssn').value=d.ssn||'';document.getElementById('sd1').value=d.sd1||'';document.getElementById('sd2').value=d.sd2||'';
+document.getElementById('ap').value=d.ap||1;
+if(d.ports) for(var pi=0;pi<4&&pi<d.ports.length;pi++){
+var p=d.ports[pi];
+var pe=document.querySelector('.pe[data-idx="'+pi+'"]');if(pe)pe.checked=p.en;
+var pp=document.querySelector('.pp[data-idx="'+pi+'"]');if(pp)pp.value=''+(p.pr||0);
+var pb=document.querySelector('.pb[data-idx="'+pi+'"]');if(pb)pb.value=''+(p.ba||19200);
+var pa=document.querySelector('.pa[data-idx="'+pi+'"]');if(pa)pa.value=p.ad||'0x94';
+var rows=document.querySelectorAll('.civ-addr-row-'+pi);
+for(var r=0;r<rows.length;r++)rows[r].style.display=(p.pr==0)?'block':'none';
+var card=pe?pe.closest('.card'):null;
+if(card)card.style.borderColor=p.en?'rgba(79,195,247,0.3)':'rgba(239,68,68,0.3)';
+}
+document.getElementById('ipf').style.display=d.dh!==false?'none':'block';
+if(d.lBLE!=undefined)document.getElementById('lb_BLE').checked=d.lBLE==1;
+if(d.lCIV!=undefined)document.getElementById('lb_CIV').checked=d.lCIV==1;
+if(d.lIC705!=undefined)document.getElementById('lb_IC705').checked=d.lIC705==1;
+if(d.lWiFi!=undefined)document.getElementById('lb_WiFi').checked=d.lWiFi==1;
+if(d.lSYS!=undefined)document.getElementById('lb_SYS').checked=d.lSYS==1;
+if(d.lERRO!=undefined)document.getElementById('lb_ERRO').checked=d.lERRO==1;
+carregarLogs();
+}catch(e){carregarLogs();}
+};
+x.send();
 }
 function civ(c,v){
-  var d={};d[c]=v;
-  var x=new XMLHttpRequest();
-  x.open('POST','/api/civ',true);
-  x.setRequestHeader('Content-Type','application/json');
-  x.onload=function(){try{var r=JSON.parse(x.responseText);toast(r.success?'OK':'Erro',r.success?'ok':'err');}catch(e){toast('Erro','err');}};
-  x.send(JSON.stringify(d));
-  if(c=='ptt'||c=='pwr')setTimeout(carregar,500);
+var d={};d[c]=v;
+var x=new XMLHttpRequest();
+x.open('POST','/api/civ',true);
+x.setRequestHeader('Content-Type','application/json');
+x.onload=function(){try{var r=JSON.parse(x.responseText);toast(r.success?'OK':'Erro',r.success?'ok':'err');}catch(e){toast('Erro','err');}};
+x.send(JSON.stringify(d));
+if(c=='ptt'||c=='pwr')setTimeout(carregar,500);
 }
 function envia(url,data,cb){
-  var x=new XMLHttpRequest();
-  x.open('POST',url,true);
-  x.setRequestHeader('Content-Type','application/json');
-  x.onload=function(){
-    try{
-      var r=JSON.parse(x.responseText);
-      var msg=r.msg||(r.success?'OK':'Falha');
-      toast(msg,r.success?'ok':'err');
-      if(cb)cb();
-    }catch(e){toast('Erro: resposta invalida','err');}
-  };
-  x.onerror=function(){toast('Erro de conexao','err');};
-  x.send(JSON.stringify(data));
+var x=new XMLHttpRequest();
+x.open('POST',url,true);
+x.setRequestHeader('Content-Type','application/json');
+x.onload=function(){
+try{
+var r=JSON.parse(x.responseText);
+var msg=r.msg||(r.success?'OK':'Falha');
+toast(msg,r.success?'ok':'err');
+if(cb)cb();
+}catch(e){toast('Erro: resposta invalida','err');}
+};
+x.onerror=function(){toast('Erro de conexao','err');};
+x.send(JSON.stringify(data));
 }
 function scanIC5(){envia('/api/save',{scan_ic5:true});toast('Escaneando IC-705...','info');}
 function discIC5(){envia('/api/save',{disc_ic5:true});}
 function saveIC5(){
-  envia('/api/save',{
-    ce:document.getElementById('ce').checked,
-    cp:parseInt(document.getElementById('cp').value),
-    bn:document.getElementById('bn').value,
-    ca705:document.getElementById('ca_addr').value
-  });
+envia('/api/save',{
+ce:document.getElementById('ce').checked,
+cp:parseInt(document.getElementById('cp').value),
+bn:document.getElementById('bn').value,
+ca705:document.getElementById('ca_addr').value
+});
 }
-// BLE Scanner
 function scanBLE(){
-  var b=document.getElementById('b_scanble');
-  b.disabled=true;b.textContent='Escaneando...';
-  document.getElementById('ble-result').innerHTML='<p style="color:#94a3b8;font-size:11px">Escaneando dispositivos BLE...</p>';
-  var x=new XMLHttpRequest();
-  x.open('GET','/api/ble_scan?start=1',true);
-  x.onload=function(){
-    (function poll(){
-      var x2=new XMLHttpRequest();
-      x2.open('GET','/api/ble_scan',true);
-      x2.onload=function(){
-        try{
-          var d=JSON.parse(x2.responseText);
-          if(!d.scanning){
-            var html='';
-            if(d.devices&&d.devices.length>0){
-              for(var i=0;i<d.devices.length;i++){
-                var dev=d.devices[i];
-                html+='<div style="display:flex;align-items:center;gap:4px;padding:4px;background:#1a2a3a;margin:2px 0;border-radius:3px">';
-                html+='<span style="flex:1;color:#e2e8f0;font-size:11px">'+(dev.n||'?')+'</span>';
-                html+='<span style="color:#94a3b8;font-size:10px">'+dev.r+'dBm</span>';
-                html+='<button class="btn-sm" onclick="salvarBTDevice(\''+dev.a+'\',\''+(dev.n||'?')+'\')">Salvar</button>';
-                html+='</div>';
-              }
-            } else {
-              html='<p style="color:#94a3b8;font-size:11px">Nenhum dispositivo encontrado.</p>';
-            }
-            document.getElementById('ble-list').innerHTML=html;
-            document.getElementById('ble-result').innerHTML='<p style="color:#10b981;font-size:11px">'+(d.devices?d.devices.length:0)+' dispositivos.</p>';
-            b.disabled=false;b.textContent='Escanear BLE';
-            return;
-          }
-        }catch(e){}
-        setTimeout(poll,1000);
-      };
-      x2.send();
-    })();
-  };
-  x.send();
+var b=document.getElementById('b_scanble');
+b.disabled=true;b.textContent='Escaneando...';
+document.getElementById('ble-result').innerHTML='<p style="color:#94a3b8;font-size:11px">Escaneando dispositivos BLE...</p>';
+var x=new XMLHttpRequest();
+x.open('GET','/api/ble_scan?start=1',true);
+x.onload=function(){
+(function poll(){
+var x2=new XMLHttpRequest();
+x2.open('GET','/api/ble_scan',true);
+x2.onload=function(){
+try{
+var d=JSON.parse(x2.responseText);
+if(!d.scanning){
+var html='';
+if(d.devices&&d.devices.length>0){
+for(var i=0;i<d.devices.length;i++){
+var dev=d.devices[i];
+html+='<div style="display:flex;align-items:center;gap:4px;padding:4px;background:#1a2a3a;margin:2px 0;border-radius:3px">';
+html+='<span style="flex:1;color:#e2e8f0;font-size:11px">'+(dev.n||'?')+'</span>';
+html+='<span style="color:#94a3b8;font-size:10px">'+dev.r+'dBm</span>';
+html+='<button class="btn-sm" onclick="salvarBTDevice(\''+dev.a+'\',\''+(dev.n||'?')+'\')">Salvar</button>';
+html+='</div>';
 }
-
+} else {
+html='<p style="color:#94a3b8;font-size:11px">Nenhum dispositivo encontrado.</p>';
+}
+document.getElementById('ble-list').innerHTML=html;
+document.getElementById('ble-result').innerHTML='<p style="color:#10b981;font-size:11px">'+(d.devices?d.devices.length:0)+' dispositivos.</p>';
+b.disabled=false;b.textContent='Escanear BLE';
+return;
+}
+}catch(e){}
+setTimeout(poll,1000);
+};
+x2.send();
+})();
+};
+x.send();
+}
 function salvarBTDevice(addr,name){
-  envia('/api/save',{bt_add_a:addr,bt_add_n:name},function(){carregarBT();});
+envia('/api/save',{bt_add_a:addr,bt_add_n:name},function(){carregarBT();});
 }
-
 function carregarBT(){
-  var x=new XMLHttpRequest();
-  x.open('GET','/api/bt_devices',true);
-  x.onload=function(){
-    try{
-      var d=JSON.parse(x.responseText);
-      var html='';
-      if(d.devices&&d.devices.length>0){
-        for(var i=0;i<d.devices.length;i++){
-          var dev=d.devices[i];
-          html+='<div style="display:flex;align-items:center;gap:4px;padding:4px;background:#1a2a3a;margin:2px 0;border-radius:3px">';
-          html+='<span style="flex:1;color:#e2e8f0;font-size:11px">'+(dev.n||'?')+'</span>';
-          html+='<span style="color:#94a3b8;font-size:9px">'+dev.a+'</span>';
-          html+='<button class="btn-sm" style="background:#ef4444" onclick="excluirBT('+i+')">X</button>';
-          html+='</div>';
-        }
-      } else {
-        html='<p style="color:#94a3b8;font-size:11px">Nenhum dispositivo salvo.</p>';
-      }
-      document.getElementById('bt-saved-list').innerHTML=html;
-    }catch(e){}
-  };
-  x.send();
+var x=new XMLHttpRequest();
+x.open('GET','/api/bt_devices',true);
+x.onload=function(){
+try{
+var d=JSON.parse(x.responseText);
+var html='';
+if(d.devices&&d.devices.length>0){
+for(var i=0;i<d.devices.length;i++){
+var dev=d.devices[i];
+html+='<div style="display:flex;align-items:center;gap:4px;padding:4px;background:#1a2a3a;margin:2px 0;border-radius:3px">';
+html+='<span style="flex:1;color:#e2e8f0;font-size:11px">'+(dev.n||'?')+'</span>';
+html+='<span style="color:#94a3b8;font-size:9px">'+dev.a+'</span>';
+html+='<button class="btn-sm" style="background:#ef4444" onclick="excluirBT('+i+')">X</button>';
+html+='</div>';
 }
-
+} else {
+html='<p style="color:#94a3b8;font-size:11px">Nenhum dispositivo salvo.</p>';
+}
+document.getElementById('bt-saved-list').innerHTML=html;
+}catch(e){}
+};
+x.send();
+}
 function excluirBT(idx){
-  envia('/api/save',{bt_del:idx},function(){carregarBT();});
+envia('/api/save',{bt_del:idx},function(){carregarBT();});
 }
-
 function sBT(){
-  var btn=document.getElementById('btn').value;
-  var btp=document.getElementById('btp').value;
-  if(!btp||btp.length<4||btp.length>6){toast('Senha deve ter 4-6 digitos','err');return;}
-  envia('/api/save',{btn:btn,btp:btp},function(){toast('Reinicie o ESP32 para aplicar','info');});
+var btn=document.getElementById('btn').value;
+var btp=document.getElementById('btp').value;
+if(!btp||btp.length<4||btp.length>6){toast('Senha deve ter 4-6 digitos','err');return;}
+envia('/api/save',{btn:btn,btp:btp},function(){toast('Reinicie o ESP32 para aplicar','info');});
 }
 function sAP(){envia('/api/save',{aps:document.getElementById('aps').value,app:document.getElementById('app').value});}
 function sSTA(){sIP();}
 function sIP(){
-  var p='sip='+encodeURIComponent(document.getElementById('sip').value)+'&sgw='+encodeURIComponent(document.getElementById('sgw').value)+'&ssn='+encodeURIComponent(document.getElementById('ssn').value)+'&sd1='+encodeURIComponent(document.getElementById('sd1').value)+'&sd2='+encodeURIComponent(document.getElementById('sd2').value)+'&dh='+(document.getElementById('dhcp').checked?'1':'0');
-  var x=new XMLHttpRequest();
-  x.open('GET','/api/save?'+p,true);
-  x.onload=function(){try{var r=JSON.parse(x.responseText);toast(r.msg||(r.success?'OK':'Falha'),r.success?'ok':'err');carregarRedes();}catch(e){toast('Erro','err');}};
-  x.onerror=function(){toast('Erro de conexao','err');};
-  x.send();
+var p='sip='+encodeURIComponent(document.getElementById('sip').value)+'&sgw='+encodeURIComponent(document.getElementById('sgw').value)+'&ssn='+encodeURIComponent(document.getElementById('ssn').value)+'&sd1='+encodeURIComponent(document.getElementById('sd1').value)+'&sd2='+encodeURIComponent(document.getElementById('sd2').value)+'&dh='+(document.getElementById('dhcp').checked?'1':'0');
+var x=new XMLHttpRequest();
+x.open('GET','/api/save?'+p,true);
+x.onload=function(){try{var r=JSON.parse(x.responseText);toast(r.msg||(r.success?'OK':'Falha'),r.success?'ok':'err');carregarRedes();}catch(e){toast('Erro','err');}};
+x.onerror=function(){toast('Erro de conexao','err');};
+x.send();
 }
 function selRede(el){document.getElementById('essid').value=el.value;}
-
-// Gerenciamento de multiplas redes WiFi
 function carregarRedes(){
-  var x=new XMLHttpRequest();
-  x.open('GET','/api/wifi_nets',true);
-  x.onload=function(){
-    try{
-      var d=JSON.parse(x.responseText);
-      var list=document.getElementById('rede-list');
-      var html='';
-      for(var i=0;i<d.nets.length;i++){
-        var n=d.nets[i];
-        html+='<div style="display:flex;align-items:center;gap:4px;padding:4px;background:#1a2a3a;margin:2px 0;border-radius:3px">';
-        html+='<span style="color:#94a3b8;font-size:10px;min-width:20px">'+(i+1)+'.</span>';
-        html+='<span style="flex:1;color:#e2e8f0;font-size:12px">'+n.s+'</span>';
-        html+='<button class="btn-sm" onclick="editarRede('+i+')">E</button>';
-        html+='<button class="btn-sm btn-outline" onclick="subirRede('+i+')">&#8593;</button>';
-        html+='<button class="btn-sm btn-outline" onclick="descerRede('+i+')">&#8595;</button>';
-        html+='<button class="btn-sm" style="background:#ef4444" onclick="excluirRede('+i+')">X</button>';
-        html+='</div>';
-      }
-      if(d.nets.length==0) html+='<p style="color:#94a3b8;font-size:11px">Nenhuma rede cadastrada.</p>';
-      list.innerHTML=html;
-    }catch(e){}
-  };
-  x.send();
+var x=new XMLHttpRequest();
+x.open('GET','/api/wifi_nets',true);
+x.onload=function(){
+try{
+var d=JSON.parse(x.responseText);
+var list=document.getElementById('rede-list');
+var html='';
+for(var i=0;i<d.nets.length;i++){
+var n=d.nets[i];
+html+='<div style="display:flex;align-items:center;gap:4px;padding:4px;background:#1a2a3a;margin:2px 0;border-radius:3px">';
+html+='<span style="color:#94a3b8;font-size:10px;min-width:20px">'+(i+1)+'.</span>';
+html+='<span style="flex:1;color:#e2e8f0;font-size:12px">'+n.s+'</span>';
+html+='<button class="btn-sm" onclick="editarRede('+i+')">E</button>';
+html+='<button class="btn-sm btn-outline" onclick="subirRede('+i+')">&#8593;</button>';
+html+='<button class="btn-sm btn-outline" onclick="descerRede('+i+')">&#8595;</button>';
+html+='<button class="btn-sm" style="background:#ef4444" onclick="excluirRede('+i+')">X</button>';
+html+='</div>';
+}
+if(d.nets.length==0) html+='<p style="color:#94a3b8;font-size:11px">Nenhuma rede cadastrada.</p>';
+list.innerHTML=html;
+}catch(e){}
+};
+x.send();
 }
 function addRede(){
-  document.getElementById('rede-edit').style.display='block';
-  document.getElementById('essid').value='';
-  document.getElementById('epass').value='';
-  document.getElementById('essid').focus();
+document.getElementById('rede-edit').style.display='block';
+document.getElementById('essid').value='';
+document.getElementById('epass').value='';
+document.getElementById('essid').focus();
 }
 function editarRede(idx){
-  var x=new XMLHttpRequest();
-  x.open('GET','/api/wifi_nets?edit='+idx,true);
-  x.onload=function(){
-    try{
-      var d=JSON.parse(x.responseText);
-      document.getElementById('essid').value=d.nets[idx].s;
-      document.getElementById('epass').value=d.nets[idx].p||'';
-      document.getElementById('rede-edit').style.display='block';
-    }catch(e){}
-  };
-  x.send();
+var x=new XMLHttpRequest();
+x.open('GET','/api/wifi_nets?edit='+idx,true);
+x.onload=function(){
+try{
+var d=JSON.parse(x.responseText);
+document.getElementById('essid').value=d.nets[idx].s;
+document.getElementById('epass').value=d.nets[idx].p||'';
+document.getElementById('rede-edit').style.display='block';
+}catch(e){}
+};
+x.send();
 }
 function salvarRede(){
-  var s=document.getElementById('essid').value;
-  var p=document.getElementById('epass').value;
-  if(!s){toast('SSID obrigatorio','err');return;}
-  envia('/api/save',{wn_add_s:s,wn_add_p:p});
-  document.getElementById('rede-edit').style.display='none';
-  setTimeout(carregarRedes,500);
+var s=document.getElementById('essid').value;
+var p=document.getElementById('epass').value;
+if(!s){toast('SSID obrigatorio','err');return;}
+envia('/api/save',{wn_add_s:s,wn_add_p:p});
+document.getElementById('rede-edit').style.display='none';
+setTimeout(carregarRedes,500);
 }
 function cancelarRede(){document.getElementById('rede-edit').style.display='none';}
 function subirRede(idx){envia('/api/save',{wn_move:idx,wn_dir:-1});setTimeout(carregarRedes,500);}
 function descerRede(idx){envia('/api/save',{wn_move:idx,wn_dir:1});setTimeout(carregarRedes,500);}
 function excluirRede(idx){envia('/api/save',{wn_del:idx});setTimeout(carregarRedes,500);}
 function sCIV(){
-  var ap=parseInt(document.getElementById('ap').value);
-  var data={ap:ap};
-  for(var i=0;i<4;i++){
-    var enEl=document.querySelector('.pe[data-idx="'+i+'"]');
-    var prEl=document.querySelector('.pp[data-idx="'+i+'"]');
-    var baEl=document.querySelector('.pb[data-idx="'+i+'"]');
-    var adEl=document.querySelector('.pa[data-idx="'+i+'"]');
-    if(enEl)data['pe'+i]=enEl.checked?1:0;
-    if(prEl)data['pp'+i]=parseInt(prEl.value);
-    if(baEl)data['pb'+i]=parseInt(baEl.value);
-    if(adEl)data['pa'+i]=adEl.value;
-  }
-  envia('/api/save',data);
+var ap=parseInt(document.getElementById('ap').value);
+var data={ap:ap};
+for(var i=0;i<4;i++){
+var enEl=document.querySelector('.pe[data-idx="'+i+'"]');
+var prEl=document.querySelector('.pp[data-idx="'+i+'"]');
+var baEl=document.querySelector('.pb[data-idx="'+i+'"]');
+var adEl=document.querySelector('.pa[data-idx="'+i+'"]');
+if(enEl)data['pe'+i]=enEl.checked?1:0;
+if(prEl)data['pp'+i]=parseInt(prEl.value);
+if(baEl)data['pb'+i]=parseInt(baEl.value);
+if(adEl)data['pa'+i]=adEl.value;
+}
+envia('/api/save',data);
 }
 function listarRedes(networks){
-  var s=document.getElementById('sta_sel');s.innerHTML='<option value="">--</option>';
-  if(!networks)return;
-  var seen={};
-  for(var i=0;i<networks.length;i++){
-    var n=networks[i];
-    if(!n.ssid||seen[n.ssid])continue;
-    seen[n.ssid]=true;
-    var o=document.createElement('option');o.value=n.ssid;o.textContent=n.ssid+(n.open?'':'\uD83D\uDD12');s.appendChild(o);
-  }
+var s=document.getElementById('sta_sel');s.innerHTML='<option value="">--</option>';
+if(!networks)return;
+var seen={};
+for(var i=0;i<networks.length;i++){
+var n=networks[i];
+if(!n.ssid||seen[n.ssid])continue;
+seen[n.ssid]=true;
+var o=document.createElement('option');o.value=n.ssid;o.textContent=n.ssid+(n.open?'':'\uD83D\uDD12');s.appendChild(o);
+}
 }
 function scanWiFi(){
-  document.getElementById('b_scanw').disabled=true;document.getElementById('b_scanw').textContent='...';
-  document.getElementById('scanr').innerHTML='<p style="color:#94a3b8;font-size:11px">Escaneando...</p>';
-  var x=new XMLHttpRequest();
-  x.open('GET','/api/scan',true);
-  x.onload=function(){
-    (function poll(){
-      var x2=new XMLHttpRequest();
-      x2.open('GET','/api/scan',true);
-      x2.onload=function(){
-        try{
-          var d=JSON.parse(x2.responseText);
-          if(!d.scanning){listarRedes(d.networks);document.getElementById('scanr').innerHTML='<p style="color:#10b981;font-size:11px">'+(d.networks?d.networks.length:0)+' redes.</p>';document.getElementById('b_scanw').disabled=false;document.getElementById('b_scanw').textContent='\u21BB';return;}
-        }catch(e){}
-        setTimeout(poll,1000);
-      };
-      x2.send();
-    })();
-  };
-  x.send();
+document.getElementById('b_scanw').disabled=true;document.getElementById('b_scanw').textContent='...';
+document.getElementById('scanr').innerHTML='<p style="color:#94a3b8;font-size:11px">Escaneando...</p>';
+var x=new XMLHttpRequest();
+x.open('GET','/api/scan',true);
+x.onload=function(){
+(function poll(){
+var x2=new XMLHttpRequest();
+x2.open('GET','/api/scan',true);
+x2.onload=function(){
+try{
+var d=JSON.parse(x2.responseText);
+if(!d.scanning){listarRedes(d.networks);document.getElementById('scanr').innerHTML='<p style="color:#10b981;font-size:11px">'+(d.networks?d.networks.length:0)+' redes.</p>';document.getElementById('b_scanw').disabled=false;document.getElementById('b_scanw').textContent='\u21BB';return;}
+}catch(e){}
+setTimeout(poll,1000);
+};
+x2.send();
+})();
+};
+x.send();
 }
 function carregarLogPref(){
-  var x=new XMLHttpRequest();
-  x.open('GET','/api/config',true);
-  x.onload=function(){
-    try{
-      var d=JSON.parse(x.responseText);
-      if(d.lBLE!=undefined)document.getElementById('lb_BLE').checked=d.lBLE==1;
-      if(d.lCIV!=undefined)document.getElementById('lb_CIV').checked=d.lCIV==1;
-      if(d.lIC705!=undefined)document.getElementById('lb_IC705').checked=d.lIC705==1;
-      if(d.lWiFi!=undefined)document.getElementById('lb_WiFi').checked=d.lWiFi==1;
-      if(d.lSYS!=undefined)document.getElementById('lb_SYS').checked=d.lSYS==1;
-      if(d.lERRO!=undefined)document.getElementById('lb_ERRO').checked=d.lERRO==1;
-      carregarLogs();
-    }catch(e){carregarLogs();}
-  };
-  x.onerror=function(){carregarLogs();};
-  x.send();
+var x=new XMLHttpRequest();
+x.open('GET','/api/config',true);
+x.onload=function(){
+try{
+var d=JSON.parse(x.responseText);
+if(d.lBLE!=undefined)document.getElementById('lb_BLE').checked=d.lBLE==1;
+if(d.lCIV!=undefined)document.getElementById('lb_CIV').checked=d.lCIV==1;
+if(d.lIC705!=undefined)document.getElementById('lb_IC705').checked=d.lIC705==1;
+if(d.lWiFi!=undefined)document.getElementById('lb_WiFi').checked=d.lWiFi==1;
+if(d.lSYS!=undefined)document.getElementById('lb_SYS').checked=d.lSYS==1;
+if(d.lERRO!=undefined)document.getElementById('lb_ERRO').checked=d.lERRO==1;
+carregarLogs();
+}catch(e){carregarLogs();}
+};
+x.onerror=function(){carregarLogs();};
+x.send();
 }
 function carregarLogs(){
-  var tipos=[];
-  ['BLE','CIV','IC705','WiFi','SYS','ERRO'].forEach(function(t){
-    var cb=document.getElementById('lb_'+t);
-    if(cb&&cb.checked)tipos.push(t);
-  });
-  var filtro=tipos.join(',');
-  var x=new XMLHttpRequest();
-  x.open('GET','/api/logs?type='+filtro+'&count=100',true);
-  x.onload=function(){
-    try{
-      var d=JSON.parse(x.responseText);
-      var html='';
-      for(var i=0;i<d.length;i++){
-        var e=d[i];
-        var cor=e.t=='ERRO'?'#ef4444':e.t=='CIV'?'#4fc3f7':e.t=='IC705'?'#FFB300':e.t=='BLE'?'#10b981':e.t=='WiFi'?'#3b82f6':'#94a3b8';
-        var ts=new Date(e.s*1000).toLocaleTimeString('pt-BR');
-        html+='<div style="color:'+cor+'"><span style="color:#555">'+ts+'</span> ['+e.t+'] '+e.m+'</div>';
-      }
-      if(!html)html='<div style="color:#555">Nenhum log habilitado.</div>';
-      document.getElementById('loglist').innerHTML=html;
-    }catch(e){document.getElementById('loglist').innerHTML='<div style="color:#ef4444">Erro ao carregar</div>';}
-  };
-  x.send();
+var tipos=[];
+['BLE','CIV','IC705','WiFi','SYS','ERRO'].forEach(function(t){
+var cb=document.getElementById('lb_'+t);
+if(cb&&cb.checked)tipos.push(t);
+});
+var filtro=tipos.join(',');
+var x=new XMLHttpRequest();
+x.open('GET','/api/logs?type='+filtro+'&count=100',true);
+x.onload=function(){
+try{
+var d=JSON.parse(x.responseText);
+var html='';
+for(var i=0;i<d.length;i++){
+var e=d[i];
+var cor=e.t=='ERRO'?'#ef4444':e.t=='CIV'?'#4fc3f7':e.t=='IC705'?'#FFB300':e.t=='BLE'?'#10b981':e.t=='WiFi'?'#3b82f6':'#94a3b8';
+var ts=new Date(e.s*1000).toLocaleTimeString('pt-BR');
+html+='<div style="color:'+cor+'"><span style="color:#555">'+ts+'</span> ['+e.t+'] '+e.m+'</div>';
 }
-
+if(!html)html='<div style="color:#555">Nenhum log habilitado.</div>';
+document.getElementById('loglist').innerHTML=html;
+}catch(e){document.getElementById('loglist').innerHTML='<div style="color:#ef4444">Erro ao carregar</div>';}
+};
+x.send();
+}
 function salvarLogPref(){
-  var pref={};
-  ['BLE','CIV','IC705','WiFi','SYS','ERRO'].forEach(function(t){
-    var cb=document.getElementById('lb_'+t);
-    if(cb)pref['l'+t]=cb.checked?1:0;
-  });
-  var x=new XMLHttpRequest();
-  x.open('POST','/api/save',true);
-  x.setRequestHeader('Content-Type','application/json');
-  x.send(JSON.stringify(pref));
-  carregarLogs();
+var pref={};
+['BLE','CIV','IC705','WiFi','SYS','ERRO'].forEach(function(t){
+var cb=document.getElementById('lb_'+t);
+if(cb)pref['l'+t]=cb.checked?1:0;
+});
+var x=new XMLHttpRequest();
+x.open('POST','/api/save',true);
+x.setRequestHeader('Content-Type','application/json');
+x.send(JSON.stringify(pref));
+carregarLogs();
 }
-
 function carregarUsers(){
-  var x=new XMLHttpRequest();
-  x.open('GET','/api/config',true);
-  x.onload=function(){
-    try{
-      var d=JSON.parse(x.responseText);
-      if(d.users){
-        var html='';
-        for(var i=0;i<d.users.length;i++){
-          var u=d.users[i];
-          html+='<div style="display:flex;align-items:center;gap:4px;padding:4px;background:#1a2a3a;margin:2px 0;border-radius:3px">';
-          html+='<span style="flex:1;color:#e2e8f0;font-size:12px">'+u.n+'</span>';
-          if(u.n!='admin')html+='<button class="btn-sm" style="background:#ef4444" onclick="delUser('+i+')">X</button>';
-          else html+='<span style="color:#555;font-size:10px">(admin)</span>';
-          html+='</div>';
-        }
-        document.getElementById('user-list').innerHTML=html;
-      }
-    }catch(e){}
-  };
-  x.send();
+var x=new XMLHttpRequest();
+x.open('GET','/api/config',true);
+x.onload=function(){
+try{
+var d=JSON.parse(x.responseText);
+if(d.users){
+var html='';
+for(var i=0;i<d.users.length;i++){
+var u=d.users[i];
+html+='<div style="display:flex;align-items:center;gap:4px;padding:4px;background:#1a2a3a;margin:2px 0;border-radius:3px">';
+html+='<span style="flex:1;color:#e2e8f0;font-size:12px">'+u.n+'</span>';
+if(u.n!='admin')html+='<button class="btn-sm" style="background:#ef4444" onclick="delUser('+i+')">X</button>';
+else html+='<span style="color:#555;font-size:10px">(admin)</span>';
+html+='</div>';
 }
-// Firmware update
+document.getElementById('user-list').innerHTML=html;
+}
+}catch(e){}
+};
+x.send();
+}
 document.getElementById('fwfile').addEventListener('change',function(){
-  document.getElementById('fwbtn').disabled=!this.files||this.files.length==0;
-  if(this.files&&this.files[0])document.getElementById('fwstatus').textContent='Arquivo: '+this.files[0].name+' ('+Math.round(this.files[0].size/1024)+'KB)';
+document.getElementById('fwbtn').disabled=!this.files||this.files.length==0;
+if(this.files&&this.files[0])document.getElementById('fwstatus').textContent='Arquivo: '+this.files[0].name+' ('+Math.round(this.files[0].size/1024)+'KB)';
 });
 function fwUpload(){
-  var file=document.getElementById('fwfile').files[0];
-  if(!file){toast('Selecione um arquivo','err');return;}
-  if(!confirm('Atualizar firmware? O dispositivo será reiniciado.'))return;
-  var prog=document.getElementById('fwprog'),bar=document.getElementById('fwbar'),status=document.getElementById('fwstatus'),time=document.getElementById('fwtime');
-  prog.style.display='block';status.textContent='Enviando...';time.textContent='Calculando...';
-  document.getElementById('fwbtn').disabled=true;
-  var xhr=new XMLHttpRequest();
-  xhr.open('POST','/api/update',true);
-  xhr.upload.onprogress=function(e){
-    if(e.lengthComputable){
-      var pct=Math.round(e.loaded/e.total*100);
-      bar.style.width=pct+'%';
-      status.textContent='Enviando: '+Math.round(e.loaded/1024)+'/'+Math.round(e.total/1024)+' KB ('+pct+'%)';
-      // Estimar tempo restante
-      if(e.loaded>0&&e.timeStamp){
-        var elapsed=performance.now()-xhr._startTime;
-        if(elapsed>0){var total=elapsed/e.loaded*e.total;var rem=Math.round((total-elapsed)/1000);time.textContent='~'+rem+'s restante'+(rem>1?'s':'');}
-      }
-    }
-  };
-  xhr._startTime=performance.now();
-  xhr.onload=function(){
-    if(xhr.status==200){status.textContent='Sucesso! Reiniciando...';toast('Firmware atualizado!','info');setTimeout(function(){window.location.href='/';},3000);}
-    else{status.textContent='Erro!';toast('Falha na atualização','err');document.getElementById('fwbtn').disabled=false;}
-  };
-  xhr.onerror=function(){status.textContent='Erro de conexão';document.getElementById('fwbtn').disabled=false;};
-  xhr.send(file);
+var file=document.getElementById('fwfile').files[0];
+if(!file){toast('Selecione um arquivo','err');return;}
+if(!confirm('Atualizar firmware? O dispositivo será reiniciado.'))return;
+var prog=document.getElementById('fwprog'),bar=document.getElementById('fwbar'),status=document.getElementById('fwstatus'),time=document.getElementById('fwtime');
+prog.style.display='block';status.textContent='Enviando...';time.textContent='Calculando...';
+document.getElementById('fwbtn').disabled=true;
+var xhr=new XMLHttpRequest();
+xhr.open('POST','/api/update',true);
+xhr.upload.onprogress=function(e){
+if(e.lengthComputable){
+var pct=Math.round(e.loaded/e.total*100);
+bar.style.width=pct+'%';
+status.textContent='Enviando: '+Math.round(e.loaded/1024)+'/'+Math.round(e.total/1024)+' KB ('+pct+'%)';
+if(e.loaded>0&&e.timeStamp){
+var elapsed=performance.now()-xhr._startTime;
+if(elapsed>0){var total=elapsed/e.loaded*e.total;var rem=Math.round((total-elapsed)/1000);time.textContent='~'+rem+'s restante'+(rem>1?'s':'');}
 }
-
+}
+};
+xhr._startTime=performance.now();
+xhr.onload=function(){
+if(xhr.status==200){status.textContent='Sucesso! Reiniciando...';toast('Firmware atualizado!','info');setTimeout(function(){window.location.href='/';},3000);}
+else{status.textContent='Erro!';toast('Falha na atualização','err');document.getElementById('fwbtn').disabled=false;}
+};
+xhr.onerror=function(){status.textContent='Erro de conexão';document.getElementById('fwbtn').disabled=false;};
+xhr.send(file);
+}
 function altSenha(){
-  var u=document.getElementById('au_user').value,o=document.getElementById('au_oldpass').value,n=document.getElementById('au_newpass').value;
-  if(!u||!o||!n){toast('Preencha todos os campos','err');return;}
-  envia('/api/save',{chpass_user:u,chpass_old:o,chpass_new:n},function(){carregarUsers();});
+var u=document.getElementById('au_user').value,o=document.getElementById('au_oldpass').value,n=document.getElementById('au_newpass').value;
+if(!u||!o||!n){toast('Preencha todos os campos','err');return;}
+envia('/api/save',{chpass_user:u,chpass_old:o,chpass_new:n},function(){carregarUsers();});
 }
 function addUser(){
-  var u=document.getElementById('nu_user').value,p=document.getElementById('nu_pass').value;
-  if(!u||!p){toast('Preencha usuario e senha','err');return;}
-  envia('/api/save',{adduser_n:u,adduser_p:p},function(){carregarUsers();document.getElementById('nu_user').value='';document.getElementById('nu_pass').value='';});
+var u=document.getElementById('nu_user').value,p=document.getElementById('nu_pass').value;
+if(!u||!p){toast('Preencha usuario e senha','err');return;}
+envia('/api/save',{adduser_n:u,adduser_p:p},function(){carregarUsers();document.getElementById('nu_user').value='';document.getElementById('nu_pass').value='';});
 }
 function delUser(idx){
-  envia('/api/save',{deluser:idx},function(){carregarUsers();});
+envia('/api/save',{deluser:idx},function(){carregarUsers();});
 }
 function sair(){
-  var x=new XMLHttpRequest();x.open('GET','/api/logout',true);
-  x.onload=function(){window.location.href='/login';};x.send();
+var x=new XMLHttpRequest();x.open('GET','/api/logout',true);
+x.onload=function(){window.location.href='/login';};x.send();
 }
-
 carregar();
 setTimeout(carregarCfg,300);
 setTimeout(carregarRedes,600);
