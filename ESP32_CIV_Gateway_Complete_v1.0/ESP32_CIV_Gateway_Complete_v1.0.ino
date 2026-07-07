@@ -1973,12 +1973,13 @@ button:hover{background:#80d8ff}
 
 <script>
 function buildPortCards(d){
+  if(!d||!d.ports){document.getElementById('port-cards-container').innerHTML='<p style="color:#ef4444;font-size:11px">Erro ao carregar portas</p>';return;}
   var html='';
   var protos=['CI-V','SPE','Yaesu','Kenwood'];
   var addrOpts=['0x94','0x18','0x76','0x98','0x88','0x70','0x48','0x39'];
   var addrLabels=['IC-7300','IC-7100','IC-7610','IC-705','IC-9700','IC-7000','IC-706','IC-2730'];
   for(var i=0;i<4;i++){
-    var p=d.ports?d.ports[i]:{en:true,pr:0,ba:19200,ad:'0x94'};
+    var p=d.ports[i]||{en:true,pr:0,ba:19200,ad:'0x94'};
     html+='<div class="card" style="padding:8px;border-color:'+(p.en?'rgba(79,195,247,0.3)':'rgba(239,68,68,0.3)')+'">';
     html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
     html+='<strong style="color:#FFB300;font-size:12px">PORT '+(i+1)+'</strong>';
@@ -2603,7 +2604,7 @@ Copyright &copy; ForceIT by PR2PT &mdash; <a href="http://forceit.com.br" style=
 
 void h_cfg() {
   if(!checkAuth()){srv.send(401,"application/json","{\"success\":false}");return;}
-  StaticJsonDocument<1024> d;
+  StaticJsonDocument<2048> d;
   d["aps"]=cfg.ap_ssid; d["app"]=cfg.ap_pass; d["stas"]=cfg.sta_ssid; d["stap"]=cfg.sta_pass; d["dh"]=cfg.sta_dhcp;
   d["sip"]=cfg.sta_ip.toString(); d["sgw"]=cfg.sta_gw.toString(); d["ssn"]=cfg.sta_sn.toString(); d["sd1"]=cfg.sta_d1.toString(); d["sd2"]=cfg.sta_d2.toString();
   { char buf[8]; snprintf(buf,sizeof(buf),"0x%02X",cfg.cat_addr); d["ca705"]=buf; }
