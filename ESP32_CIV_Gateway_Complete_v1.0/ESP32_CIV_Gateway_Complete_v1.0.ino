@@ -785,12 +785,12 @@ void poll_ic5() {
   if(!ic5con||!ic5civ) return;
   unsigned long now=millis();
   // Polling mais lento (2s) para nao sobrecarregar
-  if(now-last_poll>=1000) {
+  if(now-last_poll>=200) {
     uint8_t cmd[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,C_F_READ,CIV_END};
     send_civ(cmd,sizeof(cmd)); last_poll=now;
   }
   // S-meter a cada 1000ms (junto com frequencia)
-  if(now-last_smeter>=1000) {
+  if(now-last_smeter>=200) {
     uint8_t cmd[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,C_SMETER,0x02,CIV_END};
     send_civ(cmd,sizeof(cmd)); last_smeter=now;
   }
@@ -954,8 +954,7 @@ void parse_civ(uint8_t* d, int l) {
   }
   // S-meter: FE FE E0 A4 15 02 <byte1> <byte2> FD
   else if(cmd==C_SMETER&&l>=7&&d[5]==0x02) {
-    ic5_smeter=d[6];
-    if(ic5_smeter<8&&l>=8) ic5_smeter=d[7]; // se primeiro byte for muito baixo, tenta segundo
+    ic5_smeter=d[6]; // IC-705: unico byte com S-meter 0-254 (30=S9)
   }
   // Power: FE FE 98 E0 1A 05 <0=OFF 1=ON> FD
   else if(cmd==0x1A&&l>=7&&d[5]==0x05) {
@@ -2661,21 +2660,15 @@ var fhz=parseInt(d.freq)||0;window._curFreq=fhz;var fm=Math.floor(fhz/1000000);v
 document.getElementById('v_mode').textContent=d.mode||'---';
 document.getElementById('v_ptt').innerHTML='<span class="badge '+(d.ptt?'bg-red':'bg-green')+'">'+(d.ptt?'TX':'RX')+'</span>';
 var sm=d.smeter||0,sv='S0';
-if(sm>100){ // Escala 0-255 (Icom classica)
-if(sm<8)sv='S0';else if(sm<24)sv='S1';else if(sm<40)sv='S2';else if(sm<56)sv='S3';
-else if(sm<72)sv='S4';else if(sm<88)sv='S5';else if(sm<104)sv='S6';
-else if(sm<116)sv='S7';else if(sm<124)sv='S8';else if(sm<136)sv='S9';
-else if(sm<152)sv='S9+10';else if(sm<168)sv='S9+20';else if(sm<184)sv='S9+30';
-else if(sm<200)sv='S9+40';else if(sm<216)sv='S9+50';else sv='S9+60';
-}else{ // Escala 0-100% (IC-705 padrao)
-if(sm<5)sv='S0';else if(sm<15)sv='S1';else if(sm<25)sv='S2';else if(sm<35)sv='S3';
-else if(sm<45)sv='S4';else if(sm<55)sv='S5';else if(sm<65)sv='S6';
-else if(sm<72)sv='S7';else if(sm<78)sv='S8';else if(sm<85)sv='S9';
-else if(sm<90)sv='S9+10';else if(sm<95)sv='S9+20';else sv='S9+40';
-}
+// IC-705: CI-V retorna 0-254 (30 = S9)
+if(sm<4)sv='S0';else if(sm<8)sv='S1';else if(sm<12)sv='S2';else if(sm<16)sv='S3';
+else if(sm<20)sv='S4';else if(sm<24)sv='S5';else if(sm<28)sv='S6';
+else if(sm<30)sv='S7';else if(sm<32)sv='S8';else if(sm<40)sv='S9';
+else if(sm<75)sv='S9+10';else if(sm<115)sv='S9+20';else if(sm<155)sv='S9+30';
+else if(sm<195)sv='S9+40';else if(sm<235)sv='S9+50';else sv='S9+60';
 document.getElementById('stxt').textContent=d.pwr?'---':sv;
 document.getElementById('stxt2').textContent=d.pwr?'TX':'';
-document.getElementById('sbar').style.width=Math.min(sm,100)+'%';
+document.getElementById('sbar').style.width=Math.min(sm/254*100,100)+'%';
 document.getElementById('v_pwr').innerHTML='<span class="badge '+(d.pwr?'bg-green':'bg-red')+'">'+(d.pwr?'ON':'OFF')+'</span>';
 document.getElementById('v_split').innerHTML='<span class="badge '+(d.split?'bg-green':'bg-red')+'">'+(d.split?'ON':'OFF')+'</span>';
 var agcN=['OFF','FAST','MID','SLOW'];document.getElementById('v_agc').textContent=d.agc!==undefined?agcN[d.agc]||'---':'---';
@@ -3305,7 +3298,7 @@ carregar();
 setTimeout(carregarCfg,300);
 setTimeout(carregarRedes,600);
 setTimeout(carregarBT,900);
-setInterval(carregar,5000);
+setInterval(carregar,200);
 </script>
 <div style="text-align:center;padding:12px;font-size:10px;color:#555;border-top:1px solid rgba(79,195,247,0.1);margin-top:12px">
 Copyright &copy; ForceIT by PR2PT &mdash; <a href="http://forceit.com.br" style="color:#4fc3f7;text-decoration:none" target="_blank">forceit.com.br</a> &mdash; <a href="https://hamportal.cc" style="color:#4fc3f7;text-decoration:none" target="_blank">hamportal.cc</a>
