@@ -2619,6 +2619,7 @@ ca705:document.getElementById('ca_addr').value
 function scanBLE(){
 var b=document.getElementById('b_scanble');
 b.disabled=true;b.textContent='Escaneando...';
+document.getElementById('ble-list').innerHTML='';
 document.getElementById('ble-result').innerHTML='<p style="color:#94a3b8;font-size:11px">Escaneando dispositivos BLE...</p>';
 var x=new XMLHttpRequest();
 x.open('GET','/api/ble_scan?start=1',true);
@@ -3030,8 +3031,11 @@ class BLEDeviceCB : public BLEAdvertisedDeviceCallbacks {
 void ble_scan() {
   if(ble_scan_active) return;
   ble_scan_active=true;
-  ble_scan_buf="["; ble_scan_cnt=0;
+  ble_scan_results="[]";
+  ble_scan_buf="[";
+  ble_scan_cnt=0;
   BLEScan* sc=BLEDevice::getScan();
+  sc->clearResults();
   sc->setAdvertisedDeviceCallbacks(new BLEDeviceCB());
   sc->setInterval(100);
   sc->setWindow(50);
