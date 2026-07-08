@@ -791,7 +791,7 @@ void poll_ic5() {
   }
   // S-meter a cada 1000ms (junto com frequencia)
   if(now-last_smeter>=200) {
-    uint8_t cmd[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,C_SMETER,0x02,CIV_END};
+    uint8_t cmd[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,C_SMETER,0x01,CIV_END};
     send_civ(cmd,sizeof(cmd)); last_smeter=now;
   }
   if(pending_cmd) { send_civ(pending_buf,pending_len); pending_cmd=false; }
@@ -953,7 +953,7 @@ void parse_civ(uint8_t* d, int l) {
     ic5_ptt=d[5]; last_change_src=1;
   }
   // S-meter: FE FE E0 A4 15 02 <byte1> <byte2> FD
-  else if(cmd==C_SMETER&&l>=7&&d[5]==0x02) {
+  else if(cmd==C_SMETER&&l>=7&&d[5]==0x01) {
     // IC-705: resposta pode ser FE FE E0 A4 15 02 <flag> <level> FD
     // Onde d[6]=flag, d[7]=level real
     ic5_smeter=(l>=8)?d[7]:d[6];
