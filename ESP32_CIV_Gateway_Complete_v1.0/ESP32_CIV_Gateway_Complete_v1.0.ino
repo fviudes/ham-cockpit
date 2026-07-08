@@ -36,26 +36,30 @@
 #define FIRMWARE_VERSION "1.0.4"
 #define PIN_LED 2       // LED simples (liga/desliga)
 #define PIN_LED_RGB 48  // LED RGB (WS2812/Neopixel) - ESP32-S3 DevKitC-1
-// Controle LED RGB (WS2812) via software (portavel, sem bibliotecas)
-static uint32_t grb_val = 0;
+// Controle LED RGB (WS2812) via GPIO register macros
+#include <soc/gpio_reg.h>
+static bool rgb_ok = false;
+
 void rgb_set(uint8_t r, uint8_t g, uint8_t b) {
-  grb_val = (g << 16) | (r << 8) | b;
-  pinMode(PIN_LED_RGB, OUTPUT);
-  // WS2812: GRB, 24 bits, timing aproximado com NOPs no ESP32 240MHz
+  if(!rgb_ok) { pinMode(PIN_LED_RGB, OUTPUT); rgb_ok = true; }
+  r = r * 77 / 255; g = g * 77 / 255; b = b * 77 / 255;
+  uint32_t grb = (g << 16) | (r << 8) | b, m = 1 << PIN_LED_RGB;
   noInterrupts();
-  uint32_t mask = 0x800000;
-  while(mask) {
-    if(grb_val & mask) {
-      digitalWrite(PIN_LED_RGB, HIGH); __asm__ __volatile__ ("nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop;");
-      digitalWrite(PIN_LED_RGB, LOW);  __asm__ __volatile__ ("nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop;");
+  for(int i = 23; i >= 0; i--) {
+    if(grb & (1 << i)) {
+      REG_WRITE(GPIO_OUT_W1TS_REG, m);
+      __asm__ __volatile__("nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;");
+      REG_WRITE(GPIO_OUT_W1TC_REG, m);
+      __asm__ __volatile__("nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;");
     } else {
-      digitalWrite(PIN_LED_RGB, HIGH); __asm__ __volatile__ ("nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop;");
-      digitalWrite(PIN_LED_RGB, LOW);  __asm__ __volatile__ ("nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop;");
+      REG_WRITE(GPIO_OUT_W1TS_REG, m);
+      __asm__ __volatile__("nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;");
+      REG_WRITE(GPIO_OUT_W1TC_REG, m);
+      __asm__ __volatile__("nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;nop;");
     }
-    mask >>= 1;
   }
   interrupts();
-  delayMicroseconds(60); // RESET pulse
+  delayMicroseconds(60);
 }
 #define PORT1_RX 16
 #define PORT1_TX 17
