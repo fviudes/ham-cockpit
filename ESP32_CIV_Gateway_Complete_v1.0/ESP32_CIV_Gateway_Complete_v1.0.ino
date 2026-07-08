@@ -954,8 +954,7 @@ void parse_civ(uint8_t* d, int l) {
   }
   // S-meter: FE FE E0 A4 15 02 <byte1> <byte2> FD
   else if(cmd==C_SMETER&&l>=7&&d[5]==0x02) {
-    ic5_smeter=(l>=8)?d[7]:d[6]; // alguns radios usam o 2o byte
-    if(ic5_smeter>100) ic5_smeter=d[6]; // fallback
+    ic5_smeter=d[6]; // primeiro byte apos comando
   }
   // Power: FE FE 98 E0 1A 05 <0=OFF 1=ON> FD
   else if(cmd==0x1A&&l>=7&&d[5]==0x05) {
@@ -2006,12 +2005,17 @@ button:hover{background:#80d8ff}
 </div>
 <div style="display:flex;gap:4px;flex-wrap:wrap">
 <span style="color:#94a3b8;font-size:10px;line-height:24px">Banda:</span>
+<button class="btn-sm" onclick="civ('freq','1810000')">160m</button>
+<button class="btn-sm" onclick="civ('freq','3530000')">80m</button>
+<button class="btn-sm" onclick="civ('freq','7100000')">40m</button>
+<button class="btn-sm" onclick="civ('freq','10125000')">30m</button>
+<button class="btn-sm" onclick="civ('freq','14200000')">20m</button>
+<button class="btn-sm" onclick="civ('freq','18068000')">17m</button>
+<button class="btn-sm" onclick="civ('freq','21000000')">15m</button>
+<button class="btn-sm" onclick="civ('freq','24940000')">12m</button>
 <button class="btn-sm" onclick="civ('freq','28000000')">10m</button>
 <button class="btn-sm" onclick="civ('freq','144000000')">2m</button>
 <button class="btn-sm" onclick="civ('freq','430000000')">70cm</button>
-<button class="btn-sm" onclick="civ('freq','7100000')">40m</button>
-<button class="btn-sm" onclick="civ('freq','14200000')">20m</button>
-<button class="btn-sm" onclick="civ('freq','21000000')">15m</button>
 </div>
 <div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">
 <span style="color:#94a3b8;font-size:10px;line-height:24px">Modo:</span>
@@ -2656,12 +2660,15 @@ var fhz=parseInt(d.freq)||0;window._curFreq=fhz;var fm=Math.floor(fhz/1000000);v
 document.getElementById('v_mode').textContent=d.mode||'---';
 document.getElementById('v_ptt').innerHTML='<span class="badge '+(d.ptt?'bg-red':'bg-green')+'">'+(d.ptt?'TX':'RX')+'</span>';
 var sm=d.smeter||0;
-var dbm=-127+sm*114/255;
-var sUnit='S0';
-if(dbm>-73){var ov=Math.round((dbm+73)/-10)*-10;sUnit='S9+'+(ov<0?0:ov)+'dB';}
-else if(dbm>-127){var sv=Math.round((127+dbm)/6);sUnit='S'+Math.min(9,Math.max(0,sv));}
-document.getElementById('stxt').textContent=d.pwr?'---':sUnit;
-document.getElementById('stxt2').textContent=d.pwr?'TX':Math.round(dbm)+' dBm';
+// Tabela Icom: raw value -> S-unit
+var sv='S0';
+if(sm<8)sv='S0';else if(sm<24)sv='S1';else if(sm<40)sv='S2';else if(sm<56)sv='S3';
+else if(sm<72)sv='S4';else if(sm<88)sv='S5';else if(sm<104)sv='S6';
+else if(sm<116)sv='S7';else if(sm<124)sv='S8';else if(sm<136)sv='S9';
+else if(sm<152)sv='S9+10';else if(sm<168)sv='S9+20';else if(sm<184)sv='S9+30';
+else if(sm<200)sv='S9+40';else if(sm<216)sv='S9+50';else sv='S9+60';
+document.getElementById('stxt').textContent=d.pwr?'---':sv;
+document.getElementById('stxt2').textContent=d.pwr?'TX':Math.round((sm/255)*120-140)+' dBm';
 document.getElementById('sbar').style.width=Math.min(sm/255*100,100)+'%';
 document.getElementById('v_pwr').innerHTML='<span class="badge '+(d.pwr?'bg-green':'bg-red')+'">'+(d.pwr?'ON':'OFF')+'</span>';
 document.getElementById('v_split').innerHTML='<span class="badge '+(d.split?'bg-green':'bg-red')+'">'+(d.split?'ON':'OFF')+'</span>';
