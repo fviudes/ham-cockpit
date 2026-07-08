@@ -1972,7 +1972,7 @@ button:hover{background:#80d8ff}
 <h2>Painel de Controle Icom Radio</h2>
 <div class="card">
 <div class="grid">
-<div class="gitem"><div class="glabel">Frequencia</div><div class="gval freq" id="v_freq">---</div></div>
+<div class="gitem" style="display:flex;flex-direction:row;padding:3px 5px"><div style="flex:1"><div class="glabel">Frequencia</div><div class="gval freq" id="v_freq" style="font-size:22px;padding:0">---</div></div><div style="display:flex;flex-direction:column;justify-content:space-around;gap:2px"><button class="btn-sm" onclick="freqStep(1)" style="font-size:9px;padding:0px 6px;flex:1;min-height:20px">&uarr;</button><button class="btn-sm" onclick="freqStep(-1)" style="font-size:9px;padding:0px 6px;flex:1;min-height:20px">&darr;</button><span style="font-size:7px;color:#94a3b8;text-align:center">1k</span></div></div>
 <div class="gitem"><div class="glabel">Modo</div><div class="gval" id="v_mode">---</div></div>
 <div style="display:flex;gap:4px;flex:1">
 <div class="gitem" style="flex:0.3;display:flex;flex-direction:column;justify-content:center"><div class="glabel">PTT</div><div class="gval" id="v_ptt"><span class="badge bg-red">RX</span></div></div>
@@ -2020,6 +2020,7 @@ button:hover{background:#80d8ff}
 <button class="btn-sm" onclick="civ('mode',5)">FM</button>
 <button class="btn-sm" onclick="civ('mode',3)">CW</button>
 <button class="btn-sm" onclick="civ('mode',2)">AM</button>
+<button class="btn-sm btn-outline" onclick="civ('mode',9)">DV</button>
 </div>
 <div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">
 <span style="color:#94a3b8;font-size:10px;line-height:24px">AGC:</span>
@@ -2434,7 +2435,7 @@ WARN: <span id="spe_warn_txt_display"></span>
 <label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="0" checked> Enable</label></div>
 <label style="font-size:9px">Protocolo</label>
 <select class="pp" data-idx="0" onchange="protoChange2(this,0)" style="font-size:10px;padding:3px 4px">
-<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option><option value="5">FlexRadio</option></select>
+<option value="0">Icom CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option><option value="5">FlexRadio</option></select>
 <label style="font-size:9px">Baud</label>
 <select class="pb" data-idx="0" style="font-size:10px;padding:3px 4px">
 <option value="9600">9600</option><option value="19200" selected>19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
@@ -2449,7 +2450,7 @@ WARN: <span id="spe_warn_txt_display"></span>
 <label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="1" checked> Enable</label></div>
 <label style="font-size:9px">Protocolo</label>
 <select class="pp" data-idx="1" onchange="protoChange2(this,1)" style="font-size:10px;padding:3px 4px">
-<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option><option value="5">FlexRadio</option></select>
+<option value="0">Icom CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option><option value="5">FlexRadio</option></select>
 <label style="font-size:9px">Baud</label>
 <select class="pb" data-idx="1" style="font-size:10px;padding:3px 4px">
 <option value="9600">9600</option><option value="19200" selected>19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
@@ -2464,7 +2465,7 @@ WARN: <span id="spe_warn_txt_display"></span>
 <label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="2" checked> Enable</label></div>
 <label style="font-size:9px">Protocolo</label>
 <select class="pp" data-idx="2" onchange="protoChange2(this,2)" style="font-size:10px;padding:3px 4px">
-<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option><option value="5">FlexRadio</option></select>
+<option value="0">Icom CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option><option value="5">FlexRadio</option></select>
 <label style="font-size:9px">Baud</label>
 <select class="pb" data-idx="2" style="font-size:10px;padding:3px 4px">
 <option value="9600">9600</option><option value="19200" selected>19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
@@ -2479,7 +2480,7 @@ WARN: <span id="spe_warn_txt_display"></span>
 <label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="3" checked> Enable</label></div>
 <label style="font-size:9px">Protocolo</label>
 <select class="pp" data-idx="3" onchange="protoChange2(this,3)" style="font-size:10px;padding:3px 4px">
-<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option><option value="5">FlexRadio</option></select>
+<option value="0">Icom CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option><option value="5">FlexRadio</option></select>
 <label style="font-size:9px">Baud</label>
 <select class="pb" data-idx="3" style="font-size:10px;padding:3px 4px">
 <option value="9600">9600</option><option value="19200" selected>19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
@@ -2651,7 +2652,7 @@ x.open('GET','/api/status',true);
 x.onload=function(){
 try{
 var d=JSON.parse(x.responseText);
-var fhz=parseInt(d.freq)||0;var fm=Math.floor(fhz/1000000);var fk=Math.floor((fhz%1000000)/1000);var fh=fhz%1000;document.getElementById('v_freq').textContent=fhz?fm+'.'+('000'+fk).slice(-3)+'.'+('000'+fh).slice(-3)+' Hz':'---';
+var fhz=parseInt(d.freq)||0;window._curFreq=fhz;var fm=Math.floor(fhz/1000000);var fk=Math.floor((fhz%1000000)/1000);var fh=fhz%1000;document.getElementById('v_freq').textContent=fhz?fm+'.'+('000'+fk).slice(-3)+'.'+('000'+fh).slice(-3)+' Hz':'---';
 document.getElementById('v_mode').textContent=d.mode||'---';
 document.getElementById('v_ptt').innerHTML='<span class="badge '+(d.ptt?'bg-red':'bg-green')+'">'+(d.ptt?'TX':'RX')+'</span>';
 var sm=d.smeter||0;
@@ -2922,6 +2923,12 @@ carregarLogs();
 };
 x.send();
 }
+function freqStep(dir){
+var f=window._curFreq||0;
+if(f<100000)return;
+f+=dir*1000;if(f<1000)f=1000;
+civ('freq',f);
+}
 function civ(c,v){
 var d={};d[c]=v;
 var x=new XMLHttpRequest();
@@ -2929,7 +2936,7 @@ x.open('POST','/api/civ',true);
 x.setRequestHeader('Content-Type','application/json');
 x.onload=function(){try{var r=JSON.parse(x.responseText);toast(r.success?'OK':'Erro',r.success?'ok':'err');}catch(e){toast('Erro','err');}};
 x.send(JSON.stringify(d));
-if(c=='ptt'||c=='pwr')setTimeout(carregar,500);
+if(c=='ptt'||c=='pwr'||c=='freq')setTimeout(carregar,300);
 }
 function envia(url,data,cb){
 var x=new XMLHttpRequest();
