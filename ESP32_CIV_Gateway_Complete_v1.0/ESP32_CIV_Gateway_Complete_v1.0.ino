@@ -2558,6 +2558,9 @@ var _en={
   'Reiniciar':'Reboot','Reset de Fabrica':'Factory Reset',
   'Chave de Antena':'Antenna Switch','Chave de Radio':'Radio Switch',
   'Logs do Sistema':'System Logs','Frequencia Manual':'Manual Frequency',
+  'Status do Sistema':'System Status','Memória':'Memory','Mem&oacute;ria':'Memory',
+  'Atualização de Firmware':'Firmware Update','Atualiza&ccedil;&atilde;o de Firmware':'Firmware Update',
+  'Escanear Dispositivos':'Scan Devices','CAT ativado':'CAT enabled',
   'Historico':'History','Pinagem':'Pinout','Pino':'Pin','Nome':'Name',
   'Funcao':'Function','Dir.':'Dir.','LED indicador':'Indicator LED',
   'USB CDC (Console)':'USB CDC (Console)',
@@ -2590,10 +2593,19 @@ function applyLang(){
     if(_en[t])h.textContent=_en[t];
     else{var i=t.indexOf(' ');if(i>0){var f=t.substring(0,i);if(_en[f])h.textContent=_en[f]+t.substring(i);}}
   });
-  document.querySelectorAll('.glabel,.gval,strong,span,div,label').forEach(function(e){
+  document.querySelectorAll('.glabel,.gval,strong,span,div').forEach(function(e){
     if(e.children.length>0)return;
     var t=e.textContent.trim();
     if(t&&t.length<60&&_en[t])e.textContent=_en[t];
+  });
+  // Labels: extrai texto ignorando elementos filhos (checkbox, input)
+  document.querySelectorAll('label').forEach(function(l){
+    var txt='';
+    for(var i=0;i<l.childNodes.length;i++){if(l.childNodes[i].nodeType==3)txt+=l.childNodes[i].textContent;}
+    txt=txt.trim();
+    if(txt&&_en[txt]){
+      for(var i=0;i<l.childNodes.length;i++){if(l.childNodes[i].nodeType==3){l.childNodes[i].textContent=_en[txt];break;}}
+    }
   });
   document.querySelectorAll('input[placeholder]').forEach(function(e){
     var p=e.getAttribute('placeholder');if(p&&_en[p])e.setAttribute('placeholder',_en[p]);
