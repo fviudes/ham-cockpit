@@ -1836,6 +1836,7 @@ void setup_ws() {
   srv.on("/",HTTP_GET,h_root);
   srv.on("/api/config",HTTP_GET,h_cfg);
   srv.on("/api/status",HTTP_GET,h_sts);
+  srv.on("/api/smeter",HTTP_GET,[](){StaticJsonDocument<32> d;d["sm"]=ic5_smeter;String r;serializeJson(d,r);srv.send(200,"application/json",r);});
   srv.on("/api/scan",HTTP_GET,h_scan);
   srv.on("/api/wifi_nets",HTTP_GET,h_wifi_nets);
   srv.on("/api/ble_scan",HTTP_GET,h_ble_scan);
@@ -2631,7 +2632,8 @@ var conts=document.querySelectorAll('[id^="tb-"]');
 for(var i=0;i<conts.length;i++)conts[i].style.display='none';
 document.getElementById('tb-'+tab).style.display='block';
 el.classList.add('active');
-if(tab=='radio'||tab=='ic705'||tab=='bluetooth'){carregar();carregarBT();}
+if(tab=='radio'){carregar();carregarBT();if(window._smInt)clearInterval(window._smInt);window._smInt=setInterval(pollSmeter,50);}else{if(window._smInt){clearInterval(window._smInt);window._smInt=null;}}
+if(tab=='ic705'||tab=='bluetooth'){carregar();carregarBT();}
 if(tab=='spe'){carregarSPE();}
 if(tab=='hamplus'){carregarHP();}
 if(tab=='wifi'){carregar();listarRedes();carregarRedes();}
@@ -2665,9 +2667,8 @@ else if(sm<64)sv='S4';else if(sm<78)sv='S5';else if(sm<92)sv='S6';
 else if(sm<106)sv='S7';else if(sm<120)sv='S8';else if(sm<138)sv='S9';
 else if(sm<158)sv='S9+10';else if(sm<178)sv='S9+20';else if(sm<198)sv='S9+30';
 else if(sm<218)sv='S9+40';else if(sm<238)sv='S9+50';else sv='S9+60';
-document.getElementById('stxt').textContent=sv;
+// S-meter atualizado via pollSmeter() em tempo real
 document.getElementById('stxt2').textContent=d.pwr?'TX':'';
-document.getElementById('sbar').style.width=Math.min(sm/254*100,100)+'%';
 document.getElementById('v_pwr').innerHTML='<span class="badge '+(d.pwr?'bg-green':'bg-red')+'">'+(d.pwr?'ON':'OFF')+'</span>';
 document.getElementById('v_split').innerHTML='<span class="badge '+(d.split?'bg-green':'bg-red')+'">'+(d.split?'ON':'OFF')+'</span>';
 var agcN=['OFF','FAST','MID','SLOW'];document.getElementById('v_agc').textContent=d.agc!==undefined?agcN[d.agc]||'---':'---';
@@ -2680,6 +2681,24 @@ document.getElementById('s_pair').innerHTML=d.ic5pair?'<span class="badge bg-gre
 document.getElementById('sbtn').textContent=d.btn||'---';
 document.getElementById('sbtcon').innerHTML=d.nuscon?'<span class="badge bg-green">Conectado</span>':'<span class="badge bg-red">Aguardando</span>';
 document.getElementById('sbtp').textContent=d.btp||'----';
+}catch(e){}
+};
+x.send();
+}
+function pollSmeter(){
+var x=new XMLHttpRequest();
+x.open('GET','/api/smeter',true);
+x.onload=function(){try{
+var d=JSON.parse(x.responseText);
+var sm=d.sm||0;
+var sv='S0';
+if(sm<8)sv='S0';else if(sm<21)sv='S1';else if(sm<35)sv='S2';else if(sm<49)sv='S3';
+else if(sm<64)sv='S4';else if(sm<78)sv='S5';else if(sm<92)sv='S6';
+else if(sm<106)sv='S7';else if(sm<120)sv='S8';else if(sm<138)sv='S9';
+else if(sm<158)sv='S9+10';else if(sm<178)sv='S9+20';else if(sm<198)sv='S9+30';
+else if(sm<218)sv='S9+40';else if(sm<238)sv='S9+50';else sv='S9+60';
+document.getElementById('stxt').textContent=sv;
+document.getElementById('sbar').style.width=Math.min(sm/254*100,100)+'%';
 }catch(e){}
 };
 x.send();
@@ -3294,6 +3313,7 @@ if(!confirm('CONFIRMO! Desejo restaurar para fabrica.'))return;
 envia('/api/save',{factory:true});
 }
 carregar();
+window._smInt=setInterval(pollSmeter,50);
 setTimeout(carregarCfg,300);
 setTimeout(carregarRedes,600);
 setTimeout(carregarBT,900);
