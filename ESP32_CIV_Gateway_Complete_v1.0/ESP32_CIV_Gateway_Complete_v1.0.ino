@@ -2662,13 +2662,13 @@ var fhz=parseInt(d.freq)||0;window._curFreq=fhz;var fm=Math.floor(fhz/1000000);v
 document.getElementById('v_mode').textContent=d.mode||'---';
 document.getElementById('v_ptt').innerHTML='<span class="badge '+(d.ptt?'bg-red':'bg-green')+'">'+(d.ptt?'TX':'RX')+'</span>';
 var sm=d.smeter||0,sv='S0';
-// Mostra raw value para debug
-if(sm<8)sv='S0';else if(sm<21)sv='S1';else if(sm<35)sv='S2';else if(sm<49)sv='S3';
-else if(sm<64)sv='S4';else if(sm<78)sv='S5';else if(sm<92)sv='S6';
-else if(sm<106)sv='S7';else if(sm<120)sv='S8';else if(sm<138)sv='S9';
-else if(sm<158)sv='S9+10';else if(sm<178)sv='S9+20';else if(sm<198)sv='S9+30';
-else if(sm<218)sv='S9+40';else if(sm<238)sv='S9+50';else sv='S9+60';
-document.getElementById('stxt').textContent=sv;
+// IC-705: escala CI-V onde S9=30, cada +10dB = +20 unidades
+if(sm<4)sv='S0';else if(sm<8)sv='S1';else if(sm<12)sv='S2';else if(sm<15)sv='S3';
+else if(sm<19)sv='S4';else if(sm<23)sv='S5';else if(sm<27)sv='S6';
+else if(sm<30)sv='S7';else if(sm<33)sv='S8';else if(sm<40)sv='S9';
+else if(sm<60)sv='S9+10';else if(sm<80)sv='S9+20';else if(sm<100)sv='S9+30';
+else if(sm<120)sv='S9+40';else if(sm<140)sv='S9+50';else sv='S9+60';
+document.getElementById('stxt').textContent=sv+'('+sm+')';
 document.getElementById('stxt2').textContent=d.pwr?'TX':'';
 document.getElementById('sbar').style.width=Math.min(sm/254*100,100)+'%';
 document.getElementById('v_pwr').innerHTML='<span class="badge '+(d.pwr?'bg-green':'bg-red')+'">'+(d.pwr?'ON':'OFF')+'</span>';
