@@ -35,10 +35,33 @@
 // ===================== HARDWARE =====================
 #define FIRMWARE_VERSION "1.0.4"
 #define PIN_LED 2       // LED simples (liga/desliga)
-// Se sua placa tiver LED RGB (WS2812/Neopixel) em outro pino, defina aqui:
-// #define PIN_LED_RGB 48  // Descomente e ajuste conforme sua placa
-// #include <Adafruit_NeoPixel.h>
-// Adafruit_NeoPixel rgb(1, PIN_LED_RGB, NEO_GRB + NEO_KHZ800);
+#define PIN_LED_RGB 48  // LED RGB (WS2812/Neopixel) - ESP32-S3 DevKitC-1
+// Controle LED RGB (WS2812) via RMT
+#include <esp32-hal-rmt.h>
+static bool rgb_ok = false;
+static rmt_obj_t* rmt_led = NULL;
+
+void rgb_set(uint8_t r, uint8_t g, uint8_t b) {
+  if(!rgb_ok) {
+    rmt_led = rmtInit(PIN_LED_RGB, true, RMT_MEM_64);
+    if(rmt_led == NULL) { Serial.println("[LED] RGB init fail"); return; }
+    rmtSetTick(rmt_led, 100);
+    rgb_ok = true;
+  }
+  uint32_t grb = (g << 16) | (r << 8) | b;
+  rmt_data_t data[24];
+  for(int i = 0; i < 24; i++) {
+    if(grb & (1 << (23 - i))) {
+      data[i].level0 = 1; data[i].duration0 = 8;
+      data[i].level1 = 0; data[i].duration1 = 5;
+    } else {
+      data[i].level0 = 1; data[i].duration0 = 4;
+      data[i].level1 = 0; data[i].duration1 = 9;
+    }
+  }
+  rmtWrite(rmt_led, data, 24);
+  delay(1);
+}
 #define PORT1_RX 16
 #define PORT1_TX 17
 #define PORT2_RX 18
@@ -1691,7 +1714,7 @@ void wifi_conn_tick() {
     wifi_connecting=false;
     wifi_net_current=-1;
     sta_con=true;
-    digitalWrite(PIN_LED,HIGH); // WiFi conectado → LED aceso (azul se RGB)
+    rgb_set(0,0,20); digitalWrite(PIN_LED,HIGH); // WiFi OK → LED azul
     addLog("WiFi","Conectado! IP: %s",WiFi.localIP().toString().c_str());
     Serial.printf("[WiFi] Conectado! IP: %s\n",WiFi.localIP().toString().c_str());
     return;
@@ -3655,7 +3678,8 @@ void setup() {
 
   Serial.println("\n=== CAT-Bridge CAT/CI-V/BT Gateway v" FIRMWARE_VERSION " ===\n");
   Serial.println("[BOOT] Iniciando...");
-  // LED boot: pisca 10x (durante carregamento do firmware/config)
+  // LED boot: vermelho (carregando)
+  rgb_set(20,0,0);
   digitalWrite(PIN_LED,HIGH);
   for(int i=0;i<10;i++){ digitalWrite(PIN_LED,!digitalRead(PIN_LED)); delay(100); }
   digitalWrite(PIN_LED,HIGH);
@@ -3690,7 +3714,8 @@ void setup() {
     scan_ic5();
   }
 
-  if(sta_con) digitalWrite(PIN_LED,HIGH); else digitalWrite(PIN_LED,LOW); // WiFi OK → LED aceso
+  if(sta_con) rgb_set(0,0,20); // WiFi → azul
+  else rgb_set(5,0,0); // AP only → vermelho fraco
   addLog("SYS","Pronto! Web: http://%s/ BLE: %s",WiFi.softAPIP().toString().c_str(),cfg.bt_name.c_str());
   Serial.println("\n[SYS] Pronto!\n");
   Serial.printf("Web: http://%s/\n",WiFi.softAPIP().toString().c_str());
