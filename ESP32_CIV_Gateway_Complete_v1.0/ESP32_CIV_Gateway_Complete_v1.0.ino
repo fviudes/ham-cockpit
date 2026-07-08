@@ -2660,12 +2660,12 @@ var fhz=parseInt(d.freq)||0;window._curFreq=fhz;var fm=Math.floor(fhz/1000000);v
 document.getElementById('v_mode').textContent=d.mode||'---';
 document.getElementById('v_ptt').innerHTML='<span class="badge '+(d.ptt?'bg-red':'bg-green')+'">'+(d.ptt?'TX':'RX')+'</span>';
 var sm=d.smeter||0,sv='S0';
-// IC-705: CI-V retorna 0-254 (30 = S9)
-if(sm<4)sv='S0';else if(sm<8)sv='S1';else if(sm<12)sv='S2';else if(sm<16)sv='S3';
-else if(sm<20)sv='S4';else if(sm<24)sv='S5';else if(sm<28)sv='S6';
-else if(sm<30)sv='S7';else if(sm<32)sv='S8';else if(sm<40)sv='S9';
-else if(sm<75)sv='S9+10';else if(sm<115)sv='S9+20';else if(sm<155)sv='S9+30';
-else if(sm<195)sv='S9+40';else if(sm<235)sv='S9+50';else sv='S9+60';
+// IC-705: CI-V retorna 0-255 (escala linear, 128=S9)
+if(sm<8)sv='S0';else if(sm<21)sv='S1';else if(sm<35)sv='S2';else if(sm<49)sv='S3';
+else if(sm<64)sv='S4';else if(sm<78)sv='S5';else if(sm<92)sv='S6';
+else if(sm<106)sv='S7';else if(sm<120)sv='S8';else if(sm<138)sv='S9';
+else if(sm<158)sv='S9+10';else if(sm<178)sv='S9+20';else if(sm<198)sv='S9+30';
+else if(sm<218)sv='S9+40';else if(sm<238)sv='S9+50';else sv='S9+60';
 document.getElementById('stxt').textContent=d.pwr?'---':sv;
 document.getElementById('stxt2').textContent=d.pwr?'TX':'';
 document.getElementById('sbar').style.width=Math.min(sm/254*100,100)+'%';
