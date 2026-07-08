@@ -2548,38 +2548,26 @@ function setLang(l){
 function applyLang(){
   document.title=_lang=='en'?'CAT-Bridge - Control Panel':'CAT-Bridge';
   if(_lang=='pt') return;
-  // Traduzir labels (class="glabel")
-  document.querySelectorAll('.glabel').forEach(function(el){
-    var k=el.textContent.trim();
-    if(_en[k]) el.textContent=_en[k];
-  });
-  // Traduzir botoes das abas
-  document.querySelectorAll('.tab').forEach(function(b){
-    var t=b.getAttribute('data-tab');
-    var n={radio:tr('Radio'),ic705:'IC-705',spe:tr('SPE'),hamplus:tr('Hamplus'),wifi:tr('WiFi'),bluetooth:tr('Bluetooth'),civ:tr('CAT / CI-V'),logs:tr('Logs'),admin:tr('Admin'),status:tr('Status')};
-    if(n[t])b.textContent=n[t];
-  });
-  // Traduzir cabecalhos h2
+  function tx(e){
+    if(!e||e.tagName=='SCRIPT'||e.tagName=='STYLE')return;
+    var t=e.textContent.trim();
+    if(t&&t.length<60&&_en[t])e.textContent=_en[t];
+  }
+  document.querySelectorAll('button,.tab').forEach(tx);
   document.querySelectorAll('h2').forEach(function(h){
     var t=h.textContent.trim();
-    if(_en[t]) h.textContent=_en[t];
-    else {
-      // Tenta traduzir primeira palavra
-      var sp=t.indexOf(' ');
-      if(sp>0){var first=t.substring(0,sp);if(_en[first])h.textContent=_en[first]+t.substring(sp);}
-    }
+    if(_en[t])h.textContent=_en[t];
+    else{var i=t.indexOf(' ');if(i>0){var f=t.substring(0,i);if(_en[f])h.textContent=_en[f]+t.substring(i);}}
   });
-  // Traduzir labels de formulario
-  document.querySelectorAll('label').forEach(function(l){
-    // So traduz labels com texto simples (sem elementos filhos)
-    var txt=l.textContent.trim();
-    if(txt.length>0&&txt.length<40&&_en[txt]&&l.children.length==0)l.textContent=_en[txt];
+  document.querySelectorAll('.glabel,.gval,strong,span,div,label').forEach(function(e){
+    if(e.children.length>0)return;
+    var t=e.textContent.trim();
+    if(t&&t.length<60&&_en[t])e.textContent=_en[t];
   });
-  // Traduzir placeholders de input
-  document.querySelectorAll('input[placeholder]').forEach(function(inp){
-    var p=inp.getAttribute('placeholder');
-    if(p&&_en[p])inp.setAttribute('placeholder',_en[p]);
+  document.querySelectorAll('input[placeholder]').forEach(function(e){
+    var p=e.getAttribute('placeholder');if(p&&_en[p])e.setAttribute('placeholder',_en[p]);
   });
+  document.querySelectorAll('option').forEach(function(e){if(_en[e.textContent])e.textContent=_en[e.textContent];});
 }
 // Restore language
 try{var sv=localStorage.getItem('catbridge_lang');if(sv)setLang(sv);}catch(e){}
