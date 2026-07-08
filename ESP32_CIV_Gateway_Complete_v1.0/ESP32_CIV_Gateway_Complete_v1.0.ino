@@ -1,5 +1,5 @@
 /*
- * CAT-Bridge CAT/CI-V/BT Gateway v1.0.4
+ * CAT-Bridge CAT/CI-V/BT Gateway v1.0.5
  * Gateway CI-V para Icom IC-705 via BLE + controle SPE Expert via RS232
  *
  * Recursos:
@@ -33,7 +33,7 @@
 #include <BLEClient.h>
 
 // ===================== HARDWARE =====================
-#define FIRMWARE_VERSION "1.0.4"
+#define FIRMWARE_VERSION "1.0.5"
 #define PIN_LED 2       // LED simples (liga/desliga)
 #define PIN_LED_RGB 48  // LED RGB (WS2812/Neopixel) - ESP32-S3 DevKitC-1
 // Controle LED RGB (WS2812) via GPIO register macros
@@ -1955,7 +1955,7 @@ button:hover{background:#80d8ff}
 .slider{width:100%;margin:4px 0}
 .slider-val{color:#4fc3f7;font-size:11px;text-align:right}
 </style></head><body>
-<h1>&#9881; CAT-Bridge CAT/CI-V/BT Gateway <span style="font-size:12px;color:#94a3b8">v1.0.4</span> <span style="float:right;font-size:11px;font-weight:normal"><button class="btn-sm" id="langPtBtn" onclick="setLang('pt')" style="background:#4fc3f7;margin:0">PT</button> <button class="btn-sm" id="langEnBtn" onclick="setLang('en')" style="background:transparent;border:1px solid #4fc3f7;color:#4fc3f7;margin:0">EN</button></span></h1>
+<h1>&#9881; CAT-Bridge CAT/CI-V/BT Gateway <span style="font-size:12px;color:#94a3b8">v1.0.5</span> <span style="float:right;font-size:11px;font-weight:normal"><button class="btn-sm" id="langPtBtn" onclick="setLang('pt')" style="background:#4fc3f7;margin:0">PT</button> <button class="btn-sm" id="langEnBtn" onclick="setLang('en')" style="background:transparent;border:1px solid #4fc3f7;color:#4fc3f7;margin:0">EN</button></span></h1>
 <div class="tabs" id="tabbar">
 <button class="tab active" data-tab="radio" onclick="st(this)">Radio</button>
 <button class="tab" data-tab="ic705" onclick="st(this)">IC-705</button>
@@ -2313,7 +2313,7 @@ WARN: <span id="spe_warn_txt_display"></span>
 </div>
 </div>
 <div class="card"><h2>Atualização de Firmware</h2>
-<p style="font-size:11px;color:#94a3b8">Versão atual: <strong id="fwver">v1.0.4</strong></p>
+<p style="font-size:11px;color:#94a3b8">Versão atual: <strong id="fwver">v1.0.5</strong></p>
 <input type="file" id="fwfile" accept=".bin" style="display:none">
 <div style="display:flex;gap:4px;margin-top:6px">
 <button onclick="document.getElementById('fwfile').click()">Selecionar</button>
