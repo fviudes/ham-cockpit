@@ -1,5 +1,5 @@
 /*
- * ESP32 CAT/CI-V/BT Gateway v1.0.3
+ * CAT-Bridge CAT/CI-V/BT Gateway v1.0.4
  * Gateway CI-V para Icom IC-705 via BLE + controle SPE Expert via RS232
  *
  * Recursos:
@@ -33,7 +33,7 @@
 #include <BLEClient.h>
 
 // ===================== HARDWARE =====================
-#define FIRMWARE_VERSION "1.0.3"
+#define FIRMWARE_VERSION "1.0.4"
 #define PIN_LED 2
 #define PORT1_RX 16
 #define PORT1_TX 17
@@ -1883,7 +1883,7 @@ void h_root() {
   srv.send_P(200,"text/html",(PGM_P)R"rawliteral(
 <!DOCTYPE html><html lang="pt-BR"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ESP32 CAT/CI-V/BT Gateway</title>
+<title>CAT-Bridge CAT/CI-V/BT Gateway</title>
 <link href="https://fonts.cdnfonts.com/css/ds-digital" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -1925,7 +1925,7 @@ button:hover{background:#80d8ff}
 .slider{width:100%;margin:4px 0}
 .slider-val{color:#4fc3f7;font-size:11px;text-align:right}
 </style></head><body>
-<h1>&#9881; ESP32 CAT/CI-V/BT Gateway <span style="font-size:12px;color:#94a3b8">v1.0.3</span></h1>
+<h1>&#9881; CAT-Bridge CAT/CI-V/BT Gateway <span style="font-size:12px;color:#94a3b8">v1.0.4</span></h1>
 <div class="tabs" id="tabbar">
 <button class="tab active" data-tab="radio" onclick="st(this)">Radio</button>
 <button class="tab" data-tab="ic705" onclick="st(this)">IC-705</button>
@@ -2283,7 +2283,7 @@ WARN: <span id="spe_warn_txt_display"></span>
 </div>
 </div>
 <div class="card"><h2>Atualização de Firmware</h2>
-<p style="font-size:11px;color:#94a3b8">Versão atual: <strong id="fwver">v1.0.3</strong></p>
+<p style="font-size:11px;color:#94a3b8">Versão atual: <strong id="fwver">v1.0.4</strong></p>
 <input type="file" id="fwfile" accept=".bin" style="display:none">
 <div style="display:flex;gap:4px;margin-top:6px">
 <button onclick="document.getElementById('fwfile').click()">Selecionar</button>
@@ -3412,7 +3412,7 @@ void h_login_page() {
   srv.send_P(200,"text/html",(PGM_P)R"rawliteral(
 <!DOCTYPE html><html><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>ESP32 CAT/CI-V/BT Gateway - Login</title>
+<title>CAT-Bridge CAT/CI-V/BT Gateway - Login</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:Arial,sans-serif;background:#0d1b2a;color:#e2e8f0;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:20px}
@@ -3425,7 +3425,7 @@ button:hover{background:#80d8ff}
 #erro{color:#ef4444;font-size:13px;margin-top:8px;display:none}
 </style></head><body>
 <div class="card">
-<h1>ESP32 CAT/CI-V/BT Gateway</h1>
+<h1>CAT-Bridge CAT/CI-V/BT Gateway</h1>
 <input type="text" id="user" placeholder="Usuário" autocomplete="off">
 <input type="password" id="pass" placeholder="Senha">
 <button onclick="entrar()">Entrar</button>
@@ -3504,7 +3504,7 @@ void setup() {
   // Aguarda Serial Monitor conectar (ate 5s)
   for(int i=0;i<5;i++){delay(1000);Serial.printf("\n[BOOT] Aguardando Serial... %ds\n",5-i);if(Serial)break;}
 
-  Serial.println("\n=== ESP32 CAT/CI-V/BT Gateway v" FIRMWARE_VERSION " ===\n");
+  Serial.println("\n=== CAT-Bridge CAT/CI-V/BT Gateway v" FIRMWARE_VERSION " ===\n");
   Serial.println("[BOOT] Iniciando...");
   load_cfg();
 
