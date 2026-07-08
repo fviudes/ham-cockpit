@@ -3011,8 +3011,13 @@ class BLEDeviceCB : public BLEAdvertisedDeviceCallbacks {
   void onResult(BLEAdvertisedDevice dev) {
     if(ble_scan_cnt>=30) return;
     if(ble_scan_cnt>0) ble_scan_buf+=",";
+    String dn=dev.getName();
+    if(dn.length()==0 && dev.haveName()) dn=dev.getName();
+    if(dn.length()==0) dn="?";
+    // Escape JSON special chars in name
+    dn.replace("\\","\\\\"); dn.replace("\"","\\\"");
     ble_scan_buf+="{\"n\":\"";
-    ble_scan_buf+=dev.getName().length()>0?dev.getName().c_str():"?";
+    ble_scan_buf+=dn.c_str();
     ble_scan_buf+="\",\"a\":\"";
     ble_scan_buf+=dev.getAddress().toString().c_str();
     ble_scan_buf+="\",\"r\":";
