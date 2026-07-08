@@ -53,6 +53,7 @@
 #define PROTO_YAESU 2
 #define PROTO_KENWOOD 3
 #define PROTO_HAMPLUS 4
+#define PROTO_FLEXRADIO 5
 
 // ===================== SPE CONSTANTS =====================
 #define SPE_SYN 0x55
@@ -98,6 +99,18 @@
 #define YS_MODE_DATAU 0x0C
 #define YS_MODE_AMN 0x0D
 #define YS_MODE_PSK 0x0E
+
+// ===================== FLEXRADIO CONSTANTS =====================
+// FlexRadio CAT e Kenwood-compativel (ASCII, ; terminator, 11-digit freq)
+// Modos Flex (MD command)
+#define FR_MODE_LSB 1
+#define FR_MODE_USB 2
+#define FR_MODE_CWL 3
+#define FR_MODE_CWU 4
+#define FR_MODE_FM 5
+#define FR_MODE_AM 6
+#define FR_MODE_DIGU 7
+#define FR_MODE_DIGL 9
 
 // ===================== KENWOOD CAT CONSTANTS =====================
 // Modos Kenwood (MD command)
@@ -392,6 +405,13 @@ void hp_poll();
 void hp_parse();
 bool hp_is_active();
 void translate_to_hp();
+
+// FlexRadio (Kenwood-compativel)
+bool fr_is_active();
+void fr_send(const char* cmd);
+void fr_poll();
+void fr_parse();
+void fr_read();
 void translate_hp_to_others();
 
 // ===================== BLE CALLBACKS =====================
@@ -752,6 +772,10 @@ void poll_ic5() {
 }
 
 void set_freq(uint64_t f) {
+  if(fr_is_active()) {
+    char cmd[20]; snprintf(cmd,20,"FA%011llu",f); fr_send(cmd);
+    ic5_freq=f; Serial.printf("[FR] FA %llu\n",f); return;
+  }
   if(kw_is_active()) {
     char cmd[20]; snprintf(cmd,20,"FA%011llu",f);
     kw_send(cmd); ic5_freq=f; Serial.printf("[KW] FA %llu\n",f); return;
@@ -774,6 +798,13 @@ void set_freq(uint64_t f) {
 }
 
 void set_mode(uint8_t m) {
+  if(fr_is_active()) {
+    uint8_t fm=2;
+    switch(m) { case 0: fm=1; break; case 1: fm=2; break; case 2: fm=6; break; case 3: fm=4; break; case 5: fm=5; break; }
+    char cmd[8]; snprintf(cmd,8,"MD%d",fm); fr_send(cmd);
+    ic5_mode=m; strcpy(ic5_mode_str,m<sizeof(mode_names)/sizeof(mode_names[0])&&mode_names[m][0]?mode_names[m]:"?");
+    Serial.printf("[FR] Mode: %s\n", ic5_mode_str); return;
+  }
   if(kw_is_active()) {
     uint8_t km=2;
     switch(m) { case 0: km=1; break; case 1: km=2; break; case 2: km=5; break; case 3: km=3; break; case 5: km=4; break; }
@@ -799,6 +830,7 @@ void set_mode(uint8_t m) {
 }
 
 void set_ptt(bool on) {
+  if(fr_is_active()) { fr_send(on?"TX1":"RX"); ic5_ptt=on; Serial.printf("[FR] PTT: %s\n", on?"TX":"RX"); return; }
   if(kw_is_active()) { kw_send(on?"TX0":"RX"); ic5_ptt=on; Serial.printf("[KW] PTT: %s\n", on?"TX":"RX"); return; }
   if(ys_is_active()) { ys_send(on?"MX1":"MX0"); ic5_ptt=on; Serial.printf("[YS] PTT: %s\n", on?"TX":"RX"); return; }
   uint8_t d[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,C_PTT_ON,on?0x01:0x00,CIV_END};
@@ -808,6 +840,7 @@ void set_ptt(bool on) {
 }
 
 void set_pwr(bool on) {
+  if(fr_is_active()) { fr_send(on?"PS1":"PS0"); ic5_pwr=on; Serial.printf("[FR] Power: %s\n", on?"ON":"OFF"); return; }
   if(kw_is_active()) { kw_send(on?"PS1":"PS0"); ic5_pwr=on; Serial.printf("[KW] Power: %s\n", on?"ON":"OFF"); return; }
   if(ys_is_active()) { ys_send(on?"PS1":"PS0"); ic5_pwr=on; Serial.printf("[YS] Power: %s\n", on?"ON":"OFF"); return; }
   if(on){
@@ -845,6 +878,7 @@ void set_att(uint8_t v) {
 }
 
 void set_rf(uint8_t v) {
+  if(fr_is_active()) { char cmd[8]; snprintf(cmd,8,"RG%03u",v); fr_send(cmd); ic5_rf=v; Serial.printf("[FR] RF: %u\n",v); return; }
   if(kw_is_active()) { char cmd[8]; snprintf(cmd,8,"RG%03u",v); kw_send(cmd); ic5_rf=v; Serial.printf("[KW] RF: %u\n",v); return; }
   if(ys_is_active()) { char cmd[8]; snprintf(cmd,8,"RG%03u",v); ys_send(cmd); ic5_rf=v; Serial.printf("[YS] RF: %u\n",v); return; }
   uint8_t d[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,C_RF_SET,0x12,v,CIV_END};
@@ -853,6 +887,7 @@ void set_rf(uint8_t v) {
 }
 
 void set_af(uint8_t v) {
+  if(fr_is_active()) { char cmd[8]; snprintf(cmd,8,"AG0%03u",v); fr_send(cmd); ic5_af=v; Serial.printf("[FR] AF: %u\n",v); return; }
   if(kw_is_active()) { char cmd[8]; snprintf(cmd,8,"AG0%03u",v); kw_send(cmd); ic5_af=v; Serial.printf("[KW] AF: %u\n",v); return; }
   if(ys_is_active()) { char cmd[8]; snprintf(cmd,8,"AG0%03u",v); ys_send(cmd); ic5_af=v; Serial.printf("[YS] AF: %u\n",v); return; }
   uint8_t d[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,C_AF_SET,0x14,v,CIV_END};
@@ -1283,6 +1318,97 @@ bool kw_is_active() {
   return (cfg.port_proto[p-1] == PROTO_KENWOOD);
 }
 
+// ===================== FLEXRADIO CAT =====================
+// Kenwood-compativel: ASCII cmd; com 11-digit frequency
+// Reusa kw_send/kw_read (mesmo formato), parse proprio para modos
+
+bool fr_is_active() {
+  uint8_t p = cfg.active_port; if(p < 1 || p > 4) return false;
+  return (cfg.port_proto[p-1] == PROTO_FLEXRADIO);
+}
+
+void fr_send(const char* cmd) {
+  auto p = ys_port(); if(!p) return;
+  p->print(cmd); p->print(';'); p->flush();
+  ys_last_tx = millis();
+  if(log_enabled.civ) Serial.printf("[FR] >> %s;\n", cmd);
+}
+
+void fr_read() {
+  auto p = ys_port(); if(!p) return;
+  while(p->available() && ys_rxlen < YS_BUF_LEN - 1) {
+    char c = p->read();
+    if(c == '?') { Serial.println("[FR] Erro: ?"); ys_rxlen=0; continue; }
+    if(c == ';') {
+      ys_rxbuf[ys_rxlen] = 0;
+      fr_parse();
+      ys_rxlen = 0;
+      ys_connected = true;
+    } else if(c >= 0x20 && c <= 0x7E) ys_rxbuf[ys_rxlen++] = c;
+  }
+  if(ys_rxlen >= YS_BUF_LEN - 1) ys_rxlen = 0;
+  if(ys_rxlen > 0 && millis() - ys_last_tx > 500) ys_rxlen = 0;
+}
+
+void fr_parse() {
+  char* buf = (char*)ys_rxbuf;
+  int len = strlen(buf);
+  if(len < 2) return;
+  if(log_enabled.civ) Serial.printf("[FR] << %s\n", buf);
+
+  // FA/FB: 11-digit frequency
+  if((strncmp(buf,"FA",2)==0||strncmp(buf,"FB",2)==0) && len >= 14) {
+    char f[16]; memcpy(f,buf+2,11); f[11]=0; ic5_freq = atoll(f);
+  }
+  // MD: mode
+  else if(strncmp(buf,"MD",2)==0 && len >= 3) {
+    int m = atoi(buf+2);
+    const char* fn[]={"","LSB","USB","CWL","CWU","FM","AM","DIGU","","DIGL"};
+    ic5_mode = m;
+    if(m>=0&&m<10&&fn[m][0]) strcpy(ic5_mode_str,fn[m]);
+    else snprintf(ic5_mode_str,8,"M%d",m);
+  }
+  // SM: S-meter (000-260 -> 0-255)
+  else if(strncmp(buf,"SM",2)==0 && len >= 5) {
+    int v = atoi(buf+2);
+    ic5_smeter = v * 255 / 260;
+  }
+  // PC: Power
+  else if(strncmp(buf,"PC",2)==0 && len >= 5) { ic5_pwr = atoi(buf+2) > 0 ? 1 : 0; }
+  // IF: full status (same format as Kenwood)
+  else if(strncmp(buf,"IF",2)==0 && len >= 30) {
+    char f[16]; memcpy(f,buf+2,11); f[11]=0; ic5_freq = atoll(f);
+    int m = buf[27]-'0';
+    ic5_mode = m; ic5_ptt = (buf[26] == '1');
+    const char* fn[]={"","LSB","USB","CWL","CWU","FM","AM","DIGU","","DIGL"};
+    if(m>=0&&m<10&&fn[m][0]) strcpy(ic5_mode_str,fn[m]);
+    else snprintf(ic5_mode_str,8,"M%d",m);
+  }
+  // TX: PTT
+  else if(strncmp(buf,"TX",2)==0 && len >= 3) { ic5_ptt = (buf[2] == '1'); }
+  // AG: AF gain
+  else if(strncmp(buf,"AG",2)==0 && len >= 5) { ic5_af = atoi(buf+2); }
+  // RG: RF gain (not Flex native but supported)
+  else if(strncmp(buf,"RG",2)==0 && len >= 5) { ic5_rf = atoi(buf+2); }
+  // ID
+  else if(strncmp(buf,"ID",2)==0 && len >= 5) { ys_connected = true; }
+}
+
+void fr_poll() {
+  if(!fr_is_active()) return;
+  unsigned long now = millis();
+  if(now - last_ys_poll < 1000) return;
+  last_ys_poll = now;
+  static int step = 0;
+  switch(step) {
+    case 0: fr_send("FA"); break;
+    case 1: fr_send("SM"); break;
+    case 2: fr_send("IF"); break;
+    case 3: fr_send("MD"); break;
+  }
+  step = (step + 1) % 4;
+}
+
 // ===================== HAMPLUS HP603 =====================
 void hp_send(uint8_t cmd) {
   auto p = ys_port(); if(!p) return;
@@ -1387,7 +1513,7 @@ void translate_civ_to_cat() {
   static bool last_p = false;
   static uint8_t last_m = 0;
   uint8_t pt = cfg.port_proto[cfg.active_port-1];
-  if(pt != PROTO_YAESU && pt != PROTO_KENWOOD) return;
+  if(pt != PROTO_YAESU && pt != PROTO_KENWOOD && pt != PROTO_FLEXRADIO) return;
 
   // Frequencia
   if(ic5_freq != last_f && ic5_freq > 100000) {
@@ -1452,7 +1578,7 @@ void translate_kw_to_spe() {
 // Traduz CAT (Yaesu/Kenwood) → CI-V (IC-705 via BLE)
 void translate_cat_to_civ() {
   uint8_t pt = cfg.port_proto[cfg.active_port-1];
-  if(pt != PROTO_YAESU && pt != PROTO_KENWOOD) return;
+  if(pt != PROTO_YAESU && pt != PROTO_KENWOOD && pt != PROTO_FLEXRADIO) return;
   if(!ic5con || !ic5civ || !ic5ch) return;
   static uint64_t last_f_civ = 0;
   static bool last_p_civ = false;
@@ -1598,9 +1724,9 @@ void sel_port(uint8_t p) {
   if(p<1||p>4)return;
   cfg.active_port=p;
   switch(p){case 1:act_civ=&p1;break;case 2:act_civ=&p2;break;case 3:act_civ=&p3;break;}
-  const char* pn[] = {"CIV","SPE","YS","KW","HP"};
+  const char* pn[] = {"CIV","SPE","YS","KW","HP","FR"};
   uint8_t pt = cfg.port_proto[p-1];
-  Serial.printf("[CI-V] Porta: PORT %d Proto: %s\n",p,pt<5?pn[pt]:"?");
+  Serial.printf("[CI-V] Porta: PORT %d Proto: %s\n",p,pt<6?pn[pt]:"?");
 }
 void rst_port(uint8_t p) {
   if(cfg.port_proto[p-1]==PROTO_SPE){ sp_init(); return; }
@@ -1639,9 +1765,9 @@ void serial_cmd() {
   } else if(c=="cfg"||c=="config"){
     Serial.printf("AP:%s STA:%s DHCP:%s BLE:%s CAT:%s Porta:%d\n",cfg.ap_ssid.c_str(),cfg.sta_ssid.c_str(),cfg.sta_dhcp?"S":"N",cfg.bt_name.c_str(),cfg.cat_enabled?"S":"N",cfg.cat_port);
     for(int i=0;i<4;i++){
-      const char* pns[]={"CIV","SPE","YS","KW","HP"};
+      const char* pns[]={"CIV","SPE","YS","KW","HP","FR"};
       uint8_t pt=cfg.port_proto[i];
-      Serial.printf("PORT%d: Proto=%s Baud=%u Addr=0x%02X\n",i+1,pt<5?pns[pt]:"?",cfg.civ_baud[i],cfg.civ_addr[i]);
+      Serial.printf("PORT%d: Proto=%s Baud=%u Addr=0x%02X\n",i+1,pt<6?pns[pt]:"?",cfg.civ_baud[i],cfg.civ_addr[i]);
     }
   } else if(c=="ports"){
     Serial.println("PORT1: RX16 TX17 (CIV)\nPORT2: RX18 TX19 (CIV)\nPORT3: RX20 TX21 (CIV)\nPORT4: RX14 TX15 (SPE RS232)");
@@ -2268,7 +2394,7 @@ WARN: <span id="spe_warn_txt_display"></span>
 <label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="0" checked> Enable</label></div>
 <label style="font-size:9px">Protocolo</label>
 <select class="pp" data-idx="0" onchange="protoChange2(this,0)" style="font-size:10px;padding:3px 4px">
-<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option></select>
+<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option><option value="5">FlexRadio</option></select>
 <label style="font-size:9px">Baud</label>
 <select class="pb" data-idx="0" style="font-size:10px;padding:3px 4px">
 <option value="9600">9600</option><option value="19200" selected>19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
@@ -2283,7 +2409,7 @@ WARN: <span id="spe_warn_txt_display"></span>
 <label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="1" checked> Enable</label></div>
 <label style="font-size:9px">Protocolo</label>
 <select class="pp" data-idx="1" onchange="protoChange2(this,1)" style="font-size:10px;padding:3px 4px">
-<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option></select>
+<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option><option value="5">FlexRadio</option></select>
 <label style="font-size:9px">Baud</label>
 <select class="pb" data-idx="1" style="font-size:10px;padding:3px 4px">
 <option value="9600">9600</option><option value="19200" selected>19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
@@ -2298,7 +2424,7 @@ WARN: <span id="spe_warn_txt_display"></span>
 <label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="2" checked> Enable</label></div>
 <label style="font-size:9px">Protocolo</label>
 <select class="pp" data-idx="2" onchange="protoChange2(this,2)" style="font-size:10px;padding:3px 4px">
-<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option></select>
+<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option><option value="5">FlexRadio</option></select>
 <label style="font-size:9px">Baud</label>
 <select class="pb" data-idx="2" style="font-size:10px;padding:3px 4px">
 <option value="9600">9600</option><option value="19200" selected>19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
@@ -2313,7 +2439,7 @@ WARN: <span id="spe_warn_txt_display"></span>
 <label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="3" checked> Enable</label></div>
 <label style="font-size:9px">Protocolo</label>
 <select class="pp" data-idx="3" onchange="protoChange2(this,3)" style="font-size:10px;padding:3px 4px">
-<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option></select>
+<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option><option value="5">FlexRadio</option></select>
 <label style="font-size:9px">Baud</label>
 <select class="pb" data-idx="3" style="font-size:10px;padding:3px 4px">
 <option value="9600">9600</option><option value="19200" selected>19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
@@ -3497,6 +3623,9 @@ void loop() {
     translate_kw_to_spe();
     translate_cat_to_civ();
   }
+
+  // FlexRadio polling
+  if(fr_is_active()){ fr_poll(); fr_read(); }
 
   // Hamplus HP603 polling
   if(hp_is_active()){ hp_poll(); hp_read(); }
