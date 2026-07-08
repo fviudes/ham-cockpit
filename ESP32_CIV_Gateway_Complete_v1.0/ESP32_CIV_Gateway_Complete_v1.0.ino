@@ -2666,7 +2666,7 @@ else if(sm<64)sv='S4';else if(sm<78)sv='S5';else if(sm<92)sv='S6';
 else if(sm<106)sv='S7';else if(sm<120)sv='S8';else if(sm<138)sv='S9';
 else if(sm<158)sv='S9+10';else if(sm<178)sv='S9+20';else if(sm<198)sv='S9+30';
 else if(sm<218)sv='S9+40';else if(sm<238)sv='S9+50';else sv='S9+60';
-document.getElementById('stxt').textContent=d.pwr?'---':sv+' ('+sm+')';
+document.getElementById('stxt').textContent=sv+'('+sm+')';
 document.getElementById('stxt2').textContent=d.pwr?'TX':'';
 document.getElementById('sbar').style.width=Math.min(sm/254*100,100)+'%';
 document.getElementById('v_pwr').innerHTML='<span class="badge '+(d.pwr?'bg-green':'bg-red')+'">'+(d.pwr?'ON':'OFF')+'</span>';
