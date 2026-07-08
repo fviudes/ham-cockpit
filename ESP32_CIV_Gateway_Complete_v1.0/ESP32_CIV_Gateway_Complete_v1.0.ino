@@ -2690,7 +2690,7 @@ var x=new XMLHttpRequest();
 x.open('GET','/api/smeter',true);
 x.onload=function(){try{
 var d=JSON.parse(x.responseText);
-var sm=Math.max(0,(d.sm||0)-14); // -14 raw ≈ -1 S-unit
+var sm=Math.min(254,Math.max(0,(d.sm||0)+7)); // +7 raw offset
 var sv='S0';
 if(sm<8)sv='S0';else if(sm<21)sv='S1';else if(sm<35)sv='S2';else if(sm<49)sv='S3';
 else if(sm<64)sv='S4';else if(sm<78)sv='S5';else if(sm<92)sv='S6';
