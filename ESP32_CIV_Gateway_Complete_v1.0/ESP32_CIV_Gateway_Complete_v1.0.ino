@@ -954,7 +954,8 @@ void parse_civ(uint8_t* d, int l) {
   }
   // S-meter: FE FE E0 A4 15 02 <byte1> <byte2> FD
   else if(cmd==C_SMETER&&l>=7&&d[5]==0x02) {
-    ic5_smeter=d[6]; // primeiro byte apos comando
+    ic5_smeter=d[6];
+    if(ic5_smeter<8&&l>=8) ic5_smeter=d[7]; // se primeiro byte for muito baixo, tenta segundo
   }
   // Power: FE FE 98 E0 1A 05 <0=OFF 1=ON> FD
   else if(cmd==0x1A&&l>=7&&d[5]==0x05) {
@@ -2659,17 +2660,22 @@ var d=JSON.parse(x.responseText);
 var fhz=parseInt(d.freq)||0;window._curFreq=fhz;var fm=Math.floor(fhz/1000000);var fk=Math.floor((fhz%1000000)/1000);var fh=fhz%1000;document.getElementById('v_freq').textContent=fhz?fm+'.'+('000'+fk).slice(-3)+'.'+('000'+fh).slice(-3)+' Hz':'---';
 document.getElementById('v_mode').textContent=d.mode||'---';
 document.getElementById('v_ptt').innerHTML='<span class="badge '+(d.ptt?'bg-red':'bg-green')+'">'+(d.ptt?'TX':'RX')+'</span>';
-var sm=d.smeter||0;
-// Tabela Icom: raw value -> S-unit
-var sv='S0';
+var sm=d.smeter||0,sv='S0';
+if(sm>100){ // Escala 0-255 (Icom classica)
 if(sm<8)sv='S0';else if(sm<24)sv='S1';else if(sm<40)sv='S2';else if(sm<56)sv='S3';
 else if(sm<72)sv='S4';else if(sm<88)sv='S5';else if(sm<104)sv='S6';
 else if(sm<116)sv='S7';else if(sm<124)sv='S8';else if(sm<136)sv='S9';
 else if(sm<152)sv='S9+10';else if(sm<168)sv='S9+20';else if(sm<184)sv='S9+30';
 else if(sm<200)sv='S9+40';else if(sm<216)sv='S9+50';else sv='S9+60';
+}else{ // Escala 0-100% (IC-705 padrao)
+if(sm<5)sv='S0';else if(sm<15)sv='S1';else if(sm<25)sv='S2';else if(sm<35)sv='S3';
+else if(sm<45)sv='S4';else if(sm<55)sv='S5';else if(sm<65)sv='S6';
+else if(sm<72)sv='S7';else if(sm<78)sv='S8';else if(sm<85)sv='S9';
+else if(sm<90)sv='S9+10';else if(sm<95)sv='S9+20';else sv='S9+40';
+}
 document.getElementById('stxt').textContent=d.pwr?'---':sv;
-document.getElementById('stxt2').textContent=d.pwr?'TX':Math.round((sm/255)*120-140)+' dBm';
-document.getElementById('sbar').style.width=Math.min(sm/255*100,100)+'%';
+document.getElementById('stxt2').textContent=d.pwr?'TX':'';
+document.getElementById('sbar').style.width=Math.min(sm,100)+'%';
 document.getElementById('v_pwr').innerHTML='<span class="badge '+(d.pwr?'bg-green':'bg-red')+'">'+(d.pwr?'ON':'OFF')+'</span>';
 document.getElementById('v_split').innerHTML='<span class="badge '+(d.split?'bg-green':'bg-red')+'">'+(d.split?'ON':'OFF')+'</span>';
 var agcN=['OFF','FAST','MID','SLOW'];document.getElementById('v_agc').textContent=d.agc!==undefined?agcN[d.agc]||'---':'---';
