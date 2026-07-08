@@ -2632,7 +2632,7 @@ var conts=document.querySelectorAll('[id^="tb-"]');
 for(var i=0;i<conts.length;i++)conts[i].style.display='none';
 document.getElementById('tb-'+tab).style.display='block';
 el.classList.add('active');
-if(tab=='radio'){carregar();carregarBT();if(window._smInt)clearInterval(window._smInt);window._smInt=setInterval(pollSmeter,50);}else{if(window._smInt){clearInterval(window._smInt);window._smInt=null;}}
+if(tab=='radio'){carregar();carregarBT();if(window._smInt)clearInterval(window._smInt);window._smInt=setInterval(pollSmeter,200);}else{if(window._smInt){clearInterval(window._smInt);window._smInt=null;}}
 if(tab=='ic705'||tab=='bluetooth'){carregar();carregarBT();}
 if(tab=='spe'){carregarSPE();}
 if(tab=='hamplus'){carregarHP();}
@@ -3313,7 +3313,7 @@ if(!confirm('CONFIRMO! Desejo restaurar para fabrica.'))return;
 envia('/api/save',{factory:true});
 }
 carregar();
-window._smInt=setInterval(pollSmeter,50);
+window._smInt=setInterval(pollSmeter,200);
 setTimeout(carregarCfg,300);
 setTimeout(carregarRedes,600);
 setTimeout(carregarBT,900);
