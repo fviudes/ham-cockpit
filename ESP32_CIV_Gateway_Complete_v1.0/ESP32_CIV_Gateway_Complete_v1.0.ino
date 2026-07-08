@@ -392,6 +392,7 @@ void hp_poll();
 void hp_parse();
 bool hp_is_active();
 void translate_to_hp();
+void translate_hp_to_others();
 
 // ===================== BLE CALLBACKS =====================
 class ICCB : public BLEClientCallbacks {
@@ -1335,18 +1336,49 @@ bool hp_is_active() {
 }
 
 // ===================== HAMPLUS TRANSLATOR =====================
-// Bidirecional: Hamplus ↔ todos os protocolos
+// Bidirecional via CAT: Hamplus HP603 ↔ todos os protocolos
 void translate_to_hp() {
   if(!hp_is_active()) return;
   static bool last_ptt = false;
-  // Envia PTT de outros protocolos para Hamplus (forca STATUS update)
+  static uint64_t last_freq = 0;
+  // PTT → Hamplus: forca STATUS update
   if(ic5_ptt != last_ptt) {
     last_ptt = ic5_ptt;
-    hp_send(0x00); // Solicita STATUS para atualizar display
+    hp_send(0x00);
+  }
+  // Frequencia → Hamplus: trigger STATUS (antena pode mudar conforme banda)
+  if(ic5_freq != last_freq && ic5_freq > 100000) {
+    last_freq = ic5_freq;
+    hp_send(0x00);
   }
 }
-// Hamplus → outros: hp_parse() ja define ic5_ptt, e os tradutores existentes
-// (civ_to_spe, ys_to_spe, kw_to_spe) monitoram ic5_ptt e agem nos destinos.
+
+// Hamplus → outros: hp_parse() ja define:
+//   hp_ptt → ic5_ptt → tradutores SPE/CAT reagem
+//   hp_antenna → disponivel na UI
+//   hp_radio → disponivel na UI
+//   hp_split → disponivel na UI
+void translate_hp_to_others() {
+  if(!hp_is_active()) return;
+  static int last_ant = -1;
+  static int last_rad = -1;
+  static bool last_spl = false;
+  // Antena mudou → log
+  if(hp_antenna != last_ant) {
+    last_ant = hp_antenna;
+    addLog("HP","Antena %d selecionada", hp_antenna);
+  }
+  // Radio mudou → log
+  if(hp_radio != last_rad) {
+    last_rad = hp_radio;
+    addLog("HP","Radio %d selecionado", hp_radio);
+  }
+  // Split mudou → log
+  if(hp_split != last_spl) {
+    last_spl = hp_split;
+    addLog("HP","Split %s", hp_split?"ON":"OFF");
+  }
+}
 
 // ===================== PROTOCOL TRANSLATORS =====================
 // Tradutor generico: IC-705 (CI-V via BLE) → porta CAT (Yaesu/Kenwood) ativa
@@ -3450,8 +3482,11 @@ void loop() {
 
   // Hamplus HP603 polling
   if(hp_is_active()){ hp_poll(); hp_read(); }
-  // Hamplus recebe PTT de qualquer protocolo
-  if(hp_is_active()) translate_to_hp();
+  // Hamplus bidirecional: recebe de outros protocolos e envia para outros
+  if(hp_is_active()){
+    translate_to_hp();
+    translate_hp_to_others();
+  }
 
   bridge_nusp();
   bridge_pnus();
