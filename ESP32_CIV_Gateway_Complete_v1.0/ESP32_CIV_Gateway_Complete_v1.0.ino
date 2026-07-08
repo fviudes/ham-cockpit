@@ -2335,6 +2335,13 @@ WARN: <span id="spe_warn_txt_display"></span>
 <div id="s_wifi_bar" style="height:100%;width:0%;border-radius:6px;transition:width .3s"></div>
 </div></div>
 </div>
+<div class="card"><h2>Historico</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
+<div><label style="font-size:8px">CPU %</label><canvas id="chCpu" width="160" height="50" style="width:100%;height:50px;background:#0a1118;border-radius:3px"></canvas></div>
+<div><label style="font-size:8px">RAM %</label><canvas id="chRam" width="160" height="50" style="width:100%;height:50px;background:#0a1118;border-radius:3px"></canvas></div>
+<div><label style="font-size:8px">Rede %</label><canvas id="chNet" width="160" height="50" style="width:100%;height:50px;background:#0a1118;border-radius:3px"></canvas></div>
+</div>
+</div>
 <div class="card">
 <h2>Rede</h2>
 <div class="grid3">
@@ -2513,15 +2520,39 @@ function setLang(l){
   try{localStorage.setItem('catbridge_lang',l);}catch(e){}
 }
 function applyLang(){
-  document.querySelectorAll('[data-i18n]').forEach(function(el){
-    var k=el.getAttribute('data-i18n');
-    if(_lang=='en'&&_en[k]) el.textContent=_en[k]; else if(_lang=='pt') el.textContent=k;
-  });
+  // Atualiza titulo da pagina
+  document.title=_lang=='en'?'CAT-Bridge CAT/CI-V/BT Gateway - Control Panel':'CAT-Bridge CAT/CI-V/BT Gateway';
+  if(_lang=='pt') return; // PT e o idioma padrao do HTML
+  // Mapeamento de IDs de elementos para chaves de traducao
+  var map={
+    'v_mode':'Modo','v_ptt':'PTT','v_pwr':'Power','v_split':'Split','v_agc':'AGC','v_pre':'PRE/ATT',
+    's_ic5':'IC-705','s_civ':'CAT / CI-V',
+    's_spe_id':'Modelo','s_spe_op':'Status','s_spe_tx':'TX/RX','s_spe_pout':'RF Out',
+    's_spe_swr':'SWR','s_spe_pwr':'Power','s_spe_vpa':'V PA','s_spe_ipa':'I PA','s_spe_temp':'Temp',
+    's_spe_input':'Input','s_spe_band':'Band','s_spe_ant':'Antenna',
+    's_chip':'Chip','s_cpu':'CPU','s_temp':'Temp','s_cores':'Cores','s_fwver':'Firmware','s_sketch':'Sketch',
+    's_ram':'RAM','s_psram':'PSRAM','s_flash':'Flash',
+    's_apip':'AP IP','s_staip':'STA IP','s_mac':'MAC','s_gw':'Gateway','s_mask':'Mask','s_dns':'DNS',
+    's_rssi':'RSSI','s_ssid':'SSID','s_req':'Req','s_uptime':'Uptime',
+    'fwver':'Firmware','sbtn':'BLE Name',
+    's_spe_id2':'Modelo','s_spe_op2':'Status','s_spe_tx2':'TX/RX','s_spe_pout2':'RF Out',
+    's_spe_swr2':'SWR','s_spe_pwr2':'Power','s_spe_vpa2':'V PA','s_spe_ipa2':'I PA','s_spe_temp2':'Temp'
+  };
+  for(var id in map){
+    var el=document.getElementById(id); if(!el) continue;
+    var k=map[id]; var v=_en[k];
+    if(v) el.textContent=v;
+  }
   // Traduzir botoes das abas
   document.querySelectorAll('.tab').forEach(function(b){
     var t=b.getAttribute('data-tab');
     var n={radio:tr('Radio'),ic705:'IC-705',spe:tr('SPE'),hamplus:tr('Hamplus'),wifi:tr('WiFi'),bluetooth:tr('Bluetooth'),civ:tr('CAT / CI-V'),logs:tr('Logs'),admin:tr('Admin'),status:tr('Status')};
     if(n[t])b.textContent=n[t];
+  });
+  // Traduzir h2s (heading texts)
+  document.querySelectorAll('h2').forEach(function(h){
+    var k=h.textContent.trim().split(' ')[0];
+    if(k&&_en[k])h.textContent=h.textContent.replace(k,_en[k]);
   });
 }
 // Restore language
@@ -2694,6 +2725,26 @@ var wu=d.wifi_util||0;
 document.getElementById('s_wifi_util_pct').textContent=wu+'%';
 var wbar=document.getElementById('s_wifi_bar');
 if(wbar){wbar.style.width=wu+'%';wbar.style.background=wu<20?'#10b981':wu<50?'#4fc3f7':'#FFB300';}
+// Historico graficos
+var hlen=60;
+if(typeof _hcpu=='undefined'){window._hcpu=[];window._hram=[];window._hnet=[];}
+window._hcpu.push(cp);if(window._hcpu.length>hlen)window._hcpu.shift();
+window._hram.push(ramUso);if(window._hram.length>hlen)window._hram.shift();
+window._hnet.push(wu);if(window._hnet.length>hlen)window._hnet.shift();
+function drawChart(id,data,color){
+var c=document.getElementById(id);if(!c)return;
+var ctx=c.getContext('2d');var w=c.width,h=c.height;
+ctx.clearRect(0,0,w,h);if(data.length<2)return;
+var max=100;ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.beginPath();
+for(var i=0;i<data.length;i++){
+var x=(i/(data.length-1))*w;var y=h-(data[i]/max)*h;
+if(i==0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+}ctx.stroke();
+ctx.fillStyle='rgba(79,195,247,0.1)';ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();ctx.fill();
+}
+drawChart('chCpu',window._hcpu,'#4fc3f7');
+drawChart('chRam',window._hram,'#10b981');
+drawChart('chNet',window._hnet,'#FFB300');
 var up=d.uptime_s||0;
 var dd=Math.floor(up/86400);up%=86400;
 var hh=Math.floor(up/3600);up%=3600;
