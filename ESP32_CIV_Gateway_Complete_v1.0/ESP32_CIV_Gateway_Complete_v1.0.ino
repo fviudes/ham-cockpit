@@ -2015,7 +2015,7 @@ WARN: <span id="spe_warn_txt_display"></span>
 </div>
 </div>
 </div>
-<div id="tb-hamplus" style="display:none"><h2>Hamplus HP603</h2>
+<div id="tb-hamplus" style="display:none"><h2>Hamplus</h2>
 <!-- LEDs + Rotor row -->
 <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
 <div class="card" style="flex:1;min-width:120px;padding:8px;display:flex;gap:8px;justify-content:center">
@@ -2030,8 +2030,8 @@ WARN: <span id="spe_warn_txt_display"></span>
 <div><span id="hp_rotor_dir" style="color:#FFB300;font-size:28px;font-weight:bold;letter-spacing:2px">000</span><span style="color:#555;font-size:10px">&deg;</span></div>
 </div>
 <div style="display:flex;flex-direction:column;gap:3px">
-<button class="btn-sm" onclick="hpRotor(1)">Rotor 1</button>
-<button class="btn-sm" onclick="hpRotor(2)">Rotor 2</button>
+<button class="btn-sm hp-rotor-btn" onclick="hpRotor(1)">Rotor 1</button>
+<button class="btn-sm hp-rotor-btn" onclick="hpRotor(2)">Rotor 2</button>
 </div>
 <div style="display:flex;flex-direction:column;gap:3px">
 <button class="btn-sm" onclick="hpDir(1)">&uarr;</button>
@@ -2040,23 +2040,25 @@ WARN: <span id="spe_warn_txt_display"></span>
 </div>
 </div>
 </div>
-<!-- Antenna and Radio buttons -->
-<div class="card" style="padding:8px">
-<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:4px;margin-bottom:6px">
-<button class="btn-sm" onclick="hpAnt(1)">ANT 1</button><button class="btn-sm" onclick="hpAnt(2)">ANT 2</button>
-<button class="btn-sm" onclick="hpAnt(3)">ANT 3</button><button class="btn-sm" onclick="hpAnt(4)">ANT 4</button>
-<button class="btn-sm" onclick="hpAnt(5)">ANT 5</button><button class="btn-sm" onclick="hpAnt(6)">ANT 6</button>
-<button class="btn-sm btn-outline" onclick="hpAnt(7)" style="opacity:0.5">ANT 7</button>
-<button class="btn-sm btn-outline" onclick="hpAnt(8)" style="opacity:0.5">ANT 8</button>
-<button class="btn-sm btn-outline" onclick="hpAnt(9)" style="opacity:0.5">ANT 9</button>
-<button class="btn-sm btn-outline" onclick="hpAnt(10)" style="opacity:0.5">ANT 10</button>
+<!-- Chave de Antena -->
+<div class="card" style="padding:8px"><h2>Chave de Antena</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:4px">
+<button class="btn-sm hp-ant-btn" onclick="hpAnt(1)">ANT 1</button><button class="btn-sm hp-ant-btn" onclick="hpAnt(2)">ANT 2</button>
+<button class="btn-sm hp-ant-btn" onclick="hpAnt(3)">ANT 3</button><button class="btn-sm hp-ant-btn" onclick="hpAnt(4)">ANT 4</button>
+<button class="btn-sm hp-ant-btn" onclick="hpAnt(5)">ANT 5</button><button class="btn-sm hp-ant-btn" onclick="hpAnt(6)">ANT 6</button>
+<button class="btn-sm hp-ant-btn btn-outline" onclick="hpAnt(7)" style="opacity:0.5">ANT 7</button>
+<button class="btn-sm hp-ant-btn btn-outline" onclick="hpAnt(8)" style="opacity:0.5">ANT 8</button>
+<button class="btn-sm hp-ant-btn btn-outline" onclick="hpAnt(9)" style="opacity:0.5">ANT 9</button>
+<button class="btn-sm hp-ant-btn btn-outline" onclick="hpAnt(10)" style="opacity:0.5">ANT 10</button>
 </div>
-<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr;gap:4px">
-<button class="btn-sm" onclick="hpRadio(1)">Radio 1</button><button class="btn-sm" onclick="hpRadio(2)">Radio 2</button>
-<button class="btn-sm" onclick="hpRadio(3)">Radio 3</button>
-<button class="btn-sm btn-outline" onclick="hpRadio(4)" style="opacity:0.5">Radio 4</button>
-<button class="btn-sm btn-outline" onclick="hpRadio(5)" style="opacity:0.5">Radio 5</button>
-<button class="btn-sm btn-outline" onclick="hpRadio(6)" style="opacity:0.5">Radio 6</button>
+</div>
+<!-- Chave de Radio -->
+<div class="card" style="padding:8px"><h2>Chave de Radio</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:4px">
+<button class="btn-sm hp-radio-btn" onclick="hpRadio(1)">Radio 1</button><button class="btn-sm hp-radio-btn" onclick="hpRadio(2)">Radio 2</button>
+<button class="btn-sm hp-radio-btn" onclick="hpRadio(3)">Radio 3</button>
+<button class="btn-sm hp-radio-btn btn-outline" onclick="hpRadio(4)" style="opacity:0.5">Radio 4</button>
+<button class="btn-sm hp-radio-btn btn-outline" onclick="hpRadio(5)" style="opacity:0.5">Radio 5</button>
 </div>
 </div>
 </div>
@@ -2529,6 +2531,13 @@ l('hp_led_send',d.hp_ptt||false);
 l('hp_led_split',d.hp_split||false);
 // Rotor direction
 if(d.hp_dir!=undefined){var dir=('000'+d.hp_dir).slice(-3);var el=document.getElementById('hp_rotor_dir');if(el)el.textContent=dir;}
+// Highlight selected Rotor
+var ra=hpCurrentRotor||1;
+document.querySelectorAll('.hp-rotor-btn').forEach(function(e){e.style.borderColor=e.innerHTML=='Rotor '+ra?'#4fc3f7':'rgba(79,195,247,0.2)';e.style.background=e.innerHTML=='Rotor '+ra?'rgba(79,195,247,0.2)':'#1a2a3a';});
+// Highlight selected Antenna
+document.querySelectorAll('.hp-ant-btn').forEach(function(e){var n=parseInt(e.textContent.match(/\d+/)[0]);e.style.borderColor=n==d.hp_antenna?'#FFB300':'rgba(79,195,247,0.2)';e.style.background=n==d.hp_antenna?'rgba(255,179,0,0.2)':'#1a2a3a';e.style.opacity=n>6?'0.5':'1';});
+// Highlight selected Radio
+document.querySelectorAll('.hp-radio-btn').forEach(function(e){var n=parseInt(e.textContent.match(/\d+/)[0]);e.style.borderColor=n==d.hp_radio?'#FFB300':'rgba(79,195,247,0.2)';e.style.background=n==d.hp_radio?'rgba(255,179,0,0.2)':'#1a2a3a';e.style.opacity=n>3?'0.5':'1';});
 }catch(e){}
 };
 x.send();
