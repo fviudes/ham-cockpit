@@ -52,6 +52,7 @@
 #define PROTO_SPE 1
 #define PROTO_YAESU 2
 #define PROTO_KENWOOD 3
+#define PROTO_HAMPLUS 4
 
 // ===================== SPE CONSTANTS =====================
 #define SPE_SYN 0x55
@@ -108,6 +109,10 @@
 #define KW_MODE_FSK 6
 #define KW_MODE_CWR 7
 #define KW_MODE_FSR 9
+
+// ===================== HAMPLUS HP603 CONSTANTS =====================
+#define HP_BAUD 9600
+#define HP_BUF_LEN 32
 
 // ===================== BLE UUIDs =====================
 #define IC705_SVC  "14cf8001-1ec2-d408-1b04-2eb270f14203"
@@ -243,6 +248,19 @@ bool ys_connected = false;
 char ys_last_cmd[YS_CMD_MAX] = "";
 unsigned long ys_last_tx = 0;
 
+// Origem da ultima mudanca em ic5_* (1=CIV, 2=CAT)
+int last_change_src = 0;
+
+// ===================== HAMPLUS STATUS =====================
+uint8_t hp_rxbuf[HP_BUF_LEN]; int hp_rxlen = 0;
+unsigned long last_hp_poll = 0;
+int hp_antenna = 0;
+int hp_radio = 0;
+bool hp_split = false;
+bool hp_ptt = false;
+int hp_dir = 0;
+int hp_rotor_active = 1;
+
 // ===================== SPE STATUS =====================
 #define SPE_BUF_LEN 128
 uint8_t spe_rxbuf[SPE_BUF_LEN];
@@ -357,8 +375,23 @@ bool ys_is_active();
 void kw_send(const char* cmd);
 void kw_read();
 void kw_poll();
+void kw_read();
 void kw_parse();
 bool kw_is_active();
+// Tradutores de protocolo
+void translate_civ_to_spe();
+void translate_ys_to_spe();
+void translate_kw_to_spe();
+void translate_civ_to_cat();
+void translate_cat_to_civ();
+
+// Hamplus HP603
+void hp_send(uint8_t cmd);
+void hp_read();
+void hp_poll();
+void hp_parse();
+bool hp_is_active();
+void translate_to_hp();
 
 // ===================== BLE CALLBACKS =====================
 class ICCB : public BLEClientCallbacks {
@@ -844,19 +877,18 @@ void parse_civ(uint8_t* d, int l) {
   uint8_t cmd=d[4];
   // FE FE E0 A4 03 <5 bytes freq> FD
   if(cmd==C_F_READ&&l>=11&&d[l-1]==CIV_END) {
-    ic5_freq=bcd_freq(d,5,5);
+    ic5_freq=bcd_freq(d,5,5); last_change_src=1;
     Serial.printf("[CI-V] Freq: %llu Hz\n", ic5_freq);
   }
   // FE FE 98 E0 04 <mode> <filt> FD
   else if(cmd==C_M_READ&&l>=7) {
-    ic5_mode=d[5]; ic5_filt=d[6];
+    ic5_mode=d[5]; ic5_filt=d[6]; last_change_src=1;
     if(ic5_mode<sizeof(mode_names)/sizeof(mode_names[0])&&mode_names[ic5_mode][0]) strcpy(ic5_mode_str,mode_names[ic5_mode]);
     else snprintf(ic5_mode_str,8,"M%02X",ic5_mode);
-    Serial.printf("[CI-V] Modo: %s Filt:%u\n", ic5_mode_str, ic5_filt);
   }
   // FE FE 98 E0 1C <00=RX 01=TX> FD
   else if(cmd==C_PTT_READ&&l>=6) {
-    ic5_ptt=d[5]; Serial.printf("[CI-V] PTT: %s\n", ic5_ptt?"TX":"RX");
+    ic5_ptt=d[5]; last_change_src=1;
   }
   // S-meter: FE FE E0 A4 15 02 <byte1> <byte2> FD
   else if(cmd==C_SMETER&&l>=7&&d[5]==0x02) {
@@ -1250,6 +1282,175 @@ bool kw_is_active() {
   return (cfg.port_proto[p-1] == PROTO_KENWOOD);
 }
 
+// ===================== HAMPLUS HP603 =====================
+void hp_send(uint8_t cmd) {
+  auto p = ys_port(); if(!p) return;
+  uint8_t buf[2] = {'K', cmd};
+  p->write(buf, 2); p->flush();
+  ys_last_tx = millis();
+  if(log_enabled.civ) Serial.printf("[HP] >> K%02X\n", cmd);
+}
+
+void hp_read() {
+  auto p = ys_port(); if(!p) return;
+  while(p->available() && hp_rxlen < HP_BUF_LEN-1) {
+    char c = p->read();
+    if(c == 0x0A && hp_rxlen > 0) {
+      hp_rxbuf[hp_rxlen] = 0;
+      hp_parse();
+      hp_rxlen = 0;
+    } else if(c >= 0x20 || c == 0x0D) {
+      hp_rxbuf[hp_rxlen++] = c;
+    }
+  }
+  if(hp_rxlen >= HP_BUF_LEN-1) hp_rxlen = 0;
+  if(hp_rxlen > 0 && millis() - ys_last_tx > 500) hp_rxlen = 0;
+}
+
+void hp_parse() {
+  char* buf = (char*)hp_rxbuf;
+  if(strncmp(buf, "ST=", 3) != 0 || hp_rxlen < 5) return;
+  if(log_enabled.civ) Serial.printf("[HP] << %s\n", buf);
+  uint8_t u2 = buf[3], u3 = buf[4];
+  hp_antenna = (u2 & 0x3F); // bits 0-5
+  hp_radio = (u2 & 0x40) ? 2 : ((u3 & 0x01) ? 3 : 1);
+  if(u2 & 0x80) hp_radio = 2;
+  if(u3 & 0x01) hp_radio = 3;
+  hp_split = (u3 & 0x02) != 0;
+  hp_ptt = (u3 & 0x04) != 0;
+  ic5_ptt = hp_ptt;
+}
+
+void hp_poll() {
+  if(!hp_is_active()) return;
+  unsigned long now = millis();
+  if(now - last_hp_poll < 2000) return;
+  last_hp_poll = now;
+  hp_send(0x00); // STATUS request
+}
+
+bool hp_is_active() {
+  uint8_t p = cfg.active_port; if(p < 1 || p > 4) return false;
+  return (cfg.port_proto[p-1] == PROTO_HAMPLUS);
+}
+
+// ===================== HAMPLUS TRANSLATOR =====================
+// Bidirecional: Hamplus ↔ todos os protocolos
+void translate_to_hp() {
+  if(!hp_is_active()) return;
+  static bool last_ptt = false;
+  // Envia PTT de outros protocolos para Hamplus (forca STATUS update)
+  if(ic5_ptt != last_ptt) {
+    last_ptt = ic5_ptt;
+    hp_send(0x00); // Solicita STATUS para atualizar display
+  }
+}
+// Hamplus → outros: hp_parse() ja define ic5_ptt, e os tradutores existentes
+// (civ_to_spe, ys_to_spe, kw_to_spe) monitoram ic5_ptt e agem nos destinos.
+
+// ===================== PROTOCOL TRANSLATORS =====================
+// Tradutor generico: IC-705 (CI-V via BLE) → porta CAT (Yaesu/Kenwood) ativa
+void translate_civ_to_cat() {
+  static uint64_t last_f = 0;
+  static bool last_p = false;
+  static uint8_t last_m = 0;
+  uint8_t pt = cfg.port_proto[cfg.active_port-1];
+  if(pt != PROTO_YAESU && pt != PROTO_KENWOOD) return;
+
+  // Frequencia
+  if(ic5_freq != last_f && ic5_freq > 100000) {
+    last_f = ic5_freq;
+    if(pt == PROTO_YAESU) { char c[16]; snprintf(c,16,"FA%09llu",ic5_freq); ys_send(c); }
+    else { char c[20]; snprintf(c,20,"FA%011llu",ic5_freq); kw_send(c); }
+    addLog("CIV","Freq -> %s", pt==PROTO_YAESU?"YS":"KW");
+  }
+  // PTT
+  if(ic5_ptt != last_p) {
+    last_p = ic5_ptt;
+    if(pt == PROTO_YAESU) ys_send(ic5_ptt?"MX1":"MX0");
+    else kw_send(ic5_ptt?"TX0":"RX");
+    addLog("CIV","PTT -> %s", pt==PROTO_YAESU?"YS":"KW");
+  }
+  // Modo
+  if(ic5_mode != last_m) {
+    last_m = ic5_mode;
+    uint8_t ym = 2; // USB default
+    switch(ic5_mode) { case 0: ym=1; break; case 1: ym=2; break; case 2: ym=5; break; case 3: ym=3; break; case 5: ym=4; break; }
+    if(pt == PROTO_YAESU) { char c[8]; snprintf(c,8,"MD0%X",ym); ys_send(c); }
+    else { char c[8]; snprintf(c,8,"MD%d",ym); kw_send(c); }
+    addLog("CIV","Mode -> %s", pt==PROTO_YAESU?"YS":"KW");
+  }
+}
+// Traduz comandos CI-V (BLE ou porta fisica) para SPE (PORT4)
+void translate_civ_to_spe() {
+  if(!sp_is_active()) return;
+  if(!ic5con && !ic5civ && cfg.port_proto[cfg.active_port-1]!=PROTO_CIV) return;
+  static bool last_ptt = false;
+  if(ic5_ptt != last_ptt) {
+    last_ptt = ic5_ptt;
+    if(ic5_ptt) { spe_set_op(true); addLog("SPE","CIV PTT ON -> OPERATE"); }
+    else { spe_set_op(false); addLog("SPE","CIV PTT OFF -> STANDBY"); }
+  }
+}
+
+// Traduz comandos Yaesu CAT para SPE
+void translate_ys_to_spe() {
+  if(!sp_is_active()) return;
+  if(!ys_is_active()) return;
+  static bool last_ptt = false;
+  if(ic5_ptt != last_ptt) {
+    last_ptt = ic5_ptt;
+    if(ic5_ptt) { spe_set_op(true); addLog("YS","PTT ON -> SPE OPERATE"); }
+    else { spe_set_op(false); addLog("YS","PTT OFF -> SPE STANDBY"); }
+  }
+}
+
+// Traduz comandos Kenwood CAT para SPE
+void translate_kw_to_spe() {
+  if(!sp_is_active()) return;
+  if(!kw_is_active()) return;
+  static bool last_ptt = false;
+  if(ic5_ptt != last_ptt) {
+    last_ptt = ic5_ptt;
+    if(ic5_ptt) { spe_set_op(true); addLog("KW","PTT ON -> SPE OPERATE"); }
+    else { spe_set_op(false); addLog("KW","PTT OFF -> SPE STANDBY"); }
+  }
+}
+
+// Traduz CAT (Yaesu/Kenwood) → CI-V (IC-705 via BLE)
+void translate_cat_to_civ() {
+  uint8_t pt = cfg.port_proto[cfg.active_port-1];
+  if(pt != PROTO_YAESU && pt != PROTO_KENWOOD) return;
+  if(!ic5con || !ic5civ || !ic5ch) return;
+  static uint64_t last_f_civ = 0;
+  static bool last_p_civ = false;
+  static uint8_t last_m_civ = 0;
+
+  if(ic5_freq != last_f_civ && ic5_freq > 100000) {
+    last_f_civ = ic5_freq;
+    // Envia CI-V FE FE A4 E0 00 <5 BCD LSB> FD
+    uint8_t d[13]; int i=0;
+    d[i++]=CIV_PRE; d[i++]=CIV_PRE; d[i++]=civ_ic705_addr; d[i++]=CIV_CTRL; d[i++]=0x00;
+    uint64_t f=ic5_freq;
+    for(int j=0;j<5;j++){ d[i++] = (((f%100)/10)<<4) | (f%10); f/=100; }
+    d[i++]=CIV_END;
+    ic5ch->writeValue(d,i,true);
+    addLog("CIV","CAT Freq -> IC705");
+  }
+  if(ic5_ptt != last_p_civ) {
+    last_p_civ = ic5_ptt;
+    uint8_t d[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,C_PTT_ON,ic5_ptt?0x01:0x00,CIV_END};
+    ic5ch->writeValue(d,sizeof(d),true);
+    addLog("CIV","CAT PTT -> IC705");
+  }
+  if(ic5_mode != last_m_civ) {
+    last_m_civ = ic5_mode;
+    uint8_t d[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,C_M_SET,ic5_mode,0x01,CIV_END};
+    ic5ch->writeValue(d,sizeof(d),true);
+    addLog("CIV","CAT Mode -> IC705");
+  }
+}
+
 // ===================== BRIDGES =====================
 void bridge_ic5p() {
   if(!ic5con||!ic5civ||!rxrdy||!cfg.cat_enabled) return;
@@ -1260,14 +1461,18 @@ void bridge_ic5p() {
   rxrdy=false;
 }
 void bridge_pic5() {
-  if(!ic5con||!ic5civ) return;
   uint8_t p=cfg.cat_port?cfg.cat_port:cfg.active_port;
   if(cfg.port_proto[p-1]>=PROTO_SPE) return;
   auto sp=gp(p);
   if(!sp||p==4||!sp->available()) return;
   uint8_t b[128]; int l=0;
   while(sp->available()&&l<128) b[l++]=sp->read();
-  if(l>0&&ic5ch) ic5ch->writeValue(b,l);
+  if(l>0){
+    // Parse dados CI-V da porta fisica (atualiza ic5_*)
+    if(!rxrdy) { memcpy(rxbuf,b,l); rxlen=l; rxrdy=true; proc_ic5(); }
+    // Envia para IC-705 via BLE (se conectado)
+    if(ic5con&&ic5civ&&ic5ch) ic5ch->writeValue(b,l);
+  }
 }
 void bridge_nusp() {
   if(!nuscon||!nuslen) return;
@@ -1361,13 +1566,13 @@ void sel_port(uint8_t p) {
   if(p<1||p>4)return;
   cfg.active_port=p;
   switch(p){case 1:act_civ=&p1;break;case 2:act_civ=&p2;break;case 3:act_civ=&p3;break;}
-  const char* pn[] = {"CIV","SPE","YS","KW"};
+  const char* pn[] = {"CIV","SPE","YS","KW","HP"};
   uint8_t pt = cfg.port_proto[p-1];
-  Serial.printf("[CI-V] Porta: PORT %d Proto: %s\n",p,pt<4?pn[pt]:"?");
+  Serial.printf("[CI-V] Porta: PORT %d Proto: %s\n",p,pt<5?pn[pt]:"?");
 }
 void rst_port(uint8_t p) {
   if(cfg.port_proto[p-1]==PROTO_SPE){ sp_init(); return; }
-  if(cfg.port_proto[p-1]==PROTO_YAESU||cfg.port_proto[p-1]==PROTO_KENWOOD){
+  if(cfg.port_proto[p-1]>=PROTO_YAESU){
     uint32_t bd = cfg.spe_baud[p-1] ? cfg.spe_baud[p-1] : YAESU_BAUD_DEFAULT;
     switch(p){
       case 1:p1.end();p1.begin(bd,SERIAL_8N1,PORT1_RX,PORT1_TX);break;
@@ -1402,9 +1607,9 @@ void serial_cmd() {
   } else if(c=="cfg"||c=="config"){
     Serial.printf("AP:%s STA:%s DHCP:%s BLE:%s CAT:%s Porta:%d\n",cfg.ap_ssid.c_str(),cfg.sta_ssid.c_str(),cfg.sta_dhcp?"S":"N",cfg.bt_name.c_str(),cfg.cat_enabled?"S":"N",cfg.cat_port);
     for(int i=0;i<4;i++){
-      const char* pns[]={"CIV","SPE","YS","KW"};
+      const char* pns[]={"CIV","SPE","YS","KW","HP"};
       uint8_t pt=cfg.port_proto[i];
-      Serial.printf("PORT%d: Proto=%s Baud=%u Addr=0x%02X\n",i+1,pt<4?pns[pt]:"?",cfg.civ_baud[i],cfg.civ_addr[i]);
+      Serial.printf("PORT%d: Proto=%s Baud=%u Addr=0x%02X\n",i+1,pt<5?pns[pt]:"?",cfg.civ_baud[i],cfg.civ_addr[i]);
     }
   } else if(c=="ports"){
     Serial.println("PORT1: RX16 TX17 (CIV)\nPORT2: RX18 TX19 (CIV)\nPORT3: RX20 TX21 (CIV)\nPORT4: RX14 TX15 (SPE RS232)");
@@ -1478,6 +1683,9 @@ void setup_ws() {
 // Contadores para diagnostico
 unsigned long req_count = 0;
 unsigned long last_req_reset = 0;
+unsigned long last_req_rate_check = 0;
+unsigned long req_count_last = 0;
+int wifi_util_pct = 0;
 unsigned long loop_iters = 0;
 unsigned long last_loop_check = 0;
 unsigned long last_loop_iters = 0;
@@ -1487,14 +1695,17 @@ int cpu_pct = 0;
 void h_sysinfo() {
   if(!checkAuth()){srv.send(401,"application/json","{\"success\":false}");return;}
   req_count++;
-  StaticJsonDocument<512> d;
+  StaticJsonDocument<1024> d;
   uint32_t ps=ESP.getPsramSize(), fs=ESP.getFreePsram();
   d["heap_total"]=ESP.getHeapSize(); d["heap_free"]=ESP.getFreeHeap();
   d["psram_total"]=ps; d["psram_free"]=fs;
   d["psram_pct"]=ps?(fs*100/ps):0;
   d["flash_size"]=ESP.getFlashChipSize();
-  d["sketch_size"]=ESP.getSketchSize(); d["sketch_free"]=ESP.getFreeSketchSpace();
+  unsigned long sk_total=ESP.getFreeSketchSpace();
+d["sketch_total"]=sk_total; d["sketch_size"]=ESP.getSketchSize(); d["sketch_free"]=sk_total-ESP.getSketchSize();
+d["cores"]=ESP.getChipCores();
   d["chip"]=ESP.getChipModel(); d["chip_rev"]=ESP.getChipRevision();
+  d["chip_temp"]=-127;
   d["cpu_mhz"]=ESP.getCpuFreqMHz();
   d["uptime_ms"]=millis();
   d["uptime_s"]=millis()/1000;
@@ -1505,7 +1716,7 @@ void h_sysinfo() {
   d["wifi_mask"]=sta_con?WiFi.subnetMask().toString():"";
   d["wifi_dns1"]=sta_con?WiFi.dnsIP().toString():"";
   d["wifi_ssid"]=WiFi.SSID();
-  d["cpu_pct"]=cpu_pct; d["fw_ver"]=FIRMWARE_VERSION; d["req_count"]=req_count;
+  d["cpu_pct"]=cpu_pct; d["wifi_util"]=wifi_util_pct; d["fw_ver"]=FIRMWARE_VERSION; d["req_count"]=req_count;
   String r; serializeJson(d,r); srv.send(200,"application/json",r);
 }
 
@@ -1561,6 +1772,7 @@ button:hover{background:#80d8ff}
 <button class="tab active" data-tab="radio" onclick="st(this)">Radio</button>
 <button class="tab" data-tab="ic705" onclick="st(this)">IC-705</button>
 <button class="tab" data-tab="spe" onclick="st(this)">SPE</button>
+<button class="tab" data-tab="hamplus" onclick="st(this)">Hamplus</button>
 <button class="tab" data-tab="wifi" onclick="st(this)">WiFi</button>
 <button class="tab" data-tab="bluetooth" onclick="st(this)">Bluetooth</button>
 <button class="tab" data-tab="civ" onclick="st(this)">CAT / CI-V</button>
@@ -1771,9 +1983,57 @@ WARN: <span id="spe_warn_txt_display"></span>
 </div>
 </div>
 </div>
+<div id="tb-hamplus" style="display:none"><h2>Hamplus HP603</h2>
+<!-- LEDs + Rotor row -->
+<div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+<div class="card" style="flex:1;min-width:120px;padding:8px;display:flex;gap:8px;justify-content:center">
+<div style="text-align:center"><span id="hp_led_pwr" style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#10b981"></span><div style="font-size:9px;color:#94a3b8;margin-top:2px">Power</div></div>
+<div style="text-align:center"><span id="hp_led_send" style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#333"></span><div style="font-size:9px;color:#94a3b8;margin-top:2px">Send</div></div>
+<div style="text-align:center"><span id="hp_led_split" style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#333"></span><div style="font-size:9px;color:#94a3b8;margin-top:2px">Split</div></div>
+</div>
+<div class="card" style="flex:2;min-width:160px;padding:8px">
+<div style="display:flex;align-items:center;gap:6px">
+<div style="background:#001020;border:1px solid #0a2a4a;border-radius:4px;padding:6px;text-align:center;font-family:'DS-Digital',monospace;flex:1">
+<span style="color:#555;font-size:8px">GRAUS</span>
+<div><span id="hp_rotor_dir" style="color:#FFB300;font-size:28px;font-weight:bold;letter-spacing:2px">000</span><span style="color:#555;font-size:10px">&deg;</span></div>
+</div>
+<div style="display:flex;flex-direction:column;gap:3px">
+<button class="btn-sm" onclick="hpRotor(1)">Rotor 1</button>
+<button class="btn-sm" onclick="hpRotor(2)">Rotor 2</button>
+</div>
+<div style="display:flex;flex-direction:column;gap:3px">
+<button class="btn-sm" onclick="hpDir(1)">&uarr;</button>
+<button class="btn-sm" onclick="hpDir(-1)">&darr;</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Antenna and Radio buttons -->
+<div class="card" style="padding:8px">
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:4px;margin-bottom:6px">
+<button class="btn-sm" onclick="hpAnt(1)">ANT 1</button><button class="btn-sm" onclick="hpAnt(2)">ANT 2</button>
+<button class="btn-sm" onclick="hpAnt(3)">ANT 3</button><button class="btn-sm" onclick="hpAnt(4)">ANT 4</button>
+<button class="btn-sm" onclick="hpAnt(5)">ANT 5</button><button class="btn-sm" onclick="hpAnt(6)">ANT 6</button>
+<button class="btn-sm btn-outline" onclick="hpAnt(7)" style="opacity:0.5">ANT 7</button>
+<button class="btn-sm btn-outline" onclick="hpAnt(8)" style="opacity:0.5">ANT 8</button>
+<button class="btn-sm btn-outline" onclick="hpAnt(9)" style="opacity:0.5">ANT 9</button>
+<button class="btn-sm btn-outline" onclick="hpAnt(10)" style="opacity:0.5">ANT 10</button>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr;gap:4px">
+<button class="btn-sm" onclick="hpRadio(1)">Radio 1</button><button class="btn-sm" onclick="hpRadio(2)">Radio 2</button>
+<button class="btn-sm" onclick="hpRadio(3)">Radio 3</button>
+<button class="btn-sm btn-outline" onclick="hpRadio(4)" style="opacity:0.5">Radio 4</button>
+<button class="btn-sm btn-outline" onclick="hpRadio(5)" style="opacity:0.5">Radio 5</button>
+<button class="btn-sm btn-outline" onclick="hpRadio(6)" style="opacity:0.5">Radio 6</button>
+</div>
+</div>
+</div>
 <div id="tb-wifi" style="display:none"><h2>WiFi</h2>
 <div class="card">
 <h2>AP</h2><label>SSID</label><input type="text" id="aps"><label>Senha</label><input type="password" id="app"><button onclick="sAP()">Salvar AP</button>
+</div>
+<div class="card">
+<h2>STA</h2><label>SSID</label><input type="text" id="stas"><label>Senha</label><input type="password" id="stap"><button onclick="sSTA()">Salvar STA</button>
 </div>
 <div class="card">
 <h2>Redes Disponiveis</h2>
@@ -1855,6 +2115,13 @@ WARN: <span id="spe_warn_txt_display"></span>
 <input type="text" id="nu_user" placeholder="usuário"><input type="password" id="nu_pass" placeholder="senha">
 <button onclick="addUser()">Adicionar</button></div>
 </div>
+<div class="card"><h2>Dispositivo</h2>
+<p style="font-size:11px;color:#94a3b8;margin-bottom:6px">Reinicia o ESP32 ou restaura todas as configura&ccedil;&otilde;es para o padr&atilde;o de f&aacute;brica.</p>
+<div style="display:flex;gap:4px;flex-wrap:wrap">
+<button class="btn-outline btn-sm" onclick="rebootESP()">Reiniciar</button>
+<button class="btn-red btn-sm" onclick="factoryReset()">Reset de F&aacute;brica</button>
+</div>
+</div>
 <div class="card"><h2>Atualização de Firmware</h2>
 <p style="font-size:11px;color:#94a3b8">Versão atual: <strong id="fwver">v1.0.3</strong></p>
 <input type="file" id="fwfile" accept=".bin" style="display:none">
@@ -1876,7 +2143,10 @@ WARN: <span id="spe_warn_txt_display"></span>
 <div class="grid3">
 <div class="gitem"><div class="glabel">Chip</div><div class="gval" id="s_chip">---</div></div>
 <div class="gitem"><div class="glabel">CPU</div><div class="gval" id="s_cpu">--- MHz</div></div>
+<div class="gitem"><div class="glabel">Temp</div><div class="gval" id="s_temp">N/A</div></div>
+<div class="gitem"><div class="glabel">N&uacute;cleos</div><div class="gval" id="s_cores">---</div></div>
 <div class="gitem"><div class="glabel">Firmware</div><div class="gval" id="s_fwver">---</div></div>
+<div class="gitem"><div class="glabel">Sketch</div><div class="gval" style="font-size:11px" id="s_sketch">---</div></div>
 </div>
 </div>
 <div class="card">
@@ -1886,9 +2156,9 @@ WARN: <span id="spe_warn_txt_display"></span>
 <div class="gitem"><div class="glabel">PSRAM</div><div class="gval" id="s_psram">---</div></div>
 <div class="gitem"><div class="glabel">Flash</div><div class="gval" id="s_flash">---</div></div>
 </div>
-<div style="margin-top:6px"><label>RAM</label>
+<div style="margin-top:6px"><label>RAM <span id="s_ram_pct" style="float:right;color:#4fc3f7">0%</span></label>
 <div style="height:8px;background:#1a2a3a;border-radius:4px"><div id="s_ram_bar" style="height:100%;width:0%;background:linear-gradient(90deg,#10b981,#4fc3f7,#FFB300,#ef4444);border-radius:4px;transition:width .3s"></div></div></div>
-<div style="margin-top:4px"><label>PSRAM</label>
+<div style="margin-top:4px"><label>PSRAM <span id="s_psram_pct" style="float:right;color:#4fc3f7">0%</span></label>
 <div style="height:8px;background:#1a2a3a;border-radius:4px"><div id="s_psram_bar" style="height:100%;width:0%;background:linear-gradient(90deg,#10b981,#4fc3f7,#FFB300,#ef4444);border-radius:4px;transition:width .3s"></div></div></div>
 </div>
 <div class="card">
@@ -1896,6 +2166,13 @@ WARN: <span id="spe_warn_txt_display"></span>
 <div><label>CPU: <span id="s_cpu_pct" style="color:#4fc3f7;font-weight:bold">0%</span></label>
 <div style="height:12px;background:#1a2a3a;border-radius:6px;overflow:hidden">
 <div id="s_cpu_bar" style="height:100%;width:0%;border-radius:6px;transition:width .3s"></div>
+</div></div>
+</div>
+<div class="card">
+<h2>WiFi</h2>
+<div><label>Utiliza&ccedil;&atilde;o: <span id="s_wifi_util_pct" style="color:#4fc3f7;font-weight:bold">0%</span></label>
+<div style="height:12px;background:#1a2a3a;border-radius:6px;overflow:hidden">
+<div id="s_wifi_bar" style="height:100%;width:0%;border-radius:6px;transition:width .3s"></div>
 </div></div>
 </div>
 <div class="card">
@@ -1915,12 +2192,40 @@ WARN: <span id="spe_warn_txt_display"></span>
 </div>
 </div>
 <div class="card">
+<h2>Pinagem</h2>
+<div style="font-size:10px;font-family:monospace">
+<div style="display:grid;grid-template-columns:1fr 1fr 2fr 1fr;gap:2px;padding:2px 0;border-bottom:1px solid #1a2a3a;color:#555">
+<span>Pino</span><span>Nome</span><span>Fun&ccedil;&atilde;o</span><span>Dir.</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr 2fr 1fr;gap:2px;padding:2px 0;border-bottom:1px solid #1a2a3a">
+<span>2</span><span style="color:#555">GPIO2</span><span>LED indicador</span><span>OUT</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr 2fr 1fr;gap:2px;padding:2px 0;border-bottom:1px solid #1a2a3a">
+<span>14</span><span style="color:#555">GPIO14</span><span>PORT4 RX (SPE RS232)</span><span>IN</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr 2fr 1fr;gap:2px;padding:2px 0;border-bottom:1px solid #1a2a3a">
+<span>15</span><span style="color:#555">GPIO15</span><span>PORT4 TX (SPE RS232)</span><span>OUT</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr 2fr 1fr;gap:2px;padding:2px 0;border-bottom:1px solid #1a2a3a">
+<span>16</span><span style="color:#555">GPIO16</span><span>PORT1 RX (CI-V/CAT)</span><span>IN</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr 2fr 1fr;gap:2px;padding:2px 0;border-bottom:1px solid #1a2a3a">
+<span>17</span><span style="color:#555">GPIO17</span><span>PORT1 TX (CI-V/CAT)</span><span>OUT</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr 2fr 1fr;gap:2px;padding:2px 0;border-bottom:1px solid #1a2a3a">
+<span>18</span><span style="color:#555">GPIO18</span><span>PORT2 RX (CI-V/CAT)</span><span>IN</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr 2fr 1fr;gap:2px;padding:2px 0;border-bottom:1px solid #1a2a3a">
+<span>19</span><span style="color:#555">GPIO19</span><span>PORT2 TX (CI-V/CAT)</span><span>OUT</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr 2fr 1fr;gap:2px;padding:2px 0;border-bottom:1px solid #1a2a3a">
+<span>20</span><span style="color:#555">GPIO20</span><span>PORT3 RX (CI-V/CAT)</span><span>IN</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr 2fr 1fr;gap:2px;padding:2px 0;border-bottom:1px solid #1a2a3a">
+<span>21</span><span style="color:#555">GPIO21</span><span>PORT3 TX (CI-V/CAT)</span><span>OUT</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr 2fr 1fr;gap:2px;padding:2px 0;border-bottom:1px solid #1a2a3a">
+<span>43</span><span style="color:#555">GPIO43</span><span>USB CDC (Console)</span><span>I/O</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr 2fr 1fr;gap:2px;padding:2px 0">
+<span>44</span><span style="color:#555">GPIO44</span><span>USB CDC (Console)</span><span>I/O</span></div>
+</div>
+</div>
+<div class="card">
 <h2>Uptime</h2>
 <div class="gval" style="text-align:center;font-size:18px" id="s_uptime">---</div>
 </div>
 </div>
 <div id="tb-civ" style="display:none"><h2>CAT / CI-V</h2>
-<label>Porta Ativa</label><select id="ap" style="margin-bottom:6px"><option value="1">PORT1</option><option value="2">PORT2</option><option value="3">PORT3</option><option value="4">PORT4</option></select>
 <button onclick="sCIV()" style="margin-bottom:8px">Salvar Todas</button>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px" id="ports-grid">
 <div class="card" style="padding:8px">
@@ -1929,7 +2234,7 @@ WARN: <span id="spe_warn_txt_display"></span>
 <label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="0" checked> Enable</label></div>
 <label style="font-size:9px">Protocolo</label>
 <select class="pp" data-idx="0" onchange="protoChange2(this,0)" style="font-size:10px;padding:3px 4px">
-<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option></select>
+<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option></select>
 <label style="font-size:9px">Baud</label>
 <select class="pb" data-idx="0" style="font-size:10px;padding:3px 4px">
 <option value="9600">9600</option><option value="19200" selected>19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
@@ -1944,7 +2249,7 @@ WARN: <span id="spe_warn_txt_display"></span>
 <label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="1" checked> Enable</label></div>
 <label style="font-size:9px">Protocolo</label>
 <select class="pp" data-idx="1" onchange="protoChange2(this,1)" style="font-size:10px;padding:3px 4px">
-<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option></select>
+<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option></select>
 <label style="font-size:9px">Baud</label>
 <select class="pb" data-idx="1" style="font-size:10px;padding:3px 4px">
 <option value="9600">9600</option><option value="19200" selected>19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
@@ -1959,7 +2264,7 @@ WARN: <span id="spe_warn_txt_display"></span>
 <label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="2" checked> Enable</label></div>
 <label style="font-size:9px">Protocolo</label>
 <select class="pp" data-idx="2" onchange="protoChange2(this,2)" style="font-size:10px;padding:3px 4px">
-<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option></select>
+<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option></select>
 <label style="font-size:9px">Baud</label>
 <select class="pb" data-idx="2" style="font-size:10px;padding:3px 4px">
 <option value="9600">9600</option><option value="19200" selected>19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
@@ -1974,7 +2279,7 @@ WARN: <span id="spe_warn_txt_display"></span>
 <label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="3" checked> Enable</label></div>
 <label style="font-size:9px">Protocolo</label>
 <select class="pp" data-idx="3" onchange="protoChange2(this,3)" style="font-size:10px;padding:3px 4px">
-<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option></select>
+<option value="0">CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option></select>
 <label style="font-size:9px">Baud</label>
 <select class="pb" data-idx="3" style="font-size:10px;padding:3px 4px">
 <option value="9600">9600</option><option value="19200" selected>19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
@@ -1997,6 +2302,7 @@ document.getElementById('tb-'+tab).style.display='block';
 el.classList.add('active');
 if(tab=='radio'||tab=='ic705'||tab=='bluetooth'){carregar();carregarBT();}
 if(tab=='spe'){carregarSPE();}
+if(tab=='hamplus'){carregarHP();}
 if(tab=='wifi'){carregar();listarRedes();carregarRedes();}
 if(tab=='logs')carregarLogPref();
 if(tab=='admin')carregarUsers();
@@ -2121,13 +2427,19 @@ try{
 var d=JSON.parse(x.responseText);
 document.getElementById('s_chip').textContent=(d.chip||'?')+' rev.'+(d.chip_rev||0);
 document.getElementById('s_cpu').textContent=(d.cpu_mhz||'?')+' MHz';
-document.getElementById('s_fwver').textContent=d.fw_ver||'---';
+document.getElementById('s_temp').textContent=(d.chip_temp&&d.chip_temp>-127)?d.chip_temp+' C':'N/A';
+var fw=d.fw_ver;
+if(!fw){var h1s=document.querySelector('h1 span');if(h1s)fw=h1s.textContent;}
+document.getElementById('s_fwver').textContent=fw||'---';
+document.getElementById('s_cores').textContent=(d.cores||'?')+' nucleos';
+document.getElementById('s_sketch').textContent=fmtBytes(d.sketch_total)+' total / '+fmtBytes(d.sketch_size)+' usado / '+fmtBytes(d.sketch_free)+' livre';
 var ramUso=((d.heap_total||1)-(d.heap_free||0))/(d.heap_total||1)*100;
 document.getElementById('s_ram').textContent=fmtBytes(d.heap_free)+' / '+fmtBytes(d.heap_total);
 document.getElementById('s_ram_bar').style.width=Math.round(ramUso)+'%';
+document.getElementById('s_ram_pct').textContent=Math.round(ramUso)+'%';
 var psUso=((d.psram_total||1)-(d.psram_free||0))/(d.psram_total||1)*100;
 document.getElementById('s_psram').textContent=(d.psram_total?fmtBytes(d.psram_free)+' / '+fmtBytes(d.psram_total):'N/A');
-if(d.psram_total){document.getElementById('s_psram_bar').style.width=Math.round(psUso)+'%';}else{document.getElementById('s_psram_bar').style.width='0%';}
+if(d.psram_total){document.getElementById('s_psram_bar').style.width=Math.round(psUso)+'%';document.getElementById('s_psram_pct').textContent=Math.round(psUso)+'%';}else{document.getElementById('s_psram_bar').style.width='0%';document.getElementById('s_psram_pct').textContent='N/A';}
 document.getElementById('s_flash').textContent=fmtBytes(d.sketch_free)+' livre ('+fmtBytes(d.flash_size)+')';
 document.getElementById('s_apip').textContent=d.wifi_ap_ip||'---';
 document.getElementById('s_staip').textContent=d.wifi_sta_ip||'---';
@@ -2143,6 +2455,10 @@ document.getElementById('s_cpu_pct').textContent=cp+'%';
 var bar=document.getElementById('s_cpu_bar');
 bar.style.width=cp+'%';
 bar.style.background=cp<30?'#10b981':cp<60?'#FFB300':'#ef4444';
+var wu=d.wifi_util||0;
+document.getElementById('s_wifi_util_pct').textContent=wu+'%';
+var wbar=document.getElementById('s_wifi_bar');
+if(wbar){wbar.style.width=wu+'%';wbar.style.background=wu<20?'#10b981':wu<50?'#4fc3f7':'#FFB300';}
 var up=d.uptime_s||0;
 var dd=Math.floor(up/86400);up%=86400;
 var hh=Math.floor(up/3600);up%=3600;
@@ -2161,6 +2477,30 @@ function protoChange2(el,idx){
 var rows=document.querySelectorAll('.civ-addr-row-'+idx);
 for(var r=0;r<rows.length;r++)rows[r].style.display=el.value=='0'?'block':'none';
 }
+// Hamplus functions
+function hpAnt(n){envia('/api/save',{'hp_ant':n});}
+function hpRadio(n){envia('/api/save',{'hp_radio':n});}
+function hpSplit(){envia('/api/save',{'hp_split':true});}
+var hpCurrentRotor=1;
+function hpRotor(n){hpCurrentRotor=n;toast('Rotor '+n+' selecionado','info');}
+function hpDir(d){envia('/api/save',{'hp_rotor':hpCurrentRotor,'hp_dir':d});}
+function carregarHP(){
+var x=new XMLHttpRequest();
+x.open('GET','/api/status',true);
+x.onload=function(){
+try{
+var d=JSON.parse(x.responseText);
+// LEDs
+var l=function(id,on){var e=document.getElementById(id);if(e)e.style.background=on?'#10b981':'#333';};
+l('hp_led_pwr',true);
+l('hp_led_send',d.hp_ptt||false);
+l('hp_led_split',d.hp_split||false);
+// Rotor direction
+if(d.hp_dir!=undefined){var dir=('000'+d.hp_dir).slice(-3);var el=document.getElementById('hp_rotor_dir');if(el)el.textContent=dir;}
+}catch(e){}
+};
+x.send();
+}
 function carregarCfg(){
 var x=new XMLHttpRequest();
 x.open('GET','/api/config',true);
@@ -2173,11 +2513,11 @@ document.getElementById('btn').value=d.btn||'';
 document.getElementById('btp').value=d.btp||'1234';
 if(d.ca705)document.getElementById('ca_addr').value=d.ca705;
 document.getElementById('aps').value=d.aps||'';document.getElementById('app').value=d.app||'';
-document.getElementById('stas').value=d.stas||'';document.getElementById('stap').value=d.stap||'';
+var elStas=document.getElementById('stas');if(elStas)elStas.value=d.stas||'';var elStap=document.getElementById('stap');if(elStap)elStap.value=d.stap||'';
 document.getElementById('dhcp').checked=d.dh!==false;
 document.getElementById('sip').value=d.sip||'';document.getElementById('sgw').value=d.sgw||'';
 document.getElementById('ssn').value=d.ssn||'';document.getElementById('sd1').value=d.sd1||'';document.getElementById('sd2').value=d.sd2||'';
-document.getElementById('ap').value=d.ap||1;
+// Porta ativa gerenciada via protocolo de cada porta
 if(d.ports) for(var pi=0;pi<4&&pi<d.ports.length;pi++){
 var p=d.ports[pi];
 var pe=document.querySelector('.pe[data-idx="'+pi+'"]');if(pe)pe.checked=p.en;
@@ -2379,8 +2719,7 @@ function subirRede(idx){envia('/api/save',{wn_move:idx,wn_dir:-1});setTimeout(ca
 function descerRede(idx){envia('/api/save',{wn_move:idx,wn_dir:1});setTimeout(carregarRedes,500);}
 function excluirRede(idx){envia('/api/save',{wn_del:idx});setTimeout(carregarRedes,500);}
 function sCIV(){
-var ap=parseInt(document.getElementById('ap').value);
-var data={ap:ap};
+var data={};
 for(var i=0;i<4;i++){
 var enEl=document.querySelector('.pe[data-idx="'+i+'"]');
 var prEl=document.querySelector('.pp[data-idx="'+i+'"]');
@@ -2391,7 +2730,7 @@ if(prEl)data['pp'+i]=parseInt(prEl.value);
 if(baEl)data['pb'+i]=parseInt(baEl.value);
 if(adEl)data['pa'+i]=adEl.value;
 }
-envia('/api/save',data);
+envia('/api/save',data,function(){carregarCfg();});
 }
 function listarRedes(networks){
 var s=document.getElementById('sta_sel');s.innerHTML='<option value="">--</option>';
@@ -2551,6 +2890,15 @@ function sair(){
 var x=new XMLHttpRequest();x.open('GET','/api/logout',true);
 x.onload=function(){window.location.href='/login';};x.send();
 }
+function rebootESP(){
+if(!confirm('Reiniciar o dispositivo?'))return;
+envia('/api/save',{reboot:true});
+}
+function factoryReset(){
+if(!confirm('TEM CERTEZA? Isso vai apagar TODAS as configuracoes (WiFi, usuarios, portas, etc) e reiniciar o dispositivo.'))return;
+if(!confirm('CONFIRMO! Desejo restaurar para fabrica.'))return;
+envia('/api/save',{factory:true});
+}
 carregar();
 setTimeout(carregarCfg,300);
 setTimeout(carregarRedes,600);
@@ -2583,7 +2931,7 @@ void h_cfg() {
   JsonArray pa=d.createNestedArray("ports");
   for(int i=0;i<4;i++){
     JsonObject po=pa.createNestedObject();
-    po["en"]=cfg.port_enabled[i]; po["pr"]=cfg.port_proto[i]; po["ba"]=cfg.civ_baud[i]; po["ad"]="0x"+String(cfg.civ_addr[i],HEX);
+    po["en"]=cfg.port_enabled[i]; po["pr"]=cfg.port_proto[i]; po["ba"]=(cfg.port_proto[i]>=PROTO_SPE)?cfg.spe_baud[i]:cfg.civ_baud[i]; po["ad"]="0x"+String(cfg.civ_addr[i],HEX);
   }
   String r; serializeJson(d,r); srv.send(200,"application/json",r);
 }
@@ -2601,6 +2949,7 @@ void h_sts() {
   d["sta_ip"]=sta_con?WiFi.localIP().toString():"";
   // SPE fields apenas quando ativo (reduz resposta JSON)
   d["spe_active"]=sp_is_active();
+  d["hp_ptt"]=hp_ptt; d["hp_split"]=hp_split; d["hp_antenna"]=hp_antenna; d["hp_radio"]=hp_radio; d["hp_dir"]=hp_dir;
   if(sp_is_active()){
     d["spe_id"]=spe_id; d["spe_op"]=spe_op; d["spe_tx"]=spe_tx;
     d["spe_pout"]=spe_pout; d["spe_pwr_level"]=String(spe_pwr_level);
@@ -2770,14 +3119,18 @@ void h_save() {
     char ke[8],kp[8],kb[8],ka[8]; snprintf(ke,8,"pe%d",i); snprintf(kp,8,"pp%d",i); snprintf(kb,8,"pb%d",i); snprintf(ka,8,"pa%d",i);
     if(d.containsKey(ke)) cfg.port_enabled[i]=d[ke].as<int>()==1;
     if(d.containsKey(kp)) cfg.port_proto[i]=d[kp].as<uint8_t>();
-    if(d.containsKey(kb)) cfg.civ_baud[i]=d[kb].as<uint32_t>();
+    if(d.containsKey(kb)){
+      uint32_t bd=d[kb].as<uint32_t>();
+      if(cfg.port_proto[i]>=PROTO_SPE) cfg.spe_baud[i]=bd; else cfg.civ_baud[i]=bd;
+    }
     if(d.containsKey(ka)){String a=d[ka].as<String>();cfg.civ_addr[i]=(uint8_t)strtol(a.c_str(),NULL,16);}
   }
   save_cfg();
 
   if(d.containsKey("disc_ic5")&&d["disc_ic5"].as<bool>()){if(ic5cli)ic5cli->disconnect();srv.send(200,"application/json","{\"success\":true}");return;}
   if(d.containsKey("scan_ic5")&&d["scan_ic5"].as<bool>()){scan_ic5();srv.send(200,"application/json","{\"success\":true}");return;}
-  if(d.containsKey("reboot")&&d["reboot"].as<bool>()){srv.send(200,"application/json","{\"success\":true}");delay(500);ESP.restart();return;}
+   if(d.containsKey("reboot")&&d["reboot"].as<bool>()){srv.send(200,"application/json","{\"success\":true}");delay(500);ESP.restart();return;}
+  if(d.containsKey("factory")&&d["factory"].as<bool>()){nvs.begin("civ-gw",false);nvs.clear();nvs.end();srv.send(200,"application/json","{\"success\":true}");delay(500);ESP.restart();return;}
 
   // Gerenciamento de dispositivos Bluetooth
   if(d.containsKey("bt_add_a")){
@@ -2869,6 +3222,12 @@ void h_civ_cmd() {
   else if(d.containsKey("setkey")){if(sp_is_active())sp_send_cmd(SPE_CMD_SET);}
   else if(d.containsKey("blon")){if(sp_is_active())sp_send_cmd(SPE_CMD_BL_ON);}
   else if(d.containsKey("bloff")){if(sp_is_active())sp_send_cmd(SPE_CMD_BL_OFF);}
+  // Hamplus HP603 commands
+  else if(d.containsKey("hp_ant")){if(hp_is_active()){int a=d["hp_ant"].as<int>();if(a>=1&&a<=6)hp_send(a);}}
+  else if(d.containsKey("hp_radio")){if(hp_is_active()){int r=d["hp_radio"].as<int>();if(r>=1&&r<=3)hp_send(6+r);}}
+  else if(d.containsKey("hp_split")){if(hp_is_active())hp_send(0x0A);}
+  else if(d.containsKey("hp_sts")){if(hp_is_active())hp_send(0x00);}
+  else if(d.containsKey("hp_dir")&&d.containsKey("hp_rotor")){hp_rotor_active=d["hp_rotor"].as<int>();int dir=d["hp_dir"].as<int>();hp_dir+=dir;if(hp_dir>360)hp_dir-=360;if(hp_dir<0)hp_dir+=360;}
 
   srv.send(200,"application/json","{\"success\":true}");
 }
@@ -3062,6 +3421,9 @@ void loop() {
     proc_ic5();
     bridge_ic5p();
     bridge_pic5();
+    // Traduz CI-V (IC-705) para SPE
+    translate_civ_to_spe();
+    translate_civ_to_cat();
   }
 
   // SPE polling (quando porta ativa for SPE)
@@ -3074,13 +3436,22 @@ void loop() {
   if(ys_is_active()){
     ys_poll();
     ys_read();
+    translate_ys_to_spe();
+    translate_cat_to_civ();
   }
 
   // Kenwood polling
   if(kw_is_active()){
     kw_poll();
     kw_read();
+    translate_kw_to_spe();
+    translate_cat_to_civ();
   }
+
+  // Hamplus HP603 polling
+  if(hp_is_active()){ hp_poll(); hp_read(); }
+  // Hamplus recebe PTT de qualquer protocolo
+  if(hp_is_active()) translate_to_hp();
 
   bridge_nusp();
   bridge_pnus();
@@ -3094,6 +3465,10 @@ void loop() {
     cpu_pct = max_loop_iters > 0 ? 100 - (cur * 100 / max_loop_iters) : 0;
     last_loop_iters = loop_iters;
     last_cpu_check = now;
+    // WiFi utilizacao: req/s normalizado (max ~50 req/s)
+    unsigned long rps = req_count - req_count_last;
+    wifi_util_pct = rps > 50 ? 100 : rps * 2;
+    req_count_last = req_count;
   }
 
   delay(1);
