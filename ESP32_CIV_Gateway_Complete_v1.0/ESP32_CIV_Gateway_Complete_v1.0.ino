@@ -791,7 +791,7 @@ void poll_ic5() {
   }
   // S-meter a cada 1000ms (junto com frequencia)
   if(now-last_smeter>=200) {
-    uint8_t cmd[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,C_SMETER,0x01,CIV_END};
+    uint8_t cmd[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,C_SMETER,0x00,CIV_END};
     send_civ(cmd,sizeof(cmd)); last_smeter=now;
   }
   if(pending_cmd) { send_civ(pending_buf,pending_len); pending_cmd=false; }
@@ -953,10 +953,10 @@ void parse_civ(uint8_t* d, int l) {
     ic5_ptt=d[5]; last_change_src=1;
   }
   // S-meter: FE FE E0 A4 15 02 <byte1> <byte2> FD
-  else if(cmd==C_SMETER&&l>=7&&d[5]==0x01) {
-    // IC-705: resposta pode ser FE FE E0 A4 15 02 <flag> <level> FD
-    // Onde d[6]=flag, d[7]=level real
-    ic5_smeter=(l>=8)?d[7]:d[6];
+  else if(cmd==C_SMETER&&l>=7&&d[5]<0x10) {
+    // Tenta varios offsets para o IC-705
+    ic5_smeter=d[l-2]; // Penultimo byte antes do FD
+    Serial.printf("[SM] len=%d d6=%d d7=%d d8=%d use=%d\n",l,d[6],d[7],(l>8?d[8]:-1),ic5_smeter);
   }
   // Power: FE FE 98 E0 1A 05 <0=OFF 1=ON> FD
   else if(cmd==0x1A&&l>=7&&d[5]==0x05) {
@@ -2668,7 +2668,7 @@ else if(sm<10)sv='S4';else if(sm<12)sv='S5';else if(sm<14)sv='S6';
 else if(sm<16)sv='S7';else if(sm<18)sv='S8';else if(sm<22)sv='S9';
 else if(sm<27)sv='S9+10';else if(sm<32)sv='S9+20';else if(sm<37)sv='S9+30';
 else if(sm<42)sv='S9+40';else if(sm<47)sv='S9+50';else sv='S9+60';
-document.getElementById('stxt').textContent=sv+'('+sm+')';
+document.getElementById('stxt').textContent='Raw:'+sm+' '+sv;
 document.getElementById('stxt2').textContent=d.pwr?'TX':'';
 document.getElementById('sbar').style.width=Math.min(sm/254*100,100)+'%';
 document.getElementById('v_pwr').innerHTML='<span class="badge '+(d.pwr?'bg-green':'bg-red')+'">'+(d.pwr?'ON':'OFF')+'</span>';
