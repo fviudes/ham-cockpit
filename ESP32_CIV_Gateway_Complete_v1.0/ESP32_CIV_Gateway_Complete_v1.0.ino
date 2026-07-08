@@ -2365,11 +2365,14 @@ WARN: <span id="spe_warn_txt_display"></span>
 <div id="s_wifi_bar" style="height:100%;width:0%;border-radius:6px;transition:width .3s"></div>
 </div></div>
 </div>
-<div class="card"><h2>Historico</h2>
-<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px">
-<div><label style="font-size:8px">CPU %</label><canvas id="chCpu" width="160" height="50" style="width:100%;height:50px;background:#0a1118;border-radius:3px"></canvas></div>
-<div><label style="font-size:8px">RAM %</label><canvas id="chRam" width="160" height="50" style="width:100%;height:50px;background:#0a1118;border-radius:3px"></canvas></div>
-<div><label style="font-size:8px">Rede %</label><canvas id="chNet" width="160" height="50" style="width:100%;height:50px;background:#0a1118;border-radius:3px"></canvas></div>
+<div class="card"><h2>Hist&oacute;rico (60 min)</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+<div><label style="font-size:8px">CPU % <span id="chCpuVal" style="color:#4fc3f7;float:right">--</span></label>
+<canvas id="chCpu" width="300" height="120" style="width:100%;height:120px;background:#0a1118;border-radius:4px;cursor:crosshair"></canvas></div>
+<div><label style="font-size:8px">RAM % <span id="chRamVal" style="color:#10b981;float:right">--</span></label>
+<canvas id="chRam" width="300" height="120" style="width:100%;height:120px;background:#0a1118;border-radius:4px;cursor:crosshair"></canvas></div>
+<div><label style="font-size:8px">Rede % <span id="chNetVal" style="color:#FFB300;float:right">--</span></label>
+<canvas id="chNet" width="300" height="120" style="width:100%;height:120px;background:#0a1118;border-radius:4px;cursor:crosshair"></canvas></div>
 </div>
 </div>
 <div class="card">
@@ -2782,26 +2785,54 @@ var wu=d.wifi_util||0;
 document.getElementById('s_wifi_util_pct').textContent=wu+'%';
 var wbar=document.getElementById('s_wifi_bar');
 if(wbar){wbar.style.width=wu+'%';wbar.style.background=wu<20?'#10b981':wu<50?'#4fc3f7':'#FFB300';}
-// Historico graficos
-var hlen=60;
-if(typeof _hcpu=='undefined'){window._hcpu=[];window._hram=[];window._hnet=[];}
+// Historico graficos (60 min, 1 ponto por segundo = 3600 pontos)
+var hlen=3600;
+if(typeof _hcpu=='undefined'){
+  window._hcpu=[];window._hram=[];window._hnet=[];
+  // Preenche com 0 para ter pontos iniciais
+  for(var i=0;i<2;i++){window._hcpu.push(0);window._hram.push(0);window._hnet.push(0);}
+}
 window._hcpu.push(cp);if(window._hcpu.length>hlen)window._hcpu.shift();
 window._hram.push(ramUso);if(window._hram.length>hlen)window._hram.shift();
 window._hnet.push(wu);if(window._hnet.length>hlen)window._hnet.shift();
-function drawChart(id,data,color){
+function drawChart(id,data,color,valId){
 var c=document.getElementById(id);if(!c)return;
 var ctx=c.getContext('2d');var w=c.width,h=c.height;
-ctx.clearRect(0,0,w,h);if(data.length<2)return;
-var max=100;ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.beginPath();
+ctx.clearRect(0,0,w,h);
+// Grid horizontal (10 em 10%) com labels
+ctx.strokeStyle='rgba(255,255,255,0.08)';ctx.lineWidth=0.5;ctx.setLineDash([3,3]);
+ctx.font='7px monospace';ctx.textAlign='right';ctx.textBaseline='middle';
+for(var g=0;g<=100;g+=10){
+var gy=h-(g/100)*h;ctx.beginPath();ctx.moveTo(0,gy);ctx.lineTo(w,gy);ctx.stroke();
+ctx.fillStyle='rgba(255,255,255,0.2)';ctx.fillText(g+'%',w-2,gy);
+}
+// Grid vertical (5 em 5 min = 300 segundos) com labels
+ctx.setLineDash([2,4]);
+var segs=data.length;
+ctx.textAlign='center';ctx.textBaseline='bottom';
+for(var s=0;s<segs;s+=300){
+var gx=(s/(segs-1||1))*w;if(gx>0&&gx<w){ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,h);ctx.stroke();}
+var minLabel=Math.round(s/60);ctx.fillStyle='rgba(255,255,255,0.2)';ctx.fillText(minLabel+'m',gx,h);
+}
+ctx.setLineDash([]);
+if(data.length<2)return;
+// Area fill
+ctx.fillStyle=color+'30';ctx.beginPath();ctx.moveTo(0,h);
+for(var i=0;i<data.length;i++){var x=(i/(data.length-1))*w;var y=h-(data[i]/100)*h;ctx.lineTo(x,y);}
+ctx.lineTo(w,h);ctx.closePath();ctx.fill();
+// Line
+ctx.strokeStyle=color;ctx.lineWidth=1;ctx.beginPath();
 for(var i=0;i<data.length;i++){
-var x=(i/(data.length-1))*w;var y=h-(data[i]/max)*h;
+var x=(i/(data.length-1))*w;var y=h-(data[i]/100)*h;
 if(i==0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
 }ctx.stroke();
-ctx.fillStyle='rgba(79,195,247,0.1)';ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();ctx.fill();
+// Label valor
+var lastVal=data[data.length-1];
+if(valId)document.getElementById(valId).textContent=Math.round(lastVal)+'%';
 }
-drawChart('chCpu',window._hcpu,'#4fc3f7');
-drawChart('chRam',window._hram,'#10b981');
-drawChart('chNet',window._hnet,'#FFB300');
+drawChart('chCpu',window._hcpu,'#4fc3f7','chCpuVal');
+drawChart('chRam',window._hram,'#10b981','chRamVal');
+drawChart('chNet',window._hnet,'#FFB300','chNetVal');
 var up=d.uptime_s||0;
 var dd=Math.floor(up/86400);up%=86400;
 var hh=Math.floor(up/3600);up%=3600;
