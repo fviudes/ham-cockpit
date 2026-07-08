@@ -954,7 +954,9 @@ void parse_civ(uint8_t* d, int l) {
   }
   // S-meter: FE FE E0 A4 15 02 <byte1> <byte2> FD
   else if(cmd==C_SMETER&&l>=7&&d[5]==0x02) {
-    ic5_smeter=d[6]; // IC-705: unico byte com S-meter 0-254 (30=S9)
+    // IC-705: resposta pode ser FE FE E0 A4 15 02 <flag> <level> FD
+    // Onde d[6]=flag, d[7]=level real
+    ic5_smeter=(l>=8)?d[7]:d[6];
   }
   // Power: FE FE 98 E0 1A 05 <0=OFF 1=ON> FD
   else if(cmd==0x1A&&l>=7&&d[5]==0x05) {
@@ -2666,7 +2668,7 @@ else if(sm<64)sv='S4';else if(sm<78)sv='S5';else if(sm<92)sv='S6';
 else if(sm<106)sv='S7';else if(sm<120)sv='S8';else if(sm<138)sv='S9';
 else if(sm<158)sv='S9+10';else if(sm<178)sv='S9+20';else if(sm<198)sv='S9+30';
 else if(sm<218)sv='S9+40';else if(sm<238)sv='S9+50';else sv='S9+60';
-document.getElementById('stxt').textContent=sv+'('+sm+')';
+document.getElementById('stxt').textContent=sv;
 document.getElementById('stxt2').textContent=d.pwr?'TX':'';
 document.getElementById('sbar').style.width=Math.min(sm/254*100,100)+'%';
 document.getElementById('v_pwr').innerHTML='<span class="badge '+(d.pwr?'bg-green':'bg-red')+'">'+(d.pwr?'ON':'OFF')+'</span>';
