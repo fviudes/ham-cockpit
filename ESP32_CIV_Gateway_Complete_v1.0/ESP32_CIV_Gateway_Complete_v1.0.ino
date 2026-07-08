@@ -1925,7 +1925,7 @@ button:hover{background:#80d8ff}
 .slider{width:100%;margin:4px 0}
 .slider-val{color:#4fc3f7;font-size:11px;text-align:right}
 </style></head><body>
-<h1>&#9881; CAT-Bridge CAT/CI-V/BT Gateway <span style="font-size:12px;color:#94a3b8">v1.0.4</span></h1>
+<h1>&#9881; CAT-Bridge CAT/CI-V/BT Gateway <span style="font-size:12px;color:#94a3b8">v1.0.4</span> <span style="float:right;font-size:11px;font-weight:normal"><button class="btn-sm" id="langPtBtn" onclick="setLang('pt')" style="background:#4fc3f7;margin:0">PT</button> <button class="btn-sm" id="langEnBtn" onclick="setLang('en')" style="background:transparent;border:1px solid #4fc3f7;color:#4fc3f7;margin:0">EN</button></span></h1>
 <div class="tabs" id="tabbar">
 <button class="tab active" data-tab="radio" onclick="st(this)">Radio</button>
 <button class="tab" data-tab="ic705" onclick="st(this)">IC-705</button>
@@ -2452,8 +2452,83 @@ WARN: <span id="spe_warn_txt_display"></span>
 </div>
 <div id="toast" class="toast"></div>
 <script>
+// i18n - Traducao PT/EN
+var _lang='pt';
+var _en={
+  'Radio':'Radio','IC-705':'IC-705','SPE':'SPE','Hamplus':'Hamplus','WiFi':'WiFi',
+  'Bluetooth':'Bluetooth','CAT / CI-V':'CAT / CI-V','Logs':'Logs','Admin':'Admin','Status':'Status',
+  'Painel de Controle Icom Radio':'Icom Radio Control Panel',
+  'Controles':'Controls','Ganhos':'Gains','Frequencia Manual':'Manual Frequency',
+  'Frequencia':'Frequency','Modo':'Mode','Banda':'Band','PTT':'PTT','Power':'Power','Split':'Split',
+  'AGC':'AGC','PRE/ATT':'PRE/ATT','Standby':'Standby','Ligar':'Turn On','Salvar':'Save',
+  'IC-705 CAT over BLE':'IC-705 CAT over BLE',
+  'Procedimento':'Procedure','Escanear IC-705':'Scan IC-705','Desconectar':'Disconnect',
+  'CAT ativado':'CAT enabled','Porta destino':'Target port','Endereco CI-V do radio':'Radio CI-V address',
+  'Nome BLE':'BLE Name','Procedimento:':'Procedure:',
+  'SPE Expert Amplifier':'SPE Expert Amplifier','OPERATE':'OPERATE','STANDBY':'STANDBY',
+  'TUNE':'TUNE','Input:':'Input:','INPUT':'INPUT','POWER (L/M/H)':'POWER (L/M/H)',
+  'Chave de Antena':'Antenna Switch','Chave de Radio':'Radio Switch',
+  'ANT':'ANT','Radio':'Radio','Rotor':'Rotor','GRAUS':'DEGREES',
+  'Salvar Todas':'Save All','Enable':'Enable','Protocolo':'Protocol','Baud':'Baud',
+  'Endereco CI-V':'CI-V Address','Porta Ativa':'Active Port',
+  'Configuracao BLE':'BLE Settings','Nome do dispositivo':'Device Name',
+  'Senha de pareamento (PIN)':'Pairing PIN','Escanear BLE':'Scan BLE',
+  'Dispositivos Salvos':'Saved Devices','Nenhum dispositivo encontrado.':'No devices found.',
+  'AP':'AP','STA':'STA','SSID':'SSID','Senha':'Password','DHCP':'DHCP',
+  'Redes Disponiveis':'Available Networks','Redes Gerenciadas':'Managed Networks',
+  'Adicionar Rede':'Add Network','Logs do Sistema':'System Logs',
+  'Atualizar':'Refresh','Administracao':'Administration','Sair':'Logout',
+  'Alterar Senha':'Change Password','Usuario':'User','Senha atual':'Current Password',
+  'Nova senha':'New Password','Gerenciar Usuarios':'Manage Users',
+  'Novo usuario':'New User','Adicionar':'Add','Atualizacao de Firmware':'Firmware Update',
+  'Versao atual':'Current version','Selecionar':'Select','Atualizar':'Update',
+  'Aguardando...':'Waiting...','Dispositivo':'Device','Reiniciar':'Reboot',
+  'Reset de Fabrica':'Factory Reset','Chip':'Chip','CPU':'CPU','Temp':'Temp',
+  'Nucleos':'Cores','Firmware':'Firmware','Sketch':'Sketch',
+  'Memoria':'Memory','RAM':'RAM','PSRAM':'PSRAM','Flash':'Flash',
+  'Rede':'Network','Gateway':'Gateway','Mascara':'Mask','DNS':'DNS',
+  'Utilizacao':'Usage','Processador':'Processor','Uptime':'Uptime',
+  'Pinagem':'Pinout','Pino':'Pin','Nome':'Name','Funcao':'Function','Dir.':'Dir.',
+  'LED indicador':'Indicator LED','USB CDC (Console)':'USB CDC (Console)',
+  'Modelo':'Model','Status':'Status','TX/RX':'TX/RX','RF Out':'RF Out',
+  'SWR':'SWR','V PA':'V PA','I PA':'I PA','Temp':'Temp','Band':'Band',
+  'Antenna':'Antenna','Input':'Input','ALARM':'ALARM','WARNING':'WARNING',
+  'Cat':'Cat','Disp':'Disp','Set':'Set','PWR':'PWR','OP':'OP',
+  'On':'On','Off':'Off','Antena':'Antenna','Tunner':'Tuner',
+  'KW':'KW','YS':'YS','HP':'HP','FR':'FR',
+  'Copyright':'Copyright','Salvar IP':'Save IP','Salvar AP':'Save AP',
+  'Salvar STA':'Save STA','Salvar Bluetooth':'Save Bluetooth',
+  'Escaneando...':'Scanning...','Nenhum':'None','livre':'free','usado':'used','total':'total'
+};
+function tr(k){return _lang=='en'&&_en[k]?_en[k]:k;}
+function setLang(l){
+  _lang=l;
+  document.getElementById('langPtBtn').style.background=l=='pt'?'#4fc3f7':'transparent';
+  document.getElementById('langPtBtn').style.border=l=='pt'?'none':'1px solid #4fc3f7';
+  document.getElementById('langPtBtn').style.color=l=='pt'?'#0d1b2a':'#4fc3f7';
+  document.getElementById('langEnBtn').style.background=l=='en'?'#4fc3f7':'transparent';
+  document.getElementById('langEnBtn').style.border=l=='en'?'none':'1px solid #4fc3f7';
+  document.getElementById('langEnBtn').style.color=l=='en'?'#0d1b2a':'#4fc3f7';
+  applyLang();
+  try{localStorage.setItem('catbridge_lang',l);}catch(e){}
+}
+function applyLang(){
+  document.querySelectorAll('[data-i18n]').forEach(function(el){
+    var k=el.getAttribute('data-i18n');
+    if(_lang=='en'&&_en[k]) el.textContent=_en[k]; else if(_lang=='pt') el.textContent=k;
+  });
+  // Traduzir botoes das abas
+  document.querySelectorAll('.tab').forEach(function(b){
+    var t=b.getAttribute('data-tab');
+    var n={radio:tr('Radio'),ic705:'IC-705',spe:tr('SPE'),hamplus:tr('Hamplus'),wifi:tr('WiFi'),bluetooth:tr('Bluetooth'),civ:tr('CAT / CI-V'),logs:tr('Logs'),admin:tr('Admin'),status:tr('Status')};
+    if(n[t])b.textContent=n[t];
+  });
+}
+// Restore language
+try{var sv=localStorage.getItem('catbridge_lang');if(sv)setLang(sv);}catch(e){}
+
 function st(el){
-var tab=el.getAttribute('data-tab');
+  var tab=el.getAttribute('data-tab');
 var tabs=document.querySelectorAll('.tab');
 for(var i=0;i<tabs.length;i++)tabs[i].classList.remove('active');
 var conts=document.querySelectorAll('[id^="tb-"]');
