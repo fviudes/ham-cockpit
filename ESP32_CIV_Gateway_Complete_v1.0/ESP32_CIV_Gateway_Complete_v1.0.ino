@@ -36,31 +36,26 @@
 #define FIRMWARE_VERSION "1.0.4"
 #define PIN_LED 2       // LED simples (liga/desliga)
 #define PIN_LED_RGB 48  // LED RGB (WS2812/Neopixel) - ESP32-S3 DevKitC-1
-// Controle LED RGB (WS2812) via RMT
-#include <esp32-hal-rmt.h>
-static bool rgb_ok = false;
-static rmt_obj_t* rmt_led = NULL;
-
+// Controle LED RGB (WS2812) via software (portavel, sem bibliotecas)
+static uint32_t grb_val = 0;
 void rgb_set(uint8_t r, uint8_t g, uint8_t b) {
-  if(!rgb_ok) {
-    rmt_led = rmtInit(PIN_LED_RGB, true, RMT_MEM_64);
-    if(rmt_led == NULL) { Serial.println("[LED] RGB init fail"); return; }
-    rmtSetTick(rmt_led, 100);
-    rgb_ok = true;
-  }
-  uint32_t grb = (g << 16) | (r << 8) | b;
-  rmt_data_t data[24];
-  for(int i = 0; i < 24; i++) {
-    if(grb & (1 << (23 - i))) {
-      data[i].level0 = 1; data[i].duration0 = 8;
-      data[i].level1 = 0; data[i].duration1 = 5;
+  grb_val = (g << 16) | (r << 8) | b;
+  pinMode(PIN_LED_RGB, OUTPUT);
+  // WS2812: GRB, 24 bits, timing aproximado com NOPs no ESP32 240MHz
+  noInterrupts();
+  uint32_t mask = 0x800000;
+  while(mask) {
+    if(grb_val & mask) {
+      digitalWrite(PIN_LED_RGB, HIGH); __asm__ __volatile__ ("nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop;");
+      digitalWrite(PIN_LED_RGB, LOW);  __asm__ __volatile__ ("nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop;");
     } else {
-      data[i].level0 = 1; data[i].duration0 = 4;
-      data[i].level1 = 0; data[i].duration1 = 9;
+      digitalWrite(PIN_LED_RGB, HIGH); __asm__ __volatile__ ("nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop;");
+      digitalWrite(PIN_LED_RGB, LOW);  __asm__ __volatile__ ("nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop; nop;");
     }
+    mask >>= 1;
   }
-  rmtWrite(rmt_led, data, 24);
-  delay(1);
+  interrupts();
+  delayMicroseconds(60); // RESET pulse
 }
 #define PORT1_RX 16
 #define PORT1_TX 17
