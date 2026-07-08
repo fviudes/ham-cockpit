@@ -34,7 +34,11 @@
 
 // ===================== HARDWARE =====================
 #define FIRMWARE_VERSION "1.0.4"
-#define PIN_LED 2
+#define PIN_LED 2       // LED simples (liga/desliga)
+// Se sua placa tiver LED RGB (WS2812/Neopixel) em outro pino, defina aqui:
+// #define PIN_LED_RGB 48  // Descomente e ajuste conforme sua placa
+// #include <Adafruit_NeoPixel.h>
+// Adafruit_NeoPixel rgb(1, PIN_LED_RGB, NEO_GRB + NEO_KHZ800);
 #define PORT1_RX 16
 #define PORT1_TX 17
 #define PORT2_RX 18
@@ -1679,11 +1683,15 @@ void setup_sta() {
 
 void wifi_conn_tick() {
   if(!wifi_connecting) return;
+  // LED pisca durante conexao WiFi
+  static unsigned long last_led_tog=0;
+  if(millis()-last_led_tog>500){last_led_tog=millis();digitalWrite(PIN_LED,!digitalRead(PIN_LED));}
   // WiFi conectou
   if(WiFi.status()==WL_CONNECTED) {
     wifi_connecting=false;
     wifi_net_current=-1;
     sta_con=true;
+    digitalWrite(PIN_LED,HIGH); // WiFi conectado → LED aceso (azul se RGB)
     addLog("WiFi","Conectado! IP: %s",WiFi.localIP().toString().c_str());
     Serial.printf("[WiFi] Conectado! IP: %s\n",WiFi.localIP().toString().c_str());
     return;
@@ -2536,14 +2544,15 @@ var _en={
 function tr(k){return _lang=='en'&&_en[k]?_en[k]:k;}
 function setLang(l){
   _lang=l;
-  document.getElementById('langPtBtn').style.background=l=='pt'?'#4fc3f7':'transparent';
-  document.getElementById('langPtBtn').style.border=l=='pt'?'none':'1px solid #4fc3f7';
-  document.getElementById('langPtBtn').style.color=l=='pt'?'#0d1b2a':'#4fc3f7';
-  document.getElementById('langEnBtn').style.background=l=='en'?'#4fc3f7':'transparent';
-  document.getElementById('langEnBtn').style.border=l=='en'?'none':'1px solid #4fc3f7';
-  document.getElementById('langEnBtn').style.color=l=='en'?'#0d1b2a':'#4fc3f7';
-  applyLang();
   try{localStorage.setItem('catbridge_lang',l);}catch(e){}
+  if(l=='pt'){window.location.reload();return;}
+  document.getElementById('langPtBtn').style.background='transparent';
+  document.getElementById('langPtBtn').style.border='1px solid #4fc3f7';
+  document.getElementById('langPtBtn').style.color='#4fc3f7';
+  document.getElementById('langEnBtn').style.background='#4fc3f7';
+  document.getElementById('langEnBtn').style.border='none';
+  document.getElementById('langEnBtn').style.color='#0d1b2a';
+  applyLang();
 }
 function applyLang(){
   document.title=_lang=='en'?'CAT-Bridge - Control Panel':'CAT-Bridge';
@@ -2570,7 +2579,7 @@ function applyLang(){
   document.querySelectorAll('option').forEach(function(e){if(_en[e.textContent])e.textContent=_en[e.textContent];});
 }
 // Restore language
-try{var sv=localStorage.getItem('catbridge_lang');if(sv)setLang(sv);}catch(e){}
+try{var sv=localStorage.getItem('catbridge_lang');if(sv=='en'){_lang='en';document.getElementById('langPtBtn').style.background='transparent';document.getElementById('langPtBtn').style.border='1px solid #4fc3f7';document.getElementById('langPtBtn').style.color='#4fc3f7';document.getElementById('langEnBtn').style.background='#4fc3f7';document.getElementById('langEnBtn').style.border='none';document.getElementById('langEnBtn').style.color='#0d1b2a';applyLang();}}catch(e){}
 
 function st(el){
   var tab=el.getAttribute('data-tab');
@@ -3639,13 +3648,17 @@ void h_logs() {
 // ===================== SETUP =====================
 void setup() {
   Serial.begin(SERIAL_BAUD);
-  pinMode(PIN_LED,OUTPUT); digitalWrite(PIN_LED,LOW);
+  pinMode(PIN_LED,OUTPUT); digitalWrite(PIN_LED,HIGH); // LED ligado ao iniciar
 
   // Aguarda Serial Monitor conectar (ate 5s)
   for(int i=0;i<5;i++){delay(1000);Serial.printf("\n[BOOT] Aguardando Serial... %ds\n",5-i);if(Serial)break;}
 
   Serial.println("\n=== CAT-Bridge CAT/CI-V/BT Gateway v" FIRMWARE_VERSION " ===\n");
   Serial.println("[BOOT] Iniciando...");
+  // LED boot: pisca 10x (durante carregamento do firmware/config)
+  digitalWrite(PIN_LED,HIGH);
+  for(int i=0;i<10;i++){ digitalWrite(PIN_LED,!digitalRead(PIN_LED)); delay(100); }
+  digitalWrite(PIN_LED,HIGH);
   load_cfg();
 
   p1.begin(cfg.civ_baud[0],SERIAL_8N1,PORT1_RX,PORT1_TX);
@@ -3677,7 +3690,7 @@ void setup() {
     scan_ic5();
   }
 
-  digitalWrite(PIN_LED,HIGH);
+  if(sta_con) digitalWrite(PIN_LED,HIGH); else digitalWrite(PIN_LED,LOW); // WiFi OK → LED aceso
   addLog("SYS","Pronto! Web: http://%s/ BLE: %s",WiFi.softAPIP().toString().c_str(),cfg.bt_name.c_str());
   Serial.println("\n[SYS] Pronto!\n");
   Serial.printf("Web: http://%s/\n",WiFi.softAPIP().toString().c_str());
