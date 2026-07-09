@@ -4089,13 +4089,15 @@ void loop() {
   bridge_nusp();
   bridge_pnus();
 
-  // Calculo de CPU
+  // Calculo de CPU (corrigido: sem valores negativos)
   static unsigned long last_cpu_check = 0;
   unsigned long now = millis();
   if(now - last_cpu_check >= 1000) {
     unsigned long cur = loop_iters - last_loop_iters;
     if(cur > max_loop_iters) max_loop_iters = cur;
-    cpu_pct = max_loop_iters > 0 ? 100 - (cur * 100 / max_loop_iters) : 0;
+    else max_loop_iters = max_loop_iters - (max_loop_iters >> 7); // decay suave
+    if(max_loop_iters < 1) max_loop_iters = 1;
+    cpu_pct = max_loop_iters > 0 ? 100 - min(100UL, cur * 100 / max_loop_iters) : 0;
     last_loop_iters = loop_iters;
     last_cpu_check = now;
     // WiFi utilizacao: req/s normalizado (max ~50 req/s)
