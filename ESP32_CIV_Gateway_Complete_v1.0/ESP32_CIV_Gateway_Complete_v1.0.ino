@@ -806,7 +806,7 @@ void poll_ic5() {
   if(!ic5con||!ic5civ) return;
   unsigned long now=millis();
   // Polling mais lento (2s) para nao sobrecarregar
-  if(now-last_poll>=200) {
+  if(now-last_poll>=500) {
     uint8_t cmd[]={CIV_PRE,CIV_PRE,civ_ic705_addr,CIV_CTRL,C_F_READ,CIV_END};
     send_civ(cmd,sizeof(cmd)); last_poll=now;
   }
@@ -3499,11 +3499,11 @@ if(!confirm('CONFIRMO! Desejo restaurar para fabrica.'))return;
 envia('/api/save',{factory:true});
 }
 carregar();
-window._smInt=setInterval(pollSmeter,200);
+window._smInt=setInterval(pollSmeter,500);
 setTimeout(carregarCfg,300);
 setTimeout(carregarRedes,600);
 setTimeout(carregarBT,900);
-setInterval(carregar,200);
+setInterval(carregar,1000);
 </script>
 <div style="text-align:center;padding:12px;font-size:10px;color:#555;border-top:1px solid rgba(79,195,247,0.1);margin-top:12px">
 Copyright &copy; ForceIT by PR2PT &mdash; <a href="http://forceit.com.br" style="color:#4fc3f7;text-decoration:none" target="_blank">forceit.com.br</a> &mdash; <a href="https://hamportal.cc" style="color:#4fc3f7;text-decoration:none" target="_blank">hamportal.cc</a>
