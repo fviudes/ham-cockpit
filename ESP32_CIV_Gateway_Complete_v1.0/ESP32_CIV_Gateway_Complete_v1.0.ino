@@ -2670,7 +2670,17 @@ LED simples (GPIO2): pisca durante boot, acende quando WiFi conecta<br><br>
 
 <strong style="color:#FFB300">14. Idioma / Language</strong><br>
 Clique PT/EN no topo da p&aacute;gina. A prefer&ecirc;ncia fica salva no navegador (localStorage).<br>
-<em>EN: Click PT/EN at page top. Preference saved in browser (localStorage).</em>
+<em>EN: Click PT/EN at page top. Preference saved in browser (localStorage).</em><br><br>
+
+<strong style="color:#FFB300">15. Refer&ecirc;ncias / References</strong><br>
+<strong>SPE Expert 1.3K-FA:</strong> <a href="https://www.spetlc.com/en/download-3kfa-uk.html" target="_blank" style="color:#4fc3f7">Application Programmer&rsquo;s Guide</a> &bull; Manual do usu&aacute;rio incluso no projeto<br>
+<strong>Icom IC-705:</strong> <a href="https://www.icomjapan.com/support/manual/" target="_blank" style="color:#4fc3f7">Icom CI-V Reference</a> &bull; CI-V ref no manual do IC-705<br>
+<strong>Yaesu FTX-1:</strong> <a href="https://www.radiomanual.info/schemi/YAESU_HF/FTX-1_series_CAT_user_2025.pdf" target="_blank" style="color:#4fc3f7">CAT User Guide</a> &bull; Protocolo CAT Yaesu<br>
+<strong>Kenwood TS-480:</strong> <a href="https://www.kenwood.com/i/products/info/amateur/ts_480/pdf/ts_480_pc.pdf" target="_blank" style="color:#4fc3f7">PC Control Command</a> &bull; Comandos CAT Kenwood<br>
+<strong>FlexRadio:</strong> <a href="https://www.flexradio.com/documentation/" target="_blank" style="color:#4fc3f7">SmartSDR CAT User Guide</a> &bull; Protocolo FlexRadio (Kenwood-compat&iacute;vel)<br>
+<strong>Hamplus AS-603WL:</strong> <a href="https://hamplus.com/wp-content/uploads/2024/12/Manual-AS-603WL-V.2.2.2-English.pdf" target="_blank" style="color:#4fc3f7">Manual HP603 Protocol</a> &bull; Protocolo da chaveadora<br>
+<strong>Palstar AT-AUTO:</strong> <a href="https://www.randl.com/man2/palstar/atauto.pdf" target="_blank" style="color:#4fc3f7">AT-AUTO Manual</a> &bull; Se&ccedil;&atilde;o de protocolo RS232 (p&aacute;gs 53-61)<br>
+<em>EN: Reference links for external device configuration sources. All manuals are included in the project repository.</em>
 </div>
 </div>
 <div id="tb-civ" style="display:none"><h2>CAT / CI-V</h2>
