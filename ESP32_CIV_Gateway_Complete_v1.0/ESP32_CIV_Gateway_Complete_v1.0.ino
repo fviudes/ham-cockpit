@@ -2594,38 +2594,83 @@ WARN: <span id="spe_warn_txt_display"></span>
 </div>
 </div>
 <div id="tb-manual" style="display:none"><h2>Manual / User Guide</h2>
-<div class="card" style="font-size:11px;line-height:1.5;color:#cbd5e1">
-<strong style="color:#FFB300">1. Introdu&ccedil;&atilde;o / Introduction</strong><br>
-<i>PT:</i> CAT-Bridge &eacute; um gateway multi-protocolo para r&aacute;dios Icom, Yaesu, Kenwood, FlexRadio, amplificador SPE Expert, chaveadora Hamplus e tuner Palstar AT-AUTO. Conecta at&eacute; 4 dispositivos via portas seriais e o IC-705 via BLE.<br>
-<i>EN:</i> CAT-Bridge is a multi-protocol gateway for Icom, Yaesu, Kenwood, FlexRadio radios, SPE Expert amplifier, Hamplus antenna switch and Palstar AT-AUTO tuner. Connects up to 4 devices via serial ports and IC-705 via BLE.<br><br>
-
-<strong style="color:#FFB300">2. Conex&otilde;es / Connections</strong><br>
+<div class="card" style="font-size:10px;line-height:1.5;color:#cbd5e1">
+<strong style="color:#FFB300">1. Conex&otilde;es F&iacute;sicas / Wiring</strong><br>
 PORT1: RX=GPIO16 TX=GPIO17 &bull; PORT2: RX=GPIO18 TX=GPIO19<br>
-PORT3: RX=GPIO20 TX=GPIO21 &bull; PORT4: RX=GPIO14 TX=GPIO15 (SPE RS232)<br>
-LED RGB: GPIO48 (WS2812) &bull; LED simples: GPIO2<br><br>
+PORT3: RX=GPIO20 TX=GPIO21 &bull; PORT4: RX=GPIO14 TX=GPIO15 (SPE c/ MAX3232)<br>
+LED RGB: GPIO48 &bull; LED: GPIO2 &bull; USB: GPIO43/44 (console)<br>
+<em>EN: PORT1-3 use TTL 3.3V direct. PORT4 needs RS232 (MAX3232) for SPE.</em><br><br>
 
-<strong style="color:#FFB300">3. Protocolos / Protocols</strong><br>
-Cada porta pode ser configurada individualmente na aba <strong>CAT / CI-V</strong> com Enable/Disable, Protocolo e Baud. Protocolos dispon&iacute;veis: Icom CI-V, SPE, Yaesu CAT, Kenwood CAT, FlexRadio, Hamplus HP603, Palstar AT-AUTO.<br>
-<i>EN:</i> Each port can be configured individually in the <strong>CAT / CI-V</strong> tab with Enable/Disable, Protocol and Baud. Available protocols: Icom CI-V, SPE, Yaesu CAT, Kenwood CAT, FlexRadio, Hamplus HP603, Palstar AT-AUTO.<br><br>
+<strong style="color:#FFB300">2. Primeiro Uso / First Use</strong><br>
+1. Conecte o cabo USB ao PC &bull; <em>Connect USB cable to PC</em><br>
+2. IDE Arduino: placa ESP32S3 Dev Module, PSRAM OPI, Huge APP (3MB)<br>
+3. Fa&ccedil;a upload do firmware &bull; <em>Upload the firmware</em><br>
+4. Conecte ao WiFi AP: <strong>CAT-Bridge</strong> (senha: 12345678)<br>
+5. Abra http://192.168.4.1 no navegador &bull; <em>Open in browser</em><br>
+6. Login: admin / 1234<br><br>
 
-<strong style="color:#FFB300">4. IC-705 via BLE</strong><br>
-Na aba <strong>IC-705</strong>, ative CAT, escaneie e pareie. Ap&oacute;s pareamento, o barramento CI-V &eacute; liberado. O r&aacute;dio pode ser controlado via aba <strong>Radio</strong>.<br>
-<i>EN:</i> In the <strong>IC-705</strong> tab, enable CAT, scan and pair. After pairing, the CI-V bus is released. The radio can be controlled via the <strong>Radio</strong> tab.<br><br>
+<strong style="color:#FFB300">3. Configurar WiFi / WiFi Setup</strong><br>
+Aba <strong>WiFi</strong>: configure o AP (nome/senha) ou adicione redes STA. V&aacute;rias redes podem ser adicionadas com prioridade. O IP pode ser DHCP ou fixo.<br>
+<em>EN: <strong>WiFi</strong> tab: configure AP (name/password) or add STA networks. Multiple networks with priority. IP can be DHCP or static.</em><br>
+Para conectar o CAT-Bridge &agrave; sua rede: aba WiFi &rarr; Redes Gerenciadas &rarr; + Adicionar Rede &rarr; digite SSID e senha &rarr; Salvar. O dispositivo conecta automaticamente.<br>
+<em>EN: To connect to your network: WiFi tab &rarr; Managed Networks &rarr; + Add Network &rarr; enter SSID and password &rarr; Save. Device connects automatically.</em><br><br>
 
-<strong style="color:#FFB300">5. Tradutores / Translators</strong><br>
-A bridge converte automaticamente entre protocolos: CI-V &harr; SPE (PTT), CI-V &harr; CAT (freq/modo/PTT), CAT &harr; SPE (PTT). Frequ&ecirc;ncia de qualquer fonte &eacute; enviada ao Palstar via QSY.<br>
-<i>EN:</i> The bridge automatically converts between protocols: CI-V &harr; SPE (PTT), CI-V &harr; CAT (freq/mode/PTT), CAT &harr; SPE (PTT). Frequency from any source is sent to Palstar via QSY.<br><br>
+<strong style="color:#FFB300">4. Configurar Portas / Port Setup</strong><br>
+Aba <strong>CAT / CI-V</strong>: 4 cards (PORT1-4). Cada porta tem:<br>
+<strong>Enable:</strong> ativa/desativa a porta &bull; <strong>Protocolo:</strong> CI-V, SPE, Yaesu, Kenwood, FlexRadio, Hamplus, Palstar &bull; <strong>Baud:</strong> taxa de comunica&ccedil;&atilde;o &bull; <strong>Endere&ccedil;o CI-V:</strong> apenas para CI-V<br>
+<em>EN: <strong>CAT / CI-V</strong> tab: 4 cards (PORT1-4). Each port has Enable, Protocol, Baud, CI-V Address (CI-V only).</em><br>
+Clique <strong>Salvar Todas</strong> para aplicar &bull; <em>Click <strong>Save All</strong> to apply.</em><br>
+Protocolos recomendados por dispositivo:<br>
+Icom IC-705 &rarr; CI-V (BLE) &bull; Outros Icom &rarr; CI-V (porta serial)<br>
+Yaesu FT-x &rarr; Yaesu CAT (38400 baud) &bull; Kenwood TS-x &rarr; Kenwood CAT (38400)<br>
+FlexRadio &rarr; FlexRadio (38400) &bull; SPE Expert &rarr; SPE (9600, PORT4 RS232)<br>
+Hamplus AS-603WL &rarr; Hamplus HP603 (9600) &bull; Palstar AT-AUTO &rarr; Palstar (9600)<br><br>
 
-<strong style="color:#FFB300">6. Abas / Tabs</strong><br>
-<strong>Radio:</strong> Controle do r&aacute;dio ativo (freq, modo, PTT, ganhos, bandas) &bull; <strong>IC-705:</strong> Configura&ccedil;&atilde;o BLE/CAT &bull; <strong>SPE:</strong> Display LCD e controle do amplificador &bull; <strong>Hamplus:</strong> Chaveadora de antenas e r&aacute;dios &bull; <strong>Palstar:</strong> Display e controle do tuner &bull; <strong>WiFi:</strong> Redes e IP &bull; <strong>CAT / CI-V:</strong> Configura&ccedil;&atilde;o das 4 portas &bull; <strong>Status:</strong> Monitoramento CPU/RAM/Rede/gr&aacute;ficos &bull; <strong>Admin:</strong> Usu&aacute;rios, firmware, reboot, reset &bull; <strong>Logs:</strong> Logs do sistema<br><br>
+<strong style="color:#FFB300">5. IC-705 via Bluetooth</strong><br>
+Aba <strong>IC-705</strong>: ative o checkbox CAT. No IC-705: Menu &rarr; Set &rarr; Bluetooth Set &rarr; Pairing Reception. Clique <strong>Escanear IC-705</strong>. O ESP32 conecta automaticamente. Ap&oacute;s pareamento, o barramento CI-V &eacute; liberado.<br>
+<em>EN: <strong>IC-705</strong> tab: enable CAT checkbox. On IC-705: Menu &rarr; Set &rarr; Bluetooth Set &rarr; Pairing Reception. Click <strong>Scan IC-705</strong>. ESP32 connects automatically. After pairing, CI-V bus is released.</em><br>
+A aba <strong>Bluetooth</strong> permite escanear outros dispositivos BLE e salvar endere&ccedil;os.<br>
+<em>EN: <strong>Bluetooth</strong> tab scans for BLE devices and saves addresses.</em><br><br>
 
-<strong style="color:#FFB300">7. LEDs</strong><br>
-Boot/carregando: <span style="color:#ef4444">Vermelho</span> &bull; WiFi conectado: <span style="color:#4fc3f7">Azul</span> &bull; AP only (sem STA): vermelho fraco<br>
-<i>EN:</i> Boot/loading: <span style="color:#ef4444">Red</span> &bull; WiFi connected: <span style="color:#4fc3f7">Blue</span> &bull; AP only (no STA): dim red<br><br>
+<strong style="color:#FFB300">6. Operar o R&aacute;dio / Radio Operation</strong><br>
+Aba <strong>Radio</strong>: painel completo com frequ&ecirc;ncia (bot&otilde;es +/- 1kHz), modos (USB/LSB/AM/FM/CW/DV), bandas (160m-70cm), PTT, S-meter, AGC, PRE/ATT, RF/AF gain. Os sliders de RF/AF atualizam em tempo real.<br>
+<em>EN: <strong>Radio</strong> tab: full control panel with frequency (+/- 1kHz buttons), modes, bands, PTT, S-meter, AGC, PRE/ATT, RF/AF gain sliders.</em><br><br>
 
-<strong style="color:#FFB300">8. Idioma / Language</strong><br>
-Clique PT/EN no topo da p&aacute;gina para alternar. A prefer&ecirc;ncia &eacute; salva no navegador.<br>
-<i>EN:</i> Click PT/EN at the top of the page to switch. Preference is saved in the browser.
+<strong style="color:#FFB300">7. SPE Expert Amplifier</strong><br>
+Aba <strong>SPE</strong>: display LCD simulando o painel do amplificador (RF Out, SWR, V PA, I PA, temperatura, modo OPERATE/STBY). Bot&otilde;es do painel frontal: Input, Antena, Band, L, C, Tune, Set, Cat, Disp, PWR, OP, Off. Setas de navega&ccedil;&atilde;o. LEDs de AL, Tune, Off, ON, OP, TX.<br>
+<em>EN: <strong>SPE</strong> tab: LCD display simulating the amplifier panel. Front panel buttons, navigation arrows, status LEDs.</em><br>
+Configura&ccedil;&atilde;o: PORT4 com protocolo SPE, 9600 baud, RS232 via MAX3232.<br><br>
+
+<strong style="color:#FFB300">8. Hamplus HP603</strong><br>
+Aba <strong>Hamplus</strong>: controle da chaveadora de antenas AS-603WL. LEDs Power/Send/Split, display do rotor (graus), sele&ccedil;&atilde;o de Rotor 1/2 com setas. 10 bot&otilde;es de antena (ANT1-6 ativos, 7-10 placeholder), 5 bot&otilde;es de r&aacute;dio (Radio1-3 ativos).<br>
+<em>EN: <strong>Hamplus</strong> tab: antenna switch control. Power/Send/Split LEDs, rotor display, antenna (ANT1-6 active) and radio (Radio1-3 active) selection.</em><br><br>
+
+<strong style="color:#FFB300">9. Palstar AT-AUTO</strong><br>
+Aba <strong>Palstar</strong>: display LCD mostrando modo (AUTO/MANUAL/BYPASS), antena (COAX/BAL), pot&ecirc;ncia FWD/REF, SWR, L e C. Bot&otilde;es: Auto, Manual, Bypass, Coax, Balanced, Home L&C, Tune. LEDs Tune/Match/Bypass.<br>
+<em>EN: <strong>Palstar</strong> tab: LCD display showing mode, antenna, forward/reflected power, SWR, L and C values. Mode and antenna selection buttons.</em><br>
+A frequ&ecirc;ncia do r&aacute;dio &eacute; enviada automaticamente ao Palstar via QSY (bridge).<br><br>
+
+<strong style="color:#FFB300">10. Tradutores Autom&aacute;ticos / Auto Translators</strong><br>
+O sistema converte automaticamente entre protocolos (bridge bidirecional):<br>
+CI-V &harr; SPE (PTT) &bull; CI-V &harr; Yaesu/Kenwood/FlexRadio (freq/modo/PTT)<br>
+Yaesu/Kenwood &harr; SPE (PTT) &bull; Frequ&ecirc;ncia &rarr; Palstar (QSY autom&aacute;tico)<br>
+<em>EN: Automatic bidirectional protocol conversion between all supported protocols.</em><br><br>
+
+<strong style="color:#FFB300">11. Status do Sistema / System Status</strong><br>
+Aba <strong>Status</strong>: monitora CPU, RAM, PSRAM, flash, WiFi, requisi&ccedil;&otilde;es, uptime. Gr&aacute;ficos hist&oacute;ricos de CPU, RAM e rede (60 minutos). Pinagem completa do ESP32.<br>
+<em>EN: <strong>Status</strong> tab: monitors CPU, RAM, PSRAM, flash, WiFi, requests, uptime. Historical charts (60 min) for CPU, RAM, network. Full pinout.</em><br><br>
+
+<strong style="color:#FFB300">12. Administra&ccedil;&atilde;o / Administration</strong><br>
+Aba <strong>Admin</strong>: alterar senha, gerenciar usu&aacute;rios, atualizar firmware (.bin via OTA), reiniciar o dispositivo, reset de f&aacute;brica (apaga TODAS as configura&ccedil;&otilde;es).<br>
+<em>EN: <strong>Admin</strong> tab: change password, manage users, firmware update, reboot, factory reset (erases ALL settings).</em><br><br>
+
+<strong style="color:#FFB300">13. LEDs Indicadores / Status LEDs</strong><br>
+Boot: <span style="color:#ef4444">Vermelho/Red</span> &bull; WiFi conectado: <span style="color:#4fc3f7">Azul/Blue</span> &bull; AP only: vermelho fraco<br>
+LED simples (GPIO2): pisca durante boot, acende quando WiFi conecta<br><br>
+
+<strong style="color:#FFB300">14. Idioma / Language</strong><br>
+Clique PT/EN no topo da p&aacute;gina. A prefer&ecirc;ncia fica salva no navegador (localStorage).<br>
+<em>EN: Click PT/EN at page top. Preference saved in browser (localStorage).</em>
 </div>
 </div>
 <div id="tb-civ" style="display:none"><h2>CAT / CI-V</h2>
