@@ -1636,6 +1636,21 @@ void translate_hp_to_others() {
   }
 }
 
+// ===================== PALSTAR BRIDGE =====================
+void translate_to_pal() {
+  if(!pal_is_active()) return;
+  static uint64_t last_freq = 0;
+  // Frequencia de outro protocolo → QSY no Palstar
+  if(ic5_freq != last_freq && ic5_freq > 100000) {
+    last_freq = ic5_freq;
+    uint8_t d[5]; uint64_t f = ic5_freq;
+    for(int i=0;i<5;i++){ d[i]=(((f%100)/10)<<4)|(f%10); f/=100; }
+    pal_send_cmd(0x05,0,d,5);
+    addLog("PAL","QSY %llu Hz", ic5_freq);
+  }
+}
+// Palstar → outros: SWR/power sao exibidos na aba, sem equivalente em CAT de radio
+
 // ===================== PROTOCOL TRANSLATORS =====================
 // Tradutor generico: IC-705 (CI-V via BLE) → porta CAT (Yaesu/Kenwood) ativa
 void translate_civ_to_cat() {
@@ -4057,6 +4072,8 @@ void loop() {
 
   // Palstar polling
   if(pal_is_active()){ pal_poll(); pal_read(); }
+  // Palstar bridge: frequencia de outros protocolos → QSY
+  if(pal_is_active()) translate_to_pal();
 
   // FlexRadio polling
   if(fr_is_active()){ fr_poll(); fr_read(); }
