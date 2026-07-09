@@ -1,0 +1,1206 @@
+
+===== PAGE 53 =====
+43
+Rear-Panel Pinouts and Interface
+Cables
+7.1 Radio/Computer Serial Data Interface
+The AT-AUTO is designed to interface with a computer’s serial port in order to enable
+the owner to load new ﬁrmware updates as they become available, and as a method of
+remotely controlling the AT-AUTO. The AT-AUTO ﬁrmware also includes unique operating
+enhancements that are only available when properly interfaced to a (ﬁrmware supported)
+CI-V/CAT capable transceiver.
+At the time of purchase, Palstar supplies an interface cable that is suitable for use with
+either Icom transceivers, most Kenwood, or some Yaesu transceivers. The information sup-
+plied in this section is provided to enable the AT-AUTO owner to construct interface cables
+suitable for his particular model of radio. Icom has had a standard serial communications
+interface (CI-V) for quite a few years, and Kenwood appears to have standardized on a
+common RS-232 serial connector and protocol. However, other manufacturers appear to
+randomly vary the CAT connector type (DIN, mini-DIN, DB9, etc.) as well as command
+syntax, and interface protocol (TTL/RS-232) from model to model.
+The AT-AUTO is directly compatible with most popular transceivers via it’s CI-V (Icom)
+interface and RS-232 interface (Kenwood, and many Yaesu rigs). The AT-AUTO is NOT
+directly compatible with CAT radios that use TTL data levels. In this case, the owner will
+need to supply an RS-232 to TTL level converter. Connecting the AT-AUTO’s RS-232 serial
+output to a radio that expects TTL voltage levels will very likely damage the radio. Palstar
+is not liable for damage caused by improper tuner to radio interfacing.
+Rear panel connector pinouts are provided in Table 7.1, and Figure 7.1 provides illustra-
+tions of the interfacing cabling.
+Note: When interfacing the AT-AUTO with CAT capable radios via the RS-232 port,
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 54 =====
+44
+Pin 7 (AT-AUTO processor reset) must remain unconnected, or the “Reset Enable” jumper
+must beOpen (See Figure 11.1).
+7.2 Radio Tuner Handshake
+The AT-AUTO is capable of controlling the low-power, constant carrier generation capability
+built into some Icom and Kenwood radios. This “Handshake” mode of operation requires
+connection of the AT-AUTO with either the Icom’s “tuner” interface or the Kenwood’s “AT”
+interface. The AT-AUTO ﬁrmware must be conﬁgured to support the speciﬁc type of radio,
+and is currently ONLY compatible with Icom and Kenwood. Do NOT attempt AT-AUTO
+- radio interfacing via the “Data/Handshake” connector with non-Icom or non-Kenwood
+radios. Kenwood radios require additional external circuitry (built into the Palstar-supplied
+interface cable) in order for the handshake feature to operate.
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 55 =====
+45
+Table 7.1: Rear Panel Connector Descriptions
+Outline Name Pinout
+1
+2
+3
+Power Pin 1 - No Connection
+Pin 2 - +12 VDC (≈ 3.5 A max while tuning)
+Pin 3 - DC Ground
+1
+234
+5
+Transceiver Data Pin 1 - TTL I/O
+Pin 2 - TTL I/O
+Pin 3 - No Internal Connection*
+Pin 4 - Signal Ground
+Pin 5 - Icom CI-V Bus I/O (Open Collector)
+234
+78 6
+15
+9
+RS-232/CAT** Pin 1 - No Connection
+Pin 2 - Serial Data Output (From AT-AUTO)
+Pin 3 - Serial Date Input (To AT-AUTO)
+Pin 4 - No Connection
+Pin 5 - Signal Ground
+Pin 6 - No Connection
+Pin 7 - AT-AUTO Processor Reset
+Pin 8 - No Connection
+Pin 9 - No Connection
+*Note: Some Palstar-supplied Icom interface cables include a wire which is connected be-
+tween Pin 3 of the Transceiver Data Input and Pin 3 of Icom Tuner plug. However, within
+the AT-AUTO, there is no internal connection to Pin 3 of the Transceiver Data Input.
+**Note: Voltages are RS-232 compliant and are NOT TTL compatible. If the intended
+radio uses TTL signal levels, a Level Converter is required. Consult your owner’s manual
+prior to connecting to this port.
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 56 =====
+46
+Upload CableFirmware
+5 3 2
+2 135
+9 6
+7
+DB9 Male
+DB9 Female
+AT−AUTO
+PC Serial Port
+9
+1
+6
+7
+1235
+6
+9
+5 123
+8 7
+6
+9
+AT−AUTO to CAT Cable
+for Kenwood, Yaesu, etc.
+DB9 Male
+AT−AUTO
+Radio CAT Port
+DB9 Female
+1
+4
+2
+5 6
+3
+1
+234
+5
+"AT" Plug
+Kenwood
+Data Input
+Transceiver
+Kenwood to AT−AUTO
+Circuitry built into Palstar−Supplied
+Kenwood "handshake" cable.
+*
+*
+1
+2
+3
+4
+1
+234
+5
+"Remote" Jack
+Data Input
+Transceiver Icom Tuner Plug
+Icom CI−V
+Auxiliary
+CI−V Jacks
+Icom to AT−AUTO
+N/C
++12V
+1
+2
+3
+Ground
+AT−AUTO DC Power Input
+Figure 7.1: Interface Cable Diagrams
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 57 =====
+47
+Remote Control
+8.1 General Description
+The AT-AUTO is remotely controllable from a computer serial port, or via the Icom CI-V
+bus. The Icom CI-V bus and protocol permit multiple transceivers and computers to operate
+nearly simultaneously, and the AT-AUTO command syntax has therefore been designed to
+be compatible with the Icom protocols.
+The AT-AUTO has a speciﬁc CI-V address (default 0xE0) (hexadecimal). The AT-AUTO
+will ignore any commands not addressed speciﬁcally to it. Additionally, all commands should
+originate from a speciﬁc CI-V address, that is diﬀerent from the AT-AUTO CI-V address.
+Any of the AT-AUTO’s commands may be sent to the AT-AUTO, regardless of its current
+operating mode (Automatic, Manual, orBypass).
+In order to enable remote control operation, the AT-AUTO must be conﬁgured to operate
+with either an “Icom Normal CI-V & Tuner I/O” or “Icom CI-V Only...”. If the radio that the
+AT-AUTO is connected to is NOT and Icom model, select “Icom CI-V Only...”. Additionally,
+ensure that the AT-AUTO’s internal hardware jumpers are conﬁgured appropriately (See
+Table 11.1).
+All commands are preceded by two identical header bytes (0xFE), and then followed by
+one trailer (end-of-command) byte which is always 0xFD. All commands are therefore of this
+format (commas added for clarity only):
+0xFE, 0xFE, To-Address, From-Address, Command, Command-Sub Byte(s), 0xFD. The
+AT-AUTO command set is shown in Table 8.1.
+8.1.1 Example Command Strings
+The controlling PC may be assigned any CI-V address. For these examples, assume that the
+controlling PC in assigned a CI-V address of 0x3A.
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 58 =====
+48
+To command the AT-AUTO to switch toManual mode, the PC would send the following
+command string:
+0xFE 0xFE 0xE0 0x3A 0x07 0x01 0xFD
+The AT-AUTO will switch toManual mode and acknowledge the command by sending:
+0xFE 0xFE 0x3A 0xE0 0xFB 0xFD.
+Likewise, to remotely select theBalanced RF output, the command from the PC would be:
+0xFE 0xFE 0xE0 0x3A 0x08 0x10 0xFD
+The AT-AUTO will immediately switch to theBalanced RF output and acknowledge the
+command by sending:
+0xFE 0xFE 0x3A 0xE0 0xFB 0xFD
+8.1.2 Sub-Command Structure and Data Syntax
+Generally, most commands include sub-command data bytes. For example, when command-
+ing a Capacitor position, the position is encoded into the command string. Sub-command
+bytes are always encoded as Binary-Coded-Decimal (BCD). Failure to encode them in BCD
+format will corrupt the command decoding and the command will fail.
+The sub-command data (frequency,C or L position, etc.) encoded in BCD format, is
+transmitted LSB (least signiﬁcant byte) ﬁrst. For example, to commandC to position of 274,
+the position (sub-command) bytes would be 0x74, and 0x02. The command string would
+therefore be:
+0xFE 0xFE 0xE0 0x3A 0x09 0x74 0x02 0xFD.
+Sending the QSY command (requires frequency information) to the AT-AUTO, the AT-
+AUTO will recall match settings for that frequency and automatically positionC and L to
+their corresponding match positions. For example, to QSY the AT-AUTO to 28.725,168
+MHz, the command string would be:
+0xFE 0xFE 0xE0 0x3A 0x05 0x68 0x51 0x72 0x28 0x00 0xFD.
+The AT-AUTO will respond to a “Read Status” command with the following string:
+0xFE, 0xFE, 0x3A, 0xE0, Output, Mode, Motor, L-Position, C-Position, Status, 0xFD
+Deﬁnitions of the information returned after a “Read Status” command are contained in
+Table 8.2.
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 59 =====
+49
+Table 8.1: Remote Control Command Set
+Command Command String
+(Header + the following string + Trailer)
+QSY 0x05 BCD0 BCD1 BCD2 BCD3 BCD4
+Read Status 0x06 0x05
+Read Power 0x06 0x06
+Set Automatic Mode 0x07 0x00
+Set Manual Mode 0x07 0x01
+Set Bypass Mode 0x07 0x02
+Select Coax 0x08 0x00
+Select Balanced 0x08 0x10
+Home L &C 0x0B
+Set C (0-397) 0x09 BCD-Lo BCD-Hi
+Set L* (0-13,120) 0x0A BCD-Lo BCD-Hi
+Note*: The position displayed in the LCD is the actual inductor position divided by 16.
+Valid range of inductor position is 0-13,120 (Shown on the LCD as 0-820).
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 60 =====
+50
+Table 8.2: AT-AUTO Response to Read Status Command
+Byte Value/Bit Deﬁnitions
+Output 0x00 - Through to Coax
+(Selected Output) 0x10 - Through to Balanced
+0x80 - Bypass to Coax
+0x90 - Bypass to Balanced
+Mode 0x00 - Automatic Mode
+(Active Mode) 0x01 - Manual Mode
+0x02 -Bypass Mode
+Motor Bit 7 - Set if C is commanded to a speciﬁc position
+(Stepper Motors) Bit 6 - Set if C is turning
+Bit 5 - Always Clear/No Meaning
+Bit 4 - Set ifL is commanded to a speciﬁc position
+Bit 3 - Set ifL is turning
+Bit 2 - Always Clear/No Meaning
+Bit 1 - Set ifC movement was/is Clockwise
+Bit 0 - Set ifL movement was/is Clockwise
+Inductor Position* 3 Bytes in BCD format. Example: 8,926 – 0x26 0x89 0x00
+Capacitor Position 2 Bytes in BCD format. Example: 257 – 0x57 0x02
+Status 0x00 - Stepper motors commanded to stop
+0x01 -Automatic mode idle
+0x02 - Automatic tuning in progress
+0x03 - Match not found
+0x04 - Match found, SWR≤ “Tune Stop SWR”, saving match settings
+0x05 - Match found, SWR≤ “Tune Start SWR”, saving match settings
+0x06 - Automatic mode QSY in progress
+0x07 - Automatic tuning aborted/timed out
+Note*: The position displayed in the LCD is the actual inductor position divided by 16.
+Valid range of inductor position is 0-13,120 (Shown on the LCD as 0-820).
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 61 =====
+51
+The AT-AUTO has four 10-bit hardware analog-to-digital converters. In order to improve
+SWR resolution at low input power levels, two of the A/D converters are conﬁgured and
+adjusted to provide high SWR resolution when using low RF input power levels. Likewise the
+remaining two A/D converters are intended for use when using high RF input power levels,
+when the low-power A/D converters would likely be saturated. If speciﬁc SWR information
+is required, the user’s particular computer application may calculate SWR from the available
+A/D converters. The output of the A/D converters is relative and not absolute. If speciﬁc
+power calibration is required, this may also be accomplished with custom user application
+software. The AT-AUTO “Read Power” command returns the conversion results for all four
+A/D converters in the following format:
+0xFE, 0xFE, 0x3A, 0xE0, Forward-High, Reﬂected-High, Forward-Low, Reﬂected-Low,
+0xFD
+Deﬁnitions of the individual bytes returned from a “Read Power” command are contained
+in Table 8.3.
+Table 8.3: AT-AUTO Response to Read Power Command
+Power (2 Bytes Each) Value
+Forward Power High (0-1024) Example: 374 - 0x74 0x03
+Reﬂected Power High (0-1024) Example: 12 - 0x12 0x00
+Forward Power Low (0-1024) Example: 927 - 0x27 0x09
+Reﬂected Power Low (0-1024) Example: 36 - 0x36 0x00
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 62 =====
+52
+Analog Power Meter
+The AT-AUTO includes a cross-needle Power/SWR meter based upon the popular Palstar
+PM2000A. The Wattmeter is provided as an operator convenience and is capable of reading
+peak-envelope-power (PEP) in SSB mode. The AT-AUTO controller circuitry is completely
+independent from the Wattmeter circuitry and the Wattmeter switch settings have no eﬀect
+on operation of the AT-AUTO. There is also an operator-selectable dual-range power level
+switch (300 W or 3000 W) in order to improve the displayed power resolution.
+9.1 Reading Peak Power
+The LAMP button controls both the SWR meter illumination as well as power to the
+PEAK and PEAK/HOLD circuitry and must beOn in order to read peak power. De-
+pressing the front panelPEAK button will activate the active peak power circuitry and
+the meter will then display PEP and exhibit fast attack and approximately 1.5 second delay
+time. The displayed PEP will be approximately 95-100% of the SSB signal PEP, but may
+vary depending upon the tonal and inﬂection characteristics of the user’s voice (displayed
+power may be greater). If the PEAK/HOLD button is depressed, the maximum PEP
+measured will be “held” on the meter display for approximately two seconds. This feature
+is provided to make it easier to observe the actual peak output power.
+For CW signals, the peak power is synonymous with average power. Therefore, a trans-
+mitter’s single tone (CW) signal should yield the same displayed power level regardless of
+whether the meter is set to display the average or peak power (switch selection set toA VG
+or PEAK, respectively).
+Note: The PEAK/A VGswitch must be depressed in order for thePEAK/HOLD
+feature to function properly.
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 63 =====
+53
+9.2 Calibration
+The meter was calibrated at the Palstar factory. However, if the user determines that
+calibration is required, please follow thisprocedure:
+1. Connect the AT-AUTO coaxial output to another calibrated Wattmeter of known
+accuracy.
+2. Terminate the output of the calibrated Wattmeter into a 50 Ω dummy load.
+3. Set the AT-AUTO toBypass mode.
+4. Deselect thePEAK/HOLD feature.
+5. Turn On the meterLAMP (to supply DC power to the meter circuitry).
+6. Calibrate the low-rangeA VGforward power display
+(a) Set the AT-AUTO Wattmeter to the 300 W power range.
+(b) Set the AT-AUTO Wattmeter to readA VGpower.
+(c) Connect the output of an HF transmitter to the AT-AUTO RF input.
+(d) Apply an approximate 100 W CW carrier to the AT-AUTO.
+(e) Adjust theFOR LOpotentiometer (Figure 9.1) so that the AT-AUTO’s forward
+power indication matches that shown on the calibrated Wattmeter.
+7. Calibrate the low-rangePEAK forward power display
+(a) Set the AT-AUTO Wattmeter to readPEAK power.
+(b) Apply an approximate 100 W CW carrier to the AT-AUTO.
+(c) Adjust thePEAK LO potentiometer (Figure 9.1) so that the AT-AUTO’s for-
+ward power indication matches that shown on the calibrated Wattmeter.
+8. Calibrate the high-rangePEAK forward power display
+(a) Set the AT-AUTO Wattmeter to the 3000 W power range.
+(b) Apply an approximate 500-1000 W CW carrier to the AT-AUTO.
+(c) Adjust thePEAK HIpotentiometer (Figure 9.1) so that the AT-AUTO’s forward
+power indication matches that shown on the calibrated Wattmeter.
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 64 =====
+54
+9. Calibrate the high-rangeA VGforward power display
+(a) Set the AT-AUTO Wattmeter to readA VGpower.
+(b) Apply an approximate 500-1000 W CW carrier to the AT-AUTO.
+(c) Adjust theFOR HIpotentiometer (Figure 9.1) so that the AT-AUTO’s forward
+power indication matches that shown on the calibrated Wattmeter.
+10. Reverse the AT-AUTO coaxial input and output (connect transmitter output to AT-
+AUTO coaxial output, connect AT-AUTO coaxial input to calibrated Wattmeter,
+which terminates into a 50 Ω dummy load.
+11. Calibrate the high-range reﬂected power display
+(a) Apply an approximate 20-50 W CW carrier to the AT-AUTO.
+(b) Adjust the REV HI potentiometer (Figure 9.1) so that the AT-AUTO’s re-
+ﬂected power indication matches the forward power displayed on the calibrated
+Wattmeter.
+12. Calibrate the low-range reﬂected power display
+(a) Set the AT-AUTO Wattmeter to the 300 W power range.
+(b) Apply an approximate 10-20 W CW carrier to the AT-AUTO.
+(c) Adjust the REV LO potentiometer (Figure 9.1) so that the AT-AUTO’s re-
+ﬂected power indication matches the forward power displayed on the calibrated
+Wattmeter.
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 65 =====
+55
+Figure 9.1: Meter Board Adjustment Locations
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 66 =====
+56
+Operating Tips
+10.1 QRO Operation
+When using a high-power ampliﬁer with the AT-AUTO, the AT-AUTO would occasionally
+automatically attempt to retune during SSB transmissions. This problem was addressed in
+ﬁrmware version 2.0, and testing shows that the problem is greatly mitigated. However, to
+prevent this from happening, the user may disable “Autonomous” automatic tuning (See
+Conﬁguration Section), or else selectManual mode after the AT-AUTO has successfully
+completed the automatic tuning attempt.
+10.2 CI-V Passive Listening
+When multiple controllers attempt to control (query) the same transceiver, data collisions
+often occur. The data collisions corrupt the frequency data and manifest as erratic/erroneous
+AT-AUTO frequency-following.
+The solution is ensure that only one device (AT-AUTO or computer logging software, etc.)
+is permitted to query the radio for frequency information, while the AT-AUTO, computer
+software, and any other controller on the data bus merely “listen” for the radio’s response
+to the singular frequency queries.
+For example, if the user has a computer logging program which accesses the CI-V bus
+and queries the radio at regular intervals, the user may reduce the likelihood of CI-V data
+bus collisions by preventing the AT-AUTO from querying the radio, and preventing the
+radio from autonomously placing uncommanded data on the CI-V bus (set data transceive
+to Oﬀ). The AT-AUTO will now follow frequency information sent as a result of a query
+generated by the computer logging program. In this case, the user should set the AT-AUTO
+CI-V address to match the CI-V address of the computer running the logging program, and
+CI-V transceive toOﬀ. With the AT-AUTO’s “CI-V query enable” jumper removed, the
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 67 =====
+57
+AT-AUTO’s query attempt will never reach the CI-V bus. It will only be able to listen for
+CI-V data but will not transmit on the CI-V bus. The Icom radio should then also be set to
+data transceiveOﬀ. Conversely, if the computer logging software can be conﬁgured to listen
+only, the the AT-AUTO may be setup to provide the radio frequency queries.
+Alternatively, if using an Icom CI-V equipped radio, conﬁgured for data transceiveOn,
+the radio will automatically send frequency data anytime its frequency changes. All of the
+other controllers (AT-AUTO, computer, etc.,) should be conﬁgured to receive only. In this
+manner, data collisions are prevented because the radio is the only device placing data on
+the serial databus. All other devices are passive listeners.
+10.3 CAT Passive Listening
+The AT-AUTO is intended to interface with CAT-equipped transceivers. A signiﬁcant prob-
+lem exists when also attempting to simultaneously control or query the radio via computer
+software (example: computer logging software). The RS-232 protocol is intended to link two
+devices only.
+In order for the AT-AUTO to follow frequency changes in CAT-equipped radios, it re-
+ceives data sent back to the AT-AUTO from the radio (normally in direct response to the
+AT-AUTO’s querying of the radio’s frequency). The radio’s response may also be generated
+as a result of computer logging software generating the radio query command. The user may
+fabricate a serial “Y” cable, whereby the AT-AUTO’s serial data transmit line is omitted,
+but where the serial data line from the radio is shared between the computer and the AT-
+AUTO. The AT-AUTO and the computer will both be able to receive the radio’s frequency
+data, transmitted as a result of the computer-generated query command.
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 68 =====
+58
+Internal Jumper Settings
+The AT-AUTO has two user-selectable hardware jumpers. The default jumper settings are
+appropriate for most AT-AUTO applications. However, some circumstances may require
+alternate jumper settings. The jumpers are located on the AT-AUTO controller circuit
+board and their relative locations are indicated in Figure 11.1 on page 59 . Jumper settings
+are listed in Table 11.1 on page 60.
+11.1 Reset Enable
+The AT-AUTO incorporates a microprocessor reset-via-RTS signal from a computer serial
+port. The software used by the computer to upload ﬁrmware to the AT-AUTO micropro-
+cessor requires the ability to reset the AT-AUTO microprocessor.
+11.2 CI-V Tx Enable
+In it’s default jumper conﬁguration, the AT-AUTO is able to transmit and receive data over
+the RS-232 port and receive data from the CI-V bus, but is unable to transmit data over
+the CI-V bus. This is generally immaterial because when an Icom radio is setup for CI-V
+data transceive operation, it will automatically send frequency data over the CI-V bus, and
+does not require the AT-AUTO to transmit data over the CI-V bus or otherwise query the
+Icom radio. However, if the Icom radio is conﬁgured with CI-V data transceiveOﬀ, then the
+AT-AUTO must actively query the radio, and the CI-V Tx Enable jumper must be Closed.
+11.3 Jumper Access
+Remove DC power from the AT-AUTO. Then remove the screws along the left and right
+sides of the AT-AUTO to remove the top cover. The controller circuit board is located
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 69 =====
+59
+immediately behind the Liquid Crystal Display (LCD). Observe anti-static precautions when
+working on/near the controller circuit board.
+Reset
+Enable
+CI−V Tx Enable
+Figure 11.1: Jumper Locations
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 70 =====
+60
+Table 11.1: Jumper Settings
+Operation Reset Enable CI-V Tx Enable
+CI-V Transceive from Any Icom Don’t Care Don’t Care
+CI-V Transceive from Speciﬁc Icom Don’t Care Don’t Care
+Smart with CI-V Transceive OFF Open Closed
+Smart via CAT* Closed Open
+Smart Via CAT** Open Open
+Firmware Update Closed Open
+Remote Control via CAT Open Open
+Remote Control via CI-V Open Closed
+Default Closed Open
+*Note: Reset Enable jumper may be Closed if using the “AT-AUTO to CAT” cable illus-
+trated in Figure 7.1 on page 46.
+**Note: Reset Enable must be Open if hardware ﬂow control line (RTS) is present in the
+CAT cable. If unsure, remove the jumper fromReset Enable.
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 71 =====
+61
+Firmware Revision Summary of
+Changes
+The AT-AUTO was ﬁrst released with Firmware version 1.01. Firmware versions 1.02
+through 1.10 consisted mainly of minor bug ﬁxes and some other minor ﬁrmware enhance-
+ments. Version 2.0 however is signiﬁcantly diﬀerent from versions 1.01-1.10, incorporating
+new operating features and reﬁnements along with a considerable number of minor, not-so-
+minor, and semi-critical bug ﬁxes.
+Firmware version 1.10 was the last ﬁrmware update prior to version 2.0. Version 2.0
+incorporates many bug ﬁxes and enhanced operating features. Palstar, Inc. encourages all
+AT-AUTO owners to update their AT-AUTOs with this latest ﬁrmware revision. As of this
+writing, the latest ﬁrmware release is version 2.03.
+12.1 Version 2.00 Bug Corrections
+The following is a partial summary of bugs found in previous ﬁrmware versions (in no
+particular order of signiﬁcance) and corrected with AT-AUTO ﬁrmware version 2.0:
+1. Conﬁguration/Data EEPROM write - Bug forced conﬁguration and data settings to be
+continuously written to EEPROM at a 1 Hz rate. Data should only have been written
+to EEPROM if the data had changed. This was a hidden bug (now ﬁxed) and was not
+apparent to user.
+2. Non-Initialized Fine Tuning - Bug manifested whenever “ﬁne tune” commanded with-
+out prior automatic tuning in the band of operation. Under these conditions, the
+AT-AUTO would motor the inductor to the maximum inductance and stop.
+3. Runaway Inductor - Occasionally during automatic tuning, the Inductor would motor
+to maximumL and stop.
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 72 =====
+62
+4. Runaway Capacitor - Occasionally during automatic tuning the Capacitor would re-
+peatedly turn to position 397, then continue to approximately 004, and repeat sequence
+indeﬁnitely.
+5. LCD Blanking - LCD would momentarily blank during auto-tune initiation.
+6. Uncommanded/Unintentional retuning while in SSB mode - During SWR/Power sam-
+pling AT-AUTO would detect reﬂected power prior to detection of forward power,
+causing AT-AUTO to interpret this as excessive SWR and initiate retuning.
+7. Failure to recognize excessive SWR - Under some circumstances with very excessive
+SWR, AT-AUTO would report “Good Match” and fail to initiate automatic tuning
+despite the very obvious (via the analog meter) antenna mismatch.
+8. Frequency Error - Under conditions of very high SWR, AT-AUTO would occasionally
+be unable to discern the operating frequency from the RF sample. Firmware and
+hardware changes have considerably improved this problem. Problems might still occur
+albeit rarely.
+9. Autotuning Past Low SWR Points - During automatic tuning, the positioning ofL or
+C was too coarse causing the AT-AUTO to step past good match points. Occasionally
+the AT-AUTO would then be unable to ﬁnd a successful match although subsequent
+matching attempts (manual or automatic) would ﬁnd suitable matches. Addressed in
+revised tuning algorithms.
+12.2 Version 2.00 New Firmware Features
+AT-AUTO ﬁrmware version 2.00 includes the following new features:
+1. Kenwood CAT support - Provides QSY-following of Kenwood CAT-enabled radios by
+polling frequency information via the Kenwood CAT (serial data) port (Tested with
+TS-570D).
+2. Yaesu CAT support - Provides QSY-following of the FT-2000 as described above for
+Kenwood. (Tested with FT-990, and FT-2000).
+3. Kenwood Tuner Interface - Enables automatic tuning initiation via the “TUNER”
+button and “AT” interface present on some Kenwood HF radios (Tested with TS-
+570D).
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 73 =====
+63
+4. User-Selectable Startup Mode of Operation - User may select (via ﬁrmware conﬁg-
+uration menu) the startup mode that the AT-AUTO enters upon initial power-up.
+User may opt to have the AT-AUTO always startup in either theAutomatic, Manual,
+Bypass, or the mode last in-use when the AT-AUTO was turned-oﬀ.
+5. Automatic Antenna & Bypass Selection - User may specify which output to automati-
+cally select (Coax/Balanced) based upon band of operation as well as whether the RF
+is to pass through or bypass the tuning network. This feature requires a supported
+CAT/CI-V equipped radio.
+6. Bypass during Band Change - AT-AUTO may be conﬁgured to automatically bypass
+the tuner while the AT-AUTO is changing bands. When enabled, if QSYing from one
+band to another (40m to 160m for example), the AT-AUTO will route the antenna
+directly to the radio (RF does not pass through the tuning network) until theL and C
+have been repositioned to the band of operation (160m in this example). This feature
+requires a supported CAT/CI-V equipped radio.
+7. Enhanced Icom CI-V transceive operation - The normal (default) AT-AUTO CI-V
+data transceive scheme is to constantly follow all frequency data sent via the CI-V bus
+from any CI-V equipped Icom radio. The user may however, conﬁgure the AT-AUTO
+to follow only CI-V transceive frequency data from a speciﬁc radio (based upon the
+radio’s CI-V address). Furthermore, the AT-AUTO can be conﬁgured to completely
+ignore CI-V transceive data and to poll a speciﬁc Icom radio.
+8. Remote Control Operation - The AT-AUTO may be remotely controlled via the Icom
+CI-V bus. The AT-AUTO CI-V address is user selectable and remote control operation
+permits the user to:
+(a) Set speciﬁcL and C positions.
+(b) Position L &C by sending frequency data to the AT-AUTO.
+(c) Select tuner output (Coax/Balanced).
+(d) Select operating mode (Automatic, Manual, Bypass).
+(e) Read L &C positions, as well as forward and reﬂected power.
+(f) Home L &C.
+9. Autonomous/Non-Autonomous Tuning Initiation - The AT-AUTO’s normal (default)
+behavior while in Automatic mode is to constantly monitor Forward and Reﬂected
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 74 =====
+64
+power, calculate and monitor SWR. Then whenever SWR exceeds a set threshold
+(default 1.2:1 SWR), the AT-AUTO autonomously initiates tuning. The user may now
+conﬁgure the AT-AUTO for “Non-Autonomous” tuning initiation. When so conﬁgured,
+the AT-AUTO continues to monitor Forward & Reﬂected power and to calculate and
+monitor the SWR. However, whenever the SWR exceeds a preset threshold (default
+1.2:1 SWR), instead of initiating automatic tuning, the AT-AUTO displays a warning
+to the user. Whenever this warning is displayed, the user may consent to automatic
+tuning initiation by momentarily press the rotary “Tune-Select” knob. Momentarily
+pressing the “Tune-Select” knob signals the user’s consent to initiate automatic tuning.
+This feature was added to provide a means to completely prevent automatic re-tuning,
+especially when using an HF ampliﬁer.
+10. Selectable SWR Tuning Thresholds - While inAutomatic mode, the AT-AUTO initi-
+ates automatic tuning whenever the SWR exceeds 1.2:1 (default). Automatic tuning
+continues until the SWR is at/below 1.05:1 (default). The user may conﬁgure the AT-
+AUTO to use other SWR thresholds to indicate when tuning should be initiated and at
+what SWR level automatic tuning should be considered successful. The AT-AUTO’s
+SWR defaults are quite stringent especially since most other auto-tuners cease tuning
+when SWR is less than 1.5:1. By setting higher thresholds, a user may opt to mini-
+mize retuning when operating with antennas experiencing frequent resonance changes
+(Example: a long dipole antenna blowing around in a strong wind).
+12.3 Version 2.01 Firmware Features
+AT-AUTO ﬁrmware version 2.01 includes the following new features:
+1. Automatic L and C homing - During installation of ﬁrmware version 2.01 (and newer),
+the AT-AUTO will homeL and C, and then presetC to 250.
+2. L and C synchronization tracking - If the user switched the AT-AUTOOﬀ before L
+or C position information was successfully written to non-volatile memory, then the
+AT-AUTO will automatically homeL and C when the AT-AUTO is next turnedOn.
+After completion of the homing operation,C will automatically be repositioned to 250.
+12.4 Version 2.01 Bug Corrections
+AT-AUTO ﬁrmware version 2.01 includes these changes/corrections:
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 75 =====
+65
+1. Change to the remote controlC positioning command - Correct operation required a
+third position byte (0x00) or else the command failed. Positioning command is now in
+accordance with the description provided in the operating manual (See Table 8.1).
+2. CI-V bus collision detection - In earlier ﬁrmware releases, the AT-AUTO would some-
+times spontaneously QSY based upon collision-corrupted CI-V bus data, which man-
+ifested as an illogical/erroneous QSY frequency. Likewise other bus collisions would
+occasionally cause erroneous/unintended AT-AUTO remote-control command execu-
+tion.
+12.5 Version 2.02 Bug Corrections
+AT-AUTO ﬁrmware version 2.02 includes these changes/corrections:
+1. Delayed CI-V command execution bug in version 2.01 - In version 2.01, CI-V bus
+collision detection was incorporated by providing a ﬁxed delay between decoding of the
+command and execution of the command. After the delay, if the CI-V bus jamming
+sequence (0xFC) had not detected, then the command was executed However, the very
+last command was not being executed until the subsequent data string had decoded,
+causing the the AT-AUTO to be one frequency change behind. This was particularly
+noticeable when changing bands using the Icom radio’s band buttons and was not
+observed when turning the VFO knob. CI-V data decoding and frequency following is
+now corrected. This problem did not aﬀect CAT operation with non-Icom radios.
+12.6 Version 2.03 Bug Corrections
+AT-AUTO ﬁrmware version 2.03 includes this change/correction:
+1. A bug introduced in version 2.02 eﬀectively disabled frequency following via the CAT
+port of Kenwood and some Yaesu radios. Version 2.03 ﬁxed this bug, restoring normal
+CAT operation with the aﬀected radio types. No other changes were made in version
+2.03.
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 76 =====
+66
+Software License Agreement
+IMPORTANT – READ CAREFULLY. Notice to user:To download or read the
+entire Software End-User License Agreement visit:
+http://www.palstar.com/at-auto.php
+The End User License Agreement (“Software License Agreement”) is a legal agreement
+between you, the User, and Palstar. By powering on the AT-AUTO and or installing future
+updates to the AT-AUTO ﬁrmware via the Palstar website (www.palstar.com) you agree
+to be bound by the terms of the Palstar AT-AUTO Software License Agreement including,
+without limitation, the warranty disclaimers, and limitation of liability. You agree that this
+agreement is enforceable like any written agreement negotiated and signed by you. If you
+do not agree, you are not licensed to use the Software, and must destroy any downloaded
+copies of the Software in your posession or control.
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 77 =====
+67
+Service and Warranty
+14.1 Limited Warranty
+Palstar Inc. warrants products manufactured by it to be free from defects in material and
+workmanship under normal user and servicefor a period of three (3) years for the
+AT-AUTO, AT5K, AT4K, BT1500A, R30, and ZM30and all other products for
+one (1) year from the date of delivery to the ﬁrst buyer(the “Warranty Period”).
+Palstar Inc’s obligation under this warranty is limited to repair or replacement of the product
+at it’s option at the Palstar factory in Piqua, Ohio.
+Eﬀective only when the product is returned to the factory with all transportation charges
+prepaid and examination of the produce discloses in Palstar’s judgment, to have been defec-
+tive during the Warranty Period.
+The Warranty Period shall not extend beyond its original term with respect to interim
+in-warranty repairs by Palstar. This Warranty Period shall not apply to any product which
+has been repaired or altered by anyone other than Palstar without prior written authoriza-
+tion. Warranty does not extend to any products which have been subject to damage from
+improper installation, application or maintenance in accordance with the operating speciﬁ-
+cation. Palstar neither assumes nor authorizes any person to assume for it any obligation or
+liability other than herein stated.
+14.2 Repair Policy
+When sending in a product for service, please “double” box it carefully and ship it insured
+for your protection. Please include a note clearly describing the problem, how you wish the
+item returned and how you wish to pay for the service. Package your equipment properly.
+Palstar, Inc. is not responsible for merchandise damaged in shipment. Our service rate is
+$30 per hour (1
+2 hour minimum).
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 78 =====
+68
+14.3 Return Policy
+All returns must receive prior authorization from Palstar. Returned items must be received
+in original–AS SHIPPED–condition including the original box, manuals, accessories, and
+copy of sales receipt. Returns must be within 14 days of purchase. Returned items are
+subject to a 25% restocking fee. Shipping is not refundable.
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 79 =====
+69
+Frequently Asked Questions
+15.1 Serial Port Related Questions
+15.1.1 Why is there a serial port on the AT-AUTO?
+Does this mean that I can remotely control it? What is the control protocol?
+Answer: The AT-AUTO was originally designed only to permit the user to upgrade the
+ﬁrmware as new features became available. As ﬁrmware enhancements are made, they are
+be available to the user directly from the Palstar website. Watch the Palstar website for
+ﬁrmware updates and instructions how to load revised ﬁrmware into the AT-AUTO.
+Previous ﬁrmware versions did not provide for remote control of the AT-AUTO. However,
+remote control operation is included in Version 2.0 (and subsequent) ﬁrmware versions. See
+“Remote Control” section for details.
+15.1.2 Will the AT-AUTO work with my Collins KWM1 and oth-
+ers without a computer interface?
+Answer: Yes! The AT-AUTO is a fully automatic antenna tuner. It works ﬁne with all HF
+radios. It includes the CAT and external tuner interface circuitry merely as an operating
+convenience, but they are NOT necessary for automatic tuner operation.
+15.1.3 Why does the AT-AUTO have an RS-232 port instead of
+a USB port?
+Answer: The AT-AUTO interfaces with an HF radio and with your computer via a conven-
+tional RS-232 port. Most modern HF radios that have CAT capability, do so via an RS-232
+serial port (an exception: Icom uses a simple single line, bidirectional, open-collector, serial
+interface). Using an USB port instead of an RS-232 port in the AT-AUTO would have meant
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 80 =====
+70
+that our customers would need to purchase a USB-RS232 converter in order to achieve the
+CAT interface capability that the AT-AUTO already provides. The CAT (RS-232) interface
+is only used to provide low-data-rate frequency information and remote control commands
+to the AT-AUTO. Depending upon the radio, this data stream may be less than 20-bytes.
+Clearly the expense and complexity of USB is unwarranted.
+15.2 Memory-Related Questions
+15.2.1 How can I clear the AT-AUTO memories?
+Our local club was conducting an emergency communications drill. I brought my AT-AUTO
+to the simulated emergency location and want to use the clubs G5R V antenna but a lot of
+the memories contain match settings for my 160m dipole at home.
+Answer: The AT-AUTO ﬁrmware includes over 500 non-volatile memories. The memory
+is split evenly with 250+ memories each for the balanced and coaxial outputs. The memory
+can be reset to the factory defaults by entering the “conﬁguration” menu, and then scrolling
+to the “Erase Match Mem?” option and pressing the “Mode-Tune” rotary knob.
+15.2.2 What happens when I select “Erase Match Mem?” How
+do the memories work?
+Answer: Selecting “Erase Match Mem?” erases all of the users match settings that were
+stored in the AT-AUTO’s non-volatile memory and restores all 500+ memories to original
+factory defaults.
+The factory defaults are mere starting points for tuning operation based upon operating
+frequency. Each memory default when “coax” output is selected is for a nominal 50 Ω load.
+Likewise, the “balanced” output default is for a nominal 200 Ω load. Based upon frequency
+and selected output, if the SWR exceeds an approximate 1.2 : 1 threshold, the AT-AUTO
+recalls from memory the respective inductor and capacitor settings and presets them accord-
+ingly. Then if the SWR is still excessive and if subsequent tuning occurs and a successful
+match is found, that memory’s default settings are overwritten with the actual match set-
+tings.
+15.2.3 Can I manually edit the memory settings?
+Answer: Short answer – No.
+Long answer – Yes, but only indirectly. The manner in which this may be done is to
+operate the tuner in manual mode and manually adjust the tuner for a suitable match. Then
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 81 =====
+71
+switch the tuner to automatic mode and command a “ﬁne tune” by momentarily pressing the
+Mode-Tune rotary knob. The tuner will attempt to ﬁne tune, but ﬁnding the good match,
+will instead store your match settings.
+15.2.4 How do I control which memory is recalled and used?
+Answer: You really can’t - The AT-AUTO manages all of the memories automatically
+based upon operating frequency and which output is selected.
+15.3 Radio-Interfacing Questions
+15.3.1 Why is the AT-AUTO frequency following always one-band-
+behind my IC-7800?
+I have the AT-AUTO connected to the CI-V port on my IC-7800, but the AT-AUTO is
+on the wrong band! When I press the 40m band button, the AT-AUTO switches to 20m
+(the previous band I was on), and when I then press the 20m band button, the AT-AUTO
+switches to 40m?!? What is going on? Why doesn’t this work right?!?
+Answer: We apologize – This was a bug introduced in version 2.01 of the ﬁrmware that
+aﬀected CI-V operation but not CAT operation and has been ﬁxed. This was an unintended
+consequence of adding CI-V bus collision detection, and once the problem was brought to
+our attention, it was ﬁxed. Please upload version 2.03 into the AT-AUTO.
+15.3.2 Why doesn’t the AT-AUTO work in Smart and Handshake
+modes with other radios?
+Answer: It will eventually. We designed the AT-AUTO to interface with ALL radios
+that incorporated a CAT interface and or included an external tuner interface. Version 2.0
+ﬁrmware provides Icom, Kenwood, and limited Yaesu support. Support for other radios will
+continue to be expanded and included in never ﬁrmware versions.
+The AT-AUTO hardware should be capable of supporting most radios. The decision to
+support Icom radios ﬁrst was made because the Icom interfaces are well documented and
+standardized across the entire Icom transceiver product line. We have only recently included
+support for Kenwood, but Yaesu support is still limited and undergoing development.
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 82 =====
+72
+15.3.3 Why doesn’t the AT-AUTO serial handshake work with
+the IC-7800?
+I have the AT-AUTO working perfectly in handshake mode with my Icom IC-756PROII.
+However, whenever I try using it with my IC-7800, the AT-AUTO does not follow the IC-
+7800 frequency changes. I have tried everything I can think of, and yes, the IC-7800 is set
+for CI-V transceiver at 9600 baud just as it is on the PROII. Why doesn’t this work?!?
+Answer: We apologize-This was a bug in Ver 1.01 (ﬁrst release version) of the AT-
+AUTO ﬁrmware and has subsequently been ﬁxed in more recent ﬁrmware versions (available
+for free from Palstar). Ver 1.01 ﬁrmware automatically conﬁgured the AT-AUTO Icom CI-V
+operation whenever it was aware of an Icom radio by sensing the Icoms external tuner jack.
+However, the IC-7800 does not have an external tuner interface and hence this scheme was
+inappropriate for use with an IC-7800. Please install Ver 2.00 ﬁrmware (or later).
+15.3.4 Will the AT-AUTO automatically follow frequency changes
+in the IC-735?
+Q: I want to use my Icom IC-735 with the AT-AUTO. I know that the IC-735 uses a 4-byte
+CI-V frequency protocol, whereas newer Icom radios use a 5-byte CI-V frequency protocol.
+Will the AT-AUTO automatically follow frequency changes in the IC-735? Do I need change
+the ﬁrmware setup?
+Answer: You are correct, the earlier Icom radios used 4-byte frequency data, but newer
+Icom radios pass 5 bytes of frequency data over the CI-V bus. The AT-AUTO works just
+ﬁne with both the 4 and 5 byte frequency protocols. However, the IC-735 is (hardware)
+conﬁgured to operate at 1200 baud, whereas most newer Icom radios support a broad range
+of data rates. To make the AT-AUTO automatically follow IC-735 QSY operations the AT-
+AUTO must be conﬁgured for 1200 baud, and should be setup for Icom CI-V operation. See
+the “Conﬁguration” section for details.
+15.3.5 How can I make the AT-AUTO follow a speciﬁc Icom radio
+in a multi-radio setup?
+I have a contest station consisting of multiple Icom IC-756PROIII and IC-7800 radios. These
+radios are networked via the Icom CI-V bus and under software control from a PC. I have an
+AT-AUTO working perfectly with one of the PROIII radios. However, the AT-AUTO follows
+all frequency commands sent from the PC to any of the other radios. For example, when
+I command the IC-7800 to QSY, the AT-AUTO which is actually connected to a PROIII,
+changes to the frequency of the IC-7800.
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 83 =====
+73
+Answer: Congratulations on such a nice setup! What you are describing is selective
+CI-V addressing by the AT-AUTO and was not even considered in the original ﬁrmware.
+However, Ver 2.0 and late ﬁrmware provides selective CI-V addressing. Please see the “Icom
+CI-V Conﬁguration” section for speciﬁc instructions.
+We did not anticipate a setup as elaborate as yours, nor did we envision the AT-AUTO
+as part of a much larger CI-V network. We designed the ﬁrmware to respond to any CI-
+V transceiver broadcasts as well as frequency commands sent by a PC over the CI-V bus,
+regardless of the intended recipient of such commands. The good news is that selective
+addressing is implemented in the Ver 2.0 ﬁrmware.
+15.3.6 Why doesn’t “Fine Tune” work with my Collins S-Line?
+The AT-AUTO was working just ﬁne with my IC-7000, but there is a problem with the “Fine
+Tune” feature when I use the AT-AUTO with my Collins S-Line. Basically when using it with
+the Collins station, pressing the “Mode-Tune” button when in Automatic Mode, produces
+an error with the AT-AUTO complaining about a no-power abort. Is this a problem with
+the AT-AUTO?
+Answer: When using the AT-AUTO with any radio that lacks supported CAT/CI-V
+capability, the AT-AUTO should be conﬁgured for Vintage Rigs via the conﬁguration menu.
+Please reconﬁgure the AT-AUTO for “Vintage Rig” and this will solve this problem.
+15.3.7 Does the AT-AUTO support ALE operation? Will it in
+the future?
+Answer: NO and NO.
+15.4 Conﬁguration Questions
+15.4.1 How should I setup the Peak-Hold metering for the AT-
+AUTO to work automatically?
+Answer: The AT-AUTO control circuitry does not use any of the Peak-Hold metering.
+All circuitry used by the AT-AUTO for manual/automatic tuning is independent of the
+Peak-Hold metering circuitry. The Peak-Hold circuitry and the SWR meter are included
+as an operator convenience only during manual tuning operation and are not used by the
+AT-AUTO during the process of automatic tuning.
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 84 =====
+74
+15.5 General Usage Questions
+15.5.1 How does the AT-AUTO diﬀer from other automatic tuners
+available to the amateur radio community?
+Answer: This is the ONLY fully-automatic antenna tuner purposefully designed and built
+to conservatively handle a continuous 1500 W CW carrier. Most other automatic tuners are
+a mere collection of ﬁxed inductors and capacitors that are switched in/out by relay and as
+such are generally limited to 600W PEP or less.
+The AT-AUTO uses the same high-quality roller inductor and split-stator capacitor used
+in our highly-acclaimed manual tuners, but they now are adjusted by stepper motors under
+microprocessor control.
+15.5.2 Is this a Ham-Band only tuner? Will this work on the
+MARS frequencies?
+Answer: The AT-AUTO will match antennas operating in the 1.8 - 54 MHz range. There
+are match memories dedicated to the entire match range of the tuner. Non-volatile memories
+for MARS frequencies as well as other Federal/Civil frequencies are incorporated into the
+AT-AUTO ﬁrmware.
+15.6 Tuning Algorithm-Related Questions
+15.6.1 Why does the AT-AUTO take up to 30 seconds to tune?
+Answer:The actual tune time of the AT-AUTO is very fast; 1-3 second tuning time is very
+typical. The 30 seconds quoted is due to the transit time it takes for the AT-AUTO to
+reposition the roller inductor from one extreme to another such as QSYing from 160m to
+10m.
+The actual tuning starts once the inductor and capacitor have been pre-positioned for the
+frequency/band of operation. When operating in Smart mode, the AT-AUTO automatically
+recalls its matched settings from non-volatile memory and subsequent tuning is likely not
+necessary.
+15.6.2 Why does tuning sometimes fail when “Fine Tune” is com-
+manded?
+Sometimes when I command a “Fine Tune”, that the inductor and capacitor will to the “000”
+positions and when the AT-AUTO starts tuning, the tuning fails. However, on subsequent
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 85 =====
+75
+attempts it works ﬁne. Am I doing something wrong? I noticed that this always seems to
+happen whenever Fine Tune was commanded immediately after I turn on the AT-AUTO.
+Answer: No-You are doing this properly. This was a bug in the original ﬁrmware that
+erroneously commanded theL and C to their minimum positions instead of using the existing
+L and C positions with which to commence tuning. This bug has since been corrected. Please
+update your ﬁrmware.
+15.6.3 I accidentally turned oﬀ my AT-AUTO while auto-tuning
+and now it won’t tune. How do I ﬁx it?
+Answer: No problem-You didn’t break anything, but the AT-AUTO no longer knows ex-
+actly where theL and C are positioned. For ordinary operation, the AT-AUTO must know
+the approximateL and C are positions.
+Within 1 second after completing any movement of theL or C, the AT-AUTO saves
+the new L and C positions in non-volatile memory for subsequent recall. When you turned
+oﬀ the AT-AUTO during the automatic tuning process, the AT-AUTO had repositionedL
+and C, but had not updated the memory with the newestL and C positions. When the
+AT-AUTO was next turned on, it (correctly) recalled the last-stored but incorrectL and C
+positions.
+The remedy is simple - theL and C positions merely need to be resynchronized. To
+do this, enter manual mode and turn the capacitor one complete revolution through the
+“000” position this will automatically resynchronize the capacitor. Next, synchronize the
+inductor by returning it to the minimum L position. Do this by selecting the inductor with
+the “Tune” knob, and repeatedly turning the knob in a counter-clockwise direction until the
+inductor stops rotating. When the inductor reaches the minimum position, it will engage a
+limit switch, completing the synchronization process.
+Alternatively, (with the inductor selected) you may op to depress the “Tune” knob for
+two seconds and then momentarily turn the knob counter-clockwisethe inductor should turn
+automatically to the minimum position and stop. To avoid this in the future, please wait
+one second afterL and C have stopped moving before turning oﬀ the AT-AUTO.
+15.6.4 Why does the AT-AUTO tune right past good match points?
+Not to be too picky, but I have noticed quite often that during automatic tuning, it appears
+that the AT-AUTO will tune right past dips in the SWR, but it still ﬁnds very good match
+settings. Is this normal?
+Answer: What you described was a particular tuning algorithm employed in earlier
+ﬁrmware versions. We observed this quite often, and it was intentional. That particular
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 86 =====
+76
+tuning algorithm attempted to bound the positions of minimum SWR then moving either
+the L or C. If this movement caused SWR to increase, the direction of rotation was reversed.
+The component was then commanded to rotate until the SWR stopped decreasing. The
+component movement could indeed pass the minimum SWR point, but this component
+was then commanded to a position between the two SWR peaks. The other component
+then went through the same process. Each iteration successfully bounded the minimum
+SWR. The actual tuning process was pretty quick, but the algorithm intentionally does not
+attempt to smoothly approach the minimum SWR. While this particular tuning algorithm
+you observed was very successful, we have been constantly improving it through design and
+experimentation, and have further optimized both the rate of the match convergence as well
+as the number of iterations involved in arriving at the particular match conditions. Please
+upload the latest version of the ﬁrmware to the AT-AUTO.
+15.6.5 Why does the AT-AUTO sometimes report “Match Not
+Found”, but when I transmit again, it shows “Good Match”?
+Answer: The tuning algorithm employs hysteresis: Tuning is initiated whenever SWR is
+determined to be above the “Tune Start SWR” of 1.2:1 (default), and the tuning process
+stops upon achieving a 1.05:1 SWR (default), or if the AT-AUTO times out (a prescribed
+number of tuning iterations has failed to achieve the 1.05:1 SWR). For our purposes, we
+considered a 1.2:1 SWR (or better) an extremely good match.
+There was an oversight in earlier versions of the ﬁrmware (including REV 1.01) that would
+report “Match Not Found” whenever the tuning process failed to achieve a 1.05:1 or better
+SWR, regardless of whether the SWR was below the default “Tune Start SWR” (hysteresis)
+level of 1.2:1. For example, if the best SWR that the auto tuner achieved was 1.1:1, the
+algorithm would report that tuning failed, but because 1.1:1 is below the 1.2:1 hysteresis
+threshold to initiate tuning, upon subsequent key-up, the auto tuner would correctly report
+the “Good Match”.
+This bug had been corrected in an interim ﬁrmware version. Now when the match is
+1.05:1 or better, the AT-AUTO displays “Good Match” on the 1st line of the LCD, along
+with SWR ≤ 1.05:1 on the 2nd line of the LCD. In the event that tuning did not achieve
+1.05:1 SWR, but upon timing out did match to 1.2:1 SWR or better, LCD now displays
+“Good Match” and SWR≤ 1.2:1 (or whatever the auto-tune stop SWR threshold has been
+set to.
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 87 =====
+77
+15.6.6 Why does the AT-AUTO retune at high power when it
+found a match at low power?
+After I QSY if the SWR is bad, the AT-AUTO gets a low-power carrier from my Icom radio
+to tune against. The tuning process seems to work ﬁne, but occasionally when I subsequently
+transmit, the AT-AUTO starts re-tuning. Why does it do this if it found a match at low
+power?
+Answer: The output of the RF bridge rolls oﬀ non-linearly at very low power levels.
+This is the reason that the AT-AUTO sometimes retunes upon application of QRO although
+a good match was previously found at QRP levels. The tuning algorithm is intentionally
+extremely conservative (attempting to match to 1.05:1 or better). At 10 W input to a
+load matched to 1.2:1 or better SWR, the reﬂected power levels are indeed very low and
+approach the hardware’s limit to detect these power levels. However, when QRO is applied,
+the reﬂective power may be suﬃciently increased (even at extremely good SWR) and detected
+by the AT-AUTO. This is most often manifested when the AT-AUTO is coupled to an radio
+that is conﬁgured to utilize the radios external tuner interface and rely upon the radio to
+produce a steady 10W carrier. From experience, it turns out that this power level may vary
+from radio to radio with some radios producing a stronger carrier (ﬁne) (≈ 15 W) while
+others less (≈ 6-7W) (problematic).
+15.6.7 Why does the AT-AUTO sometime start retuning when
+operating SSB?
+When operating SSB, occasionally the AT-AUTO will start automatically retuning even
+though I know the match is good. Why is this happening? And how do I prevent it? This
+is really annoying!
+Answer: The SWR polling algorithm has been revamped in ﬁrmware Version 2.0 and
+this problem has been ﬁxed. Furthermore, the user can also conﬁgure the AT-AUTO to
+require operator approval before initiating automatic tuning.
+The reason that this happened was partly due to the nature of the SSB waveform and
+the SWR sampling process. The AT-AUTO constantly samples Forward power and then
+samples Reﬂected power. While the process happens very quickly, it is possible during the
+sampling process to start the Forward sample during the initial rise in power during the SSB
+waveform and then to subsequently sample the Reﬂected power during the peak of the SSB
+waveform, occasionally resulting in erroneous SWR indications.
+This problem has been identiﬁed and is corrected in subsequent ﬁrmware releases (Ver
+1.04 and later). While there are two ways to prevent this from happening, we highly recom-
+mend that you permanently remedy this issue by uploading the latest ﬁrmware revision to
+the AT-AUTO. The other method is to switch to the AT-AUTO’s “Manual Mode” whenever
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 88 =====
+78
+you wish to prevent the AT-AUTO from autonomously retuning.
+15.6.8 The tuner sometimes retunes after autotuning using the
+radio’s “Tuner” button. Why?
+My AT-AUTO seems to work ﬁne if I tune in high power and then operate. However, if I
+tune using the Tuner button on the Icom radio, the AT-AUTO quite often wants to re-tune
+once I switch to high power operation. It does this about 30% of the time when using the
+coax-fed loop, but rarely does this when using a similar loop which is fed directly with ladder
+line. Why does it do that? Is there something wrong with my AT-AUTO?
+Answer: Tuning at low power has a couple of advantages It reduces QRM and it
+places less stress on the transmitter while a match is being sought. It is also convenient
+when using an Icom or Kenwood radio you merely press the rigs’ Tuner button and it all
+happens automatically... However, if there are losses in the antenna system greater than
+the resolution of the Forward/Reﬂected power sampling, then tuning might need to be re-
+accomplished when subsequently operating at higher power output levels.
+15.6.9 Why is tuning diﬀerent depending upon whether using
+coax-fed or balanced-fed antennas?
+OK But Why? And why does it seem to be diﬀerent depending upon whether it is a coax-fed
+or balanced-fed antenna?
+Answer: Several factors contribute to this behavior, including the power losses within
+the feed line and feed line connectors, the linearity of the RF sampling network and the
+bit-resolution of the analog-to-digital converters used to quantify the Forward and Reﬂected
+power samples.
+The AT-AUTO ﬁrmware includes an SWR hysteresis feature. That is, it measures the
+Forward and Reﬂected power and if the SWR is less than 1.2:1 (default), then it does
+not automatically tune. However, if the SWR is determined to be greater than 1.2:1, then
+automatic tuning is initiated. During the automatic tuning process, the AT-AUTO attempts
+to improve the SWR to 1.05:1. As soon as an SWR of 1.05:1 (or better) is achieved, the
+tuning is halted and the match settings are stored. If 1.05:1 (or better) is NOT achieved,
+the tuning process continues until it times out. At that time, if the SWR is still greater
+than 1.05:1, but less than 1.20:1, the automatic tuning process is deemed successful and the
+match settings are stored. The AT-AUTO provides the user with an visual indication of
+which criterion was met by displaying either “SWR≤ 1.05 : 1” (default) or “SWR≤ 1.2:1”
+(default), or “Match Not Found.”
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 89 =====
+79
+The SWR is calculated using the following equation:
+SW R= PF wd+ PRef
+PF wd− PRef
+Given a Forward power of 10W (as provided when using the “Tuner” button on the radio),
+an SWR of 1.20:1 is observed if 0.90W of Reﬂected power is sensed at the SWR bridge.
+If the Reﬂected power sensed is 0.95W, the observed SWR is 1.21:1 which now exceeds
+the hysteresis threshold needed for automatic tuning initiation. Conversely, if the Reﬂected
+power sensed is only 0.85W, the observed SWR is 1.19:1. Therefore a variation in Reﬂected
+power of 0.05W is all that is required to vary the observed SWR and may initiate automatic
+tuning. Losses in cables or connectors will easily exceed this threshold.
+If a 100W carrier is used for tuning instead, 9W of observed Reﬂected power will result
+in a 1.20:1 SWR. Likewise 9.5W of observed Reﬂected power yields an observed SWR of
+1.21:1. The diﬀerence now is that it requires an approximate Watt increase in Reﬂected
+power to achieve an SWR that exceeds the automatic tuning threshold. Therefore, when
+tuning at 10W, a 0.05W change in observed Reﬂected power may be all that is required to
+vary the observed SWR from 1.20:1 to 1.21:1 (exceeding threshold and triggering automatic
+tuning). However, when tuning at 100W, a1
+2 W change in observed Reﬂected power may be
+required to vary the SWR around the hysteresis threshold level.
+The AT-AUTO is capable of quantifying observed power levels ranging from approxi-
+mately 5-1500W with a resolution of approximately 0.1W. When tuning with a 10W carrier,
+this resolution is slightly coarse for diﬀerentiating 0.05W variations in observed Reﬂected
+power, but is well suited for resolving1
+2 W variations in observed Reﬂected power when tun-
+ing with a 100 W carrier. While the AT-AUTO power resolution at low power may seem
+limited, the most detrimental factor is the overall feedline loss and the actual SWR at the
+antenna feed point. From the ARRL Handbook, the matched losses for several feed lines are
+Table 15.1: The “matched loss” is the expected power loss due to the resistive and dielectric
+Table 15.1: Feedline Match Losses
+Feeder Type Loss per 100’
+RG-58 2.25 dB
+RG-8 1.25 dB
+Open-Wire 0.1 dB
+losses with the feedline when the feedline is terminated in its characteristic impedance. For
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 90 =====
+80
+an RG-58 type coaxial cable, if that cable is terminated into a perfect 50Ω load, then for
+every 100’ of feedline, 2.25dB of power loss is expected.
+These losses increase signiﬁcantly if there exists a signiﬁcant mismatch between the feed-
+line and the intended load. The matched loss in dB is:
+Loss = 10Log PF wd
+PRef
+.
+For a 100’ length RG-58 coaxial cable terminated into a 50 Ω load, the expected loss is
+approximately 40% when operating at 30 MHz. If the input power is 10W, only 5.9W will
+be supplied to the 50 Ω load. Conversely, for a 100’ length of Ladder Line, when terminated
+in its characteristic impedance, the expected loss is only 2.3%! A similar length of RG-8
+coaxial cable driving a 50 Ω load will dissipate (lose) as heat, approximately 24% of the
+transmitter power.
+Table 15.2: 100’ Feedline Match Loss for 1.0:1 SWR
+Feeder Type Loss (dB) Power Loss Power at Antenna
+RG-58 2.25 dB 40.4% 59.6%
+RG-8 1.25 dB 25.0% 75.0%
+Open-Wire 0.1 dB 2.3% 97.7%
+When the feedline is NOT terminated in its’ characteristic impedance, some power will
+be reﬂected back from the load toward the transmitter, increasing the feedline losses. The
+following table serves to illustrate the observed SWR that would be observed by the AT-
+AUTO when coupled to various feed lines, and when those feedline terminations produce
+reﬂections (SWR ≥ 1.0:1). This table assumes 100’ feedline length, and operation at 30
+MHz with 100 W drive power. See the ARRL Handbook for a more detailed explanation
+and associated equations.
+Table 15.3 is intended to illustrate that coaxial cables, while very convenient are extremely
+lossy when operated at high SWR and serve to very eﬀectively mask the magnitude of the
+actual load SWR.
+To summarize and to answer to the original question of why this happens and why does it
+seem to vary with diﬀerent feedline types, one must understand that when tuning with very
+low power levels (such as 10 W) that the losses in the antenna system due to feedline and
+connector losses may easily be greater than the power levels required to initiate automatic
+tuning. When using open wire line, the losses are indeed minimal and observed and actual
+SWR are very closely correlated.
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 91 =====
+81
+Table 15.3: 100’ Feedline Match Loss for various SWR
+Feeder SWR at Ant SWR at AT-AUTO Feeder Loss Power at Antenna
+RG-58 1.36:1 1.20:1 41.3 W 58.7 W
+RG-58 10.0:1 2.90:1 74.2 W 25.8 W
+RG-8 1.27:1 1.20:1 25.5 W 74.5 W
+RG-8 10.0:1 4.18:1 39.8 W 60.2 W
+Open Wire 1.20:1 1.20:1 2.3 W 97.7 W
+Open Wire 10.0:1 8.98:1 10.4 W 89.6 W
+Why don’t I see this same eﬀect with my Icom AH-4 tuner?
+OK - I think I followed all of that. However, I don’t see this same eﬀect when I use my Icom
+AH-4 automatic tuner. I tune it at low power using the Icom Tuner button, but it does not
+automatically re-tune when I switch to high power and the SWR is always around 1.5:1.
+Why?
+Answer: The AT-AUTO and the AH-4 are very diﬀerent tuners. Among the signiﬁcant
+diﬀerences is the fact that the AH-4 (like the AH-3, AH-2 and most of the other mobile
+random-wire tuners) does not drive a feedline such as a coaxial cable or open-wire line that
+in-turn feeds an antenna. It therefore is not aﬀected by the match loss of the coaxial cable
+feeding the AH-4. Because the random wire (the antenna) attaches directly to the AH-4,
+it is able to sample the swr directly at the antennas’ feed point. The AT-AUTO samples
+SWR at some distance from the antenna feed point, which is aﬀected by the match loss
+of the feedline. However, using low-loss feeders will mitigate this eﬀect. The AH-4 is also
+NOT an autonomous antenna tuner the AT-AUTO is. The AT-AUTO constantly monitors
+SWR and automatically re-tunes if necessary. The AH-4 only tunes when commanded, and
+then only tunes to reduce SWR to 1.5:1. The AT-AUTO strives for a much better match of
+1.05:1, but a match of 1.2:1 or better is automatically considered a success. The 1.05:1 SWR
+criteria is much more challenging to achieve, but is readily achievable with the AT-AUTO
+ﬁrmware and variable capacitor and roller inductor. The AH-4 uses lumped capacitance
+and inductor values which often do not yield suﬃciently ﬁne resolution of capacitance and
+inductance necessary to provide the precise tuning match achieved with the AT-AUTO.
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 92 =====
+82
+15.7 Firmware-Speciﬁc Questions
+15.7.1 Where can I get a copy of the ﬁrmware source code?
+I am a software engineer and have experience with the Atmel-type processor used in the
+AT-AUTO. I would like to add some of my own reﬁnements to the AT-AUTO. Where can I
+get a copy of the source code?
+Answer: The license agreement you accepted when you purchased the AT-AUTO pre-
+vents you from accessing, revising, reverse-engineering, sharing, etc., the AT-AUTO ﬁrmware.
+The AT-AUTO ﬁrmware is wholly-owned Palstar, Inc. intellectual property. We are protect-
+ing it accordingly. Our legal department is poised to take whatever legal action if necessary
+to do so. You should realize that considerable time and expense has gone into its develop-
+ment. Some of our competitors may very likely attempt to bring similar products to the
+market, and in so doing attempt to circumvent much of the development costs by coping
+or otherwise reverse-engineering our ﬁrmware. We therefore regret that we are unable to
+divulge any of the ﬁrmware speciﬁcs.
+15.7.2 Why should I update to the newer AT-AUTO ﬁrmware?
+Answer: You might not need to, but you will probably want to. When we started design on
+the AT-AUTO, we understood that the ﬁrmware would likely be an “evolutionary” process.
+We are in good faith attempting to provide a high-quality, eﬀective, QRO, automatic antenna
+tuner. We knew from the onset that while we invested considerable time and resources into
+the development of our ﬁrmware, there would likely be improvements and enhanced features
+that we will want to make available to our customers. Additionally, if problems were later
+discovered and as improved algorithms are designed, we wanted the customer to be able to
+take advantage of these improvements (at no additional cost).
+This is the reason we included the ability to upload the ﬁrmware to the AT-AUTO. The
+design of the AT-AUTO permits us to continually improve the AT-AUTO operation and
+add new features. We look upon the AT-AUTO as an evolutionary product with suﬃcient
+ﬁrmware ﬂexibility to permit continued product improvement. Furthermore, since introduc-
+ing the AT-AUTO, our customers have requested several features that we simply did not
+anticipate, but we are very happy that we were able to meet those requests through improve-
+ments in the ﬁrmware. If building a QRO, fully-automatic tuner were simple, others would
+have done so already.
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 93 =====
+83
+User Notes
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 94 =====
+84
+16.1 User Notes - Continued
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 95 =====
+85
+16.2 User Notes - Continued
+1-800-773-7931 www.Palstar.com
+
+===== PAGE 96 =====
+86
+16.3 User Notes - Continued
+1-800-773-7931 www.Palstar.com

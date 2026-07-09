@@ -80,6 +80,7 @@ void rgb_set(uint8_t r, uint8_t g, uint8_t b) {
 #define PROTO_KENWOOD 3
 #define PROTO_HAMPLUS 4
 #define PROTO_FLEXRADIO 5
+#define PROTO_PALSTAR 6
 
 // ===================== SPE CONSTANTS =====================
 #define SPE_SYN 0x55
@@ -300,6 +301,14 @@ bool hp_ptt = false;
 int hp_dir = 0;
 int hp_rotor_active = 1;
 
+// ===================== PALSTAR STATUS =====================
+#define PAL_BUF_LEN 32
+uint8_t pal_rxbuf[PAL_BUF_LEN]; int pal_rxlen = 0;
+unsigned long last_pal_poll = 0;
+int pal_swr = 0, pal_fwd = 0, pal_ref = 0, pal_l = 0, pal_c = 0;
+int pal_output = 0, pal_mode = 0, pal_status = 0;
+uint64_t pal_freq = 0;
+
 // ===================== SPE STATUS =====================
 #define SPE_BUF_LEN 128
 uint8_t spe_rxbuf[SPE_BUF_LEN];
@@ -431,6 +440,18 @@ void hp_poll();
 void hp_parse();
 bool hp_is_active();
 void translate_to_hp();
+
+// Palstar AT-AUTO
+void pal_send_cmd(uint8_t cmd, uint8_t sub, uint8_t* data, int dlen);
+void pal_poll();
+void pal_read();
+void pal_parse();
+bool pal_is_active();
+void pal_set_mode(uint8_t m);
+void pal_set_ant(uint8_t a);
+void pal_home();
+void pal_set_c(int v);
+void pal_set_l(int v);
 
 // FlexRadio (Kenwood-compativel)
 bool fr_is_active();
@@ -1343,6 +1364,90 @@ bool kw_is_active() {
   return (cfg.port_proto[p-1] == PROTO_KENWOOD);
 }
 
+// ===================== PALSTAR AT-AUTO =====================
+void pal_send_bytes(uint8_t* d, int l) {
+  auto p = ys_port(); if(!p) return;
+  p->write(d, l); p->flush();
+  ys_last_tx = millis();
+}
+
+void pal_send_cmd(uint8_t cmd, uint8_t sub, uint8_t* data, int dlen) {
+  uint8_t buf[32]; int i=0;
+  buf[i++]=0xFE; buf[i++]=0xFE; buf[i++]=0xE0; buf[i++]=0x3A; buf[i++]=cmd;
+  if(sub) buf[i++]=sub;
+  for(int j=0;j<dlen;j++) buf[i++]=data[j];
+  buf[i++]=0xFD;
+  pal_send_bytes(buf, i);
+  if(log_enabled.civ) Serial.printf("[PAL] >> %02X %02X\n", cmd, sub);
+}
+
+void pal_read() {
+  auto p = ys_port(); if(!p) return;
+  while(p->available() && pal_rxlen < PAL_BUF_LEN-1) {
+    uint8_t c = p->read();
+    if(c == 0xFD && pal_rxlen > 2) { pal_rxbuf[pal_rxlen++]=c; pal_parse(); pal_rxlen=0; }
+    else if(pal_rxlen > 0 || c == 0xFE) { pal_rxbuf[pal_rxlen++]=c; }
+  }
+  if(pal_rxlen >= PAL_BUF_LEN-1) pal_rxlen = 0;
+  if(pal_rxlen > 0 && millis() - ys_last_tx > 1000) pal_rxlen = 0;
+}
+
+void pal_parse() {
+  int l = pal_rxlen; if(l < 7) return;
+  uint8_t* d = pal_rxbuf;
+  if(d[0]!=0xFE || d[1]!=0xFE) return;
+  uint8_t cmd = d[4];
+  if(log_enabled.civ) Serial.printf("[PAL] << cmd=%02X len=%d\n", cmd, l);
+
+  // Status response: FE FE 3A E0 06 05 <Output> <Mode> <Motor> <Lx3> <Cx2> <Status> FD
+  if(cmd == 0x06 && l >= 12) {
+    pal_output = d[6]; pal_mode = d[7]; pal_status = d[12];
+    // L: 3 bytes BCD
+    pal_l = (d[8] & 0x0F)*100 + ((d[8]>>4)&0x0F)*10 + (d[9] & 0x0F) + ((d[9]>>4)&0x0F)*1000 +
+           (d[10] & 0x0F)*100000 + ((d[10]>>4)&0x0F)*10000;
+    // C: 2 bytes BCD
+    pal_c = (d[11] & 0x0F) + ((d[11]>>4)&0x0F)*10 +
+            (d[12] & 0x0F)*100 + ((d[12]>>4)&0x0F)*1000;
+    ys_connected = true;
+  }
+  // Power response: FE FE 3A E0 06 06 <FwdH> <RefH> <FwdL> <RefL> FD
+  else if(cmd == 0x06 && l >= 10) {
+    pal_fwd = (d[6] & 0x0F)*100 + ((d[6]>>4)&0x0F)*1000 + (d[7] & 0x0F) + ((d[7]>>4)&0x0F)*10;
+    pal_ref = (d[8] & 0x0F)*100 + ((d[8]>>4)&0x0F)*1000 + (d[9] & 0x0F) + ((d[9]>>4)&0x0F)*10;
+    if(pal_fwd > 0) pal_swr = (pal_fwd + pal_ref) / (pal_fwd - pal_ref); else pal_swr = 99;
+  }
+  // QSY ack: FE FE 3A E0 05 ... FD
+  else if(cmd == 0x05 && l >= 11) {
+    uint64_t f=0; uint64_t mul[]={1,10,100,1000,10000,100000,1000000,10000000,100000000,1000000000};
+    for(int i=0;i<5;i++){ f+=((d[6+i]>>4)&0x0F)*mul[i*2]; f+=(d[6+i]&0x0F)*mul[i*2+1]; }
+    pal_freq = f;
+  }
+  // Ack: FE FE 3A E0 FB FD
+  else if(cmd == 0xFB) { /* command acknowledged */ }
+}
+
+void pal_poll() {
+  if(!pal_is_active()) return;
+  unsigned long now = millis();
+  if(now - last_pal_poll < 2000) return;
+  last_pal_poll = now;
+  static int step = 0;
+  switch(step) {
+    case 0: pal_send_cmd(0x06,0x05,NULL,0); break; // Status
+    case 1: pal_send_cmd(0x06,0x06,NULL,0); break; // Power
+  }
+  step = (step + 1) % 2;
+}
+
+bool pal_is_active() {
+  uint8_t p = cfg.active_port; if(p < 1 || p > 4) return false;
+  return (cfg.port_proto[p-1] == PROTO_PALSTAR);
+}
+
+void pal_set_mode(uint8_t m) { uint8_t d[]={m}; pal_send_cmd(0x07,0,d,1); }
+void pal_set_ant(uint8_t a) { uint8_t d[]={a}; pal_send_cmd(0x08,0,d,1); }
+void pal_home() { pal_send_cmd(0x0B,0,NULL,0); }
+
 // ===================== FLEXRADIO CAT =====================
 // Kenwood-compativel: ASCII cmd; com 11-digit frequency
 // Reusa kw_send/kw_read (mesmo formato), parse proprio para modos
@@ -1753,9 +1858,9 @@ void sel_port(uint8_t p) {
   if(p<1||p>4)return;
   cfg.active_port=p;
   switch(p){case 1:act_civ=&p1;break;case 2:act_civ=&p2;break;case 3:act_civ=&p3;break;}
-  const char* pn[] = {"CIV","SPE","YS","KW","HP","FR"};
+  const char* pn[] = {"CIV","SPE","YS","KW","HP","FR","PAL"};
   uint8_t pt = cfg.port_proto[p-1];
-  Serial.printf("[CI-V] Porta: PORT %d Proto: %s\n",p,pt<6?pn[pt]:"?");
+  Serial.printf("[CI-V] Porta: PORT %d Proto: %s\n",p,pt<7?pn[pt]:"?");
 }
 void rst_port(uint8_t p) {
   if(cfg.port_proto[p-1]==PROTO_SPE){ sp_init(); return; }
@@ -1794,9 +1899,9 @@ void serial_cmd() {
   } else if(c=="cfg"||c=="config"){
     Serial.printf("AP:%s STA:%s DHCP:%s BLE:%s CAT:%s Porta:%d\n",cfg.ap_ssid.c_str(),cfg.sta_ssid.c_str(),cfg.sta_dhcp?"S":"N",cfg.bt_name.c_str(),cfg.cat_enabled?"S":"N",cfg.cat_port);
     for(int i=0;i<4;i++){
-      const char* pns[]={"CIV","SPE","YS","KW","HP","FR"};
+      const char* pns[]={"CIV","SPE","YS","KW","HP","FR","PAL"};
       uint8_t pt=cfg.port_proto[i];
-      Serial.printf("PORT%d: Proto=%s Baud=%u Addr=0x%02X\n",i+1,pt<6?pns[pt]:"?",cfg.civ_baud[i],cfg.civ_addr[i]);
+      Serial.printf("PORT%d: Proto=%s Baud=%u Addr=0x%02X\n",i+1,pt<7?pns[pt]:"?",cfg.civ_baud[i],cfg.civ_addr[i]);
     }
   } else if(c=="ports"){
     Serial.println("PORT1: RX16 TX17 (CIV)\nPORT2: RX18 TX19 (CIV)\nPORT3: RX20 TX21 (CIV)\nPORT4: RX14 TX15 (SPE RS232)");
@@ -1961,6 +2066,7 @@ button:hover{background:#80d8ff}
 <button class="tab" data-tab="ic705" onclick="st(this)">IC-705</button>
 <button class="tab" data-tab="spe" onclick="st(this)">SPE</button>
 <button class="tab" data-tab="hamplus" onclick="st(this)">Hamplus</button>
+<button class="tab" data-tab="palstar" onclick="st(this)">Palstar</button>
 <button class="tab" data-tab="wifi" onclick="st(this)">WiFi</button>
 <button class="tab" data-tab="bluetooth" onclick="st(this)">Bluetooth</button>
 <button class="tab" data-tab="civ" onclick="st(this)">CAT / CI-V</button>
@@ -2224,6 +2330,46 @@ WARN: <span id="spe_warn_txt_display"></span>
 </div>
 </div>
 </div>
+<div id="tb-palstar" style="display:none"><h2>Palstar AT-AUTO</h2>
+<!-- LCD Display -->
+<div class="card" style="background:#000;border:2px solid #1a3a5a;border-radius:6px;padding:10px;margin-bottom:6px">
+<div style="background:#001020;border:1px solid #0a2a4a;border-radius:4px;padding:8px;font-family:'DS-Digital',monospace">
+<div style="display:flex;justify-content:space-between;border-bottom:1px solid #0a2a4a;padding-bottom:4px;margin-bottom:4px">
+<span style="color:#4fc3f7;font-size:12px;font-weight:bold">AT-AUTO</span>
+<span style="color:#94a3b8;font-size:10px" id="pal_lcd_mode">AUTO</span>
+<span style="font-size:10px;padding:1px 5px;border-radius:2px;font-weight:bold" id="pal_lcd_ant">COAX</span>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;border-bottom:1px solid #0a2a4a;padding:4px 0;margin-bottom:4px">
+<div><span style="color:#555;font-size:7px">FWD W</span><div style="color:#4fc3f7;font-size:16px;font-weight:bold" id="pal_lcd_fwd">0</div></div>
+<div><span style="color:#555;font-size:7px">REF W</span><div style="color:#f87171;font-size:16px;font-weight:bold" id="pal_lcd_ref">0</div></div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;padding:2px 0">
+<div><span style="color:#555;font-size:7px">SWR</span><div style="color:#FFB300;font-size:14px;font-weight:bold" id="pal_lcd_swr">1.0</div></div>
+<div><span style="color:#555;font-size:7px">L</span><div style="color:#e2e8f0;font-size:12px;font-weight:bold" id="pal_lcd_l">0</div></div>
+<div><span style="color:#555;font-size:7px">C</span><div style="color:#e2e8f0;font-size:12px;font-weight:bold" id="pal_lcd_c">0</div></div>
+</div>
+</div></div>
+<!-- LED indicators -->
+<div class="card" style="padding:6px;display:flex;gap:8px;justify-content:center;margin-bottom:6px">
+<div style="text-align:center"><span id="pal_led_tune" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#333"></span><div style="font-size:8px;color:#94a3b8">Tune</div></div>
+<div style="text-align:center"><span id="pal_led_match" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#333"></span><div style="font-size:8px;color:#94a3b8">Match</div></div>
+<div style="text-align:center"><span id="pal_led_bypass" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#333"></span><div style="font-size:8px;color:#94a3b8">Bypass</div></div>
+</div>
+<!-- Control buttons -->
+<div class="card" style="padding:6px">
+<div style="display:flex;gap:3px;flex-wrap:wrap;margin-bottom:3px">
+<button class="btn-sm" onclick="palCmd('mode',0)">Auto</button>
+<button class="btn-sm" onclick="palCmd('mode',1)">Manual</button>
+<button class="btn-sm" onclick="palCmd('mode',2)">Bypass</button>
+<button class="btn-sm" onclick="palCmd('ant',0)">Coax</button>
+<button class="btn-sm" onclick="palCmd('ant',1)">Balanced</button>
+</div>
+<div style="display:flex;gap:3px;flex-wrap:wrap">
+<button class="btn-sm" onclick="palCmd('home',0)">Home L&C</button>
+<button class="btn-sm btn-outline" onclick="palCmd('tune',0)">Tune</button>
+</div>
+</div>
+</div>
 <div id="tb-wifi" style="display:none"><h2>WiFi</h2>
 <div class="card">
 <h2>AP</h2><label>SSID</label><input type="text" id="aps"><label>Senha</label><input type="password" id="app"><button onclick="sAP()">Salvar AP</button>
@@ -2440,7 +2586,7 @@ WARN: <span id="spe_warn_txt_display"></span>
 <label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="0" checked> Enable</label></div>
 <label style="font-size:9px">Protocolo</label>
 <select class="pp" data-idx="0" onchange="protoChange2(this,0)" style="font-size:10px;padding:3px 4px">
-<option value="0">Icom CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option><option value="5">FlexRadio</option></select>
+<option value="0">Icom CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option><option value="5">FlexRadio</option><option value="6">Palstar</option></select>
 <label style="font-size:9px">Baud</label>
 <select class="pb" data-idx="0" style="font-size:10px;padding:3px 4px">
 <option value="9600">9600</option><option value="19200" selected>19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
@@ -2455,7 +2601,7 @@ WARN: <span id="spe_warn_txt_display"></span>
 <label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="1" checked> Enable</label></div>
 <label style="font-size:9px">Protocolo</label>
 <select class="pp" data-idx="1" onchange="protoChange2(this,1)" style="font-size:10px;padding:3px 4px">
-<option value="0">Icom CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option><option value="5">FlexRadio</option></select>
+<option value="0">Icom CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option><option value="5">FlexRadio</option><option value="6">Palstar</option></select>
 <label style="font-size:9px">Baud</label>
 <select class="pb" data-idx="1" style="font-size:10px;padding:3px 4px">
 <option value="9600">9600</option><option value="19200" selected>19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
@@ -2470,7 +2616,7 @@ WARN: <span id="spe_warn_txt_display"></span>
 <label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="2" checked> Enable</label></div>
 <label style="font-size:9px">Protocolo</label>
 <select class="pp" data-idx="2" onchange="protoChange2(this,2)" style="font-size:10px;padding:3px 4px">
-<option value="0">Icom CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option><option value="5">FlexRadio</option></select>
+<option value="0">Icom CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option><option value="5">FlexRadio</option><option value="6">Palstar</option></select>
 <label style="font-size:9px">Baud</label>
 <select class="pb" data-idx="2" style="font-size:10px;padding:3px 4px">
 <option value="9600">9600</option><option value="19200" selected>19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
@@ -2485,7 +2631,7 @@ WARN: <span id="spe_warn_txt_display"></span>
 <label style="font-size:10px;margin:0"><input type="checkbox" class="pe" data-idx="3" checked> Enable</label></div>
 <label style="font-size:9px">Protocolo</label>
 <select class="pp" data-idx="3" onchange="protoChange2(this,3)" style="font-size:10px;padding:3px 4px">
-<option value="0">Icom CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option><option value="5">FlexRadio</option></select>
+<option value="0">Icom CI-V</option><option value="1">SPE</option><option value="2">Yaesu</option><option value="3">Kenwood</option><option value="4">Hamplus</option><option value="5">FlexRadio</option><option value="6">Palstar</option></select>
 <label style="font-size:9px">Baud</label>
 <select class="pb" data-idx="3" style="font-size:10px;padding:3px 4px">
 <option value="9600">9600</option><option value="19200" selected>19200</option><option value="38400">38400</option><option value="57600">57600</option><option value="115200">115200</option></select>
@@ -2635,6 +2781,7 @@ el.classList.add('active');
 if(tab=='radio'){carregar();carregarBT();if(window._smInt)clearInterval(window._smInt);window._smInt=setInterval(pollSmeter,200);}else{if(window._smInt){clearInterval(window._smInt);window._smInt=null;}}
 if(tab=='ic705'||tab=='bluetooth'){carregar();carregarBT();}
 if(tab=='spe'){carregarSPE();}
+if(tab=='palstar'){carregarPal();}
 if(tab=='hamplus'){carregarHP();}
 if(tab=='wifi'){carregar();listarRedes();carregarRedes();}
 if(tab=='logs')carregarLogPref();
@@ -2883,6 +3030,30 @@ function hpSplit(){envia('/api/save',{'hp_split':true});}
 var hpCurrentRotor=1;
 function hpRotor(n){hpCurrentRotor=n;toast('Rotor '+n+' selecionado','info');}
 function hpDir(d){envia('/api/save',{'hp_rotor':hpCurrentRotor,'hp_dir':d});}
+function palCmd(c,v){var o={};o['pal_'+c]=v;envia('/api/save',o);setTimeout(carregarPal,500);}
+function carregarPal(){
+var x=new XMLHttpRequest();
+x.open('GET','/api/status',true);
+x.onload=function(){
+try{
+var d=JSON.parse(x.responseText);
+if(!d.pal_active)return;
+document.getElementById('pal_lcd_mode').textContent=['AUTO','MANUAL','BYPASS'][d.pal_mode]||'?';
+document.getElementById('pal_lcd_ant').textContent=d.pal_output?'BAL':'COAX';
+document.getElementById('pal_lcd_ant').style.color=d.pal_output&0x80?'#ef4444':'#4fc3f7';
+document.getElementById('pal_lcd_fwd').textContent=d.pal_fwd||0;
+document.getElementById('pal_lcd_ref').textContent=d.pal_ref||0;
+document.getElementById('pal_lcd_swr').textContent=(d.pal_swr||0)/10;
+document.getElementById('pal_lcd_l').textContent=d.pal_l||0;
+document.getElementById('pal_lcd_c').textContent=d.pal_c||0;
+var st=d.pal_status||0;
+document.getElementById('pal_led_tune').style.background=(st==2||st==6)?'#10b981':'#333';
+document.getElementById('pal_led_match').style.background=(st==4||st==5)?'#10b981':'#333';
+document.getElementById('pal_led_bypass').style.background=(d.pal_mode==2)?'#FFB300':'#333';
+}catch(e){}
+};
+x.send();
+}
 function carregarHP(){
 var x=new XMLHttpRequest();
 x.open('GET','/api/status',true);
@@ -3364,6 +3535,9 @@ void h_sts() {
   // SPE fields apenas quando ativo (reduz resposta JSON)
   d["spe_active"]=sp_is_active();
   d["hp_ptt"]=hp_ptt; d["hp_split"]=hp_split; d["hp_antenna"]=hp_antenna; d["hp_radio"]=hp_radio; d["hp_dir"]=hp_dir;
+  d["pal_active"]=pal_is_active(); d["pal_mode"]=pal_mode; d["pal_output"]=pal_output;
+  d["pal_fwd"]=pal_fwd; d["pal_ref"]=pal_ref; d["pal_swr"]=pal_swr;
+  d["pal_l"]=pal_l; d["pal_c"]=pal_c; d["pal_status"]=pal_status;
   if(sp_is_active()){
     d["spe_id"]=spe_id; d["spe_op"]=spe_op; d["spe_tx"]=spe_tx;
     d["spe_pout"]=spe_pout; d["spe_pwr_level"]=String(spe_pwr_level);
@@ -3646,6 +3820,11 @@ void h_civ_cmd() {
   else if(d.containsKey("bloff")){if(sp_is_active())sp_send_cmd(SPE_CMD_BL_OFF);}
   // Hamplus HP603 commands
   else if(d.containsKey("hp_ant")){if(hp_is_active()){int a=d["hp_ant"].as<int>();if(a>=1&&a<=6)hp_send(a);}}
+  // Palstar commands
+  else if(d.containsKey("pal_mode")){if(pal_is_active())pal_set_mode(d["pal_mode"].as<uint8_t>());}
+  else if(d.containsKey("pal_ant")){if(pal_is_active())pal_set_ant(d["pal_ant"].as<uint8_t>());}
+  else if(d.containsKey("pal_home")){if(pal_is_active())pal_home();}
+  else if(d.containsKey("pal_tune")){if(pal_is_active())pal_send_cmd(0x07,0x00,NULL,0);} // Tune = Auto mode
   else if(d.containsKey("hp_radio")){if(hp_is_active()){int r=d["hp_radio"].as<int>();if(r>=1&&r<=3)hp_send(6+r);}}
   else if(d.containsKey("hp_split")){if(hp_is_active())hp_send(0x0A);}
   else if(d.containsKey("hp_sts")){if(hp_is_active())hp_send(0x00);}
@@ -3875,6 +4054,9 @@ void loop() {
     translate_kw_to_spe();
     translate_cat_to_civ();
   }
+
+  // Palstar polling
+  if(pal_is_active()){ pal_poll(); pal_read(); }
 
   // FlexRadio polling
   if(fr_is_active()){ fr_poll(); fr_read(); }
