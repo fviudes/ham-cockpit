@@ -2597,9 +2597,39 @@ WARN: <span id="spe_warn_txt_display"></span>
 <div class="card" style="font-size:10px;line-height:1.5;color:#cbd5e1">
 <strong style="color:#FFB300">1. Conex&otilde;es F&iacute;sicas / Wiring</strong><br>
 PORT1: RX=GPIO16 TX=GPIO17 &bull; PORT2: RX=GPIO18 TX=GPIO19<br>
-PORT3: RX=GPIO20 TX=GPIO21 &bull; PORT4: RX=GPIO14 TX=GPIO15 (SPE c/ MAX3232)<br>
-LED RGB: GPIO48 &bull; LED: GPIO2 &bull; USB: GPIO43/44 (console)<br>
-<em>EN: PORT1-3 use TTL 3.3V direct. PORT4 needs RS232 (MAX3232) for SPE.</em><br><br>
+PORT3: RX=GPIO20 TX=GPIO21 &bull; PORT4: RX=GPIO14 TX=GPIO15<br>
+LED RGB: GPIO48 &bull; LED: GPIO2 &bull; USB: GPIO43/44 (console)<br><br>
+
+<strong style="color:#FFB300">Convers&atilde;o de N&iacute;vel / Level Conversion</strong><br>
+O ESP32-S3 usa 3.3V TTL. N&atilde;o ligue diretamente a portas RS232 (&plusmn;12V) &mdash; danifica o chip. Use conversor conforme a tabela:<br>
+<em>EN: ESP32-S3 uses 3.3V TTL. Do NOT connect directly to RS232 (&plusmn;12V) &mdash; it will damage the chip. Use conversion as per table:</em><br><br>
+
+<div style="display:grid;grid-template-columns:2fr 1fr 1fr 3fr;gap:2px;font-size:9px;border-bottom:1px solid #1a2a3a;padding:2px 0;color:#FFB300">
+<span>Dispositivo / Device</span><span>N&iacute;vel</span><span>Porta</span><span>Convers&atilde;o</span></div>
+<div style="display:grid;grid-template-columns:2fr 1fr 1fr 3fr;gap:2px;font-size:9px;padding:2px 0;border-bottom:1px solid #1a2a3a">
+<span>SPE Expert (DB15 pino 3/10)</span><span>5V TTL</span><span>PORT4</span><span>Conversor 3.3V&harr;5V</span></div>
+<div style="display:grid;grid-template-columns:2fr 1fr 1fr 3fr;gap:2px;font-size:9px;padding:2px 0;border-bottom:1px solid #1a2a3a">
+<span>SPE Expert (DB15 pino 1/9)</span><span>&plusmn;12V RS232</span><span>PORT4</span><span>MAX3232</span></div>
+<div style="display:grid;grid-template-columns:2fr 1fr 1fr 3fr;gap:2px;font-size:9px;padding:2px 0;border-bottom:1px solid #1a2a3a">
+<span>Hamplus AS-603WL</span><span>&plusmn;12V RS232</span><span>1-4</span><span>MAX3232</span></div>
+<div style="display:grid;grid-template-columns:2fr 1fr 1fr 3fr;gap:2px;font-size:9px;padding:2px 0;border-bottom:1px solid #1a2a3a">
+<span>Palstar AT-AUTO</span><span>&plusmn;12V RS232</span><span>1-4</span><span>MAX3232</span></div>
+<div style="display:grid;grid-template-columns:2fr 1fr 1fr 3fr;gap:2px;font-size:9px;padding:2px 0;border-bottom:1px solid #1a2a3a">
+<span>Icom CI-V</span><span>5V TTL</span><span>1-3</span><span>Divisor resistivo</span></div>
+<div style="display:grid;grid-template-columns:2fr 1fr 1fr 3fr;gap:2px;font-size:9px;padding:2px 0">
+<span>Yaesu/Kenwood</span><span>RS232/TTL</span><span>1-3</span><span>Verificar manual</span></div>
+<br>
+<strong>Recomenda&ccedil;&atilde;o pr&aacute;tica:</strong><br>
+Para RS232 (SPE, Hamplus, Palstar): use <strong>MAX3232</strong> (3.3V, difere do MAX232 que precisa de 5V).<br>
+Para CI-V Icom: divisor resistivo no TX do ESP32 j&aacute; funciona (Icom aceita 3.3V como HIGH).<br>
+<em>EN: For RS232 use <strong>MAX3232</strong> (3.3V compatible, unlike MAX232 which needs 5V). For Icom CI-V: resistive divider on ESP32 TX works (Icom accepts 3.3V as HIGH).</em><br><br>
+
+<strong>Cabo DB9 &rarr; ESP32 via MAX3232:</strong><br>
+DB9 F&ecirc;mea &rarr; MAX3232 &rarr; ESP32 GPIO<br>
+Pino 2 (RX) &larr; TX do MAX3232 &larr; GPIO TX<br>
+Pino 3 (TX) &rarr; RX do MAX3232 &rarr; GPIO RX<br>
+Pino 5 (GND) &rarr; GND do MAX3232 &rarr; GND ESP32<br>
+<em>EN: DB9 Female &rarr; MAX3232 &rarr; ESP32 GPIO. Never connect GPIO 3.3V directly to DB9 RS232 &plusmn;12V &mdash; it will burn the ESP32.</em><br><br>
 
 <strong style="color:#FFB300">2. Primeiro Uso / First Use</strong><br>
 1. Conecte ao WiFi AP: <strong>CAT-Bridge</strong> (senha: 12345678)<br>
