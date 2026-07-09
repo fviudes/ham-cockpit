@@ -2602,10 +2602,7 @@ LED RGB: GPIO48 &bull; LED: GPIO2 &bull; USB: GPIO43/44 (console)<br>
 <em>EN: PORT1-3 use TTL 3.3V direct. PORT4 needs RS232 (MAX3232) for SPE.</em><br><br>
 
 <strong style="color:#FFB300">2. Primeiro Uso / First Use</strong><br>
-1. Conecte o cabo USB ao PC &bull; <em>Connect USB cable to PC</em><br>
-2. IDE Arduino: placa ESP32S3 Dev Module, PSRAM OPI, Huge APP (3MB)<br>
-3. Fa&ccedil;a upload do firmware &bull; <em>Upload the firmware</em><br>
-4. Conecte ao WiFi AP: <strong>CAT-Bridge</strong> (senha: 12345678)<br>
+1. Conecte ao WiFi AP: <strong>CAT-Bridge</strong> (senha: 12345678)<br>
 5. Abra http://192.168.4.1 no navegador &bull; <em>Open in browser</em><br>
 6. Login: admin / 1234<br><br>
 
