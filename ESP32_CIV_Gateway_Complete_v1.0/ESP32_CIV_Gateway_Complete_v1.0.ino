@@ -673,7 +673,6 @@ void scan_ic5() {
   Serial.println("[IC705] Escaneando IC-705 por 4s (async)...");
 
   ble_scan_active=true;
-  ble_scan_buf="["; ble_scan_cnt=0;
 
   auto ad=BLEDevice::getAdvertising();
   if(ad) ad->stop();
