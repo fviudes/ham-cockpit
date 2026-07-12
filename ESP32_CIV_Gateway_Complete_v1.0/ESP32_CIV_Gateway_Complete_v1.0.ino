@@ -669,21 +669,22 @@ void setup_nus() {
 
 void scan_ic5() {
   if(ic5con||ic5docon)return;
-  Serial.println("[IC705] Escaneando IC-705 por 4s...");
+  if(ble_scan_active) { Serial.println("[IC705] Scan ja em andamento"); return; }
+  Serial.println("[IC705] Escaneando IC-705 por 4s (async)...");
 
-  // Para advertising temporariamente
+  ble_scan_active=true;
+  ble_scan_buf="["; ble_scan_cnt=0;
+
   auto ad=BLEDevice::getAdvertising();
   if(ad) ad->stop();
 
   auto sc=BLEDevice::getScan(); sc->setAdvertisedDeviceCallbacks(new IC5AdvCB()); sc->setInterval(1349); sc->setWindow(449); sc->setActiveScan(true);
-  sc->start(4,false);
-  sc->clearResults();
+  sc->start(4,true); // ASYNC - nao bloqueia o loop
 
-  // Retoma advertising
-  delay(100);
+  delay(10);
   if(ad) ad->start();
   BLEDevice::startAdvertising();
-  Serial.println("[IC705] Scan concluido, advertising retomado");
+  Serial.println("[IC705] Scan async iniciado, loop continua");
 }
 
 void conn_ic5(BLEAddress a) {
