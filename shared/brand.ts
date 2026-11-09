@@ -1,7 +1,7 @@
 export const APP_NAME = "Ham Cockpit";
 export const APP_SLUG = "ham-cockpit";
 export const APP_USER = "hamcockpit";
-export const APP_VERSION = "2.0.0";
+export const APP_VERSION = "0.1.00";
 export const APP_BLE_NAME = "Ham-Cockpit-Web01";
 export const APP_SSID_PREFIX = "Ham-Cockpit";
 export const APP_HOSTNAME = "ham-cockpit";

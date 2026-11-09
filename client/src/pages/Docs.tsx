@@ -28,7 +28,7 @@ export default function Docs() {
       <div className="pt-14">
         <div className="container py-12">
           <motion.div initial="hidden" animate="visible" variants={fadeUp} className="mb-8">
-            <p className="mb-2 font-['IBM_Plex_Mono'] text-xs font-bold tracking-widest text-[#FFB300]">DOCUMENTAÇÃO · v2.0</p>
+            <p className="mb-2 font-['IBM_Plex_Mono'] text-xs font-bold tracking-widest text-[#FFB300]">DOCUMENTAÇÃO · v0.1.00</p>
             <h1 className="font-['Space_Grotesk'] text-4xl font-bold text-white sm:text-5xl">Ham Cockpit, sem ESP32</h1>
             <p className="mt-3 max-w-2xl text-[#94a3b8]">
               Guia público. O manual do operador (23 capítulos, PT e EN, diagramas e exemplos) está no console, em Sistema → Manual.

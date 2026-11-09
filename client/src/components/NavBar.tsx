@@ -14,7 +14,7 @@ export default function NavBar() {
           </span>
           <span className="flex flex-col items-start leading-none">
             <span className="font-['Space_Grotesk'] text-sm font-bold text-white">Ham Cockpit</span>
-            <span className="font-['IBM_Plex_Mono'] text-[10px] tracking-widest text-[#FFB300]">v2.0 · ESTAÇÃO</span>
+            <span className="font-['IBM_Plex_Mono'] text-[10px] tracking-widest text-[#FFB300]">v0.1.00 · ESTAÇÃO</span>
           </span>
         </button>
 

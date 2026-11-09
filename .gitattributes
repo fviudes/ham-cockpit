@@ -8,3 +8,4 @@ cmdline.txt text eol=lf
 **/root-login text eol=lf
 **/station-user text eol=lf
 **/sudoers-hamcockpit text eol=lf
+*.iso binary

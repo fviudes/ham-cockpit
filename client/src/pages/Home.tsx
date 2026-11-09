@@ -48,7 +48,7 @@ export default function Home() {
         <div className="container grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr]">
           <motion.div initial="hidden" animate="visible" variants={fadeUp}>
             <p className="mb-3 font-['IBM_Plex_Mono'] text-xs font-bold tracking-widest text-[#FFB300]">
-              APPLIANCE DA ESTAÇÃO · v2.0
+              APPLIANCE DA ESTAÇÃO · v0.1.00
             </p>
             <h1 className="mb-5 font-['Space_Grotesk'] text-4xl leading-tight font-bold text-white sm:text-5xl lg:text-6xl">
               Um Pi. Um browser.
@@ -269,7 +269,7 @@ export default function Home() {
 
       <footer className="border-t border-[rgba(79,195,247,0.1)] py-8">
         <div className="container flex flex-wrap items-center justify-between gap-3 text-xs text-[#5d7184]">
-          <span className="font-['IBM_Plex_Mono']">Ham Cockpit v2.0.0 · Raspberry Pi 3 / 4 · Debian Bookworm</span>
+          <span className="font-['IBM_Plex_Mono']">Ham Cockpit v0.1.00 · Raspberry Pi 3 / 4 · Ubuntu Server</span>
           <span>Não é firmware ESP32. O gateway CI-V no microcontrolador ficou para trás.</span>
         </div>
       </footer>

@@ -1,20 +1,25 @@
-# Ham Cockpit — canal de atualização
+# Canal de atualização — Ham Cockpit
 
-Esta pasta é o canal de update do console. O card **Ham Cockpit** em Admin → Atualização lê `version.json` na branch `main` de [fviudes/ham-cockpit](https://github.com/fviudes/ham-cockpit).
+Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-## Como publicar uma versão
+Versão atual neste canal: **0.1.00** (`version.json`).
 
-1. Suba o número em `version.json` (e no `VERSION` da raiz, se esta árvore for a instalada).
-2. Opcional: coloque o pacote `ham-cockpit-<versão>.tgz` nesta pasta e preencha `"file"`.
-3. Faça merge em `main`. As estações passam a mostrar a nova versão no card.
+## Como o console usa esta pasta
+
+1. Lê `version.json` na branch `main`.
+2. Compara com `/opt/ham-cockpit/VERSION` (ou o `VERSION` da árvore instalada).
+3. Se o número daqui for maior, o botão Atualizar aplica o pacote.
 
 ```json
 {
-  "version": "2.0.1",
+  "version": "0.1.01",
   "channel": "main",
-  "file": "ham-cockpit-2.0.1.tgz",
-  "notes": "correções do painel"
+  "file": "ham-cockpit-0.1.01.tgz",
+  "notes": "…"
 }
 ```
 
-Sem `"file"`, a estação baixa o snapshot de `main` e instala o `dist/` publicado no repositório.
+- `"file"` preenchido: baixa `update/<file>` desta pasta.
+- `"file"` vazio: a estação usa o snapshot publicado de `main`.
+
+Instalação e operação: [README na raiz](../README.md). ISO: [`instaladores/`](../instaladores/).

@@ -1,0 +1,16 @@
+Ham Cockpit v0.1.00 — instalador para Raspberry Pi 3 / 4
+
+Esta ISO contém a aplicação (console + scripts de estação), não a imagem
+completa do Ubuntu. Grave primeiro o Ubuntu Server 24.04 LTS ARM64 no
+microSD (Raspberry Pi Imager). Depois copie esta pasta para o Pi e rode:
+
+  sudo bash deploy/station/install-station.sh
+
+Primeiro acesso
+  Wi-Fi AP:  Ham-Cockpit-XXXX   senha hamcockpit
+  Console:   http://192.168.4.1/console    admin / 1234
+  Wavelog:   http://IP:8086/install        banco wavelog-db
+  SSH:       hamcockpit / 1234  ou  admin / 1234
+
+Documentação: README.md nesta ISO e https://github.com/fviudes/ham-cockpit
+Atualizações: pasta update/ no mesmo repositório (Admin → Atualização).
