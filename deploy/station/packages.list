@@ -16,7 +16,7 @@ docker-compose-v2
 
 # CAT serial ↔ IP
 ser2net
-hamlib-utils
+libhamlib-utils
 
 # Bluetooth IC-705 (BlueZ; Web Bluetooth no Chrome)
 bluez

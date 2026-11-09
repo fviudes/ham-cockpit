@@ -29,6 +29,38 @@ if ! grep -q 'ham-cockpit' /etc/hosts; then
   printf '127.0.1.1\tham-cockpit ham-cockpit.local\n' >>/etc/hosts
 fi
 
+enable_universe() {
+  local f
+  for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.list; do
+    [[ -f $f ]] || continue
+    if grep -qE '^[[:space:]]*deb ' "$f" && ! grep -qE '^[[:space:]]*deb .* universe' "$f"; then
+      sed -i -E 's/^(deb(-src)?[[:space:]].*[[:space:]](main|restricted)([^#]*))$/\1 universe/' "$f"
+    fi
+  done
+  for f in /etc/apt/sources.list.d/*.sources; do
+    [[ -f $f ]] || continue
+    if grep -q '^Components:' "$f" && ! grep -qE '^Components:.*universe' "$f"; then
+      sed -i -E 's/^(Components:.*)/\1 universe/' "$f"
+    fi
+  done
+}
+
+resolve_pkg() {
+  local name="$1" cand c
+  case "$name" in
+    hamlib-utils) cand=(libhamlib-utils hamlib-utils) ;;
+    *) cand=("$name") ;;
+  esac
+  for c in "${cand[@]}"; do
+    if apt-cache show "$c" >/dev/null 2>&1; then
+      printf '%s\n' "$c"
+      return 0
+    fi
+  done
+  return 1
+}
+
+enable_universe
 apt-get update -qq
 apt-get install -y locales
 sed -i 's/^# *pt_BR.UTF-8/pt_BR.UTF-8/' /etc/locale.gen
@@ -36,8 +68,24 @@ locale-gen
 update-locale LANG=pt_BR.UTF-8 LC_ALL=pt_BR.UTF-8 || true
 
 PKGLIST="$SEED/deploy/station/packages.list"
-mapfile -t PKGS < <(grep -vE '^#|^$|^(firefox|chromium-browser)$' "$PKGLIST")
-PKGS+=(epiphany-browser)
+mapfile -t RAW < <(grep -vE '^#|^$|^(firefox|chromium-browser)$' "$PKGLIST")
+RAW+=(epiphany-browser)
+PKGS=()
+for p in "${RAW[@]}"; do
+  if mapped="$(resolve_pkg "$p")"; then
+    PKGS+=("$mapped")
+  else
+    echo "AVISO: pacote $p não existe neste Ubuntu (ignorado)" >&2
+  fi
+done
+if [[ ${#PKGS[@]} -eq 0 ]]; then
+  echo "nenhum pacote apt para instalar" >&2
+  exit 1
+fi
+if ! printf '%s\n' "${PKGS[@]}" | grep -qxE 'libhamlib-utils|hamlib-utils'; then
+  echo "Hamlib (rigctld) é obrigatório e não foi encontrado no apt" >&2
+  exit 1
+fi
 apt-get install -y --no-install-recommends "${PKGS[@]}"
 
 if ! command -v node >/dev/null 2>&1 || ! node -v | grep -qE '^v(2[0-9]|[3-9])'; then

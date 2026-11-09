@@ -15,7 +15,8 @@ export DEBIAN_FRONTEND=noninteractive
 
 if [[ "$CHROOT" != "1" ]]; then
   apt-get update -qq
-  grep -vE '^#|^$' "$HERE/packages.list" | xargs -r apt-get install -y
+  mapfile -t STATION_PKGS < <(grep -vE '^#|^$' "$HERE/packages.list" | sed 's/^hamlib-utils$/libhamlib-utils/')
+  apt-get install -y "${STATION_PKGS[@]}"
 fi
 
 if [[ "$CHROOT" == "1" ]]; then
