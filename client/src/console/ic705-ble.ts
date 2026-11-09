@@ -15,11 +15,28 @@ export type BlePhase =
   | "ready"
   | "error";
 
+export type CivPatch = {
+  freq?: number;
+  mode?: string;
+  ptt?: boolean;
+  smeter?: number;
+  po?: number;
+  swr?: number;
+  agc?: "OFF" | "FAST" | "MID" | "SLOW";
+  pre?: "OFF" | "ON1" | "ON2";
+  att?: boolean;
+  nr?: boolean;
+  nb?: boolean;
+  split?: boolean;
+  vfo?: "A" | "B";
+};
+
 export type BleListener = {
   onPhase: (phase: BlePhase, detail?: string) => void;
   onPaired: (fresh: boolean) => void;
   onCivGrant: () => void;
   onFreq: (hz: number) => void;
+  onCiv?: (patch: CivPatch) => void;
   onDisconnect: () => void;
   onFrame?: (hex: string) => void;
 };
@@ -74,16 +91,20 @@ const UUID_STORE = "hamcockpit.ic705.hsUuid";
 const DEVICE_ID_STORE = "hamcockpit.ic705.deviceId";
 const ATT_CHUNK = 20;
 
+/** IC-705 CI-V operating mode (cmd 06 / 26). DV is 0x17, not 0x09. */
 export const ICOM_MODE: Record<string, number> = {
-  LSB: 0,
-  "LSB-D": 0,
-  USB: 1,
-  "USB-D": 1,
-  AM: 2,
-  CW: 3,
-  FM: 5,
-  DV: 9,
+  LSB: 0x00,
+  "LSB-D": 0x00,
+  USB: 0x01,
+  "USB-D": 0x01,
+  AM: 0x02,
+  CW: 0x03,
+  FM: 0x05,
+  DV: 0x17,
 };
+
+const AGC_BYTE = { OFF: 0x00, FAST: 0x01, MID: 0x02, SLOW: 0x03 } as const;
+const PRE_BYTE = { OFF: 0x00, ON1: 0x01, ON2: 0x02 } as const;
 
 function hexBytes(s: string) {
   return Uint8Array.from(s.trim().split(/\s+/).map((b) => parseInt(b, 16)));
@@ -91,23 +112,25 @@ function hexBytes(s: string) {
 
 function pickGrantedDevice(known: BtDevice[], deviceId?: string, deviceName?: string): BtDevice | null {
   if (!known.length) return null;
-  if (deviceId) {
-    const byId = known.find((d) => d.id === deviceId);
+  const id = (deviceId || "").trim();
+  if (id) {
+    const byId = known.find((d) => d.id === id);
     if (byId) return byId;
   }
-  if (deviceName) {
-    const want = deviceName.trim().toLowerCase();
+  const want = (deviceName || "").trim().toLowerCase();
+  if (want) {
     const byName = known.find((d) => (d.name || "").trim().toLowerCase() === want);
     if (byName) return byName;
     const byPart = known.find((d) => {
       const n = (d.name || "").toLowerCase();
-      return n && (want.includes(n) || n.includes(want) || n.includes("ic-705") || n.includes("ic705"));
+      return n && (want.includes(n) || n.includes(want));
     });
     if (byPart) return byPart;
   }
   const icom = known.filter((d) => /icom|ic-?705/i.test(d.name || ""));
   if (icom.length === 1) return icom[0]!;
   if (icom.length > 1) return icom.find((d) => /705/i.test(d.name || "")) || icom[0]!;
+  if (id && known.length === 1) return known[0]!;
   return known.length === 1 ? known[0]! : null;
 }
 
@@ -140,6 +163,9 @@ class Ic705BleLink {
   private quietDrop = false;
   private attaching = false;
   private lastTxErr = "";
+  private pollTimer = 0;
+  private pollN = 0;
+  private lastPtt = false;
 
   get connected() {
     return Boolean(this.gatt?.connected && this.char);
@@ -165,42 +191,33 @@ class Ic705BleLink {
     this.civAddr = Number.parseInt(hex, 16) || 0xa4;
   }
 
-  async connect(opts?: { acceptAll?: boolean; civAddr?: string; deviceId?: string; deviceName?: string; silent?: boolean }) {
+  get hsUuid() {
+    return appUuid();
+  }
+
+  async connect(opts?: {
+    acceptAll?: boolean;
+    civAddr?: string;
+    deviceId?: string;
+    deviceName?: string;
+    silent?: boolean;
+    reconnect?: boolean;
+    chooser?: boolean;
+    hsUuid?: string;
+  }) {
     const bt = (navigator as BtNav).bluetooth;
     if (!bt) throw new Error("Web Bluetooth indisponível");
     if (opts?.civAddr) this.setCivAddr(opts.civAddr);
+    if (opts?.hsUuid) appUuid(opts.hsUuid);
 
     this.listener?.onPhase("scanning");
     const hadLink = Boolean(this.gatt || this.device);
     await this.dropLink(false);
     if (hadLink) await delay(400);
-    let device: BtDevice | null = null;
-    if (opts?.silent || opts?.deviceId || opts?.deviceName) {
-      try {
-        const known = (await bt.getDevices?.()) ?? [];
-        let storedId = "";
-        try {
-          storedId = localStorage.getItem(DEVICE_ID_STORE) || "";
-        } catch {
-          storedId = "";
-        }
-        device = pickGrantedDevice(known, opts.deviceId || storedId, opts.deviceName);
-        if (device?.watchAdvertisements) {
-          try {
-            await Promise.race([device.watchAdvertisements(), delay(800)]);
-          } catch {
-            /* Chrome: optional for silent reconnect */
-          }
-        }
-      } catch {
-        device = null;
-      }
-    }
-    if (!device) {
-      if (opts?.silent) {
-        this.listener?.onPhase("idle");
-        throw new Error("BLE_SILENT");
-      }
+    const reconnect = Boolean(opts?.reconnect || opts?.hsUuid || opts?.deviceId);
+    const chooser = Boolean(opts?.chooser || opts?.acceptAll);
+    let device: BtDevice | null = await this.findGrantedDevice(bt, opts?.deviceId, opts?.deviceName);
+    if (!device && chooser) {
       device = await bt.requestDevice(
         opts?.acceptAll
           ? { acceptAllDevices: true, optionalServices: [IC705_SVC] }
@@ -216,15 +233,39 @@ class Ic705BleLink {
             }
       );
     }
+    if (!device) {
+      this.listener?.onPhase("idle");
+      throw new Error("BLE_SILENT");
+    }
     try {
-      await this.attach(device);
+      await this.attach(device, reconnect && !chooser);
     } catch (err) {
       this.clearWaiters(false);
-      if (opts?.silent) this.listener?.onPhase("idle");
+      if (!chooser) this.listener?.onPhase("idle");
       else if (!isBleCancel(err) && bleErrorMessage(err) !== "BLE_SILENT") this.listener?.onPhase("error", bleErrorMessage(err));
       await this.dropLink(false);
       throw err;
     }
+  }
+
+  private async findGrantedDevice(bt: NonNullable<BtNav["bluetooth"]>, deviceId?: string, deviceName?: string) {
+    let storedId = "";
+    try {
+      storedId = localStorage.getItem(DEVICE_ID_STORE) || "";
+    } catch {
+      storedId = "";
+    }
+    let device: BtDevice | null = null;
+    for (let i = 0; i < 4 && !device; i++) {
+      try {
+        const known = (await bt.getDevices?.()) ?? [];
+        device = pickGrantedDevice(known, deviceId || storedId, deviceName);
+      } catch {
+        device = null;
+      }
+      if (!device && i < 3) await delay(200);
+    }
+    return device;
   }
 
   async disconnect() {
@@ -232,6 +273,7 @@ class Ic705BleLink {
   }
 
   private async dropLink(notify: boolean) {
+    this.stopPoll();
     this.quietDrop = true;
     try {
       this.char?.removeEventListener("characteristicvaluechanged", this.onNotify);
@@ -258,6 +300,8 @@ class Ic705BleLink {
     this.device = null;
     this.rx = new Uint8Array(0);
     this.hsBusy = false;
+    this.lastPtt = false;
+    this.pollN = 0;
     await delay(0);
     this.quietDrop = false;
     if (notify) {
@@ -297,42 +341,66 @@ class Ic705BleLink {
     }
   }
 
+  private frame(...body: number[]) {
+    return Uint8Array.from([CIV_PRE, CIV_PRE, this.civAddr, CIV_CTRL, ...body, CIV_END]);
+  }
+
+  private async ask(...body: number[]) {
+    await this.sendCiv(this.frame(...body));
+  }
+
+  /** 07 00 = VFO A, 07 01 = VFO B (IC-705 CI-V). */
   async selectVfo(which: "A" | "B") {
-    await this.sendCiv(
-      Uint8Array.from([CIV_PRE, CIV_PRE, this.civAddr, CIV_CTRL, 0x07, which === "B" ? 0xd1 : 0xd0, CIV_END])
-    );
+    await this.ask(0x07, which === "B" ? 0x01 : 0x00);
   }
 
   async setFreq(hz: number) {
-    const body = new Uint8Array(13);
-    body[0] = CIV_PRE;
-    body[1] = CIV_PRE;
-    body[2] = this.civAddr;
-    body[3] = CIV_CTRL;
-    body[4] = 0x00;
+    const body = this.frame(0x00, 0, 0, 0, 0, 0);
     freqBcdLsb(hz, body, 5);
-    body[10] = CIV_END;
-    await this.sendCiv(body.subarray(0, 11));
+    await this.sendCiv(body);
   }
 
+  /** 1C 00 00 = RX, 1C 00 01 = TX. */
   async setPtt(on: boolean) {
-    await this.sendCiv(Uint8Array.from([CIV_PRE, CIV_PRE, this.civAddr, CIV_CTRL, 0x1c, on ? 0x01 : 0x00, CIV_END]));
+    this.lastPtt = on;
+    await this.ask(0x1c, 0x00, on ? 0x01 : 0x00);
   }
 
+  /** 26 00 <mode> <data> <FIL1> — data mode needs cmd 26, DV is 0x17. */
   async setMode(mode: string | number) {
     const key = typeof mode === "string" ? mode : "";
-    const icomMode = typeof mode === "number" ? mode : (ICOM_MODE[key] ?? 1);
-    const data = typeof mode === "string" && mode.endsWith("-D");
-    if (data || icomMode === 0 || icomMode === 1) {
-      await this.sendCiv(
-        Uint8Array.from([CIV_PRE, CIV_PRE, this.civAddr, CIV_CTRL, 0x26, icomMode, data ? 0x01 : 0x00, 0x01, CIV_END])
-      );
-      return;
-    }
-    await this.sendCiv(Uint8Array.from([CIV_PRE, CIV_PRE, this.civAddr, CIV_CTRL, 0x06, icomMode, 0x01, CIV_END]));
+    const icomMode = typeof mode === "number" ? mode : (ICOM_MODE[key] ?? 0x01);
+    const data = typeof mode === "string" && mode.endsWith("-D") ? 0x01 : 0x00;
+    await this.ask(0x26, 0x00, icomMode, data, 0x01);
+    await delay(30);
+    await this.ask(0x06, icomMode, 0x01);
   }
 
-  private async attach(device: BtDevice) {
+  async setPre(v: "OFF" | "ON1" | "ON2") {
+    await this.ask(0x16, 0x02, PRE_BYTE[v]);
+  }
+
+  async setAgc(v: "OFF" | "FAST" | "MID" | "SLOW") {
+    await this.ask(0x16, 0x12, v === "OFF" ? 0x01 : AGC_BYTE[v]);
+  }
+
+  async setAtt(on: boolean) {
+    await this.ask(0x11, on ? 0x20 : 0x00);
+  }
+
+  async setNr(on: boolean) {
+    await this.ask(0x16, 0x40, on ? 0x01 : 0x00);
+  }
+
+  async setNb(on: boolean) {
+    await this.ask(0x16, 0x22, on ? 0x01 : 0x00);
+  }
+
+  async setSplit(on: boolean) {
+    await this.ask(0x0f, on ? 0x01 : 0x00);
+  }
+
+  private async attach(device: BtDevice, reconnect = false) {
     this.attaching = true;
     this.device = device;
     this.rx = new Uint8Array(0);
@@ -343,8 +411,9 @@ class Ic705BleLink {
       const { svc, char } = await this.openGatt(device);
       this.char = char;
       this.listener?.onPhase("handshake");
-      const granted = await this.handshake();
-      if (!granted) throw new Error(this.hsTimeoutMessage());
+      if (reconnect) await delay(250);
+      const granted = await this.handshake(reconnect);
+      if (!granted) throw new Error(this.hsTimeoutMessage(reconnect));
       try {
         const extra = await svc.getCharacteristic(IC705_CHAR_DATA);
         this.dataChar = extra;
@@ -404,12 +473,17 @@ class Ic705BleLink {
     throw last instanceof Error ? last : new Error(String(last));
   }
 
-  private async handshake() {
+  private async handshake(reconnect = false) {
     this.hsBusy = true;
     this.sawHs.clear();
     const web61 = pkt61(appUuid());
     const web62 = pkt62(HS_NAME_WEB);
     try {
+      if (reconnect) {
+        if (await this.burst(web61, web62, false, 8_000)) return true;
+        if (await this.burst(web61, web62, false, 5_000)) return true;
+        return this.burst(web61, web62, true, 10_000);
+      }
       if (await this.burst(web61, web62, true, 12_000)) return true;
       if (await this.burst(web61, web62, false, 8_000)) return true;
       return this.burst(HS_UUID_SPP, web62, true, 8_000);
@@ -431,9 +505,11 @@ class Ic705BleLink {
     return grant;
   }
 
-  private hsTimeoutMessage() {
+  private hsTimeoutMessage(reconnect = false) {
     const rx = Array.from(this.sawHs, (c) => `0x${c.toString(16)}`).join(",") || "nenhum";
-    const hint = "No IC-705: Set → Bluetooth Set → Pairing Reception e aceite Ham-Cockpit-Web01.";
+    const hint = reconnect
+      ? "Rádio já pareado: ligue o Bluetooth do IC-705 e aproxime-o. Não abra Pairing Reception."
+      : "No IC-705: Set → Bluetooth Set → Pairing Reception e aceite Ham-Cockpit-Web01.";
     if (this.sawHs.size) return `IC-705 respondeu (${rx}) mas não deu 0x64. ${hint}`;
     const tx = this.lastTxErr ? ` TX:${this.lastTxErr}` : "";
     return `CI-V grant timeout (sem RX${tx}). ${hint}`;
@@ -467,9 +543,55 @@ class Ic705BleLink {
 
   private async afterGrant() {
     await delay(300);
-    await this.sendCiv(Uint8Array.from([CIV_PRE, CIV_PRE, this.civAddr, CIV_CTRL, 0x1a, 0x01, 0x01, CIV_END]));
-    await delay(80);
-    await this.sendCiv(Uint8Array.from([CIV_PRE, CIV_PRE, this.civAddr, CIV_CTRL, 0x03, CIV_END]));
+    await this.ask(0x03);
+    await delay(40);
+    await this.ask(0x26, 0x00);
+    await delay(40);
+    await this.ask(0x04);
+    await delay(40);
+    await this.ask(0x1c, 0x00);
+    await delay(40);
+    await this.ask(0x15, 0x02);
+    await delay(40);
+    await this.ask(0x16, 0x02);
+    await delay(40);
+    await this.ask(0x16, 0x12);
+    await delay(40);
+    await this.ask(0x11);
+    this.startPoll();
+  }
+
+  private startPoll() {
+    this.stopPoll();
+    this.pollN = 0;
+    this.pollTimer = window.setInterval(() => {
+      void this.pollTick();
+    }, 220);
+  }
+
+  private stopPoll() {
+    if (this.pollTimer) window.clearInterval(this.pollTimer);
+    this.pollTimer = 0;
+  }
+
+  private async pollTick() {
+    if (!this.gatt?.connected || this.hsBusy || this.attaching) return;
+    const n = this.pollN++;
+    if (this.lastPtt) {
+      const seq = n % 4;
+      if (seq === 0) await this.ask(0x15, 0x11);
+      else if (seq === 1) await this.ask(0x15, 0x12);
+      else if (seq === 2) await this.ask(0x1c, 0x00);
+      else await this.ask(0x15, 0x02);
+      return;
+    }
+    const seq = n % 8;
+    if (seq === 0 || seq === 3 || seq === 6) await this.ask(0x15, 0x02);
+    else if (seq === 1) await this.ask(0x03);
+    else if (seq === 2) await this.ask(0x26, 0x00);
+    else if (seq === 4) await this.ask(0x1c, 0x00);
+    else if (seq === 5) await this.ask(0x04);
+    else await this.ask(0x16, 0x02);
   }
 
   private handleNotify(ev: Event) {
@@ -519,23 +641,81 @@ class Ic705BleLink {
 
   private handleFrame(d: Uint8Array) {
     const hex = toHex(d);
-    const cmd = hsCmd(d);
-    if (this.hsBusy || cmd != null) this.listener?.onFrame?.(hex);
-    if (cmd != null) {
-      this.sawHs.add(cmd);
-      this.waiters.get(cmd)?.(true);
-      if (cmd === 0x63) this.listener?.onPaired(d[hsCmdOffset(d) + 4] === 0x01);
+    const hs = hsCmd(d);
+    if (this.hsBusy || hs != null) this.listener?.onFrame?.(hex);
+    if (hs != null) {
+      this.sawHs.add(hs);
+      this.waiters.get(hs)?.(true);
+      if (hs === 0x63) this.listener?.onPaired(d[hsCmdOffset(d) + 4] === 0x01);
       return;
     }
-    if (d.length >= 11 && d[0] === CIV_PRE && d[1] === CIV_PRE && d[4] === 0x03 && d[d.length - 1] === CIV_END) {
-      this.listener?.onFreq(bcdFreq(d, 5, 5));
+    if (d.length < 6 || d[0] !== CIV_PRE || d[1] !== CIV_PRE || d[d.length - 1] !== CIV_END) return;
+    const cmd = d[4];
+    if (cmd === 0xfa || cmd === 0xfb) {
+      if (cmd === 0xfa) this.listener?.onFrame?.(hex);
+      return;
     }
-    if (d.length >= 11 && d[0] === CIV_PRE && d[1] === CIV_PRE && d[4] === 0x00 && d[d.length - 1] === CIV_END) {
-      this.listener?.onFreq(bcdFreq(d, 5, 5));
+    const data = d.subarray(5, d.length - 1);
+    this.applyCiv(cmd, data);
+  }
+
+  private applyCiv(cmd: number, data: Uint8Array) {
+    const patch: CivPatch = {};
+    if ((cmd === 0x00 || cmd === 0x03 || cmd === 0x05) && data.length >= 5) {
+      const hz = bcdFreq(data, 0, 5);
+      if (hz >= 100_000) {
+        this.listener?.onFreq(hz);
+        patch.freq = hz;
+      }
+    } else if (cmd === 0x25 && data.length >= 6) {
+      const hz = bcdFreq(data, 1, 5);
+      if (hz >= 100_000) {
+        this.listener?.onFreq(hz);
+        patch.freq = hz;
+      }
+    } else if (cmd === 0x26 && data.length >= 4) {
+      patch.mode = modeFromCiv(data[1]!, data[2] === 0x01);
+    } else if (cmd === 0x26 && data.length >= 2) {
+      patch.mode = modeFromCiv(data[0]!, data[1] === 0x01);
+    } else if ((cmd === 0x04 || cmd === 0x01 || cmd === 0x06) && data.length >= 1) {
+      const m = data[0]!;
+      if (m !== 0x00 && m !== 0x01) patch.mode = modeFromCiv(m, false);
+    } else if (cmd === 0x1c) {
+      if (data[0] === 0x00 && data.length >= 2) {
+        this.lastPtt = data[1] === 0x01;
+        patch.ptt = this.lastPtt;
+      } else if (data.length === 1 && (data[0] === 0x00 || data[0] === 0x01)) {
+        this.lastPtt = data[0] === 0x01;
+        patch.ptt = this.lastPtt;
+      }
+    } else if (cmd === 0x15 && data.length >= 3 && data[0] === 0x02) {
+      patch.smeter = sFromLevel(bcd2(data[1]!, data[2]!));
+    } else if (cmd === 0x15 && data.length >= 3 && data[0] === 0x11) {
+      patch.po = poFromLevel(bcd2(data[1]!, data[2]!));
+    } else if (cmd === 0x15 && data.length >= 3 && data[0] === 0x12) {
+      patch.swr = swrFromLevel(bcd2(data[1]!, data[2]!));
+    } else if (cmd === 0x16 && data.length >= 2 && data[0] === 0x02) {
+      patch.pre = data[1] === 0x02 ? "ON2" : data[1] === 0x01 ? "ON1" : "OFF";
+    } else if (cmd === 0x16 && data.length >= 2 && data[0] === 0x12) {
+      patch.agc = data[1] === 0x03 ? "SLOW" : data[1] === 0x02 ? "MID" : data[1] === 0x01 ? "FAST" : "OFF";
+    } else if (cmd === 0x16 && data.length >= 2 && data[0] === 0x22) {
+      patch.nb = data[1] === 0x01;
+    } else if (cmd === 0x16 && data.length >= 2 && data[0] === 0x40) {
+      patch.nr = data[1] === 0x01;
+    } else if (cmd === 0x11 && data.length >= 1) {
+      patch.att = data[0] === 0x20;
+    } else if (cmd === 0x0f && data.length >= 1) {
+      patch.split = data[0] === 0x01;
+    } else if (cmd === 0x07 && data.length >= 1) {
+      if (data[0] === 0x00 || data[0] === 0xd0) patch.vfo = "A";
+      if (data[0] === 0x01 || data[0] === 0xd1) patch.vfo = "B";
     }
+    if (Object.keys(patch).length) this.listener?.onCiv?.(patch);
   }
 
   private handleDisconnect() {
+    this.stopPoll();
+    this.lastPtt = false;
     this.clearWaiters(false);
     this.char = null;
     this.dataChar = null;
@@ -551,6 +731,42 @@ class Ic705BleLink {
     for (const fn of Array.from(this.waiters.values())) fn(ok);
     this.waiters.clear();
   }
+}
+
+function modeFromCiv(mode: number, dataOn: boolean) {
+  if (mode === 0x17) return "DV";
+  if (mode === 0x00) return dataOn ? "LSB-D" : "LSB";
+  if (mode === 0x01) return dataOn ? "USB-D" : "USB";
+  if (mode === 0x02) return "AM";
+  if (mode === 0x03 || mode === 0x07) return "CW";
+  if (mode === 0x05 || mode === 0x06) return "FM";
+  return "USB";
+}
+
+function bcd2(hi: number, lo: number) {
+  return ((hi >> 4) & 0x0f) * 1000 + (hi & 0x0f) * 100 + ((lo >> 4) & 0x0f) * 10 + (lo & 0x0f);
+}
+
+/** IC-705 15 02: 0000=S0, 0120=S9, 0241=S9+60 → UI S-units 0–12. */
+function sFromLevel(n: number) {
+  if (n <= 0) return 0;
+  if (n <= 120) return (n / 120) * 9;
+  return 9 + ((Math.min(241, n) - 120) / 121) * 3;
+}
+
+/** 15 11: 0000=0%, 0143=50%, 0213=100% — IC-705 10 W. */
+function poFromLevel(n: number) {
+  const pct = n <= 143 ? (n / 143) * 0.5 : 0.5 + ((Math.min(213, n) - 143) / 70) * 0.5;
+  return Math.max(0, Math.min(10, pct * 10));
+}
+
+/** 15 12: 0000=1.0, 0048=1.5, 0080=2.0, 0120=3.0. */
+function swrFromLevel(n: number) {
+  if (n <= 0) return 1;
+  if (n <= 48) return 1 + (n / 48) * 0.5;
+  if (n <= 80) return 1.5 + ((n - 48) / 32) * 0.5;
+  if (n <= 120) return 2 + ((n - 80) / 40);
+  return Math.min(9.9, 3 + (n - 120) / 80);
 }
 
 function freqBcdLsb(hz: number, out: Uint8Array, off: number) {
@@ -572,17 +788,26 @@ function bcdFreq(d: Uint8Array, off: number, n: number) {
   return f;
 }
 
-function appUuid() {
+function validHsUuid(u: string) {
+  return /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i.test(u);
+}
+
+function appUuid(preferred?: string) {
   const fallback = "C47B21D6-9E80-4A11-BE05-CA7B21D6E001";
   try {
+    if (preferred && validHsUuid(preferred)) {
+      const u = preferred.toUpperCase();
+      localStorage.setItem(UUID_STORE, u);
+      return u;
+    }
     let u = localStorage.getItem(UUID_STORE);
-    if (!u || !/^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i.test(u)) {
+    if (!u || !validHsUuid(u)) {
       u = (crypto.randomUUID?.() || fallback).toUpperCase();
       localStorage.setItem(UUID_STORE, u);
     }
     return u.toUpperCase();
   } catch {
-    return fallback;
+    return preferred && validHsUuid(preferred) ? preferred.toUpperCase() : fallback;
   }
 }
 

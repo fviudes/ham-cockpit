@@ -1,6 +1,7 @@
 import { BluetoothPage, WifiPage } from "@/console/network";
 import { AcomPage, HamplusPage, Ic705Page, LdgPage, LextelPage, PalstarPage, SpePage } from "@/console/devices";
 import { DEFAULT_PASS, DEFAULT_USER, type I18nKey } from "@/console/i18n";
+import { ic705Ble } from "@/console/ic705-ble";
 import { ConsoleProvider, formatVfo, useConsole } from "@/console/state";
 import { SVC_LABEL, serviceLive } from "@/console/services-ui";
 import { LangToggle, UserMenu } from "@/console/widgets";
@@ -33,7 +34,7 @@ import {
   Wifi,
   X,
 } from "lucide-react";
-import { useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useLocation } from "wouter";
 
 const AUTH_KEY = "hamcockpit.auth";
@@ -171,7 +172,7 @@ function Login({ onOk }: { onOk: (name: string) => void }) {
             const p = String(fd.get("pass") || "");
             if (u === DEFAULT_USER && p === DEFAULT_PASS) {
               setErr(false);
-              void kickPrimary({ picker: true });
+              void kickPrimary({ picker: false });
               onOk(u);
             } else setErr(true);
           }}
@@ -198,7 +199,8 @@ function Login({ onOk }: { onOk: (name: string) => void }) {
 }
 
 function Shell({ onLogout }: { onLogout: () => void }) {
-  const { tx, s } = useConsole();
+  const { tx, s, setFreq, setS } = useConsole();
+  const headerFreqRef = useRef<HTMLParagraphElement>(null);
   const [loc, navigate] = useLocation();
   const mobile = useIsMobile();
   const [open, setOpen] = useState(false);
@@ -228,6 +230,25 @@ function Shell({ onLogout }: { onLogout: () => void }) {
   useEffect(() => {
     setOpen(false);
   }, [page]);
+
+  useEffect(() => {
+    const el = headerFreqRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const dir = e.deltaY < 0 ? 1 : -1;
+      const step = e.shiftKey ? 10_000 : e.ctrlKey || e.altKey || e.metaKey ? 100 : 1_000;
+      const which = s.vfo === "B" ? "B" : "A";
+      const cur = which === "B" ? s.freqB : s.freq;
+      const next = Math.max(100_000, cur + dir * step);
+      if (which === "A") setFreq(next);
+      else setS((p) => ({ ...p, freqB: next }));
+      if (s.ic705.phase === "ready") void ic705Ble.setFreq(next);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [s.vfo, s.freq, s.freqB, s.ic705.cat, s.ic705.phase, setFreq, setS]);
 
   const nav = (
     <nav className="flex h-full flex-col">
@@ -295,7 +316,11 @@ function Shell({ onLogout }: { onLogout: () => void }) {
             </button>
           ) : null}
           <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
-            <p className="shrink-0 font-['IBM_Plex_Mono'] text-base font-semibold text-[#7ee0ff] md:text-xl">
+            <p
+              ref={headerFreqRef}
+              title={tx("freqWheel")}
+              className="shrink-0 cursor-ns-resize font-['IBM_Plex_Mono'] text-base font-semibold text-[#7ee0ff] md:text-xl"
+            >
               {vfo.int}.{vfo.khz}.{vfo.hz}
               <span className="ml-2 text-xs font-normal tracking-widest text-[#8ea0b3]">
                 MHz · VFO {vfoLetter} · {vfoMode}

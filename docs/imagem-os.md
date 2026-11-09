@@ -23,7 +23,7 @@ GitHub Actions em **`ubuntu-24.04-arm`** (runner ARM nativo, disponível em repo
 
 Wavelog/MariaDB fazem `docker compose pull` no primeiro boot com Ethernet (não vão em tarball, para caber no disco de 14 GB do runner e acelerar o bake).
 
-Tempo típico: **15–25 min**, não 90+.
+Tempo típico: **20–35 min** no runner ARM. O `vite build` de produção usa `vite.config.prod.ts` para o Node sair depois de gerar o `dist` (o config de desenvolvimento importa o Lextel e ficava preso no CI).
 
 ```
 sudo bash image/appliance/build.sh

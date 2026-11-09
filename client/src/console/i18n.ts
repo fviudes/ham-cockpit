@@ -88,6 +88,7 @@ const dict = {
     gains: "Ganhos",
     manualFreq: "Frequência manual",
     freqUp: "Subir 1 kHz",
+    freqWheel: "Scroll do mouse: 1 kHz · Shift: 10 kHz · Ctrl: 100 Hz",
     freqDown: "Descer 1 kHz",
     selectVfoA: "Selecionar VFO A",
     selectVfoB: "Selecionar VFO B",
@@ -115,7 +116,9 @@ const dict = {
     bleCancelled: "Seleção Bluetooth cancelada",
     bleConnecting: "Conectando GATT…",
     bleHandshake: "Handshake CI-V…",
-    bleHsWait: "GATT ok. Enviando 0x61/0x62/0x63 e aguardando grant 0x64. Se o rádio pedir, aceite o pareamento.",
+    bleHsWait: "GATT ok. Handshake CI-V… se o rádio já estiver pareado, não precisa aceitar de novo.",
+    bleReconnectHint:
+      "Este rádio já foi pareado. O console reconecta sozinho (GATT + CI-V). Deixe o Bluetooth ligado no IC-705; não abra Pairing Reception.",
     bleReady: "CI-V liberado",
     bleLost: "Bluetooth desconectado",
     bleNeedPairing:
@@ -146,7 +149,9 @@ const dict = {
     radioAdd: "Adicionar rádio",
     radioRegistered: "Rádios cadastrados",
     radioPrimary: "Principal",
-    radioAutoGrant: "Toque na página para autorizar o rádio principal no Bluetooth.",
+    radioAutoGrant: "Toque na página para reconectar o rádio já pareado.",
+    bleSilentFail:
+      "Rádio já cadastrado: o Chrome não abriu o seletor. Ligue o IC-705 (Bluetooth ON) e clique Conectar de novo. Só use «Escolher outro dispositivo» na primeira vez neste browser.",
     radioNone: "Nenhum rádio cadastrado. Cat-USB escolhe uma conexão ser2net; Bluetooth escolhe o dispositivo. Depois, Conectar.",
     radioConnectedOk: "Rádio conectado",
     radioConnFail: "Não conectou no rádio",
@@ -659,6 +664,7 @@ const dict = {
     gains: "Gains",
     manualFreq: "Manual frequency",
     freqUp: "Up 1 kHz",
+    freqWheel: "Scroll: 1 kHz · Shift: 10 kHz · Ctrl: 100 Hz",
     freqDown: "Down 1 kHz",
     selectVfoA: "Select VFO A",
     selectVfoB: "Select VFO B",
@@ -686,7 +692,9 @@ const dict = {
     bleCancelled: "Bluetooth picker cancelled",
     bleConnecting: "Connecting GATT…",
     bleHandshake: "CI-V handshake…",
-    bleHsWait: "GATT up. Sending 0x61/0x62/0x63 and waiting for grant 0x64. Accept pairing on the radio if prompted.",
+    bleHsWait: "GATT up. CI-V handshake… if the radio is already paired, you do not need to accept again.",
+    bleReconnectHint:
+      "This radio is already paired. The console reconnects on its own (GATT + CI-V). Leave Bluetooth on on the IC-705; do not open Pairing Reception.",
     bleReady: "CI-V granted",
     bleLost: "Bluetooth disconnected",
     bleNeedPairing:
@@ -717,7 +725,9 @@ const dict = {
     radioAdd: "Add radio",
     radioRegistered: "Registered radios",
     radioPrimary: "Primary",
-    radioAutoGrant: "Tap the page to authorize the primary radio over Bluetooth.",
+    radioAutoGrant: "Tap the page to reconnect the already-paired radio.",
+    bleSilentFail:
+      "Radio already registered: Chrome did not open the picker. Power the IC-705 (Bluetooth ON) and click Connect again. Use “Pick another device” only the first time in this browser.",
     radioNone: "No radio yet. Cat-USB picks a ser2net connection; Bluetooth picks the device. Then Connect.",
     radioConnectedOk: "Radio connected",
     radioConnFail: "Could not connect to the radio",

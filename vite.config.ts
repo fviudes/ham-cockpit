@@ -680,30 +680,32 @@ function vitePluginWavelog(): Plugin {
   };
 }
 
-const plugins = [
-  react(),
-  tailwindcss(),
-  jsxLocPlugin(),
-  vitePluginManusRuntime(),
-  vitePluginManusDebugCollector(),
-  vitePluginStorageProxy(),
-  vitePluginSerials(),
-  vitePluginRadios(),
-  vitePluginSer2net(),
-  vitePluginLextel(),
-  vitePluginLdg(),
-  vitePluginNet(),
-  vitePluginServices(),
-  vitePluginLayout(),
-  vitePluginUpdates(),
-  vitePluginWavelog(),
-  vitePluginBackup(),
-  vitePluginUsers(),
-  vitePluginTerm(),
-];
-
-export default defineConfig({
-  plugins,
+export default defineConfig(({ command }) => ({
+  plugins: [
+    react(),
+    tailwindcss(),
+    ...(command === "build"
+      ? []
+      : [
+          jsxLocPlugin(),
+          vitePluginManusRuntime(),
+          vitePluginManusDebugCollector(),
+          vitePluginStorageProxy(),
+          vitePluginSerials(),
+          vitePluginRadios(),
+          vitePluginSer2net(),
+          vitePluginLextel(),
+          vitePluginLdg(),
+          vitePluginNet(),
+          vitePluginServices(),
+          vitePluginLayout(),
+          vitePluginUpdates(),
+          vitePluginWavelog(),
+          vitePluginBackup(),
+          vitePluginUsers(),
+          vitePluginTerm(),
+        ]),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),
@@ -735,4 +737,4 @@ export default defineConfig({
       deny: ["**/.*"],
     },
   },
-});
+}));

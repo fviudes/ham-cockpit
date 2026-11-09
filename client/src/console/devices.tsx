@@ -252,6 +252,8 @@ export function Ic705Page() {
         body: JSON.stringify({
           ...rest,
           connected: true,
+          paired: true,
+          hsUuid: ic705Ble.hsUuid || body.hsUuid,
           device: ic705Ble.deviceId || ic705Ble.deviceName || body.device,
           deviceName: ic705Ble.deviceName || body.deviceName,
           name: ic705Ble.deviceName ? `Icom · ${ic705Ble.deviceName}` : body.name,
@@ -285,12 +287,23 @@ export function Ic705Page() {
           return;
         }
         ic705Ble.setCivAddr(body.civAddr || civAddr);
-        await ic705Ble.connect({
-          acceptAll,
-          civAddr: body.civAddr || civAddr,
-          deviceId: body.device,
-          deviceName: body.deviceName,
-        });
+        try {
+          await ic705Ble.connect({
+            chooser: acceptAll,
+            acceptAll,
+            reconnect: !acceptAll && Boolean(body.paired || body.hsUuid || body.device),
+            hsUuid: body.hsUuid,
+            civAddr: body.civAddr || civAddr,
+            deviceId: body.device,
+            deviceName: body.deviceName || body.name,
+          });
+        } catch (err) {
+          if (!acceptAll && isBleCancel(err)) {
+            toast.message(tx("bleSilentFail"));
+            return;
+          }
+          throw err;
+        }
         await persistAfterBle(body);
         void fetch("/api/lextel/keepalive", { method: "POST" }).catch(() => undefined);
         setS((p) => ({
@@ -564,7 +577,12 @@ export function Ic705Page() {
         </div>
         {catUsb ? <p className="mt-3 text-sm leading-relaxed text-[#8ea0b3]">{tx("radioUsbS2nHelp")}</p> : null}
         {catUsb && radioSvcs.length === 0 ? <p className="mt-3 text-sm text-[#ffb300]">{tx("s2nNone")}</p> : null}
-        {useGatt ? <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-[#8ea0b3]">{tx("bleNeedPairing")}</p> : null}
+        {useGatt && !(s.radios.items.some((r) => isIcomBle(r) && (r.paired || r.hsUuid || r.device))) ? (
+          <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-[#8ea0b3]">{tx("bleNeedPairing")}</p>
+        ) : null}
+        {useGatt && s.radios.items.some((r) => isIcomBle(r) && (r.paired || r.hsUuid || r.device)) ? (
+          <p className="mt-3 text-sm leading-relaxed text-[#8ea0b3]">{tx("bleReconnectHint")}</p>
+        ) : null}
         {useGatt && !webBt ? <p className="mt-3 text-sm text-[#f87171]">{tx("bleUnavailable")}</p> : null}
         {s.ic705.phase === "handshake" ? (
           <p className="mt-3 font-mono text-sm leading-relaxed text-[#fbbf24]">

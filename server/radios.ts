@@ -28,6 +28,8 @@ export type StationRadio = {
   port: string;
   baud: number;
   civAddr: string;
+  hsUuid: string;
+  paired: boolean;
   connected: boolean;
   primary: boolean;
   error: string;
@@ -121,6 +123,7 @@ function sanitize(raw: Partial<StationRadio>, fallback?: StationRadio): StationR
   const port = String(raw.port ?? fallback?.port ?? device).trim() || device;
   const civAddr = String(raw.civAddr ?? fallback?.civAddr ?? "0xA4").trim() || "0xA4";
   const name = String(raw.name ?? fallback?.name ?? "").trim() || defaultName(maker, deviceName || port || device);
+  const hsUuid = String(raw.hsUuid ?? fallback?.hsUuid ?? "").trim().toUpperCase();
   return {
     id: String(raw.id ?? fallback?.id ?? newId()),
     name,
@@ -132,6 +135,8 @@ function sanitize(raw: Partial<StationRadio>, fallback?: StationRadio): StationR
     port,
     baud,
     civAddr: /^0x[0-9A-Fa-f]{2}$/.test(civAddr) ? civAddr.toUpperCase().replace("0X", "0x") : "0xA4",
+    hsUuid: /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/.test(hsUuid) ? hsUuid : "",
+    paired: Boolean(raw.paired ?? fallback?.paired),
     connected: Boolean(raw.connected ?? fallback?.connected),
     primary: Boolean(raw.primary ?? fallback?.primary),
     error: String(raw.error ?? fallback?.error ?? ""),

@@ -72,6 +72,8 @@ export type StationRadio = {
   port: string;
   baud: number;
   civAddr: string;
+  hsUuid?: string;
+  paired?: boolean;
   connected: boolean;
   primary: boolean;
   error: string;
@@ -595,13 +597,15 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
         ic705Ble.setCivAddr(primary.civAddr);
         try {
           await ic705Ble.connect({
-            silent: !opts?.picker,
+            silent: true,
+            reconnect: Boolean(primary.paired || primary.hsUuid || primary.device),
+            hsUuid: primary.hsUuid,
             civAddr: primary.civAddr,
             deviceId: primary.device,
             deviceName: primary.deviceName || primary.name,
           });
         } catch (err) {
-          if (!opts?.picker && isBleCancel(err)) {
+          if (isBleCancel(err)) {
             if (!pickerArmed.current) toast.message(t(lang, "radioAutoGrant"));
             pickerArmed.current = true;
           }
@@ -615,6 +619,8 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
             ...primary,
             connected: true,
             primary: true,
+            paired: true,
+            hsUuid: ic705Ble.hsUuid || primary.hsUuid,
             device: ic705Ble.deviceId || primary.device,
             deviceName: ic705Ble.deviceName || primary.deviceName,
           }),
@@ -653,7 +659,7 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
     const onPointer = () => {
       if (!pickerArmed.current || ic705Ble.connected || ic705Ble.busy) return;
       pickerArmed.current = false;
-      void kickPrimary({ picker: true });
+      void kickPrimary({ picker: false });
     };
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("focus", onVis);
@@ -986,6 +992,31 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
             : { ...prev, freq: Math.max(100_000, hz) }
         );
       },
+      onCiv: (patch) => {
+        setS((prev) => {
+          const next = { ...prev };
+          if (patch.freq != null) {
+            if (prev.vfo === "B") next.freqB = Math.max(100_000, patch.freq);
+            else next.freq = Math.max(100_000, patch.freq);
+          }
+          if (patch.mode) {
+            if (prev.vfo === "B") next.modeB = patch.mode as Mode;
+            else next.mode = patch.mode as Mode;
+          }
+          if (patch.ptt != null) next.ptt = patch.ptt;
+          if (patch.smeter != null) next.smeter = patch.smeter;
+          if (patch.po != null) next.po = patch.po;
+          if (patch.swr != null && !(prev.lextel.connected && prev.lextel.swr >= 1)) next.swr = patch.swr;
+          if (patch.agc) next.agc = patch.agc;
+          if (patch.pre) next.pre = patch.pre;
+          if (patch.att != null) next.att = patch.att;
+          if (patch.nr != null) next.nr = patch.nr;
+          if (patch.nb != null) next.nb = patch.nb;
+          if (patch.split != null) next.split = patch.split;
+          if (patch.vfo) next.vfo = patch.vfo;
+          return next;
+        });
+      },
       onDisconnect: () => {
         setS((p) => ({
           ...p,
@@ -1001,6 +1032,36 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
   useEffect(() => {
     const id = window.setInterval(() => {
       setS((prev) => {
+        if (prev.ic705.phase === "ready") {
+          if (prev.ptt) {
+            return {
+              ...prev,
+              spe: { ...prev.spe, tx: prev.spe.operate, pout: prev.spe.operate ? 620 : 0, ipa: prev.spe.operate ? 12.4 : 0.2 },
+              palstar: { ...prev.palstar, fwd: prev.spe.operate ? 600 : 8, ref: 4 },
+              ldg: {
+                ...prev.ldg,
+                fwd: prev.ldg.connected && !prev.ldg.hardware ? Math.round(prev.ldg.maxW * 0.62) : prev.ldg.fwd,
+                ref: prev.ldg.connected && !prev.ldg.hardware ? Math.round(prev.ldg.maxW * 0.02) : prev.ldg.ref,
+                swr: prev.ldg.connected && !prev.ldg.hardware ? 1.12 : prev.ldg.swr,
+              },
+              acom: {
+                ...prev.acom,
+                tx: prev.acom.operate && prev.acom.on && prev.acom.warmup === 0,
+                fwd: prev.acom.operate && prev.acom.on && prev.acom.warmup === 0 ? 1200 : 0,
+                ref: prev.acom.operate && prev.acom.on && prev.acom.warmup === 0 ? 18 : 0,
+              },
+              hamplus: { ...prev.hamplus, send: true },
+            };
+          }
+          return {
+            ...prev,
+            spe: { ...prev.spe, tx: false, pout: 0, ipa: 0.1 },
+            palstar: { ...prev.palstar, fwd: 0, ref: 0 },
+            ldg: prev.ldg.hardware ? prev.ldg : { ...prev.ldg, fwd: 0, ref: 0, swr: 1 },
+            acom: { ...prev.acom, tx: false, fwd: 0, ref: 0 },
+            hamplus: { ...prev.hamplus, send: false },
+          };
+        }
         if (prev.ptt) {
           const po = Math.min(9.8, Math.max(3.2, 7.1 + (Math.random() - 0.32) * 3.4));
           const swr = Math.min(2.4, Math.max(1.02, 1.08 + Math.random() * 0.22));

@@ -18,22 +18,26 @@ if [[ "$CHROOT" != "1" ]]; then
   grep -vE '^#|^$' "$HERE/packages.list" | xargs -r apt-get install -y
 fi
 
-if ! command -v node >/dev/null 2>&1 || ! node -v | grep -qE '^v(2[0-9]|[3-9])'; then
+if [[ "$CHROOT" == "1" ]]; then
+  command -v node >/dev/null 2>&1 || { echo "node ausente no chroot" >&2; exit 1; }
+elif ! command -v node >/dev/null 2>&1 || ! node -v | grep -qE '^v(2[0-9]|[3-9])'; then
   curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
   apt-get install -y nodejs
 fi
 
-if ! id hamcockpit >/dev/null 2>&1; then
-  useradd -m -s /bin/bash -G sudo,dialout,docker,plugdev,bluetooth hamcockpit
-  echo 'hamcockpit:1234' | chpasswd
-fi
-usermod -aG sudo,docker,dialout,plugdev,bluetooth,video,input,tty hamcockpit || true
-usermod -aG render hamcockpit || true
-if ! id admin >/dev/null 2>&1; then
-  useradd -m -s /bin/bash -G sudo,dialout,docker,plugdev,bluetooth admin
-  echo 'admin:1234' | chpasswd
-fi
-usermod -aG sudo,docker,dialout,plugdev,bluetooth admin || true
+add_station_user() {
+  local user="$1" pass="$2"
+  if ! id "$user" >/dev/null 2>&1; then
+    useradd -m -s /bin/bash "$user"
+    echo "$user:$pass" | chpasswd
+  fi
+  local g
+  for g in sudo docker dialout plugdev bluetooth video input tty render; do
+    getent group "$g" >/dev/null 2>&1 && usermod -aG "$g" "$user" || true
+  done
+}
+add_station_user hamcockpit 1234
+add_station_user admin 1234
 
 install -d -o hamcockpit -g hamcockpit /opt/ham-cockpit /opt/ham-cockpit/bin /opt/ser2net /opt/wavelog /opt/wavelog-gate /opt/lextel /backup
 install -m 0755 "$HERE/ham-cockpit-ap.sh" /opt/ham-cockpit/bin/ham-cockpit-ap.sh

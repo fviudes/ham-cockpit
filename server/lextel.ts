@@ -942,7 +942,7 @@ export async function lextelAutoConnect(): Promise<void> {
   }
 }
 
-setInterval(() => {
+const recoverWatch = setInterval(() => {
   if (!wantOpen || recoverBusy) return;
   if (phase === "scanning" || phase === "pairing") return;
   if (linkAlive()) {
@@ -953,5 +953,6 @@ setInterval(() => {
   }
   scheduleReconnect();
 }, 2000);
+recoverWatch.unref();
 
 void SPP_UUID;

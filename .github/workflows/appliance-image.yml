@@ -8,11 +8,12 @@ on:
 jobs:
   image:
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 75
+    timeout-minutes: 90
     permissions:
       contents: write
     env:
       SKIP_DOCKER_CACHE: "1"
+      CI: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -30,16 +31,35 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y qemu-utils cloud-guest-utils \
             parted e2fsprogs xz-utils rsync wget ca-certificates
-      - name: Build console
-        timeout-minutes: 15
+      - name: Install JS deps
+        timeout-minutes: 8
         run: |
+          set -euo pipefail
           pnpm install --frozen-lockfile
           pnpm rebuild esbuild
-          pnpm exec vite build
-          ./node_modules/.bin/esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist
+      - name: Build console
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          set +e
+          timeout --kill-after=15 90 pnpm exec vite build --config vite.config.prod.ts
+          rc=$?
+          set -e
+          if [[ $rc -ne 0 && $rc -ne 124 ]]; then
+            echo "vite failed with $rc" >&2
+            exit "$rc"
+          fi
+          if [[ $rc -eq 124 ]]; then
+            echo "vite did not exit after writing assets; continuing"
+          fi
+          test -f dist/public/index.html
+          echo "console assets ready"
+          pnpm exec esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist
           test -f dist/index.js
-          ls -lh dist
+          ls -lh dist dist/public
+          df -h
       - name: Bake Ubuntu Server 24.04 + Ham Cockpit
+        timeout-minutes: 70
         run: sudo -E bash image/appliance/build.sh
       - name: Checksum
         run: |

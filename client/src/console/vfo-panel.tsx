@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { ic705Ble } from "./ic705-ble";
 import { BANDS, formatVfo, MODES, sMeterLabel, useConsole } from "./state";
 import { Chip, ConsoleSelect, Lcd } from "./widgets";
@@ -13,7 +13,7 @@ export function VfoPanel() {
   const activeHz = s.vfo === "B" ? s.freqB : s.freq;
   const activeMode = s.vfo === "B" ? s.modeB : s.mode;
   const bandId = bandOf(activeHz);
-  const bleCat = s.ic705.cat && s.ic705.phase === "ready";
+  const bleCat = s.ic705.phase === "ready";
   const filterVal = s.nr && s.nb ? "nrnb" : s.nr ? "nr" : s.nb ? "nb" : "off";
 
   const applyFreq = (which: "A" | "B", hz: number) => {
@@ -40,8 +40,8 @@ export function VfoPanel() {
     setS((p) => ({
       ...p,
       ptt: on,
-      po: on ? 7.2 : 0,
-      swr: on ? (p.lextel.connected && p.lextel.swr >= 1 ? p.lextel.swr : 1.12) : 1,
+      po: bleCat ? p.po : on ? 7.2 : 0,
+      swr: bleCat ? p.swr : on ? (p.lextel.connected && p.lextel.swr >= 1 ? p.lextel.swr : 1.12) : 1,
     }));
     pushLog("CIV", on ? "PTT ON" : "PTT OFF");
     if (bleCat) void ic705Ble.setPtt(on);
@@ -57,7 +57,28 @@ export function VfoPanel() {
   };
 
   const applyFilter = (v: string) => {
-    setS((p) => ({ ...p, nr: v === "nr" || v === "nrnb", nb: v === "nb" || v === "nrnb" }));
+    const nr = v === "nr" || v === "nrnb";
+    const nb = v === "nb" || v === "nrnb";
+    setS((p) => ({ ...p, nr, nb }));
+    if (bleCat) {
+      void ic705Ble.setNr(nr);
+      void ic705Ble.setNb(nb);
+    }
+  };
+
+  const applyPre = (v: (typeof PRE)[number]) => {
+    setS((p) => ({ ...p, pre: v }));
+    if (bleCat) void ic705Ble.setPre(v);
+  };
+
+  const applyAtt = (on: boolean) => {
+    setS((p) => ({ ...p, att: on }));
+    if (bleCat) void ic705Ble.setAtt(on);
+  };
+
+  const applyAgc = (v: (typeof AGC)[number]) => {
+    setS((p) => ({ ...p, agc: v }));
+    if (bleCat) void ic705Ble.setAgc(v);
   };
 
   return (
@@ -165,14 +186,14 @@ export function VfoPanel() {
           <option value="nb">{tx("nb")}</option>
           <option value="nrnb">{tx("filterNrNb")}</option>
         </Drop>
-        <Drop label="PRE" value={s.pre} onChange={(v) => setS((p) => ({ ...p, pre: v as (typeof PRE)[number] }))}>
+        <Drop label="PRE" value={s.pre} onChange={(v) => applyPre(v as (typeof PRE)[number])}>
           {PRE.map((a) => (
             <option key={a} value={a}>
               {a}
             </option>
           ))}
         </Drop>
-        <Drop label="ATT" value={s.att ? "ON" : "OFF"} onChange={(v) => setS((p) => ({ ...p, att: v === "ON" }))}>
+        <Drop label="ATT" value={s.att ? "ON" : "OFF"} onChange={(v) => applyAtt(v === "ON")}>
           <option value="OFF">OFF</option>
           <option value="ON">ON</option>
         </Drop>
@@ -186,7 +207,7 @@ export function VfoPanel() {
             </option>
           ))}
         </Drop>
-        <Drop label="AGC" value={s.agc} onChange={(v) => setS((p) => ({ ...p, agc: v as (typeof AGC)[number] }))}>
+        <Drop label="AGC" value={s.agc} onChange={(v) => applyAgc(v as (typeof AGC)[number])}>
           {AGC.map((a) => (
             <option key={a} value={a}>
               {a}
@@ -236,10 +257,28 @@ function VfoFace({
   upLabel: string;
   downLabel: string;
 }) {
+  const { tx } = useConsole();
+  const freqRef = useRef<HTMLDivElement>(null);
   const v = formatVfo(hz);
   const band = bandOf(hz);
   const roeTone =
     roe == null ? "" : roe >= 2 ? "text-[#f87171]" : roe >= 1.5 ? "text-[#ffb300]" : "text-[#34d399]";
+
+  useEffect(() => {
+    const el = freqRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      onSelect();
+      const dir = e.deltaY < 0 ? 1 : -1;
+      const step = e.shiftKey ? 10_000 : e.ctrlKey || e.altKey || e.metaKey ? 100 : 1_000;
+      onStep(dir * step);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [onSelect, onStep]);
+
   return (
     <div
       className={`min-w-0 rounded-md px-1 py-0.5 ${
@@ -259,7 +298,9 @@ function VfoFace({
             <span className={isTx ? "text-[#f87171]" : "text-[#34d399]"}>{status}</span>
           </div>
           <div
-            className={`flex items-end gap-0.5 leading-none ${active ? "text-[#7ee0ff]" : "text-[#4fc3f7]"}`}
+            ref={freqRef}
+            title={tx("freqWheel")}
+            className={`flex cursor-ns-resize items-end gap-0.5 leading-none ${active ? "text-[#7ee0ff]" : "text-[#4fc3f7]"}`}
             style={active ? { textShadow: "0 0 10px rgba(126,224,255,0.35)" } : undefined}
           >
             <span className="text-3xl font-semibold tracking-tight md:text-4xl">{v.int}</span>

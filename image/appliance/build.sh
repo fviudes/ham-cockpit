@@ -68,8 +68,9 @@ cleanup() {
 trap cleanup EXIT
 
 echo "baixando Ubuntu Server ${UBUNTU_RELEASE} ARM64 Raspberry Pi..."
+df -h
 if [[ ! -f $BASE_XZ ]]; then
-  wget -O "$BASE_XZ" "$UBUNTU_IMG_URL"
+  wget --tries=3 --timeout=60 -O "$BASE_XZ" "$UBUNTU_IMG_URL"
 fi
 wget -q -O "$STAGE/SHA256SUMS" "$UBUNTU_SHA_URL"
 (cd "$STAGE" && sha256sum -c SHA256SUMS --ignore-missing)
@@ -126,6 +127,7 @@ install -m 0755 "$ROOT/image/appliance/chroot-setup.sh" "$MNT/tmp/chroot-setup.s
 install -m 0644 "$ROOT/image/appliance/user-data" "$MNT/boot/firmware/user-data"
 install -m 0644 "$ROOT/image/appliance/network-config" "$MNT/boot/firmware/network-config"
 
+df -h
 echo "chroot ARM64 — instalando Docker, ser2net, Hamlib, console..."
 if [[ $NATIVE_ARM -eq 1 ]]; then
   chroot "$MNT" /bin/bash -c \
@@ -137,6 +139,7 @@ fi
 
 rm -rf "$MNT/opt/ham-cockpit-seed" "$MNT/opt/wavelog-seed-images" "$MNT/tmp/chroot-setup.sh"
 rm -f "$MNT/usr/bin/qemu-aarch64-static"
+df -h
 sync
 
 cleanup

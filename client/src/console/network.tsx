@@ -410,16 +410,26 @@ export function BluetoothPage() {
       toast.error(tx("bleUnavailable"));
       return;
     }
+    const primary = s.radios.items.find((r) => r.primary && r.link === "bluetooth") || s.radios.items.find((r) => r.link === "bluetooth");
     try {
-      await ic705Ble.connect({ acceptAll, civAddr: d.addr });
+      await ic705Ble.connect({
+        chooser: acceptAll,
+        acceptAll,
+        reconnect: !acceptAll && Boolean(primary?.device || primary?.hsUuid || primary?.paired),
+        hsUuid: primary?.hsUuid,
+        civAddr: d.addr || primary?.civAddr,
+        deviceId: primary?.device,
+        deviceName: primary?.deviceName || primary?.name,
+      });
     } catch (err) {
       const msg = bleErrorMessage(err);
       const cancelled = isBleCancel(err);
       setS((p) => ({
         ...p,
-        ic705: { ...p.ic705, phase: cancelled ? "idle" : "error", error: msg, ble: false },
+        ic705: { ...p.ic705, phase: "idle", error: cancelled ? "" : msg, ble: false },
       }));
-      if (cancelled) toast.message(tx("bleCancelled"));
+      if (cancelled) toast.message(acceptAll ? tx("bleCancelled") : tx("bleSilentFail"));
+      else toast.error(msg);
     }
   };
 
