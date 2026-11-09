@@ -1,5 +1,5 @@
 /*
- * CAT-Bridge CAT/CI-V/BT Gateway v1.0.5
+ * Ham Cockpit CAT/CI-V/BT Gateway v1.0.5
  * Gateway CI-V para Icom IC-705 via BLE + controle SPE Expert via RS232
  *
  * Recursos:
@@ -2033,7 +2033,7 @@ void h_root() {
   srv.send_P(200,"text/html",(PGM_P)R"rawliteral(
 <!DOCTYPE html><html lang="pt-BR"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>CAT-Bridge CAT/CI-V/BT Gateway</title>
+<title>Ham Cockpit CAT/CI-V/BT Gateway</title>
 <link href="https://fonts.cdnfonts.com/css/ds-digital" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -2075,7 +2075,7 @@ button:hover{background:#80d8ff}
 .slider{width:100%;margin:4px 0}
 .slider-val{color:#4fc3f7;font-size:11px;text-align:right}
 </style></head><body>
-<h1>&#9881; CAT-Bridge CAT/CI-V/BT Gateway <span style="font-size:12px;color:#94a3b8">v1.0.5</span> <span style="float:right;font-size:11px;font-weight:normal"><button class="btn-sm" id="langPtBtn" onclick="setLang('pt')" style="background:#4fc3f7;margin:0">PT</button> <button class="btn-sm" id="langEnBtn" onclick="setLang('en')" style="background:transparent;border:1px solid #4fc3f7;color:#4fc3f7;margin:0">EN</button></span></h1>
+<h1>&#9881; Ham Cockpit CAT/CI-V/BT Gateway <span style="font-size:12px;color:#94a3b8">v1.0.5</span> <span style="float:right;font-size:11px;font-weight:normal"><button class="btn-sm" id="langPtBtn" onclick="setLang('pt')" style="background:#4fc3f7;margin:0">PT</button> <button class="btn-sm" id="langEnBtn" onclick="setLang('en')" style="background:transparent;border:1px solid #4fc3f7;color:#4fc3f7;margin:0">EN</button></span></h1>
 <div class="tabs" id="tabbar">
 <button class="tab active" data-tab="radio" onclick="st(this)">Radio</button>
 <button class="tab" data-tab="ic705" onclick="st(this)">IC-705</button>
@@ -2091,7 +2091,7 @@ button:hover{background:#80d8ff}
 <button class="tab" data-tab="manual" onclick="st(this)">Manual</button>
 </div>
 <div id="tb-radio">
-<h2>Painel de Controle Icom Radio</h2>
+<h2>Painel de Controle Radio</h2>
 <div class="card">
 <div class="grid">
 <div class="gitem" style="display:flex;flex-direction:row;padding:3px 5px"><div style="flex:1"><div class="glabel">Frequencia</div><div class="gval freq" id="v_freq" style="font-size:22px;padding:0">---</div></div><div style="display:flex;flex-direction:column;justify-content:space-around;gap:2px"><button class="btn-sm" onclick="freqStep(1)" style="font-size:9px;padding:0px 6px;flex:1;min-height:20px">&uarr;</button><button class="btn-sm" onclick="freqStep(-1)" style="font-size:9px;padding:0px 6px;flex:1;min-height:20px">&darr;</button><span style="font-size:7px;color:#94a3b8;text-align:center">1k</span></div></div>
@@ -2632,14 +2632,14 @@ Pino 5 (GND) &rarr; GND do MAX3232 &rarr; GND ESP32<br>
 <em>EN: DB9 Female &rarr; MAX3232 &rarr; ESP32 GPIO. Never connect GPIO 3.3V directly to DB9 RS232 &plusmn;12V &mdash; it will burn the ESP32.</em><br><br>
 
 <strong style="color:#FFB300">2. Primeiro Uso / First Use</strong><br>
-1. Conecte ao WiFi AP: <strong>CAT-Bridge</strong> (senha: 12345678)<br>
+1. Conecte ao WiFi AP: <strong>Ham Cockpit</strong> (senha: 12345678)<br>
 5. Abra http://192.168.4.1 no navegador &bull; <em>Open in browser</em><br>
 6. Login: admin / 1234<br><br>
 
 <strong style="color:#FFB300">3. Configurar WiFi / WiFi Setup</strong><br>
 Aba <strong>WiFi</strong>: configure o AP (nome/senha) ou adicione redes STA. V&aacute;rias redes podem ser adicionadas com prioridade. O IP pode ser DHCP ou fixo.<br>
 <em>EN: <strong>WiFi</strong> tab: configure AP (name/password) or add STA networks. Multiple networks with priority. IP can be DHCP or static.</em><br>
-Para conectar o CAT-Bridge &agrave; sua rede: aba WiFi &rarr; Redes Gerenciadas &rarr; + Adicionar Rede &rarr; digite SSID e senha &rarr; Salvar. O dispositivo conecta automaticamente.<br>
+Para conectar o Ham Cockpit &agrave; sua rede: aba WiFi &rarr; Redes Gerenciadas &rarr; + Adicionar Rede &rarr; digite SSID e senha &rarr; Salvar. O dispositivo conecta automaticamente.<br>
 <em>EN: To connect to your network: WiFi tab &rarr; Managed Networks &rarr; + Add Network &rarr; enter SSID and password &rarr; Save. Device connects automatically.</em><br><br>
 
 <strong style="color:#FFB300">4. Configurar Portas / Port Setup</strong><br>
@@ -2786,7 +2786,7 @@ var _en={
   'AGC':'AGC','PRE/ATT':'PRE/ATT','S-Meter':'S-Meter','Ganhos':'Gains',
   'RF Gain':'RF Gain','AF Gain':'AF Gain','Aplicar RF':'Apply RF','Aplicar AF':'Apply AF',
   'Banda:':'Band:','Modo:':'Mode:','AGC:':'AGC:','PRE:':'PRE:','ATT:':'ATT:',
-  'Painel de Controle Icom Radio':'Icom Radio Control Panel',
+  'Painel de Controle Radio':'Radio Control Panel',
   'Controles':'Controls','Ganhos':'Gains','Frequencia Manual':'Manual Frequency',
   'Frequencia':'Frequency','Modo':'Mode','Banda':'Band','PTT':'PTT','Power':'Power','Split':'Split',
   'AGC':'AGC','PRE/ATT':'PRE/ATT','Standby':'Standby','Ligar':'Turn On','Salvar':'Save',
@@ -2857,7 +2857,7 @@ var _en={
 function tr(k){return _lang=='en'&&_en[k]?_en[k]:k;}
 function setLang(l){
   _lang=l;
-  try{localStorage.setItem('catbridge_lang',l);}catch(e){}
+  try{localStorage.setItem('hamcockpit_lang',l);}catch(e){}
   if(l=='pt'){window.location.reload();return;}
   document.getElementById('langPtBtn').style.background='transparent';
   document.getElementById('langPtBtn').style.border='1px solid #4fc3f7';
@@ -2868,7 +2868,7 @@ function setLang(l){
   applyLang();
 }
 function applyLang(){
-  document.title=_lang=='en'?'CAT-Bridge - Control Panel':'CAT-Bridge';
+  document.title=_lang=='en'?'Ham Cockpit - Control Panel':'Ham Cockpit';
   if(_lang=='pt') return;
   function tx(e){
     if(!e||e.tagName=='SCRIPT'||e.tagName=='STYLE')return;
@@ -2901,7 +2901,7 @@ function applyLang(){
   document.querySelectorAll('option').forEach(function(e){if(_en[e.textContent])e.textContent=_en[e.textContent];});
 }
 // Restore language
-try{var sv=localStorage.getItem('catbridge_lang');if(sv=='en'){_lang='en';document.getElementById('langPtBtn').style.background='transparent';document.getElementById('langPtBtn').style.border='1px solid #4fc3f7';document.getElementById('langPtBtn').style.color='#4fc3f7';document.getElementById('langEnBtn').style.background='#4fc3f7';document.getElementById('langEnBtn').style.border='none';document.getElementById('langEnBtn').style.color='#0d1b2a';applyLang();}}catch(e){}
+try{var sv=localStorage.getItem('hamcockpit_lang');if(sv=='en'){_lang='en';document.getElementById('langPtBtn').style.background='transparent';document.getElementById('langPtBtn').style.border='1px solid #4fc3f7';document.getElementById('langPtBtn').style.color='#4fc3f7';document.getElementById('langEnBtn').style.background='#4fc3f7';document.getElementById('langEnBtn').style.border='none';document.getElementById('langEnBtn').style.color='#0d1b2a';applyLang();}}catch(e){}
 
 function st(el){
   var tab=el.getAttribute('data-tab');
@@ -3970,7 +3970,7 @@ void h_login_page() {
   srv.send_P(200,"text/html",(PGM_P)R"rawliteral(
 <!DOCTYPE html><html><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>CAT-Bridge CAT/CI-V/BT Gateway - Login</title>
+<title>Ham Cockpit CAT/CI-V/BT Gateway - Login</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:Arial,sans-serif;background:#0d1b2a;color:#e2e8f0;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:20px}
@@ -3983,7 +3983,7 @@ button:hover{background:#80d8ff}
 #erro{color:#ef4444;font-size:13px;margin-top:8px;display:none}
 </style></head><body>
 <div class="card">
-<h1>CAT-Bridge CAT/CI-V/BT Gateway</h1>
+<h1>Ham Cockpit CAT/CI-V/BT Gateway</h1>
 <input type="text" id="user" placeholder="Usuário" autocomplete="off">
 <input type="password" id="pass" placeholder="Senha">
 <button onclick="entrar()">Entrar</button>
@@ -4062,7 +4062,7 @@ void setup() {
   // Aguarda Serial Monitor conectar (ate 5s)
   for(int i=0;i<5;i++){delay(1000);Serial.printf("\n[BOOT] Aguardando Serial... %ds\n",5-i);if(Serial)break;}
 
-  Serial.println("\n=== CAT-Bridge CAT/CI-V/BT Gateway v" FIRMWARE_VERSION " ===\n");
+  Serial.println("\n=== Ham Cockpit CAT/CI-V/BT Gateway v" FIRMWARE_VERSION " ===\n");
   Serial.println("[BOOT] Iniciando...");
   // LED boot: vermelho (carregando)
   rgb_set(20,0,0);

@@ -2,6 +2,21 @@ import express from "express";
 import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
+import { lextelConnect, lextelDisconnect, lextelKeepalive, lextelLearn, lextelOpenBluetooth, lextelSave, lextelScan, lextelStatus } from "./lextel";
+import { listSerialDevices } from "./list-serials";
+import { radiosConnect, radiosDisconnect, radiosMarkBle, radiosRemove, radiosSave, radiosSetPrimary, radiosStatus, radiosUpsert } from "./radios";
+import { loadSer2net, saveSer2net } from "./ser2net-store";
+import { attachTerminal } from "./term";
+import { createUser, deleteUser, listUsers, sshStatus } from "./users";
+import { wavelogDown, wavelogStatus, wavelogUp } from "./wavelog-status";
+import { wlgDown, wlgStatus, wlgUp } from "./wlg-status";
+import { netConnect, netForget, netSave, netScan, netSetAp, netSetHostname, netSetIp, netSetLink, netStatus } from "./net";
+import { servicesApplyBoot, servicesSetAutostart, servicesStatus } from "./services";
+import { updatesApply, updatesRefresh, updatesStatus } from "./updates";
+import { layoutGet, layoutSave } from "./layouts";
+import { isLoopback, vfoDisplayExit } from "./vfo-display";
+import { ldgCmd, ldgConnect, ldgDisconnect, ldgPeek, ldgSave, ldgStatus } from "./ldg";
+import { backupCreate, backupDelete, backupList, backupRestore } from "./backup";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,12 +24,432 @@ const __dirname = path.dirname(__filename);
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  app.use(express.json({ limit: "32kb" }));
+  attachTerminal(server);
 
   // Serve static files from dist/public in production
   const staticPath =
     process.env.NODE_ENV === "production"
       ? path.resolve(__dirname, "public")
       : path.resolve(__dirname, "..", "dist", "public");
+
+  app.get("/api/ser2net", async (_req, res) => {
+    try {
+      res.json(await loadSer2net());
+    } catch (err) {
+      res.status(500).json({ ok: false, services: [], error: String(err) });
+    }
+  });
+  app.put("/api/ser2net", async (req, res) => {
+    try {
+      const body = await saveSer2net(req.body ?? {});
+      res.status(body.ok ? 200 : 400).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, services: [], error: String(err) });
+    }
+  });
+
+  app.get("/api/ldg", async (_req, res) => {
+    try {
+      res.json(await ldgPeek());
+    } catch {
+      res.json(ldgStatus());
+    }
+  });
+  app.put("/api/ldg", async (req, res) => {
+    try {
+      res.json(await ldgSave(req.body ?? {}));
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/ldg/connect", async (req, res) => {
+    try {
+      const body = await ldgConnect(req.body ?? {});
+      res.status(body.ok ? 200 : 400).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/ldg/disconnect", async (_req, res) => {
+    try {
+      res.json(await ldgDisconnect());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/ldg/cmd", async (req, res) => {
+    try {
+      res.json(await ldgCmd(String(req.body?.cmd || "")));
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+
+  app.get("/api/lextel", (_req, res) => {
+    res.json(lextelStatus());
+  });
+  app.put("/api/lextel", async (req, res) => {
+    try {
+      res.json(await lextelSave(req.body ?? {}));
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/lextel/scan", async (req, res) => {
+    try {
+      res.json(await lextelScan(Number(req.body?.seconds) || 12));
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/lextel/connect", async (req, res) => {
+    try {
+      const body = await lextelConnect(req.body ?? {});
+      res.status(body.ok && body.phase !== "error" ? 200 : 503).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/lextel/disconnect", async (_req, res) => {
+    try {
+      res.json(await lextelDisconnect());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/lextel/keepalive", async (_req, res) => {
+    try {
+      res.json(await lextelKeepalive());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/lextel/learn", async (_req, res) => {
+    try {
+      res.json(await lextelLearn());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/lextel/bluetooth", async (_req, res) => {
+    try {
+      res.json(await lextelOpenBluetooth());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+
+  app.get("/api/radios", async (_req, res) => {
+    try {
+      res.json(await radiosStatus());
+    } catch (err) {
+      res.status(500).json({ ok: false, radios: [], error: String(err) });
+    }
+  });
+  app.put("/api/radios", async (req, res) => {
+    try {
+      res.json(await radiosSave(req.body ?? {}));
+    } catch (err) {
+      res.status(500).json({ ok: false, radios: [], error: String(err) });
+    }
+  });
+  app.post("/api/radios", async (req, res) => {
+    try {
+      res.json(await radiosUpsert(req.body ?? {}));
+    } catch (err) {
+      res.status(500).json({ ok: false, radios: [], error: String(err) });
+    }
+  });
+  app.post("/api/radios/connect", async (req, res) => {
+    try {
+      const body = await radiosConnect(req.body ?? {});
+      res.status(body.ok ? 200 : 400).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, radios: [], error: String(err) });
+    }
+  });
+  app.post("/api/radios/primary", async (req, res) => {
+    try {
+      res.json(await radiosSetPrimary(String(req.body?.id ?? "")));
+    } catch (err) {
+      res.status(500).json({ ok: false, radios: [], error: String(err) });
+    }
+  });
+  app.post("/api/radios/disconnect", async (req, res) => {
+    try {
+      res.json(await radiosDisconnect(String(req.body?.id ?? "")));
+    } catch (err) {
+      res.status(500).json({ ok: false, radios: [], error: String(err) });
+    }
+  });
+  app.post("/api/radios/ble", async (req, res) => {
+    try {
+      res.json(
+        await radiosMarkBle(String(req.body?.id ?? ""), Boolean(req.body?.connected), req.body?.name, req.body?.error),
+      );
+    } catch (err) {
+      res.status(500).json({ ok: false, radios: [], error: String(err) });
+    }
+  });
+  app.delete("/api/radios/:id", async (req, res) => {
+    try {
+      res.json(await radiosRemove(req.params.id));
+    } catch (err) {
+      res.status(500).json({ ok: false, radios: [], error: String(err) });
+    }
+  });
+
+  app.get("/api/net", async (_req, res) => {
+    try {
+      res.json(await netStatus());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.put("/api/net", async (req, res) => {
+    try {
+      res.json(await netSave(req.body ?? {}));
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/net/scan", async (_req, res) => {
+    try {
+      res.json(await netScan());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/net/connect", async (req, res) => {
+    try {
+      const body = await netConnect(req.body ?? {});
+      res.status(body.ok ? 200 : 400).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/net/forget", async (req, res) => {
+    try {
+      res.json(await netForget(String(req.body?.ssid ?? "")));
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/net/link", async (req, res) => {
+    try {
+      res.json(await netSetLink(req.body?.link === "ethernet" ? "ethernet" : "wifi"));
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/net/ip", async (req, res) => {
+    try {
+      const body = await netSetIp(req.body ?? {});
+      res.status(body.ok ? 200 : 400).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/net/hostname", async (req, res) => {
+    try {
+      const body = await netSetHostname(String(req.body?.hostname ?? ""));
+      res.status(body.ok ? 200 : 400).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/net/ap", async (req, res) => {
+    try {
+      const body = await netSetAp(req.body ?? {});
+      res.status(body.ok ? 200 : 400).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+
+  app.get("/api/services", async (_req, res) => {
+    try {
+      res.json(await servicesStatus());
+    } catch (err) {
+      res.status(500).json({ ok: false, items: [], error: String(err) });
+    }
+  });
+  app.post("/api/services", async (req, res) => {
+    try {
+      const body = await servicesSetAutostart(String(req.body?.id ?? ""), Boolean(req.body?.autostart));
+      res.status(body.ok ? 200 : 400).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, items: [], error: String(err) });
+    }
+  });
+
+  app.get("/api/updates", async (_req, res) => {
+    try {
+      res.json(await updatesStatus());
+    } catch (err) {
+      res.status(500).json({ ok: false, items: [], pending: 0, error: String(err) });
+    }
+  });
+  app.post("/api/updates/check", async (_req, res) => {
+    try {
+      res.json(await updatesRefresh());
+    } catch (err) {
+      res.status(500).json({ ok: false, items: [], pending: 0, error: String(err) });
+    }
+  });
+  app.post("/api/updates", async (req, res) => {
+    try {
+      const body = await updatesApply(String(req.body?.id ?? ""));
+      res.status(body.ok ? 200 : 400).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, items: [], pending: 0, error: String(err) });
+    }
+  });
+
+  app.get("/api/serials", async (_req, res) => {
+    try {
+      res.json({ devices: await listSerialDevices() });
+    } catch (err) {
+      res.status(500).json({ devices: [], error: String(err) });
+    }
+  });
+
+  app.get("/api/wavelog/status", async (_req, res) => {
+    try {
+      res.json(await wavelogStatus());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/wavelog/up", async (_req, res) => {
+    try {
+      const body = await wavelogUp();
+      res.status(body.ok ? 200 : 503).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/wavelog/down", async (_req, res) => {
+    try {
+      res.json(await wavelogDown());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+
+  app.get("/api/wlg/status", async (_req, res) => {
+    try {
+      res.json(await wlgStatus());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/wlg/up", async (_req, res) => {
+    try {
+      const body = await wlgUp();
+      res.status(body.ok ? 200 : 503).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/wlg/down", async (_req, res) => {
+    try {
+      res.json(await wlgDown());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+
+  app.get("/api/layout", (req, res) => {
+    try {
+      res.json(layoutGet(String(req.query.user || "admin")));
+    } catch (err) {
+      res.status(500).json({ ok: false, tiles: [], error: String(err) });
+    }
+  });
+  app.put("/api/layout", (req, res) => {
+    try {
+      res.json(layoutSave(req.body?.user, req.body?.tiles));
+    } catch (err) {
+      res.status(500).json({ ok: false, tiles: [], error: String(err) });
+    }
+  });
+
+  app.get("/api/users", async (_req, res) => {
+    try {
+      const [users, ssh] = await Promise.all([listUsers(), sshStatus()]);
+      res.json({ users, ssh });
+    } catch (err) {
+      res.status(500).json({ users: [], error: String(err) });
+    }
+  });
+  app.post("/api/users", async (req, res) => {
+    try {
+      const name = String(req.body?.name ?? "");
+      const password = String(req.body?.password ?? "");
+      const body = await createUser(name, password);
+      res.status(body.ok ? 200 : 400).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.delete("/api/users/:name", async (req, res) => {
+    try {
+      const body = await deleteUser(req.params.name);
+      res.status(body.ok ? 200 : 400).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+
+  app.get("/api/backup", (_req, res) => {
+    try {
+      res.json(backupList());
+    } catch (err) {
+      res.status(500).json({ ok: false, items: [], error: String(err) });
+    }
+  });
+  app.post("/api/backup", async (req, res) => {
+    req.setTimeout(300_000);
+    res.setTimeout(300_000);
+    try {
+      const body = await backupCreate(String(req.body?.user ?? "admin"));
+      res.status(body.ok ? 200 : 500).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.delete("/api/backup/:id", (req, res) => {
+    try {
+      const body = backupDelete(req.params.id);
+      res.status(body.ok ? 200 : 400).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/backup/:id/restore", async (req, res) => {
+    req.setTimeout(300_000);
+    res.setTimeout(300_000);
+    try {
+      const body = await backupRestore(req.params.id, Boolean(req.body?.confirm));
+      res.status(body.ok ? 200 : 400).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+
+  app.post("/api/vfo-display/exit", async (req, res) => {
+    if (!isLoopback(req)) {
+      res.status(403).json({ ok: false, error: "local" });
+      return;
+    }
+    try {
+      res.json(await vfoDisplayExit());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
 
   app.use(express.static(staticPath));
 
@@ -27,6 +462,7 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+    void servicesApplyBoot();
   });
 }
 

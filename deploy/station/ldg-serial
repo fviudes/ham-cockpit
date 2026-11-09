@@ -1,0 +1,190 @@
+#!/usr/bin/env python3
+"""LDG AT-600ProII / AT-1000ProII — jack METER TTL 38400 8N1.
+
+O Ham Cockpit fala TCP (ser2net). Este helper só abre TTY se chamado
+com um path de dispositivo; path tcp:host:porta usa o socket.
+
+Wake = espaço (0x20), depois 1 byte de comando.
+Quadros do wattímetro: FWD u16 BE, REF u16 BE, band u16 BE, terminador ;;
+"""
+from __future__ import annotations
+
+import json
+import os
+import select
+import socket
+import sys
+import termios
+import time
+
+BAUD = getattr(termios, "B38400", 15)
+WAKE = b" "
+EOM = b";;"
+
+
+def fail(msg: str) -> None:
+    print(json.dumps({"ok": False, "error": msg}), flush=True)
+    sys.exit(1)
+
+
+def configure(fd: int) -> None:
+    attrs = termios.tcgetattr(fd)
+    iflag, oflag, cflag, lflag, ispeed, ospeed, cc = attrs
+    iflag = 0
+    oflag = 0
+    lflag = 0
+    cflag = termios.CS8 | termios.CREAD | termios.CLOCAL
+    cc[termios.VMIN] = 0
+    cc[termios.VTIME] = 0
+    termios.tcsetattr(
+        fd,
+        termios.TCSANOW,
+        [iflag, oflag, cflag, lflag, BAUD, BAUD, cc],
+    )
+    termios.tcflush(fd, termios.TCIOFLUSH)
+
+
+class Link:
+    def __init__(self, path: str) -> None:
+        self._sock: socket.socket | None = None
+        self._fd = -1
+        if path.startswith("tcp:"):
+            rest = path[4:]
+            host, _, port_s = rest.rpartition(":")
+            sock = socket.create_connection((host or "127.0.0.1", int(port_s)), timeout=2)
+            sock.setblocking(False)
+            self._sock = sock
+            return
+        fd = os.open(path, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
+        configure(fd)
+        self._fd = fd
+
+    def fileno(self) -> int:
+        return self._sock.fileno() if self._sock is not None else self._fd
+
+    def write(self, data: bytes) -> None:
+        if self._sock is not None:
+            self._sock.setblocking(True)
+            try:
+                self._sock.sendall(data)
+            finally:
+                self._sock.setblocking(False)
+            return
+        os.write(self._fd, data)
+
+    def read(self, n: int) -> bytes:
+        try:
+            if self._sock is not None:
+                return self._sock.recv(n) or b""
+            return os.read(self._fd, n)
+        except (BlockingIOError, TimeoutError, OSError):
+            return b""
+
+    def close(self) -> None:
+        if self._sock is not None:
+            try:
+                self._sock.close()
+            except OSError:
+                pass
+            return
+        if self._fd >= 0:
+            os.close(self._fd)
+
+
+def read_until(link: Link, timeout_ms: int) -> bytes:
+    deadline = time.monotonic() + timeout_ms / 1000.0
+    buf = bytearray()
+    while time.monotonic() < deadline:
+        remain = max(0.05, deadline - time.monotonic())
+        ready, _, _ = select.select([link], [], [], min(remain, 0.2))
+        if not ready:
+            if buf:
+                break
+            continue
+        chunk = link.read(64)
+        if chunk:
+            buf.extend(chunk)
+            if buf.endswith(EOM) or (len(buf) >= 1 and buf[-1:] in b"12TAPMF"):
+                time.sleep(0.05)
+                extra = link.read(64)
+                if extra:
+                    buf.extend(extra)
+                break
+    return bytes(buf)
+
+
+def frames_of(raw: bytes) -> list[dict[str, int]]:
+    out = []
+    i = 0
+    while i + 8 <= len(raw):
+        if raw[i + 6 : i + 8] != EOM:
+            i += 1
+            continue
+        fwd = (raw[i] << 8) | raw[i + 1]
+        ref = (raw[i + 2] << 8) | raw[i + 3]
+        band = (raw[i + 4] << 8) | raw[i + 5]
+        out.append({"fwd": fwd, "ref": ref, "band": band})
+        i += 8
+    return out
+
+
+def cmd(path: str, byte: str, timeout_ms: int) -> None:
+    ch = byte.strip()[:1]
+    if not ch:
+        fail("cmd")
+    link = Link(path)
+    try:
+        link.write(WAKE)
+        time.sleep(0.002)
+        link.write(ch.encode("ascii"))
+        raw = read_until(link, timeout_ms)
+    finally:
+        link.close()
+    print(
+        json.dumps(
+            {
+                "ok": True,
+                "rx": raw.decode("latin1", errors="replace"),
+                "frames": frames_of(raw),
+            }
+        ),
+        flush=True,
+    )
+
+
+def peek(path: str) -> None:
+    link = Link(path)
+    try:
+        time.sleep(0.15)
+        raw = link.read(256)
+    finally:
+        link.close()
+    print(
+        json.dumps(
+            {
+                "ok": True,
+                "rx": raw.hex(),
+                "frames": frames_of(raw),
+            }
+        ),
+        flush=True,
+    )
+
+
+def main() -> None:
+    if len(sys.argv) < 3:
+        fail("usage")
+    op, path = sys.argv[1], sys.argv[2]
+    if op == "cmd":
+        byte = sys.argv[3] if len(sys.argv) > 3 else ""
+        timeout = int(sys.argv[4]) if len(sys.argv) > 4 else 2000
+        cmd(path, byte, timeout)
+        return
+    if op == "peek":
+        peek(path)
+        return
+    fail("op")
+
+
+if __name__ == "__main__":
+    main()

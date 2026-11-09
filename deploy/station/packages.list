@@ -1,0 +1,51 @@
+# Ham Cockpit OS — Ubuntu Server 24.04 LTS.
+# Pacotes da estação; sobem via systemd ham-cockpit.target.
+
+# Rede / primeiro acesso AP
+network-manager
+iw
+rfkill
+wireless-regdb
+wpasupplicant
+dnsmasq
+iptables
+
+# Docker (Wavelog PHP + MariaDB)
+docker.io
+docker-compose-v2
+
+# CAT serial ↔ IP
+ser2net
+hamlib-utils
+
+# Bluetooth IC-705 (BlueZ; Web Bluetooth no Chrome)
+bluez
+
+# Console web + SSH
+nginx
+openssh-server
+sudo
+curl
+ca-certificates
+openssl
+git
+usbutils
+jq
+bsdutils
+
+# Relógio / série
+fake-hwclock
+
+# HDMI VFO (tela cheia no monitor do Pi)
+cage
+seatd
+xserver-xorg
+xinit
+openbox
+unclutter
+x11-xserver-utils
+libgl1-mesa-dri
+libgbm1
+chromium-browser
+firefox
+surf

@@ -1,0 +1,14 @@
+[Unit]
+Description=Ham Cockpit station (console, Wavelog, ser2net, Hamlib, Gate)
+Documentation=file:///opt/ham-cockpit
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+Wants=nginx.service ham-cockpit.service ham-cockpit-ap.service
+Wants=ser2net.service
+Wants=rigctld@ic705.service
+Wants=wavelog.service
+Wants=waveloggate.service
+Wants=ham-cockpit-vfo.service ham-cockpit-vfo-idle.service
+
+[Install]
+WantedBy=multi-user.target

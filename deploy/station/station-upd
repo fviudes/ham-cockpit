@@ -1,0 +1,262 @@
+#!/bin/bash
+# Consulta e aplica atualizações no Ubuntu Server. Chamado via sudo -n.
+set -euo pipefail
+
+json_escape() {
+  python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"
+}
+
+pkg_installed() {
+  local n
+  for n in "$@"; do
+    if dpkg-query -W -f='${Status}' "$n" 2>/dev/null | grep -q "install ok installed"; then
+      dpkg-query -W -f='${Version}' "$n" 2>/dev/null
+      return 0
+    fi
+  done
+  echo ""
+}
+
+pkg_candidate() {
+  local n cand
+  for n in "$@"; do
+    cand="$(apt-cache policy "$n" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
+    if [[ -n "${cand:-}" && "$cand" != "(none)" ]]; then
+      echo "$cand"
+      return 0
+    fi
+  done
+  echo ""
+}
+
+os_pretty() {
+  if [[ -f /etc/os-release ]]; then
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    echo "${PRETTY_NAME:-Ubuntu Server}"
+  else
+    echo "Ubuntu Server"
+  fi
+}
+
+os_upgradable() {
+  apt list --upgradable 2>/dev/null | awk 'NR>1 && $0 ~ /upgradable/ {c++} END {print c+0}'
+}
+
+docker_wavelog_ver() {
+  local v
+  v="$(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' wavelog-main 2>/dev/null || true)"
+  if [[ -z "${v:-}" || "$v" == "<no value>" ]]; then
+    v="$(docker inspect --format '{{.Config.Image}}' wavelog-main 2>/dev/null || true)"
+  fi
+  echo "${v:-}"
+}
+
+wlg_ver() {
+  if [[ -f /opt/wavelog-gate/VERSION ]]; then
+    tr -d '[:space:]' </opt/wavelog-gate/VERSION
+  else
+    echo "1.0.0"
+  fi
+}
+
+APP_HOME="/opt/ham-cockpit"
+if [[ ! -d "$APP_HOME" && -d /opt/cat-bridge ]]; then
+  APP_HOME="/opt/cat-bridge"
+fi
+
+app_ver() {
+  if [[ -f "$APP_HOME/VERSION" ]]; then
+    tr -d '[:space:]' <"$APP_HOME/VERSION"
+  else
+    echo "2.0.0"
+  fi
+}
+
+github_app_meta() {
+  curl -fsSL -A "Ham-Cockpit/2.0.0" "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/version.json" || true
+}
+
+check_app() {
+  local cur
+  cur="$(app_ver)"
+  emit_item app "$cur" "$cur" "false" "github.com/fviudes/ham-cockpit/update"
+}
+
+apply_app() {
+  local meta ver file tmp src
+  meta="$(github_app_meta)"
+  if [[ -z "${meta:-}" ]]; then
+    echo "update/version.json ausente em github.com/fviudes/ham-cockpit" >&2
+    return 1
+  fi
+  ver="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("version",""))' <<<"$meta")"
+  file="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("file") or "")' <<<"$meta")"
+  tmp="$(mktemp -d)"
+  # shellcheck disable=SC2064
+  trap "rm -rf '$tmp'" RETURN
+  if [[ -n "$file" ]]; then
+    curl -fsSL -A "Ham-Cockpit/2.0.0" "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/${file}" -o "$tmp/pkg.tgz"
+    tar -xzf "$tmp/pkg.tgz" -C "$tmp"
+  else
+    curl -fsSL -A "Ham-Cockpit/2.0.0" -L "https://github.com/fviudes/ham-cockpit/archive/refs/heads/main.tar.gz" -o "$tmp/main.tgz"
+    tar -xzf "$tmp/main.tgz" -C "$tmp"
+  fi
+  src="$(find "$tmp" -maxdepth 4 -type d -name public -printf '%h\n' 2>/dev/null | head -n 1 || true)"
+  if [[ -z "${src:-}" ]]; then
+    src="$(find "$tmp" -maxdepth 4 -name index.js | head -n 1 || true)"
+    [[ -n "${src:-}" ]] && src="$(dirname "$src")"
+  fi
+  if [[ -z "${src:-}" || ! -e "$src" ]]; then
+    echo "pacote de update sem dist/" >&2
+    return 1
+  fi
+  mkdir -p "$APP_HOME"
+  cp -a "$src/." "$APP_HOME/"
+  if [[ -n "${ver:-}" ]]; then
+    printf '%s\n' "$ver" >"$APP_HOME/VERSION"
+  fi
+  if [[ -f "$APP_HOME/package.json" ]]; then
+    (cd "$APP_HOME" && npm install --omit=dev) || true
+  fi
+  chown -R hamcockpit:hamcockpit "$APP_HOME" 2>/dev/null || chown -R catbridge:catbridge "$APP_HOME" 2>/dev/null || true
+  systemctl restart ham-cockpit.service 2>/dev/null || systemctl restart cat-bridge.service 2>/dev/null || true
+}
+
+compose_wavelog() {
+  local dir="${WAVELOG_DIR:-/opt/wavelog}"
+  if docker compose version >/dev/null 2>&1; then
+    (cd "$dir" && docker compose "$@")
+  elif command -v docker-compose >/dev/null 2>&1; then
+    (cd "$dir" && docker-compose "$@")
+  else
+    echo "docker compose não encontrado" >&2
+    return 1
+  fi
+}
+
+emit_item() {
+  local id="$1" current="$2" available="$3" updatable="$4" note="${5:-}"
+  printf '{"id":%s,"current":%s,"available":%s,"updatable":%s,"note":%s}' \
+    "$(json_escape "$id")" \
+    "$(json_escape "$current")" \
+    "$(json_escape "$available")" \
+    "$updatable" \
+    "$(json_escape "$note")"
+}
+
+check_os() {
+  local cur n note upd="false" avail
+  cur="$(os_pretty)"
+  n="$(os_upgradable)"
+  avail="$cur"
+  note=""
+  if [[ "${n:-0}" -gt 0 ]]; then
+    upd="true"
+    avail="$n pacotes"
+    note="apt upgrade"
+  fi
+  emit_item os "$cur" "$avail" "$upd" "$note"
+}
+
+check_pkg() {
+  local id="$1"
+  shift
+  local cur cand upd="false"
+  cur="$(pkg_installed "$@")"
+  cand="$(pkg_candidate "$@")"
+  [[ -z "$cur" ]] && cur="—"
+  [[ -z "$cand" ]] && cand="$cur"
+  if [[ "$cand" != "$cur" && "$cand" != "—" && "$cur" != "—" ]]; then
+    upd="true"
+  fi
+  emit_item "$id" "$cur" "$cand" "$upd" ""
+}
+
+check_wavelog() {
+  local cur cand upd="false"
+  cur="$(docker_wavelog_ver)"
+  [[ -z "$cur" ]] && cur="—"
+  cand="$cur"
+  emit_item wavelog "$cur" "$cand" "$upd" "docker ghcr.io/wavelog/wavelog"
+}
+
+check_wlg() {
+  emit_item wlg "$(wlg_ver)" "$(wlg_ver)" "false" ""
+}
+
+check_all() {
+  printf '{"ok":true,"os":%s,"items":[' "$(json_escape "$(os_pretty)")"
+  check_app
+  printf ','
+  check_os
+  printf ','
+  check_pkg ser2net ser2net
+  printf ','
+  check_pkg hamlib libhamlib-utils hamlib-utils
+  printf ','
+  check_wavelog
+  printf ','
+  check_wlg
+  printf ']}\n'
+}
+
+apply_os() {
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get upgrade -y
+}
+
+apply_pkg() {
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y "$@"
+}
+
+cmd="${1:-}"
+id="${2:-}"
+
+case "$cmd" in
+  check)
+    check_all
+    ;;
+  refresh)
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq
+    check_all
+    ;;
+  apply)
+    case "$id" in
+      app) apply_app ;;
+      os) apply_os ;;
+      ser2net)
+        apply_pkg ser2net
+        systemctl restart ser2net.service 2>/dev/null || true
+        ;;
+      hamlib)
+        apply_pkg libhamlib-utils hamlib-utils || apply_pkg libhamlib-utils || apply_pkg hamlib-utils
+        systemctl restart 'rigctld@*' 2>/dev/null || true
+        systemctl restart 'ampctld@*' 2>/dev/null || true
+        ;;
+      wavelog)
+        compose_wavelog pull
+        compose_wavelog up -d --remove-orphans
+        ;;
+      wlg)
+        if [[ -d /opt/wavelog-gate/.git ]]; then
+          git -C /opt/wavelog-gate pull --ff-only
+        fi
+        systemctl restart waveloggate.service 2>/dev/null || true
+        ;;
+      *)
+        echo '{"ok":false,"error":"componente desconhecido"}' >&2
+        exit 2
+        ;;
+    esac
+    check_all
+    ;;
+  *)
+    echo "uso: station-upd check|refresh|apply ID" >&2
+    exit 1
+    ;;
+esac

@@ -1,0 +1,30 @@
+[Unit]
+Description=Ham Cockpit VFO HDMI (tela cheia no monitor)
+After=ham-cockpit.service nginx.service first-boot.service
+Wants=ham-cockpit.service nginx.service
+Conflicts=getty@tty1.service
+OnFailure=getty@tty1.service
+
+[Service]
+Type=simple
+User=hamcockpit
+Group=hamcockpit
+SupplementaryGroups=video render input tty
+PAMName=login
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+Environment=XDG_SESSION_TYPE=wayland
+ExecStartPre=+/bin/mkdir -p /run/user/%U /var/lib/hamcockpit/chromium
+ExecStartPre=+/bin/chown hamcockpit:hamcockpit /run/user/%U /var/lib/hamcockpit/chromium
+ExecStart=/opt/ham-cockpit/bin/vfo-display-kiosk
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=8
+
+[Install]
+WantedBy=ham-cockpit.target

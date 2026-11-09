@@ -1,0 +1,20 @@
+[Unit]
+Description=WaveLogGate (UDP QSO → Wavelog logbook)
+Documentation=https://github.com/wavelog/WaveLogGate
+After=network-online.target wavelog.service rigctld@ic705.service
+Wants=network-online.target wavelog.service
+
+[Service]
+Type=simple
+User=hamcockpit
+Group=hamcockpit
+WorkingDirectory=/opt/wavelog-gate
+EnvironmentFile=-/opt/wavelog-gate/wavelog-gate.env
+ExecStart=/usr/bin/node /opt/wavelog-gate/wavelog-gate.mjs
+Restart=always
+RestartSec=5
+# UDP 2333 (QSO), HTTP 54321 (QSY + /status)
+
+[Install]
+WantedBy=ham-cockpit.target
+WantedBy=multi-user.target

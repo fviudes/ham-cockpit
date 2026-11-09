@@ -1,0 +1,411 @@
+import { execFile } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+import { randomBytes } from "node:crypto";
+import { SER2NET_RADIO_ID } from "../shared/const";
+import { listSerialDevices } from "./list-serials";
+import { loadSer2net, saveSer2net } from "./ser2net-store";
+
+const execFileAsync = promisify(execFile);
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const OPT_DIR = "/opt/radios";
+const BAUDS = new Set([1200, 4800, 9600, 19200, 38400, 57600, 115200, 230400]);
+
+export type RadioMaker = "icom" | "kenwood" | "yaesu" | "flex" | "tentec";
+export type RadioLink = "usb" | "bluetooth";
+export type RadioProto = "cat" | "civ";
+
+export type StationRadio = {
+  id: string;
+  name: string;
+  maker: RadioMaker;
+  link: RadioLink;
+  device: string;
+  deviceName: string;
+  proto: RadioProto;
+  port: string;
+  baud: number;
+  civAddr: string;
+  connected: boolean;
+  primary: boolean;
+  error: string;
+};
+
+export type RadioPick = {
+  id: string;
+  label: string;
+  kind: RadioLink;
+  path: string;
+};
+
+export type RadiosSnapshot = {
+  ok: boolean;
+  folder: string;
+  radios: StationRadio[];
+  usb: RadioPick[];
+  bluetooth: RadioPick[];
+  error?: string;
+  needBle?: boolean;
+  bleAddr?: string;
+};
+
+const MAKERS: RadioMaker[] = ["icom", "kenwood", "yaesu", "flex", "tentec"];
+
+function dataDir(): string {
+  if (existsSync(OPT_DIR)) return OPT_DIR;
+  const local = join(ROOT, "data", "radios");
+  mkdirSync(local, { recursive: true });
+  return local;
+}
+
+function jsonPath() {
+  return join(dataDir(), "radios.json");
+}
+
+function newId() {
+  return randomBytes(4).toString("hex");
+}
+
+function writeAtomic(file: string, body: string) {
+  const tmp = `${file}.${process.pid}.tmp`;
+  writeFileSync(tmp, body, { encoding: "utf8" });
+  renameSync(tmp, file);
+}
+
+function asMaker(v: unknown): RadioMaker {
+  return MAKERS.includes(v as RadioMaker) ? (v as RadioMaker) : "icom";
+}
+
+function asLink(v: unknown): RadioLink {
+  return v === "bluetooth" ? "bluetooth" : "usb";
+}
+
+function asProto(maker: RadioMaker, v: unknown): RadioProto {
+  if (maker !== "icom") return "cat";
+  return v === "cat" ? "cat" : "civ";
+}
+
+function asBaud(v: unknown, fallback: number) {
+  const n = Number(v);
+  if (n === 0) return 0;
+  return BAUDS.has(n) ? n : fallback;
+}
+
+function defaultBaud(maker: RadioMaker, link: RadioLink) {
+  if (link === "bluetooth" && maker !== "icom") return 9600;
+  if (maker === "kenwood" || maker === "yaesu") return 38400;
+  if (maker === "tentec") return 57600;
+  return 115200;
+}
+
+function defaultName(maker: RadioMaker, deviceName: string) {
+  const brand: Record<RadioMaker, string> = {
+    icom: "Icom",
+    kenwood: "Kenwood",
+    yaesu: "Yaesu",
+    flex: "Flex",
+    tentec: "Ten-Tec",
+  };
+  return deviceName.trim() || brand[maker];
+}
+
+function sanitize(raw: Partial<StationRadio>, fallback?: StationRadio): StationRadio {
+  const maker = asMaker(raw.maker ?? fallback?.maker);
+  const link = asLink(raw.link ?? fallback?.link);
+  const proto = asProto(maker, raw.proto ?? fallback?.proto);
+  const baud = asBaud(raw.baud ?? fallback?.baud, defaultBaud(maker, link));
+  const device = String(raw.device ?? fallback?.device ?? "").trim();
+  const deviceName = String(raw.deviceName ?? fallback?.deviceName ?? "").trim();
+  const port = String(raw.port ?? fallback?.port ?? device).trim() || device;
+  const civAddr = String(raw.civAddr ?? fallback?.civAddr ?? "0xA4").trim() || "0xA4";
+  const name = String(raw.name ?? fallback?.name ?? "").trim() || defaultName(maker, deviceName || port || device);
+  return {
+    id: String(raw.id ?? fallback?.id ?? newId()),
+    name,
+    maker,
+    link,
+    device,
+    deviceName,
+    proto,
+    port,
+    baud,
+    civAddr: /^0x[0-9A-Fa-f]{2}$/.test(civAddr) ? civAddr.toUpperCase().replace("0X", "0x") : "0xA4",
+    connected: Boolean(raw.connected ?? fallback?.connected),
+    primary: Boolean(raw.primary ?? fallback?.primary),
+    error: String(raw.error ?? fallback?.error ?? ""),
+  };
+}
+
+function normalizePrimary() {
+  const hits = radios.filter((r) => r.primary);
+  if (hits.length === 1) return;
+  if (hits.length === 0 && radios.length === 1) {
+    radios[0] = { ...radios[0]!, primary: true };
+    return;
+  }
+  if (hits.length > 1) {
+    const keep = hits[hits.length - 1]!.id;
+    radios = radios.map((r) => ({ ...r, primary: r.id === keep }));
+  }
+}
+
+let radios: StationRadio[] = [];
+
+function persist() {
+  writeAtomic(jsonPath(), `${JSON.stringify({ radios }, null, 2)}\n`);
+}
+
+function load() {
+  try {
+    const raw = JSON.parse(readFileSync(jsonPath(), "utf8")) as { radios?: unknown };
+    if (Array.isArray(raw.radios)) radios = raw.radios.map((r) => sanitize(r as Partial<StationRadio>));
+    const before = radios.map((r) => `${r.id}:${r.primary}:${r.connected}`).join();
+    normalizePrimary();
+    radios = radios.map((r) =>
+      r.link === "bluetooth" && r.proto === "civ" && r.connected ? { ...r, connected: false } : r
+    );
+    const after = radios.map((r) => `${r.id}:${r.primary}:${r.connected}`).join();
+    if (before !== after) persist();
+  } catch {
+    radios = [];
+  }
+}
+
+load();
+
+async function listBluetooth(): Promise<RadioPick[]> {
+  const out: RadioPick[] = [];
+  if (process.platform === "win32") {
+    try {
+      const { stdout } = await execFileAsync(
+        "reg",
+        ["query", "HKLM\\SYSTEM\\CurrentControlSet\\Services\\BTHPORT\\Parameters\\Devices"],
+        { windowsHide: true, timeout: 8000 },
+      );
+      const keys = stdout.split(/\r?\n/).map((l) => l.trim()).filter((l) => /\\Devices\\[0-9a-fA-F]{12}$/.test(l));
+      for (const key of keys) {
+        const hex = (key.split("\\").pop() || "").toUpperCase();
+        if (!hex || hex === "000000000000") continue;
+        const addr = hex.match(/.{2}/g)?.join(":") ?? hex;
+        let name = "Bluetooth";
+        try {
+          const { stdout: det } = await execFileAsync("reg", ["query", key, "/v", "Name"], { windowsHide: true, timeout: 4000 });
+          const m = det.match(/Name\s+REG_BINARY\s+([0-9A-Fa-f ]+)/i);
+          if (m) {
+            const raw = Buffer.from(m[1].replace(/\s+/g, ""), "hex");
+            name = raw.toString("ascii").replace(/\0/g, "").trim() || raw.toString("utf16le").replace(/\0/g, "").trim() || name;
+          }
+        } catch {
+          /* */
+        }
+        out.push({ id: addr, path: addr, label: `${name} (${addr})`, kind: "bluetooth" });
+      }
+    } catch {
+      /* */
+    }
+    try {
+      const script = [
+        "Get-PnpDevice -Class Ports -Status OK -ErrorAction SilentlyContinue | ForEach-Object {",
+        "  $com = [regex]::Match($_.FriendlyName,'COM\\d+').Value",
+        "  if (-not $com -or $_.InstanceId -notmatch 'BTHENUM') { return }",
+        "  $m = [regex]::Match($_.InstanceId, '([0-9A-Fa-f]{12})_')",
+        "  $hex = if ($m.Success) { $m.Groups[1].Value.ToUpper() } else { '' }",
+        "  if ($hex -eq '000000000000' -or $hex -eq '') { return }",
+        "  \"$com`t$hex`t$($_.FriendlyName)\"",
+        "}",
+      ].join(" ");
+      const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
+        windowsHide: true,
+        timeout: 8000,
+      });
+      for (const line of stdout.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)) {
+        const [com, hex, friendly] = line.split("\t");
+        if (!com) continue;
+        const addr = (hex || "").match(/.{2}/g)?.join(":") ?? hex ?? "";
+        const label = `${com} · ${friendly || addr}`;
+        if (!out.some((d) => d.path === com)) out.push({ id: com, path: com, label, kind: "bluetooth" });
+        const byMac = out.find((d) => d.path === addr);
+        if (byMac && !byMac.label.includes(com)) byMac.label = `${byMac.label} · ${com}`;
+      }
+    } catch {
+      /* */
+    }
+  }
+  if (process.platform === "linux") {
+    try {
+      const { stdout } = await execFileAsync("bluetoothctl", ["devices"], { timeout: 8000, windowsHide: true });
+      for (const line of stdout.split(/\r?\n/)) {
+        const m = line.match(/^Device\s+([0-9A-Fa-f:]{11,17})\s+(.*)$/);
+        if (!m) continue;
+        const addr = m[1].toUpperCase();
+        const name = m[2].trim() || addr;
+        out.push({ id: addr, path: addr, label: `${name} (${addr})`, kind: "bluetooth" });
+      }
+    } catch {
+      /* bluez optional */
+    }
+  }
+  const uniq = new Map<string, RadioPick>();
+  for (const d of out) uniq.set(d.path, d);
+  return Array.from(uniq.values()).sort((a, b) => a.label.localeCompare(b.label));
+}
+
+async function listUsb(): Promise<RadioPick[]> {
+  const list = await listSerialDevices();
+  return list.map((d) => ({
+    id: d.path,
+    path: d.path,
+    label: d.label || d.path,
+    kind: "usb" as const,
+  }));
+}
+
+export async function radiosStatus(): Promise<RadiosSnapshot> {
+  let usb: RadioPick[] = [];
+  let bluetooth: RadioPick[] = [];
+  try {
+    usb = await listUsb();
+  } catch {
+    usb = [];
+  }
+  try {
+    bluetooth = await listBluetooth();
+  } catch {
+    bluetooth = [];
+  }
+  return { ok: true, folder: dataDir(), radios, usb, bluetooth };
+}
+
+export async function radiosSave(body: { radios?: unknown }): Promise<RadiosSnapshot> {
+  if (Array.isArray(body.radios)) {
+    radios = body.radios.map((r) => sanitize(r as Partial<StationRadio>));
+    normalizePrimary();
+    persist();
+  }
+  return radiosStatus();
+}
+
+export async function radiosUpsert(raw: Partial<StationRadio>): Promise<RadiosSnapshot> {
+  const next = sanitize(raw, radios.find((r) => r.id === raw.id));
+  if (next.primary) radios = radios.map((r) => ({ ...r, primary: r.id === next.id }));
+  else if (!radios.some((r) => r.primary && r.id !== next.id)) next.primary = radios.length === 0 || radios.every((r) => r.id === next.id);
+  const idx = radios.findIndex((r) => r.id === next.id);
+  if (idx >= 0) radios[idx] = { ...radios[idx], ...next, id: radios[idx].id };
+  else radios.push(next);
+  normalizePrimary();
+  persist();
+  return radiosStatus();
+}
+
+export async function radiosSetPrimary(id: string): Promise<RadiosSnapshot> {
+  if (!id || !radios.some((r) => r.id === id)) return radiosStatus();
+  radios = radios.map((r) => ({ ...r, primary: r.id === id }));
+  persist();
+  return radiosStatus();
+}
+
+function findRadio(id: string) {
+  return radios.find((r) => r.id === id);
+}
+
+export async function radiosRemove(id: string): Promise<RadiosSnapshot> {
+  radios = radios.map((r) => (r.id === id ? { ...r, connected: false } : r)).filter((r) => r.id !== id);
+  normalizePrimary();
+  persist();
+  return radiosStatus();
+}
+
+export async function radiosConnect(raw: Partial<StationRadio>): Promise<RadiosSnapshot> {
+  const next = sanitize(raw, radios.find((r) => r.id === raw.id));
+  next.error = "";
+  const ble = next.link === "bluetooth" && next.maker === "icom" && next.proto === "civ";
+  if (!next.device && !next.port && !ble) {
+    next.connected = false;
+    next.error = next.link === "usb" ? "Selecione uma conexão ser2net" : "Selecione o dispositivo Bluetooth";
+    const idx = radios.findIndex((r) => r.id === next.id);
+    if (idx >= 0) radios[idx] = next;
+    else radios.push(next);
+    persist();
+    const snap = await radiosStatus();
+    snap.ok = false;
+    snap.error = next.error;
+    return snap;
+  }
+  if (ble) {
+    next.connected = false;
+    const idx = radios.findIndex((r) => r.id === next.id);
+    if (idx >= 0) radios[idx] = next;
+    else radios.push(next);
+    persist();
+    const snap = await radiosStatus();
+    snap.needBle = true;
+    snap.bleAddr = next.civAddr;
+    return snap;
+  }
+
+  if (next.link === "usb") {
+    const cfg = await loadSer2net();
+    const svc =
+      cfg.services.find((x) => x.id === next.device) ||
+      cfg.services.find((x) => `${cfg.bind}:${x.tcpPort}` === next.port) ||
+      cfg.services.find((x) => x.device === SER2NET_RADIO_ID);
+    const taken = Boolean(svc?.device && svc.device !== SER2NET_RADIO_ID);
+    if (!svc || taken) {
+      next.error = "Selecione uma conexão ser2net (IP/porta/serial) já cadastrada";
+      next.connected = false;
+    } else {
+      next.device = svc.id;
+      next.deviceName = svc.name || next.deviceName;
+      next.port = `${cfg.bind}:${svc.tcpPort}`;
+      next.baud = svc.baud;
+      next.connected = true;
+      radios = radios.map((r) => (r.id === next.id ? r : { ...r, connected: r.link === "usb" ? false : r.connected }));
+      if (svc.device !== SER2NET_RADIO_ID) {
+        await saveSer2net({
+          bind: cfg.bind,
+          folder: cfg.folder,
+          services: cfg.services.map((x) => ({
+            ...x,
+            device: x.id === svc.id ? SER2NET_RADIO_ID : x.device === SER2NET_RADIO_ID ? "" : x.device,
+          })),
+        });
+      }
+    }
+  } else {
+    next.connected = true;
+  }
+
+  const idx = radios.findIndex((r) => r.id === next.id);
+  if (idx >= 0) radios[idx] = next;
+  else radios.push(next);
+  persist();
+  const snap = await radiosStatus();
+  if (next.error) {
+    snap.ok = false;
+    snap.error = next.error;
+  }
+  return snap;
+}
+
+export async function radiosDisconnect(id: string): Promise<RadiosSnapshot> {
+  const row = findRadio(id);
+  if (row) {
+    row.connected = false;
+    row.error = "";
+    persist();
+  }
+  return radiosStatus();
+}
+
+export async function radiosMarkBle(id: string, connected: boolean, name?: string, error?: string): Promise<RadiosSnapshot> {
+  const row = findRadio(id);
+  if (row) {
+    row.connected = connected;
+    if (name) row.deviceName = name;
+    row.error = error || "";
+    persist();
+  }
+  return radiosStatus();
+}

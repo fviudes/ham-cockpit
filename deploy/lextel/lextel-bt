@@ -1,0 +1,113 @@
+#!/bin/bash
+# Privileged BlueZ / RFCOMM helper for the Lextel MS-2000 (Classic SPP).
+# Usage: lextel-bt scan|pair|bind|release|disconnect|devices|channel <args>
+set -euo pipefail
+
+cmd="${1:-}"
+mac="$(echo "${2:-}" | tr 'a-f' 'A-F')"
+pin="${3:-1234}"
+channel="${4:-1}"
+RFCOMM_DEV="${LEXTEL_RFCOMM:-/dev/rfcomm0}"
+RFCOMM_N="${RFCOMM_DEV##*rfcomm}"
+
+bt() {
+  bluetoothctl -- "$@" 2>/dev/null || bluetoothctl "$@" 2>/dev/null || true
+}
+
+unblock() {
+  rfkill unblock bluetooth 2>/dev/null || true
+  bt power on >/dev/null || true
+  bt pairable on >/dev/null || true
+  hciconfig hci0 up 2>/dev/null || true
+}
+
+print_devices() {
+  local paired_list
+  paired_list="$(bt devices Paired || true)"
+  bt devices | while IFS= read -r line; do
+    [[ "$line" == Device* ]] || continue
+    addr="$(echo "$line" | awk '{print $2}')"
+    name="$(echo "$line" | cut -d' ' -f3-)"
+    paired=0
+    echo "$paired_list" | grep -qi "$addr" && paired=1
+    printf 'DEV %s %s %s\n' "$addr" "$paired" "${name:-unknown}"
+  done
+}
+
+case "$cmd" in
+  scan)
+    unblock
+    secs="${2:-12}"
+    timeout "$secs" bluetoothctl --timeout "$secs" scan on >/dev/null 2>&1 || true
+    print_devices
+    ;;
+  devices)
+    unblock
+    print_devices
+    ;;
+  pair)
+    [[ -n "$mac" ]] || { echo "ERR missing MAC"; exit 1; }
+    unblock
+    bt agent KeyboardOnly >/dev/null || bt agent on >/dev/null || true
+    bt default-agent >/dev/null || true
+    bt scan on >/dev/null || true
+    coproc BT { bluetoothctl; }
+    echo "agent KeyboardOnly" >&"${BT[1]}"
+    echo "default-agent" >&"${BT[1]}"
+    echo "pair $mac" >&"${BT[1]}"
+    end=$((SECONDS + 25))
+    set +e
+    while (( SECONDS < end )); do
+      IFS= read -r -t 1 line <&"${BT[0]}"
+      [[ $? -eq 0 ]] || continue
+      if echo "$line" | grep -qiE 'PIN code|Passkey|passkey'; then
+        echo "$pin" >&"${BT[1]}"
+      fi
+      if echo "$line" | grep -qiE 'Pairing successful|Failed to pair|Authentication Failed|AlreadyExists'; then
+        echo "$line"
+        break
+      fi
+    done
+    set -e
+    echo "trust $mac" >&"${BT[1]}"
+    echo "quit" >&"${BT[1]}"
+    wait "$BT_PID" 2>/dev/null || true
+    bt trust "$mac" >/dev/null || true
+    echo "OK pair $mac"
+    ;;
+  channel)
+    [[ -n "$mac" ]] || { echo "1"; exit 0; }
+    if command -v sdptool >/dev/null 2>&1; then
+      ch="$(sdptool browse "$mac" 2>/dev/null | awk '/Serial Port/{f=1} f && /Channel/{print $2; exit}')"
+      echo "${ch:-1}"
+    else
+      echo 1
+    fi
+    ;;
+  bind)
+    [[ -n "$mac" ]] || { echo "ERR missing MAC"; exit 1; }
+    unblock
+    bt trust "$mac" >/dev/null || true
+    rfcomm release "$RFCOMM_N" 2>/dev/null || true
+    rfcomm bind 0 "$mac" "$channel"
+    if [[ -e "$RFCOMM_DEV" ]]; then
+      chgrp dialout "$RFCOMM_DEV" 2>/dev/null || true
+      chmod 0660 "$RFCOMM_DEV" 2>/dev/null || true
+    fi
+    echo "OK $RFCOMM_DEV $mac $channel"
+    ;;
+  release)
+    rfcomm release "$RFCOMM_N" 2>/dev/null || true
+    echo "OK release"
+    ;;
+  disconnect)
+    [[ -n "$mac" ]] || { echo "ERR missing MAC"; exit 1; }
+    rfcomm release "$RFCOMM_N" 2>/dev/null || true
+    bt disconnect "$mac" >/dev/null || true
+    echo "OK disconnect $mac"
+    ;;
+  *)
+    echo "ERR usage: lextel-bt scan|devices|pair|channel|bind|release|disconnect" >&2
+    exit 1
+    ;;
+esac

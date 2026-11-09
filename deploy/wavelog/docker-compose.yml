@@ -1,0 +1,56 @@
+# Wavelog logbook — pasta e porta isoladas do Ham Cockpit.
+# Instalar em: /opt/wavelog
+# LAN: http://<pi-ip>:8086   instalador: /install
+# NÃO publique 3306. NÃO coloque isto em /opt/ham-cockpit nem na porta 80.
+
+name: wavelog
+
+services:
+  wavelog-db:
+    image: mariadb:11.8
+    container_name: wavelog-db
+    environment:
+      MARIADB_RANDOM_ROOT_PASSWORD: "yes"
+      MARIADB_DATABASE: wavelog
+      MARIADB_USER: wavelog
+      MARIADB_PASSWORD: ${WAVELOG_DB_PASSWORD:?set WAVELOG_DB_PASSWORD in .env}
+    volumes:
+      - wavelog-dbdata:/var/lib/mysql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    networks:
+      - wavelog
+
+  wavelog-main:
+    image: ghcr.io/wavelog/wavelog:latest
+    container_name: wavelog-main
+    depends_on:
+      wavelog-db:
+        condition: service_healthy
+    environment:
+      CI_ENV: docker
+    volumes:
+      - wavelog-config:/var/www/html/application/config/docker
+      - wavelog-uploads:/var/www/html/uploads
+      - wavelog-userdata:/var/www/html/userdata
+    ports:
+      - "8086:80"
+    restart: unless-stopped
+    networks:
+      - wavelog
+
+volumes:
+  wavelog-dbdata:
+  wavelog-uploads:
+  wavelog-userdata:
+  wavelog-config:
+
+networks:
+  wavelog:
+    name: wavelog
+    driver: bridge

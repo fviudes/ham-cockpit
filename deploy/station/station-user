@@ -1,0 +1,53 @@
+#!/bin/bash
+# Cria/remove usuários Linux do console (grupo sudo). Chamado via sudo -n.
+set -euo pipefail
+umask 077
+
+valid() {
+  echo "$1" | grep -Eq '^[a-z][a-z0-9_-]{0,31}$'
+}
+
+supp_groups() {
+  local g="sudo,dialout,plugdev"
+  if getent group docker >/dev/null 2>&1; then
+    g="${g},docker"
+  fi
+  echo "$g"
+}
+
+case "${1:-}" in
+  list)
+    getent group sudo | awk -F: '{print $4}'
+    ;;
+  add)
+    name="${2:-}"
+    if ! valid "$name" || [[ "$name" == "root" ]]; then
+      echo "nome inválido" >&2
+      exit 2
+    fi
+    pass="$(cat -)"
+    if [[ ${#pass} -lt 4 ]]; then
+      echo "senha curta" >&2
+      exit 2
+    fi
+    g="$(supp_groups)"
+    if id "$name" >/dev/null 2>&1; then
+      usermod -aG "$g" "$name"
+    else
+      useradd -m -s /bin/bash -G "$g" "$name"
+    fi
+    printf '%s:%s\n' "$name" "$pass" | chpasswd
+    ;;
+  del)
+    name="${2:-}"
+    if ! valid "$name" || [[ "$name" == "root" || "$name" == "hamcockpit" ]]; then
+      echo "usuário protegido" >&2
+      exit 2
+    fi
+    deluser --remove-home "$name"
+    ;;
+  *)
+    echo "uso: station-user list|add NAME|del NAME" >&2
+    exit 1
+    ;;
+esac

@@ -6,6 +6,12 @@
 dist/
 build/
 *.dist
+image/out/*.img
+image/out/*.img.xz
+image/out/*.iso
+image/out/*.zip
+image/out/*.tar
+image/out/pi-gen/
 
 # Environment variables
 .env
@@ -40,6 +46,14 @@ pnpm-debug.log*
 lerna-debug.log*
 
 # Runtime data
+data/ser2net/
+data/lextel/
+data/net/
+data/services/
+data/layouts/
+data/backup/
+data/radios/
+data/ldg/
 pids
 *.pid
 *.seed

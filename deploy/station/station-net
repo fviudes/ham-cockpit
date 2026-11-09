@@ -1,0 +1,154 @@
+#!/bin/bash
+# Rede da estação: scan, STA, cabo, IPv4, hostname, AP. Chamado via sudo -n.
+set -euo pipefail
+
+WLAN="${CATBRIDGE_WLAN:-wlan0}"
+AP_CONN="Ham-Cockpit-AP"
+
+eth_dev() {
+  local d
+  for d in eth0 end0 enp1s0 eno1; do
+    [[ -d /sys/class/net/$d ]] && { echo "$d"; return 0; }
+  done
+  return 1
+}
+
+wifi_conn() {
+  nmcli -t -f NAME,TYPE,DEVICE con show --active 2>/dev/null | awk -F: '$2=="802-11-wireless" && $1!="Ham-Cockpit-AP" {print $1; exit}'
+}
+
+wired_conn() {
+  local eth
+  eth="$(eth_dev || true)"
+  [[ -n "$eth" ]] || return 1
+  nmcli -t -f NAME,DEVICE,TYPE con show --active 2>/dev/null | awk -F: -v e="$eth" '$2==e {print $1; exit}'
+}
+
+mask_prefix() {
+  python3 - "$1" <<'PY' 2>/dev/null || echo 24
+import sys
+m = sys.argv[1].split(".")
+if len(m) != 4:
+    print(24)
+    raise SystemExit
+n = 0
+for p in m:
+    b = int(p)
+    for _ in range(8):
+        if b & 0x80:
+            n += 1
+            b = (b << 1) & 0xFF
+        else:
+            print(n)
+            raise SystemExit
+print(n)
+PY
+}
+
+valid_host() {
+  echo "$1" | grep -Eq '^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$'
+}
+
+case "${1:-}" in
+  scan)
+    nmcli device wifi rescan >/dev/null 2>&1 || true
+    sleep 1
+    nmcli -t -f SSID,SIGNAL,SECURITY device wifi list 2>/dev/null | awk -F: 'NF>=2 && $1!="" {print $1 "\t" $2 "\t" $3}'
+    ;;
+  connect)
+    ssid="${2:-}"
+    [[ -n "$ssid" ]] || { echo "ssid vazio" >&2; exit 2; }
+    pass="$(cat - || true)"
+    if [[ -z "$pass" ]]; then
+      nmcli device wifi connect "$ssid" ifname "$WLAN"
+    else
+      nmcli device wifi connect "$ssid" password "$pass" ifname "$WLAN"
+    fi
+    ;;
+  forget)
+    ssid="${2:-}"
+    [[ -n "$ssid" ]] || exit 2
+    nmcli -t -f NAME,TYPE con show | awk -F: -v s="$ssid" '$2=="802-11-wireless" && $1==s {print $1}' | while read -r n; do
+      nmcli con delete "$n" >/dev/null 2>&1 || true
+    done
+    ;;
+  link)
+    mode="${2:-wifi}"
+    eth="$(eth_dev || true)"
+    if [[ "$mode" == "ethernet" ]]; then
+      [[ -n "$eth" ]] && nmcli device connect "$eth" >/dev/null 2>&1 || true
+      sta="$(wifi_conn || true)"
+      [[ -n "$sta" ]] && nmcli con down "$sta" >/dev/null 2>&1 || true
+    else
+      [[ -n "$eth" ]] && nmcli device disconnect "$eth" >/dev/null 2>&1 || true
+      sta="$(wifi_conn || true)"
+      if [[ -z "$sta" ]]; then
+        last="$(nmcli -t -f NAME,TYPE,TIMESTAMP con show | awk -F: '$2=="802-11-wireless" && $1!="Ham-Cockpit-AP" {print $3 "\t" $1}' | sort -nr | head -1 | cut -f2)"
+        [[ -n "$last" ]] && nmcli con up "$last" >/dev/null 2>&1 || true
+      fi
+    fi
+    ;;
+  ipv4)
+    method="${2:-dhcp}"
+    conn="${3:-}"
+    if [[ -z "$conn" ]]; then
+      conn="$(wifi_conn || true)"
+      [[ -n "$conn" ]] || conn="$(wired_conn || true)"
+    fi
+    [[ -n "$conn" ]] || { echo "sem conexão ativa" >&2; exit 2; }
+    if [[ "$method" == "dhcp" ]]; then
+      nmcli con modify "$conn" ipv4.method auto ipv4.addresses "" ipv4.gateway "" ipv4.dns "" ipv4.ignore-auto-dns no
+    else
+      ip="${4:-}"
+      mask="${5:-255.255.255.0}"
+      gw="${6:-}"
+      dns1="${7:-1.1.1.1}"
+      dns2="${8:-}"
+      pfx="$(mask_prefix "$mask")"
+      [[ -n "$ip" ]] || { echo "ip vazio" >&2; exit 2; }
+      dns="$dns1"
+      [[ -n "$dns2" ]] && dns="$dns1 $dns2"
+      nmcli con modify "$conn" \
+        ipv4.method manual \
+        ipv4.addresses "${ip}/${pfx}" \
+        ipv4.gateway "$gw" \
+        ipv4.dns "$dns" \
+        ipv4.ignore-auto-dns yes
+    fi
+    nmcli con up "$conn"
+    ;;
+  hostname)
+    name="${2:-}"
+    valid_host "$name" || { echo "hostname inválido" >&2; exit 2; }
+    hostnamectl set-hostname "$name"
+    if grep -qE '^127\.0\.1\.1' /etc/hosts 2>/dev/null; then
+      sed -i -E "s/^127\\.0\\.1\\.1.*/127.0.1.1\t${name}/" /etc/hosts
+    else
+      printf '127.0.1.1\t%s\n' "$name" >>/etc/hosts
+    fi
+    ;;
+  ap)
+    ssid="${2:-}"
+    psk="$(cat - || true)"
+    [[ -n "$ssid" ]] || { echo "ssid vazio" >&2; exit 2; }
+    [[ ${#psk} -ge 8 ]] || { echo "senha do AP precisa de 8 caracteres" >&2; exit 2; }
+    nmcli con delete "$AP_CONN" >/dev/null 2>&1 || true
+    nmcli con add type wifi ifname "$WLAN" con-name "$AP_CONN" autoconnect yes ssid "$ssid"
+    nmcli con modify "$AP_CONN" \
+      802-11-wireless.mode ap \
+      802-11-wireless.band bg \
+      wifi-sec.key-mgmt wpa-psk \
+      wifi-sec.psk "$psk" \
+      ipv4.method shared \
+      ipv4.addresses 192.168.4.1/24 \
+      ipv6.method disabled
+    nmcli con up "$AP_CONN"
+    ;;
+  managed)
+    nmcli -t -f NAME,TYPE,AUTOCONNECT con show | awk -F: '$2=="802-11-wireless" && $1!="Ham-Cockpit-AP" {print $1 "\t" $3}'
+    ;;
+  *)
+    echo "uso: station-net scan|connect SSID|forget SSID|link wifi|ethernet|ipv4 ...|hostname NAME|ap SSID|managed" >&2
+    exit 1
+    ;;
+esac

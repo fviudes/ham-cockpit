@@ -1,0 +1,9 @@
+{
+  "app": "2.0.0",
+  "os": "Ubuntu Server 24.04.1 LTS",
+  "osAvailable": "Ubuntu Server 24.04.3 LTS",
+  "ser2net": "4.3.13",
+  "hamlib": "4.5.5",
+  "wavelog": "1.9.4",
+  "wlg": "1.0.0"
+}

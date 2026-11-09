@@ -1,0 +1,49 @@
+#!/bin/bash
+# Liga/desliga unidades no boot. Chamado via sudo -n.
+set -euo pipefail
+
+unit_of() {
+  case "${1:-}" in
+    ser2net) echo ser2net.service ;;
+    wavelog) echo wavelog.service ;;
+    wlg) echo waveloggate.service ;;
+    spe) echo 'ampctld@spe.service' ;;
+    wifi) echo ham-cockpit-ap.service ;;
+    bluetooth) echo bluetooth.service ;;
+    web) echo ham-cockpit.service ;;
+    *) echo "" ;;
+  esac
+}
+
+cmd="${1:-}"
+id="${2:-}"
+unit="$(unit_of "$id")"
+[[ -n "$unit" ]] || { echo "serviço desconhecido" >&2; exit 2; }
+
+case "$cmd" in
+  enable)
+    systemctl enable "$unit" >/dev/null
+    if [[ "$id" == "web" ]]; then
+      systemctl enable nginx.service >/dev/null 2>&1 || true
+    fi
+    echo enabled
+    ;;
+  disable)
+    if [[ "$id" == "web" ]]; then
+      systemctl disable ham-cockpit.service nginx.service >/dev/null 2>&1 || true
+    else
+      systemctl disable "$unit" >/dev/null
+    fi
+    echo disabled
+    ;;
+  is-enabled)
+    systemctl is-enabled "$unit" 2>/dev/null || echo disabled
+    ;;
+  is-active)
+    systemctl is-active "$unit" 2>/dev/null || echo inactive
+    ;;
+  *)
+    echo "uso: station-svc enable|disable|is-enabled|is-active ID" >&2
+    exit 1
+    ;;
+esac

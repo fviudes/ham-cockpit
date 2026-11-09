@@ -1,0 +1,17 @@
+# Ham Cockpit OS — alvo Ubuntu Server 24.04 LTS (testes da estação).
+# Compacto, sem desktop.
+IMG_NAME='Ham-Cockpit'
+RELEASE='bookworm'
+TARGET_HOSTNAME='ham-cockpit'
+LOCALE_DEFAULT='pt_BR.UTF-8'
+KEYBOARD_KEYMAP='br'
+KEYBOARD_LAYOUT='Portuguese (Brazil)'
+TIMEZONE_DEFAULT='America/Sao_Paulo'
+FIRST_USER_NAME='hamcockpit'
+FIRST_USER_PASS='1234'
+DISABLE_FIRST_BOOT_USER_RENAME=1
+ENABLE_SSH=1
+WPA_COUNTRY='BR'
+DEPLOY_COMPRESSION='xz'
+COMPRESSION_LEVEL='6'
+STAGE_LIST="stage0 stage1 stage2 stage-ham-cockpit"

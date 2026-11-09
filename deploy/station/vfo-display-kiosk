@@ -1,0 +1,91 @@
+#!/bin/bash
+# Tela VFO em HDMI (tty1). Cage+browser, senão Xorg.
+set -euo pipefail
+URL="http://127.0.0.1/console/vfo-display"
+PROFILE=/var/lib/hamcockpit/chromium
+mkdir -p "$PROFILE"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null || true
+export XDG_SESSION_TYPE="${XDG_SESSION_TYPE:-wayland}"
+export WLR_LIBINPUT_NO_DEVICES=0
+
+wait_http() {
+  local i
+  for i in $(seq 1 90); do
+    if curl -sf -o /dev/null "$URL"; then return 0; fi
+    sleep 1
+  done
+  return 1
+}
+
+browser() {
+  local b
+  for b in chromium chromium-browser google-chrome firefox firefox-esr; do
+    if command -v "$b" >/dev/null 2>&1; then
+      echo "$b"
+      return 0
+    fi
+  done
+  return 1
+}
+
+wait_http || true
+BIN="$(browser || true)"
+
+FLAGS=(
+  --kiosk
+  --app="$URL"
+  --no-first-run
+  --noerrdialogs
+  --disable-infobars
+  --disable-session-crashed-bubble
+  --disable-restore-session-state
+  --disable-translate
+  --disable-features=TranslateUI
+  --check-for-update-interval=31536000
+  --autoplay-policy=no-user-gesture-required
+  --start-fullscreen
+  --window-position=0,0
+  --user-data-dir="$PROFILE"
+  --class=CATBridgeVFO
+)
+
+if command -v cage >/dev/null 2>&1; then
+  export XDG_SESSION_TYPE=wayland
+  if [[ -n "${BIN:-}" ]]; then
+    if [[ "$BIN" == firefox || "$BIN" == firefox-esr ]]; then
+      exec cage -s -- "$BIN" --kiosk "$URL"
+    fi
+    exec cage -s -- "$BIN" --ozone-platform=wayland "${FLAGS[@]}"
+  fi
+  if command -v surf >/dev/null 2>&1; then
+    exec cage -s -- surf -F "$URL"
+  fi
+fi
+
+if command -v startx >/dev/null 2>&1; then
+  export XDG_SESSION_TYPE=x11
+  APP="$BIN"
+  [[ -n "$APP" ]] || APP="$(command -v surf || true)"
+  if [[ -n "$APP" ]]; then
+    cat >/tmp/hamcockpit-vfo-xinitrc <<EOF
+#!/bin/bash
+xset -dpms s off s noblank 2>/dev/null || true
+unclutter -idle 0.1 -root 2>/dev/null &
+openbox &
+if [[ "$APP" == *firefox* ]]; then
+  exec $APP --kiosk "$URL"
+fi
+if [[ "$APP" == *surf ]]; then
+  exec $APP -F "$URL"
+fi
+exec $APP --ozone-platform=x11 ${FLAGS[*]}
+EOF
+    chmod +x /tmp/hamcockpit-vfo-xinitrc
+    exec startx /tmp/hamcockpit-vfo-xinitrc -- :0 vt1 -nolisten tcp
+  fi
+fi
+
+echo "Ham Cockpit VFO HDMI: instale cage+chromium ou xinit+openbox+surf" >&2
+exit 1

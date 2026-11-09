@@ -1,0 +1,12 @@
+[Unit]
+Description=Ham Cockpit: CTRL+X sai ao CLI; 10 min de CLI parado reabre o VFO
+After=ham-cockpit-vfo.service
+
+[Service]
+Type=simple
+ExecStart=/opt/ham-cockpit/bin/vfo-display-idle
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=ham-cockpit.target

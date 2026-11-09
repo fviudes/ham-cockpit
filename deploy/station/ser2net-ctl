@@ -1,0 +1,11 @@
+#!/bin/bash
+set -euo pipefail
+case "${1:-}" in
+  start|stop|restart|reload-or-restart|is-active)
+    exec /usr/bin/systemctl "$1" ser2net.service
+    ;;
+  *)
+    echo "uso: ser2net-ctl start|stop|restart|reload-or-restart|is-active" >&2
+    exit 2
+    ;;
+esac

@@ -1,0 +1,30 @@
+#!/bin/bash
+# HDMI VFO: show (kiosk) or exit (Linux console).
+set -euo pipefail
+CMD="${1:-status}"
+VFO=ham-cockpit-vfo.service
+GETTY=getty@tty1.service
+
+show() {
+  systemctl stop "$GETTY" 2>/dev/null || true
+  systemctl start "$VFO"
+  chvt 1 2>/dev/null || true
+}
+
+exit_console() {
+  systemctl stop "$VFO" 2>/dev/null || true
+  systemctl start "$GETTY" 2>/dev/null || true
+  chvt 1 2>/dev/null || true
+}
+
+case "$CMD" in
+  show) show ;;
+  exit) exit_console ;;
+  status)
+    if systemctl is-active --quiet "$VFO"; then echo active; else echo inactive; fi
+    ;;
+  *)
+    echo "uso: $0 show|exit|status" >&2
+    exit 2
+    ;;
+esac

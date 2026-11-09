@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+"""O timer de 10 min vale só na tela CLI (getty/tty1).
+
+Na tela VFO: CTRL+X volta ao console Linux.
+No console CLI: qualquer tecla/mouse zera o relógio; 10 min sem uso reabre o VFO.
+"""
+from __future__ import annotations
+
+import ctypes
+import glob
+import os
+import select
+import subprocess
+import time
+
+IDLE_SEC = 600
+POLL = 0.4
+CTL = "/opt/ham-cockpit/bin/vfo-display-ctl"
+VFO = "ham-cockpit-vfo.service"
+EV_KEY = 1
+EV_REL = 2
+EV_ABS = 3
+KEY_LEFTCTRL = 29
+KEY_RIGHTCTRL = 97
+KEY_X = 45
+
+
+class TimeVal(ctypes.Structure):
+    _fields_ = [("tv_sec", ctypes.c_long), ("tv_usec", ctypes.c_long)]
+
+
+class InputEvent(ctypes.Structure):
+    _fields_ = [
+        ("time", TimeVal),
+        ("type", ctypes.c_uint16),
+        ("code", ctypes.c_uint16),
+        ("value", ctypes.c_int32),
+    ]
+
+
+EVENT_SIZE = ctypes.sizeof(InputEvent)
+
+
+def unit_active(name: str) -> bool:
+    try:
+        r = subprocess.run(["systemctl", "is-active", "--quiet", name])
+        return r.returncode == 0
+    except OSError:
+        return False
+
+
+def vfo_active() -> bool:
+    return unit_active(VFO)
+
+
+def ctl(cmd: str) -> None:
+    try:
+        subprocess.run([CTL, cmd], check=False, timeout=12)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
+def open_inputs():
+    fds = []
+    for path in glob.glob("/dev/input/event*"):
+        try:
+            fds.append(os.open(path, os.O_RDONLY | os.O_NONBLOCK))
+        except OSError:
+            pass
+    return fds
+
+
+def main() -> None:
+    cli_since = None
+    ctrl = False
+    fds = open_inputs()
+    last_scan = 0.0
+    while True:
+        now = time.monotonic()
+        if now - last_scan > 8:
+            for fd in fds:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+            fds = open_inputs()
+            last_scan = now
+
+        on_vfo = vfo_active()
+        if not fds:
+            time.sleep(1)
+        else:
+            ready, _, _ = select.select(fds, [], [], POLL)
+            for fd in ready:
+                while True:
+                    try:
+                        raw = os.read(fd, EVENT_SIZE)
+                    except BlockingIOError:
+                        break
+                    except OSError:
+                        break
+                    if len(raw) < EVENT_SIZE:
+                        break
+                    ev = InputEvent.from_buffer_copy(raw)
+                    etype, code, value = ev.type, ev.code, ev.value
+                    if etype == EV_KEY and code in (KEY_LEFTCTRL, KEY_RIGHTCTRL):
+                        ctrl = value != 0
+                    if etype == EV_KEY and code == KEY_X and value == 1 and ctrl and on_vfo:
+                        ctl("exit")
+                        continue
+                    if (not on_vfo) and etype in (EV_KEY, EV_REL, EV_ABS):
+                        cli_since = time.monotonic()
+
+        on_vfo = vfo_active()
+        if on_vfo:
+            cli_since = None
+        elif cli_since is None:
+            cli_since = time.monotonic()
+        elif time.monotonic() - cli_since >= IDLE_SEC:
+            ctl("show")
+            cli_since = None
+
+
+if __name__ == "__main__":
+    main()

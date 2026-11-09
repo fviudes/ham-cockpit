@@ -1,0 +1,37 @@
+name: Ham Cockpit OS image
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "deploy/**"
+      - "image/appliance/**"
+      - "server/**"
+      - "client/**"
+      - ".github/workflows/appliance-image.yml"
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - name: Build console
+        run: pnpm install && pnpm build
+      - name: QEMU arm64
+        run: docker run --privileged --rm tonistiigi/binfmt --install all
+      - name: Build appliance image
+        run: bash image/appliance/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ham-Cockpit-OS
+          path: image/out/Ham-Cockpit*.img.xz
+          if-no-files-found: error
+          compression-level: 0

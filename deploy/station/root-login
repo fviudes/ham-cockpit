@@ -1,0 +1,7 @@
+#!/bin/bash
+export HOME=/root
+export USER=root
+export LOGNAME=root
+export TERM="${TERM:-xterm-256color}"
+cd /root 2>/dev/null || true
+exec /bin/bash -l

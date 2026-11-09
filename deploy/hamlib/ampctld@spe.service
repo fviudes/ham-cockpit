@@ -1,0 +1,13 @@
+[Unit]
+Description=Hamlib ampctld SPE via ser2net :4004
+After=ser2net.service
+Requires=ser2net.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ampctld -m 401 -r 127.0.0.1:4004 -s 9600 -t 4531
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=ham-cockpit.target

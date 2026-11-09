@@ -1,0 +1,14 @@
+[Unit]
+Description=ser2net serial-over-TCP (Ham Cockpit)
+Documentation=man:ser2net.yaml(5)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/ser2net -n -c /opt/ser2net/ser2net.yaml
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=ham-cockpit.target

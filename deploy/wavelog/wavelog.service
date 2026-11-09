@@ -1,0 +1,19 @@
+[Unit]
+Description=Wavelog logbook (MariaDB + PHP) — Ham Cockpit
+Documentation=https://github.com/wavelog/wavelog
+Requires=docker.service
+After=docker.service docker.socket network-online.target
+Wants=network-online.target
+# MariaDB + wavelog-main em :8086. Não publica 3306.
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/wavelog
+Environment=WAVELOG_DIR=/opt/wavelog
+ExecStart=/bin/bash /opt/wavelog/wavelog-ctl.sh start
+ExecStop=/bin/bash /opt/wavelog/wavelog-ctl.sh stop
+TimeoutStartSec=0
+
+[Install]
+WantedBy=ham-cockpit.target
