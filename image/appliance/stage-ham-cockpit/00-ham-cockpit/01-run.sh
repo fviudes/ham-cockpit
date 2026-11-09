@@ -1,4 +1,6 @@
 #!/bin/bash -e
+# Legado pi-gen (Raspberry Pi OS). A imagem oficial agora é Ubuntu Server 24.04:
+#   sudo bash image/appliance/build.sh
 # Overlay Ham Cockpit no rootfs (Node, /opt, systemd, imagens Docker arm64).
 STAGE_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SEED="${STAGE_ROOT}/files/seed"

@@ -22,4 +22,4 @@ Versão atual neste canal: **0.1.00** (`version.json`).
 - `"file"` preenchido: baixa `update/<file>` desta pasta.
 - `"file"` vazio: a estação usa o snapshot publicado de `main`.
 
-Instalação e operação: [README na raiz](../README.md). ISO: [`instaladores/`](../instaladores/).
+Instalação e operação: [README na raiz](../README.md). Imagem do cartão: [`instaladores/`](../instaladores/).

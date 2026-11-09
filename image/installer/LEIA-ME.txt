@@ -1,23 +1,8 @@
-Ham Cockpit OS — Ubuntu Server 24.04 LTS
-Imagem de testes da estação. Sem desktop. Serviços via systemd ham-cockpit.target.
+Ham Cockpit OS — Ubuntu Server 24.04 LTS ARM64 (Raspberry Pi 3 / 4)
 
-A ISO / nuvem Ubuntu Server recebe o Ham Cockpit com:
-     sudo bash deploy/station/install-station.sh
+A imagem ham-cockpit-*-raspi.img.xz já contém o Ubuntu e a estação
+(Docker, Wavelog, WaveLogGate, ser2net, Hamlib, console). Grave com o
+Raspberry Pi Imager (Use custom) no microSD ou SSD USB.
 
-No boot sobem sozinhos:
-  nginx :80            console Ham Cockpit
-  docker + Wavelog     MariaDB + PHP :8086
-  WaveLogGate          UDP 2333 → log de contatos
-  ser2net + Hamlib     :4532
-  AP 192.168.4.1       se não houver cabo de rede
-  SSH :22              hamcockpit / 1234  e  admin / 1234  (sudo)
-  Terminal web         shell root (aba Terminal no Admin)
-
-Atualizações (Admin → Atualização):
-  Ham Cockpit (github.com/fviudes/ham-cockpit/update), Ubuntu, ser2net, Hamlib, Wavelog, WaveLogGate.
-
-1. Grave Ubuntu Server 24.04 LTS (ARM64 no Pi, amd64 no PC de teste).
-2. No primeiro boot, copie o repositório e rode install-station.sh como root.
-3. Sem Ethernet: WiFi Ham-Cockpit-XXXX / hamcockpit
-     http://192.168.4.1     admin / 1234
-     http://IP:8086/install  banco: wavelog-db
+Scripts públicos: pasta instaladores/ na raiz do repositório.
+Release: https://github.com/fviudes/ham-cockpit/releases

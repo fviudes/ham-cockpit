@@ -12,6 +12,11 @@ image/out/*.iso
 image/out/*.zip
 image/out/*.tar
 image/out/pi-gen/
+image/out/stage/
+image/out/mnt/
+instaladores/*.img
+instaladores/*.img.xz
+instaladores/*.iso
 
 # Environment variables
 .env

@@ -40,9 +40,9 @@ Usuário de serviço: `hamcockpit`. Target systemd: `ham-cockpit.target`.
 | `server/` | API Express / plugins Vite (rádio, ser2net, backup, updates) |
 | `shared/` | IDs de serviço, ser2net, marca (`APP_VERSION`) |
 | `deploy/` | systemd, install-station, helpers |
-| `image/` | pi-gen / flash da imagem OS |
+| `image/` | Bake Ubuntu Server 24.04 ARM64 (chroot + qemu) |
 | `update/` | Canal público de versão |
-| `instaladores/` | ISO de distribuição |
+| `instaladores/` | Flash + ponteiro da imagem `.img.xz` (Release) |
 
 ## Atualização do console
 

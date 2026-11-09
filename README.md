@@ -8,19 +8,23 @@ Este repositório **não é código aberto**. O que está publicado para quem op
 | --- | --- |
 | [Esta página](#instalação) | Instalação, configuração e operação |
 | [`update/`](update/) | Canal de atualização (versão atual × versão nova no console) |
-| [`instaladores/`](instaladores/) | ISO v0.1.00 para gravar / instalar no Raspberry Pi |
+| [`instaladores/`](instaladores/) | Imagem Ubuntu Server 24.04 LTS para gravar no cartão / SSD |
 
 ---
 
 ## O que sobe no Pi
 
+A imagem já é o **Ubuntu Server 24.04 LTS ARM64** com tudo instalado e habilitado no boot:
+
 - Console HTTP na porta **80** (`http://IP/console`)
-- Wavelog (logbook) na **8086**
+- Docker + Wavelog (logbook) na **8086**
 - WaveLogGate UDP **2333** → cadastra QSO no Wavelog
 - ser2net + Hamlib (`127.0.0.1:4532`)
 - Access Point `Ham-Cockpit-XXXX` em **192.168.4.1** se não houver cabo de rede
 - SSH na porta **22** (usuários `hamcockpit` e `admin`)
 - HDMI: VFO em tela cheia; `CTRL+X` volta ao console; 10 min parado no CLI reabre o VFO
+
+Não grave o Ubuntu vanilla e não rode `install-station.sh` nesta imagem — o sistema e os pacotes já vêm assados.
 
 ---
 
@@ -28,33 +32,43 @@ Este repositório **não é código aberto**. O que está publicado para quem op
 
 ### Material
 
-- Raspberry Pi 3 ou Pi 4, fonte oficial, cartão microSD (16 GB ou mais)
-- PC Windows ou Linux para gravar o cartão
+- Raspberry Pi 3 ou Pi 4, fonte oficial
+- Cartão microSD (16 GB ou mais) **ou** SSD USB
+- PC Windows ou Linux
 - [Raspberry Pi Imager](https://www.raspberrypi.com/software/)
 
-### 1. Baixe a ISO
+### 1. Baixe a imagem
 
-Arquivo: [`instaladores/ham-cockpit-0.1.00.iso`](instaladores/ham-cockpit-0.1.00.iso)
+Arquivo: **`ham-cockpit-0.1.00-raspi.img.xz`** (Ubuntu Server 24.04 LTS + Ham Cockpit).
 
-Abra a ISO (Explorador de arquivos no Windows, ou monte no Linux). Dentro estão o instalador da aplicação, o `LEIA-ME` e os scripts de gravação.
-
-### 2. Sistema operacional no cartão
-
-Grave **Ubuntu Server 24.04 LTS** (ARM64) no microSD com o Raspberry Pi Imager.
-
-No primeiro boot do Ubuntu, ligue o Pi na rede (Ethernet) ou use um monitor/teclado.
-
-### 3. Instale o Ham Cockpit
-
-Copie o conteúdo da ISO para o Pi (pendrive, SCP ou pasta montada) e, como root:
+Na [Release v0.1.00](https://github.com/fviudes/ham-cockpit/releases/tag/v0.1.00) ou:
 
 ```bash
-sudo bash deploy/station/install-station.sh
+gh release download --repo fviudes/ham-cockpit --pattern "ham-cockpit-*-raspi.img.xz" --dir instaladores
 ```
 
-O script instala Node, Docker, nginx, cria o usuário `hamcockpit`, copia o console para `/opt/ham-cockpit` e habilita os serviços no boot.
+Scripts de gravação: [`instaladores/flash.ps1`](instaladores/flash.ps1) (Windows) e [`instaladores/flash.sh`](instaladores/flash.sh) (Linux).
 
-### 4. Primeiro acesso
+### 2. Grave no cartão ou SSD
+
+Abra o Raspberry Pi Imager → **Use custom** → escolha `ham-cockpit-0.1.00-raspi.img.xz` → selecione o microSD ou o SSD USB → grave.
+
+Windows (PowerShell **como Administrador**), com o Imager instalado:
+
+```powershell
+cd instaladores
+.\flash.ps1 -DiskNumber N
+```
+
+Linux:
+
+```bash
+sudo bash instaladores/flash.sh /dev/sdX
+```
+
+Ligue o Pi. No primeiro boot o Ubuntu expande o disco; em 1–2 minutos os serviços sobem sozinhos.
+
+### 3. Primeiro acesso
 
 1. Sem Ethernet: no telefone ou notebook, entre no Wi‑Fi **Ham-Cockpit-XXXX** (os quatro caracteres mudam por aparelho). Senha: **hamcockpit**.
 2. Abra **http://192.168.4.1/console** (ou `http://IP-do-Pi/console` / `http://ham-cockpit.local/console` na LAN).

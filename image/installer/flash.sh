@@ -6,7 +6,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 IMG="${2:-}"
 if [[ -z $IMG ]]; then
-  IMG="$(find "$REPO/image/out" "$HERE" -maxdepth 2 -name 'Ham-Cockpit*.img*' 2>/dev/null | head -n 1 || true)"
+  IMG="$(find "$REPO/image/out" "$REPO/instaladores" "$HERE" -maxdepth 2 -name 'ham-cockpit-*-raspi.img*' 2>/dev/null | head -n 1 || true)"
 fi
 [[ -n ${IMG:-} && -f $IMG ]] || { echo "gere a imagem: bash image/appliance/build.sh"; exit 1; }
 

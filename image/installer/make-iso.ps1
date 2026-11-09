@@ -10,7 +10,7 @@ $repo = Resolve-Path (Join-Path $here "..\..")
 $stage = Join-Path $env:TEMP "hamcockpit-iso"
 if (-not $OutFile) { $OutFile = Join-Path $repo "image\out\Ham-Cockpit-Installer.iso" }
 
-$img = Get-ChildItem -Path (Join-Path $repo "image\out"), $here -Filter "Ham-Cockpit*.img.xz" -ErrorAction SilentlyContinue |
+$img = Get-ChildItem -Path (Join-Path $repo "image\out"), (Join-Path $repo "instaladores"), $here -Filter "ham-cockpit-*-raspi.img.xz" -ErrorAction SilentlyContinue |
   Select-Object -First 1
 if (-not $img) {
   throw "image/out/Ham-Cockpit*.img.xz ausente. Rode: wsl bash image/appliance/build.sh"

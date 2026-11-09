@@ -1,10 +1,26 @@
-Ham Cockpit v0.1.00 — instalador para Raspberry Pi 3 / 4
+Ham Cockpit v0.1.00 — imagem Ubuntu Server 24.04 LTS para Raspberry Pi 3 / 4
 
-Esta ISO contém a aplicação (console + scripts de estação), não a imagem
-completa do Ubuntu. Grave primeiro o Ubuntu Server 24.04 LTS ARM64 no
-microSD (Raspberry Pi Imager). Depois copie esta pasta para o Pi e rode:
+Grave o arquivo ham-cockpit-0.1.00-raspi.img.xz no cartão microSD ou SSD USB
+com o Raspberry Pi Imager (Use custom). Não instale o Ubuntu à parte: a
+imagem já contém o sistema e a estação.
 
-  sudo bash deploy/station/install-station.sh
+Já empacotados e habilitados no boot:
+  Docker + Wavelog (MariaDB + PHP)   :8086
+  WaveLogGate                         UDP 2333
+  ser2net + Hamlib                    :4532
+  nginx + console Ham Cockpit         :80 /console
+  Access Point 192.168.4.1            se não houver cabo
+  SSH :22                             hamcockpit / 1234  e  admin / 1234
+
+Download da imagem (repositório privado — precisa de acesso):
+  https://github.com/fviudes/ham-cockpit/releases
+  gh release download --repo fviudes/ham-cockpit --pattern "ham-cockpit-*-raspi.img.xz" --dir instaladores
+
+Windows (Administrador), com o Raspberry Pi Imager instalado:
+  .\flash.ps1 -DiskNumber N
+
+Linux:
+  sudo bash flash.sh /dev/sdX
 
 Primeiro acesso
   Wi-Fi AP:  Ham-Cockpit-XXXX   senha hamcockpit
@@ -12,5 +28,5 @@ Primeiro acesso
   Wavelog:   http://IP:8086/install        banco wavelog-db
   SSH:       hamcockpit / 1234  ou  admin / 1234
 
-Documentação: README.md nesta ISO e https://github.com/fviudes/ham-cockpit
-Atualizações: pasta update/ no mesmo repositório (Admin → Atualização).
+Documentação: README.md na raiz do repositório.
+Atualizações: pasta update/ (Admin → Atualização).

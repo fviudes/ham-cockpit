@@ -1,11 +1,20 @@
-# Instaladores — Ham Cockpit
+# Instaladores — Ham Cockpit OS
 
-Pasta **pública** com a ISO da aplicação para o Raspberry Pi.
+Imagem **Ubuntu Server 24.04 LTS ARM64** para gravar no microSD ou SSD do Raspberry Pi 3 / 4. Já vem com Docker, Wavelog, WaveLogGate, ser2net, Hamlib, nginx e o console Ham Cockpit.
 
-| Arquivo | Versão | Uso |
+O ficheiro `.img.xz` tem ~1–2 GB e **não cabe no Git**. Está na [Release v0.1.00](https://github.com/fviudes/ham-cockpit/releases/tag/v0.1.00).
+
+| Artefato | Versão | Uso |
 | --- | --- | --- |
-| [ham-cockpit-0.1.00.iso](ham-cockpit-0.1.00.iso) | v0.1.00 | Primeira ISO: instala o console no Ubuntu Server 24.04 LTS |
+| `ham-cockpit-0.1.00-raspi.img.xz` | v0.1.00 | Grave com o Raspberry Pi Imager (Use custom) |
 
-Abra a ISO, leia `LEIA-ME.txt` e execute `deploy/station/install-station.sh` no Pi (como root).
+```bash
+gh release download --repo fviudes/ham-cockpit --pattern "ham-cockpit-*-raspi.img.xz" --dir instaladores
+```
 
-Passo a passo completo: [README do projeto](../README.md#instalação).
+Windows (Administrador): `.\flash.ps1 -DiskNumber N`  
+Linux: `sudo bash flash.sh /dev/sdX`
+
+Não grave o Ubuntu vanilla. Esta imagem já é o sistema + a estação.
+
+Passo a passo: [README do projeto](../README.md#instalação).
