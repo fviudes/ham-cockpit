@@ -66,7 +66,7 @@ Linux:
 sudo bash instaladores/flash.sh /dev/sdX
 ```
 
-Ligue o Pi. No primeiro boot o Ubuntu expande o disco; em 1–2 minutos os serviços sobem sozinhos.
+Ligue o Pi **com Ethernet**. No primeiro boot o Ubuntu expande o disco, sobe o console e o Wavelog baixa as imagens Docker (MariaDB + PHP). Sem cabo, o AP `Ham-Cockpit-XXXX` sobe na mesma; o logbook em :8086 fica para quando houver rede.
 
 ### 3. Primeiro acesso
 

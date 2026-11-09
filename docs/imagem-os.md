@@ -1,26 +1,34 @@
 # Imagem Ham Cockpit OS
 
-A distribuição gravável **não** é uma ISO de aplicação. É um disco Ubuntu Server 24.04 LTS ARM64 (`linux/arm64`) já com a estação, para o Raspberry Pi Imager gravar no microSD ou SSD USB.
+A distribuição gravável é um disco Ubuntu Server 24.04 LTS ARM64 para o Raspberry Pi Imager gravar no microSD ou SSD USB.
 
-## O que vai na imagem
+## Porque o bake em QEMU no x64 foi abandonado
 
-- Base: `ubuntu-24.04.4-preinstalled-server-arm64+raspi.img.xz` (Canonical)
-- Pacotes: `deploy/station/packages.list` (Docker, ser2net, Hamlib, nginx, BlueZ, cage/X11; sem snaps Firefox/Chromium)
-- Console em `/opt/ham-cockpit` (Node 20 + `dist/`)
-- Wavelog: compose em `/opt/wavelog` + tarballs `wavelog` e `mariadb:11.8` em `/opt/wavelog/images/` (load no first-boot)
-- WaveLogGate, ser2net, Hamlib, AP, VFO HDMI — units systemd, `ham-cockpit.target` habilitado
-- cloud-init: hostname `ham-cockpit`, expande o disco no primeiro boot, SSH com senha
+Assar a imagem num runner `ubuntu-latest` (x86) com `qemu-user-static` emula cada `apt-get` do ARM. Isso:
 
-## Como gerar
+- leva 1–2 horas
+- trava no esbuild/pnpm
+- estoura o disco do runner quando ainda se pré-carregam tarballs Docker
 
-Não roda neste Windows (precisa loop + qemu ARM64). No GitHub Actions:
+Neste PC Windows não há WSL nem Docker, então o bake local também não roda.
+
+## Caminho actual
+
+GitHub Actions em **`ubuntu-24.04-arm`** (runner ARM nativo, disponível em repositório privado):
+
+1. Compila o console (Vite + esbuild nativos)
+2. Descarrega `ubuntu-24.04.4-preinstalled-server-arm64+raspi.img.xz`
+3. Faz chroot **sem QEMU** e instala Docker, ser2net, Hamlib, nginx, Node, o console
+4. Publica `ham-cockpit-<versão>-raspi.img.xz` na Release
+
+Wavelog/MariaDB fazem `docker compose pull` no primeiro boot com Ethernet (não vão em tarball, para caber no disco de 14 GB do runner e acelerar o bake).
+
+Tempo típico: **15–25 min**, não 90+.
 
 ```
 sudo bash image/appliance/build.sh
 ```
 
-Workflow: `.github/workflows/appliance-image.yml` (`workflow_dispatch` ou tag `v*`).
+`SKIP_DOCKER_CACHE=1` é o omissão. Para embutir os `.tar` do Wavelog: `SKIP_DOCKER_CACHE=0`.
 
-Artefato: `image/out/ham-cockpit-<versão>-raspi.img.xz` → Release `v<versão>` em `fviudes/ham-cockpit`.
-
-O `.img.xz` não entra no Git (tamanho). `instaladores/` tem os scripts de gravação e o ponteiro da Release.
+Artefato: Release `v<versão>` em `fviudes/ham-cockpit`. O `.img.xz` não entra no Git.

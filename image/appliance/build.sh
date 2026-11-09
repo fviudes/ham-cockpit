@@ -33,8 +33,16 @@ need resize2fs
 need e2fsck
 command -v growpart >/dev/null 2>&1 || { echo "falta growpart (cloud-guest-utils)" >&2; exit 1; }
 
+HOST_ARCH="$(uname -m)"
+NATIVE_ARM=0
+if [[ $HOST_ARCH == aarch64 || $HOST_ARCH == arm64 ]]; then
+  NATIVE_ARM=1
+fi
 QEMU_STATIC="$(command -v qemu-aarch64-static || true)"
-[[ -n $QEMU_STATIC ]] || { echo "instale qemu-user-static" >&2; exit 1; }
+if [[ $NATIVE_ARM -eq 0 && -z $QEMU_STATIC ]]; then
+  echo "instale qemu-user-static (ou rode num host ARM64)" >&2
+  exit 1
+fi
 
 if [[ ! -f $ROOT/dist/index.js ]]; then
   echo "compilando Ham Cockpit..."
@@ -69,6 +77,7 @@ wget -q -O "$STAGE/SHA256SUMS" "$UBUNTU_SHA_URL"
 rm -f "$IMG_RAW" "$IMG_XZ"
 echo "descompactando base..."
 xz -dc "$BASE_XZ" >"$IMG_RAW"
+rm -f "$BASE_XZ"
 qemu-img resize "$IMG_RAW" "$IMAGE_SIZE"
 
 LOOP="$(losetup --show -fP "$IMG_RAW")"
@@ -88,18 +97,20 @@ mount --bind /dev/pts "$MNT/dev/pts"
 mount --bind /proc "$MNT/proc"
 mount --bind /sys "$MNT/sys"
 mount --bind /run "$MNT/run"
-cp -a "$QEMU_STATIC" "$MNT/usr/bin/qemu-aarch64-static"
+if [[ $NATIVE_ARM -eq 0 ]]; then
+  cp -a "$QEMU_STATIC" "$MNT/usr/bin/qemu-aarch64-static"
+fi
 
-echo "pré-carregando imagens Docker linux/arm64 (Wavelog + MariaDB)..."
 DOCK="$STAGE/docker"
 mkdir -p "$DOCK"
-if command -v docker >/dev/null 2>&1; then
+if [[ ${SKIP_DOCKER_CACHE:-1} != 1 ]] && command -v docker >/dev/null 2>&1; then
+  echo "pré-carregando imagens Docker linux/arm64 (Wavelog + MariaDB)..."
   docker pull --platform linux/arm64 "$DOCKER_WAVELG"
   docker pull --platform linux/arm64 "$DOCKER_MARIADB"
   docker save "$DOCKER_WAVELG" -o "$DOCK/wavelog.tar"
   docker save "$DOCKER_MARIADB" -o "$DOCK/mariadb.tar"
 else
-  echo "docker ausente no host — Wavelog será baixado no primeiro boot" >&2
+  echo "Wavelog/MariaDB: pull no primeiro boot (sem tarball na imagem)"
 fi
 
 echo "copiando seed Ham Cockpit..."
@@ -115,9 +126,14 @@ install -m 0755 "$ROOT/image/appliance/chroot-setup.sh" "$MNT/tmp/chroot-setup.s
 install -m 0644 "$ROOT/image/appliance/user-data" "$MNT/boot/firmware/user-data"
 install -m 0644 "$ROOT/image/appliance/network-config" "$MNT/boot/firmware/network-config"
 
-echo "chroot ARM64 — instalando Docker, ser2net, Hamlib, Wavelog, console..."
-chroot "$MNT" /usr/bin/qemu-aarch64-static /bin/bash -c \
-  "NODE_VER='$NODE_VER' HAMCOCKPIT_SEED=/opt/ham-cockpit-seed bash /tmp/chroot-setup.sh"
+echo "chroot ARM64 — instalando Docker, ser2net, Hamlib, console..."
+if [[ $NATIVE_ARM -eq 1 ]]; then
+  chroot "$MNT" /bin/bash -c \
+    "NODE_VER='$NODE_VER' HAMCOCKPIT_SEED=/opt/ham-cockpit-seed bash /tmp/chroot-setup.sh"
+else
+  chroot "$MNT" /usr/bin/qemu-aarch64-static /bin/bash -c \
+    "NODE_VER='$NODE_VER' HAMCOCKPIT_SEED=/opt/ham-cockpit-seed bash /tmp/chroot-setup.sh"
+fi
 
 rm -rf "$MNT/opt/ham-cockpit-seed" "$MNT/opt/wavelog-seed-images" "$MNT/tmp/chroot-setup.sh"
 rm -f "$MNT/usr/bin/qemu-aarch64-static"
@@ -127,16 +143,8 @@ cleanup
 trap - EXIT
 LOOP=""
 
-if command -v zerofree >/dev/null 2>&1; then
-  LOOP="$(losetup --show -fP "$IMG_RAW")"
-  e2fsck -fy "${LOOP}p2"
-  zerofree -v "${LOOP}p2" || true
-  losetup -d "$LOOP"
-  LOOP=""
-fi
-
 echo "comprimindo $IMG_XZ ..."
-xz -T0 -6 -v -k -f "$IMG_RAW"
+xz -T0 -4 -v -k -f "$IMG_RAW"
 mv -f "${IMG_RAW}.xz" "$IMG_XZ"
 rm -f "$IMG_RAW"
 sha256sum "$IMG_XZ" | tee "$IMG_XZ.sha256"

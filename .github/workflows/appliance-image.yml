@@ -7,10 +7,12 @@ on:
 
 jobs:
   image:
-    runs-on: ubuntu-latest
-    timeout-minutes: 180
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 75
     permissions:
       contents: write
+    env:
+      SKIP_DOCKER_CACHE: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -21,16 +23,15 @@ jobs:
       - name: Free disk
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
+          uname -m
           df -h
       - name: Host tools
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y qemu-user-static qemu-utils cloud-guest-utils \
-            parted e2fsprogs zerofree xz-utils rsync wget ca-certificates
-      - name: QEMU arm64 binfmt
-        run: docker run --privileged --rm tonistiigi/binfmt --install all
+          sudo apt-get install -y qemu-utils cloud-guest-utils \
+            parted e2fsprogs xz-utils rsync wget ca-certificates
       - name: Build console
-        timeout-minutes: 20
+        timeout-minutes: 15
         run: |
           pnpm install --frozen-lockfile
           pnpm rebuild esbuild
@@ -64,5 +65,5 @@ jobs:
           SUM="${IMG}.sha256"
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
             --title "Ham Cockpit ${TAG}" \
-            --notes "Imagem Ubuntu Server 24.04 LTS ARM64 com Ham Cockpit ${TAG} (Docker, Wavelog, WaveLogGate, ser2net, Hamlib). Grave no cartão/SSD com o Raspberry Pi Imager (Use custom)."
+            --notes "Imagem Ubuntu Server 24.04 LTS ARM64 com Ham Cockpit ${TAG} (Docker, ser2net, Hamlib, console). Wavelog baixa as imagens Docker no primeiro boot com Ethernet. Grave no cartão/SSD com o Raspberry Pi Imager (Use custom)."
           gh release upload "$TAG" "$IMG" "$SUM" --clobber
