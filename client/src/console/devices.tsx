@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
+import {
+  defaultNetworkProfile,
+  makerLinkOptions,
+  makerNetworkProfiles,
+  primaryNetPort,
+  type NetworkProfile,
+} from "@shared/equipment";
 import { bleAvailable, bleErrorMessage, ic705Ble, isBleCancel, looksLikeBleId, type BlePhase } from "./ic705-ble";
 import type { I18nKey } from "./i18n";
 import {
@@ -28,20 +35,48 @@ import { Ser2netLink } from "./ser2net-link";
 import { Chip, ConsoleInput, ConsoleSelect, Field, GhostBtn, Lcd, Led, PageHead, Panel, PanelTitle, PrimaryBtn } from "./widgets";
 
 const RADIO_BAUDS = [1200, 4800, 9600, 19200, 38400, 57600, 115200, 230400];
-const MAKERS: RadioMaker[] = ["icom", "kenwood", "yaesu", "flex", "tentec"];
+const MAKERS: RadioMaker[] = ["icom", "kenwood", "yaesu", "flex", "tentec", "xiegu", "hermes", "anan"];
 const MAKER_KEY: Record<RadioMaker, I18nKey> = {
   icom: "makerIcom",
   kenwood: "makerKenwood",
   yaesu: "makerYaesu",
   flex: "makerFlex",
   tentec: "makerTentec",
+  xiegu: "makerXiegu",
+  hermes: "makerHermes",
+  anan: "makerAnan",
 };
 
 function defaultBaud(maker: RadioMaker, link: RadioLink) {
+  if (link === "network") return 0;
   if (link === "bluetooth" && maker !== "icom") return 9600;
   if (maker === "kenwood" || maker === "yaesu") return 38400;
   if (maker === "tentec") return 57600;
+  if (maker === "xiegu") return 19200;
   return 115200;
+}
+
+function preferLink(maker: RadioMaker, current?: RadioLink): RadioLink {
+  const opts = makerLinkOptions(maker);
+  if (current && opts.includes(current)) return current;
+  return (opts.find((o) => o === "usb") || opts[0] || "usb") as RadioLink;
+}
+
+function linkLabelKey(link: RadioLink): I18nKey {
+  if (link === "network") return "radioLinkNet";
+  if (link === "bluetooth") return "radioLinkBt";
+  return "radioLinkUsb";
+}
+
+function applyNetProfile(
+  profile: NetworkProfile | undefined,
+  setPort: (v: string) => void,
+  setNetProfile: (v: string) => void,
+) {
+  if (!profile) return;
+  setNetProfile(profile.id);
+  const p = primaryNetPort(profile.ports);
+  if (p != null) setPort(String(p));
 }
 
 type RadiosApi = {
@@ -75,7 +110,7 @@ function applyRadios(
 }
 
 export function Ic705Page() {
-  const { s, setS, pushLog, tx } = useConsole();
+  const { s, setS, pushLog, tx, lang } = useConsole();
   const [, navigate] = useLocation();
   const webBt = bleAvailable();
   const [maker, setMaker] = useState<RadioMaker>("icom");
@@ -85,18 +120,31 @@ export function Ic705Page() {
   const [port, setPort] = useState("");
   const [baud, setBaud] = useState(115200);
   const [civAddr, setCivAddr] = useState("0xA4");
+  const [host, setHost] = useState("");
+  const [netProfile, setNetProfile] = useState("");
+  const [netUser, setNetUser] = useState("");
+  const [netPassword, setNetPassword] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [webBle, setWebBle] = useState<RadioPick[]>([]);
 
   const icom = maker === "icom";
-  const useCiv = icom && proto === "civ";
+  const xiegu = maker === "xiegu";
+  const useCiv = (icom || xiegu) && proto === "civ";
   const useGatt = link === "bluetooth" && useCiv;
   const catUsb = link === "usb";
+  const useNet = link === "network";
+  const linkOpts = useMemo(() => makerLinkOptions(maker), [maker]);
+  const netProfiles = useMemo(() => makerNetworkProfiles(maker), [maker]);
+  const activeNet = useMemo(
+    () => netProfiles.find((p) => p.id === netProfile) || defaultNetworkProfile(maker),
+    [netProfiles, netProfile, maker],
+  );
+  const needNetAuth = useNet && activeNet?.auth === "network-user";
   const radioSvcs = useMemo(() => radioSer2netSvcs(s.ser2net.services), [s.ser2net.services]);
   const s2nRow = useMemo(() => radioSvcs.find((x) => x.id === device), [radioSvcs, device]);
   const s2nEndpoint = s2nRow ? `${s.ser2net.bind}:${s2nRow.tcpPort}` : "";
-  const picks = catUsb ? [] : [...webBle, ...s.radios.bluetooth];
+  const picks = catUsb || useNet ? [] : [...webBle, ...s.radios.bluetooth];
   const live = s.radios.items.find((r) => r.connected);
   const gattUp = s.ic705.phase === "ready" || s.ic705.civ;
   const bleOn = gattUp || s.ic705.phase === "handshake" || s.ic705.phase === "connecting" || s.ic705.phase === "scanning";
@@ -111,6 +159,7 @@ export function Ic705Page() {
     ready: tx("blePhaseReady"),
     error: tx("blePhaseErr"),
   };
+  const loc = (p: { pt: string; en: string }) => (lang === "en" ? p.en : p.pt);
 
   const refresh = async () => {
     try {
@@ -154,8 +203,24 @@ export function Ic705Page() {
   }, [link]);
 
   useEffect(() => {
-    if (!icom) setProto("cat");
-  }, [icom]);
+    if (!icom && !xiegu) setProto("cat");
+    if (xiegu) setProto("civ");
+  }, [icom, xiegu]);
+
+  useEffect(() => {
+    setLink((cur) => preferLink(maker, cur));
+  }, [maker]);
+
+  useEffect(() => {
+    if (!useNet) return;
+    const profile = netProfiles.find((p) => p.id === netProfile) || defaultNetworkProfile(maker);
+    if (!profile) return;
+    if (profile.id !== netProfile) setNetProfile(profile.id);
+    if (!port) {
+      const p = primaryNetPort(profile.ports);
+      if (p != null) setPort(String(p));
+    }
+  }, [useNet, maker, netProfiles, netProfile, port]);
 
   useEffect(() => {
     if (!catUsb) return;
@@ -192,23 +257,51 @@ export function Ic705Page() {
   const fillFrom = (row: StationRadio) => {
     setEditingId(row.id);
     setMaker(row.maker);
-    setLink(row.link);
+    setLink(preferLink(row.maker, row.link));
     setDevice(row.device);
     setProto(row.proto);
     setPort(row.port);
     setBaud(row.baud);
     setCivAddr(row.civAddr);
+    setHost(row.host || (row.link === "network" ? row.device : ""));
+    setNetProfile(row.netProfile || "");
+    setNetUser(row.netUser || "");
+    setNetPassword(row.netPassword || "");
   };
 
   const resetForm = () => {
     setEditingId(null);
     setDevice("");
     setPort("");
+    setHost("");
+    setNetUser("");
+    setNetPassword("");
     setBaud(defaultBaud(maker, link));
-    setProto(maker === "icom" ? "civ" : "cat");
+    setProto(maker === "icom" || maker === "xiegu" ? "civ" : "cat");
+    if (link === "network") applyNetProfile(defaultNetworkProfile(maker), setPort, setNetProfile);
+    else setNetProfile("");
   };
 
   const payload = (): Partial<StationRadio> => {
+    if (useNet) {
+      const endpoint = host && port ? `${host}:${port}` : host || port;
+      return {
+        id: editingId || undefined,
+        maker,
+        link: "network",
+        proto: icom || xiegu ? proto : "cat",
+        device: host,
+        deviceName: endpoint,
+        host,
+        port,
+        baud: 0,
+        civAddr,
+        netProfile: activeNet?.id || netProfile,
+        netUser: needNetAuth ? netUser : undefined,
+        netPassword: needNetAuth ? netPassword : undefined,
+        name: `${tx(MAKER_KEY[maker])} · Rede · ${endpoint || "—"}`,
+      };
+    }
     if (catUsb && s2nRow) {
       const endpoint = `${s.ser2net.bind}:${s2nRow.tcpPort}`;
       return {
@@ -272,11 +365,27 @@ export function Ic705Page() {
     const body = row ?? payload();
     const gatt = isIcomBle(row);
     const viaS2n = (body.link ?? link) === "usb";
+    const viaNet = (body.link ?? link) === "network";
+    if (viaNet) {
+      if (!(body.host || "").trim()) {
+        toast.error(tx("radioNeedNetHost"));
+        return;
+      }
+      if (!(body.port || "").trim()) {
+        toast.error(tx("radioNeedNetPort"));
+        return;
+      }
+      const profileId = body.netProfile || "";
+      if (profileId.startsWith("icom-lan-udp") && !(body.netUser || "").trim()) {
+        toast.error(tx("radioNeedNetUser"));
+        return;
+      }
+    }
     if (viaS2n && !body.device) {
       toast.error(tx("radioNeedS2n"));
       return;
     }
-    if (!body.device && !body.port && !gatt) {
+    if (!viaNet && !body.device && !body.port && !gatt) {
       toast.error(tx("radioNeedDevice"));
       return;
     }
@@ -440,7 +549,17 @@ export function Ic705Page() {
         <StatusTile label={tx("device")} value={s.ic705.bleName || live?.name || "—"} on={linked} />
         <StatusTile
           label={tx("radioLink")}
-          value={gattUp || live?.link === "bluetooth" ? tx("radioLinkBt") : live?.link === "usb" ? tx("radioLinkUsb") : bleOn ? tx("radioLinkBt") : "—"}
+          value={
+            gattUp || live?.link === "bluetooth"
+              ? tx("radioLinkBt")
+              : live?.link === "network"
+                ? tx("radioLinkNet")
+                : live?.link === "usb"
+                  ? tx("radioLinkUsb")
+                  : bleOn
+                    ? tx("radioLinkBt")
+                    : "—"
+          }
           on={linked || bleOn}
         />
         <StatusTile
@@ -469,9 +588,21 @@ export function Ic705Page() {
               value={maker}
               onChange={(e) => {
                 const next = e.target.value as RadioMaker;
+                const nextLink = preferLink(next, link);
                 setMaker(next);
-                setProto(next === "icom" ? "civ" : "cat");
-                setBaud(defaultBaud(next, link));
+                setLink(nextLink);
+                setProto(next === "icom" || next === "xiegu" ? "civ" : "cat");
+                setBaud(defaultBaud(next, nextLink));
+                setDevice("");
+                setHost("");
+                setNetUser("");
+                setNetPassword("");
+                if (nextLink === "network") {
+                  applyNetProfile(defaultNetworkProfile(next), setPort, setNetProfile);
+                } else {
+                  setPort("");
+                  setNetProfile("");
+                }
               }}
             >
               {MAKERS.map((m) => (
@@ -488,15 +619,82 @@ export function Ic705Page() {
                 const next = e.target.value as RadioLink;
                 setLink(next);
                 setDevice("");
-                setPort("");
+                setHost("");
+                setNetUser("");
+                setNetPassword("");
                 setBaud(defaultBaud(maker, next));
+                if (next === "network") {
+                  applyNetProfile(defaultNetworkProfile(maker), setPort, setNetProfile);
+                } else {
+                  setPort("");
+                  setNetProfile("");
+                }
               }}
             >
-              <option value="usb">{tx("radioLinkUsb")}</option>
-              <option value="bluetooth">{tx("radioLinkBt")}</option>
+              {linkOpts.map((opt) => (
+                <option key={opt} value={opt}>
+                  {tx(linkLabelKey(opt))}
+                </option>
+              ))}
             </ConsoleSelect>
           </Field>
-          {catUsb ? (
+          {useNet ? (
+            <>
+              {netProfiles.length > 1 ? (
+                <Field label={tx("radioNetProfile")}>
+                  <ConsoleSelect
+                    value={activeNet?.id || ""}
+                    onChange={(e) => {
+                      const profile = netProfiles.find((p) => p.id === e.target.value);
+                      applyNetProfile(profile, setPort, setNetProfile);
+                    }}
+                  >
+                    {netProfiles.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {loc(p.label)}
+                      </option>
+                    ))}
+                  </ConsoleSelect>
+                </Field>
+              ) : null}
+              <Field label={tx("radioNetHost")}>
+                <ConsoleInput
+                  value={host}
+                  onChange={(e) => setHost(e.target.value.trim())}
+                  placeholder="192.168.1.50"
+                  autoComplete="off"
+                />
+              </Field>
+              <Field label={tx("radioNetPort")}>
+                <ConsoleInput
+                  value={port}
+                  onChange={(e) => setPort(e.target.value.replace(/[^\d]/g, "").slice(0, 5))}
+                  placeholder={String(primaryNetPort(activeNet?.ports) || "50001")}
+                  inputMode="numeric"
+                />
+              </Field>
+              {needNetAuth ? (
+                <>
+                  <Field label={tx("radioNetUser")}>
+                    <ConsoleInput
+                      value={netUser}
+                      onChange={(e) => setNetUser(e.target.value)}
+                      placeholder="Network User"
+                      autoComplete="username"
+                    />
+                  </Field>
+                  <Field label={tx("radioNetPassword")}>
+                    <ConsoleInput
+                      type="password"
+                      value={netPassword}
+                      onChange={(e) => setNetPassword(e.target.value)}
+                      autoComplete="current-password"
+                    />
+                  </Field>
+                </>
+              ) : null}
+            </>
+          ) : catUsb ? (
             <Field label={tx("s2nPick")}>
               <ConsoleSelect
                 value={device}
@@ -551,7 +749,7 @@ export function Ic705Page() {
               <ConsoleInput value={tx("radioProtoCat")} readOnly />
             </Field>
           )}
-          {useGatt ? null : (
+          {useGatt || useNet ? null : (
             <Field label={catUsb ? tx("s2nEndpoint") : tx("radioPort")}>
               <ConsoleInput
                 value={catUsb ? s2nEndpoint || "—" : port}
@@ -561,7 +759,7 @@ export function Ic705Page() {
               />
             </Field>
           )}
-          {useGatt ? null : (
+          {useGatt || useNet ? null : (
             <Field label={tx("radioSpeed")}>
               <ConsoleSelect value={baud} onChange={(e) => setBaud(Number(e.target.value))} disabled={catUsb}>
                 {RADIO_BAUDS.map((b) => (
@@ -595,6 +793,7 @@ export function Ic705Page() {
             </Field>
           ) : null}
         </div>
+        {useNet ? <p className="mt-3 text-sm leading-relaxed text-[#8ea0b3]">{tx("radioNetHelp")}</p> : null}
         {catUsb ? <p className="mt-3 text-sm leading-relaxed text-[#8ea0b3]">{tx("radioUsbS2nHelp")}</p> : null}
         {catUsb && radioSvcs.length === 0 ? <p className="mt-3 text-sm text-[#ffb300]">{tx("s2nNone")}</p> : null}
         {useGatt && !(s.radios.items.some((r) => isIcomBle(r) && (r.paired || r.hsUuid || r.device))) ? (
@@ -612,13 +811,20 @@ export function Ic705Page() {
         ) : null}
         {s.ic705.phase === "error" && s.ic705.error ? <p className="mt-3 text-sm text-[#f87171]">{s.ic705.error}</p> : null}
         <div className="mt-4 flex flex-wrap gap-2">
-          <PrimaryBtn disabled={busy || (catUsb && !device)} onClick={() => void connectRadio()}>
+          <PrimaryBtn
+            disabled={
+              busy ||
+              (catUsb && !device) ||
+              (useNet && (!host.trim() || !port.trim() || (needNetAuth && !netUser.trim())))
+            }
+            onClick={() => void connectRadio()}
+          >
             {tx("connect")}
           </PrimaryBtn>
           {useGatt ? <GhostBtn onClick={() => void connectRadio(undefined, true)}>{tx("scanAllBle")}</GhostBtn> : null}
           {catUsb ? (
             <GhostBtn onClick={() => navigate("/console/ser2net")}>{tx("s2nOpen")}</GhostBtn>
-          ) : (
+          ) : useNet ? null : (
             <GhostBtn onClick={() => void refresh()}>{tx("radioScanDev")}</GhostBtn>
           )}
           {editingId ? <GhostBtn onClick={resetForm}>{tx("cancelEdit")}</GhostBtn> : null}
@@ -661,15 +867,21 @@ export function Ic705Page() {
                     </td>
                     <td className="py-2 font-semibold text-[#4fc3f7]">{row.name}</td>
                     <td className="py-2">{tx(MAKER_KEY[row.maker])}</td>
-                    <td className="py-2">{row.link === "usb" ? tx("radioLinkUsb") : tx("radioLinkBt")}</td>
+                    <td className="py-2">{tx(linkLabelKey(row.link))}</td>
                     <td className="py-2">{row.proto === "civ" ? tx("radioProtoCiv") : tx("radioProtoCat")}</td>
                     <td className="py-2 font-['IBM_Plex_Mono'] text-[11px]">
                       {row.link === "bluetooth" && row.proto === "civ"
                         ? `GATT ${row.civAddr || "0xA4"}`
-                        : row.port || row.device}
+                        : row.link === "network"
+                          ? `${row.host || row.device || "—"}${row.port ? `:${row.port}` : ""}${row.netUser ? ` · ${row.netUser}` : ""}`
+                          : row.port || row.device}
                     </td>
                     <td className="py-2 font-['IBM_Plex_Mono']">
-                      {row.link === "bluetooth" && row.proto === "civ" ? "—" : row.baud || "—"}
+                      {row.link === "bluetooth" && row.proto === "civ"
+                        ? "—"
+                        : row.link === "network"
+                          ? "—"
+                          : row.baud || "—"}
                     </td>
                     <td className={`py-2 ${rowOn(row) ? "text-[#34d399]" : "text-[#8ea0b3]"}`}>
                       {rowOn(row) ? tx("connected") : tx("disconnected")}

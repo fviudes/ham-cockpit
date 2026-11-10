@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { randomBytes } from "node:crypto";
 import { SER2NET_RADIO_ID } from "../shared/const";
+import { EQUIPMENT_MAKERS, type EquipmentMaker } from "../shared/equipment";
 import { listSerialDevices } from "./list-serials";
 import { loadSer2net, saveSer2net } from "./ser2net-store";
 
@@ -13,8 +14,8 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OPT_DIR = "/opt/radios";
 const BAUDS = new Set([1200, 4800, 9600, 19200, 38400, 57600, 115200, 230400]);
 
-export type RadioMaker = "icom" | "kenwood" | "yaesu" | "flex" | "tentec";
-export type RadioLink = "usb" | "bluetooth";
+export type RadioMaker = EquipmentMaker;
+export type RadioLink = "usb" | "bluetooth" | "network";
 export type RadioProto = "cat" | "civ";
 
 export type StationRadio = {
@@ -33,6 +34,15 @@ export type StationRadio = {
   connected: boolean;
   primary: boolean;
   error: string;
+  /** Id no catálogo shared/equipment (opcional). */
+  equipmentId?: string;
+  /** Host/IP quando link === network. */
+  host?: string;
+  /** Perfil de rede (kind::via) do catálogo. */
+  netProfile?: string;
+  /** Network User / login Icom LAN. */
+  netUser?: string;
+  netPassword?: string;
 };
 
 export type RadioPick = {
@@ -53,7 +63,7 @@ export type RadiosSnapshot = {
   bleAddr?: string;
 };
 
-const MAKERS: RadioMaker[] = ["icom", "kenwood", "yaesu", "flex", "tentec"];
+const MAKERS: RadioMaker[] = [...EQUIPMENT_MAKERS];
 
 function dataDir(): string {
   if (existsSync(OPT_DIR)) return OPT_DIR;
@@ -81,12 +91,14 @@ function asMaker(v: unknown): RadioMaker {
 }
 
 function asLink(v: unknown): RadioLink {
-  return v === "bluetooth" ? "bluetooth" : "usb";
+  if (v === "bluetooth") return "bluetooth";
+  if (v === "network") return "network";
+  return "usb";
 }
 
 function asProto(maker: RadioMaker, v: unknown): RadioProto {
-  if (maker !== "icom") return "cat";
-  return v === "cat" ? "cat" : "civ";
+  if (maker === "icom" || maker === "xiegu") return v === "cat" ? "cat" : "civ";
+  return "cat";
 }
 
 function asBaud(v: unknown, fallback: number) {
@@ -99,6 +111,7 @@ function defaultBaud(maker: RadioMaker, link: RadioLink) {
   if (link === "bluetooth" && maker !== "icom") return 9600;
   if (maker === "kenwood" || maker === "yaesu") return 38400;
   if (maker === "tentec") return 57600;
+  if (maker === "xiegu") return 19200;
   return 115200;
 }
 
@@ -109,6 +122,9 @@ function defaultName(maker: RadioMaker, deviceName: string) {
     yaesu: "Yaesu",
     flex: "Flex",
     tentec: "Ten-Tec",
+    xiegu: "Xiegu",
+    hermes: "Hermes Lite",
+    anan: "Anan",
   };
   return deviceName.trim() || brand[maker];
 }
@@ -117,20 +133,31 @@ function sanitize(raw: Partial<StationRadio>, fallback?: StationRadio): StationR
   const maker = asMaker(raw.maker ?? fallback?.maker);
   const link = asLink(raw.link ?? fallback?.link);
   const proto = asProto(maker, raw.proto ?? fallback?.proto);
-  const baud = asBaud(raw.baud ?? fallback?.baud, defaultBaud(maker, link));
+  const baud = link === "network" ? 0 : asBaud(raw.baud ?? fallback?.baud, defaultBaud(maker, link));
   const device = String(raw.device ?? fallback?.device ?? "").trim();
   const deviceName = String(raw.deviceName ?? fallback?.deviceName ?? "").trim();
-  const port = String(raw.port ?? fallback?.port ?? device).trim() || device;
+  const host = String(raw.host ?? fallback?.host ?? "").trim();
+  const netProfile = String(raw.netProfile ?? fallback?.netProfile ?? "").trim();
+  const netUser = String(raw.netUser ?? fallback?.netUser ?? "").trim();
+  const netPassword = String(raw.netPassword ?? fallback?.netPassword ?? "");
+  const port =
+    link === "network"
+      ? String(raw.port ?? fallback?.port ?? "").trim()
+      : String(raw.port ?? fallback?.port ?? device).trim() || device;
   const civAddr = String(raw.civAddr ?? fallback?.civAddr ?? "0xA4").trim() || "0xA4";
-  const name = String(raw.name ?? fallback?.name ?? "").trim() || defaultName(maker, deviceName || port || device);
+  const endpoint = link === "network" && host ? `${host}${port ? `:${port}` : ""}` : "";
+  const name =
+    String(raw.name ?? fallback?.name ?? "").trim() ||
+    defaultName(maker, deviceName || endpoint || port || device);
   const hsUuid = String(raw.hsUuid ?? fallback?.hsUuid ?? "").trim().toUpperCase();
+  const equipmentId = String(raw.equipmentId ?? fallback?.equipmentId ?? "").trim();
   return {
     id: String(raw.id ?? fallback?.id ?? newId()),
     name,
     maker,
     link,
-    device,
-    deviceName,
+    device: link === "network" ? host || device : device,
+    deviceName: link === "network" ? deviceName || endpoint || host : deviceName,
     proto,
     port,
     baud,
@@ -140,6 +167,15 @@ function sanitize(raw: Partial<StationRadio>, fallback?: StationRadio): StationR
     connected: Boolean(raw.connected ?? fallback?.connected),
     primary: Boolean(raw.primary ?? fallback?.primary),
     error: String(raw.error ?? fallback?.error ?? ""),
+    ...(equipmentId ? { equipmentId } : {}),
+    ...(link === "network"
+      ? {
+          host,
+          ...(netProfile ? { netProfile } : {}),
+          ...(netUser ? { netUser } : {}),
+          ...(netPassword ? { netPassword } : {}),
+        }
+      : {}),
   };
 }
 
@@ -326,6 +362,33 @@ export async function radiosConnect(raw: Partial<StationRadio>): Promise<RadiosS
   const next = sanitize(raw, radios.find((r) => r.id === raw.id));
   next.error = "";
   const ble = next.link === "bluetooth" && next.maker === "icom" && next.proto === "civ";
+  if (next.link === "network") {
+    if (!next.host) {
+      next.connected = false;
+      next.error = "Informe o IP ou hostname do rádio / proxy CAT";
+    } else if (!next.port || !/^\d{1,5}$/.test(next.port) || Number(next.port) < 1 || Number(next.port) > 65535) {
+      next.connected = false;
+      next.error = "Informe a porta de rede (1–65535)";
+    } else if (next.netProfile?.startsWith("icom-lan-udp") && !next.netUser) {
+      next.connected = false;
+      next.error = "Informe o Network User do Icom LAN";
+    } else {
+      next.device = next.host;
+      next.deviceName = next.deviceName || `${next.host}:${next.port}`;
+      next.connected = true;
+      next.error = "";
+    }
+    const idx = radios.findIndex((r) => r.id === next.id);
+    if (idx >= 0) radios[idx] = next;
+    else radios.push(next);
+    persist();
+    const snap = await radiosStatus();
+    if (next.error) {
+      snap.ok = false;
+      snap.error = next.error;
+    }
+    return snap;
+  }
   if (!next.device && !next.port && !ble) {
     next.connected = false;
     next.error = next.link === "usb" ? "Selecione uma conexão ser2net" : "Selecione o dispositivo Bluetooth";

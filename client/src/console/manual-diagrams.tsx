@@ -23,6 +23,138 @@ export function FigStation({ caption }: { caption: string }) {
   );
 }
 
+/** Hub Hamlib: todos os rádios suportados convergem no rigctld. */
+export function FigHamlibHub({ caption }: { caption: string }) {
+  return (
+    <Figure caption={caption}>
+      <svg viewBox="0 0 720 260" className="h-auto w-full" role="img" aria-label={caption}>
+        <rect width="720" height="260" rx="12" fill="#071018" />
+        <Box x={16} y={20} w={120} h={52} title="Icom USB" sub="CI-V · ser2net" fill="#12324a" />
+        <Box x={16} y={84} w={120} h={52} title="Yaesu/Kenwood" sub="CAT · ser2net" fill="#12324a" />
+        <Box x={16} y={148} w={120} h={52} title="Xiegu / Ten-Tec" sub="USB SERIAL-B" fill="#12324a" />
+        <Box x={16} y={200} w={120} h={44} title="IC-705 GATT" sub="Chrome · CI-V" fill="#1a2e1a" />
+        <Box x={200} y={20} w={130} h={52} title="HL2 / Anan" sub="Thetis/piHPSDR" fill="#2a2410" />
+        <Box x={200} y={84} w={130} h={52} title="Flex 6k/8k" sub="proxy CAT" fill="#2a2410" />
+        <Box x={200} y={148} w={130} h={52} title="Icom LAN*" sub="UDP 50001–3" fill="#2a1a1a" />
+        <text x={200} y={230} fill="#8ea0b3" fontSize="9" fontFamily="IBM Plex Sans, sans-serif">
+          * driver nativo futuro
+        </text>
+        <Arrow x1={136} y1={46} x2={360} y2={110} />
+        <Arrow x1={136} y1={110} x2={360} y2={120} />
+        <Arrow x1={136} y1={174} x2={360} y2={130} />
+        <Arrow x1={330} y1={46} x2={360} y2={100} />
+        <Arrow x1={330} y1={110} x2={360} y2={120} />
+        <Box x={362} y={78} w={170} h={90} title="Hamlib Hub" sub={"rigctld NET\n:4532 · -m -r -t"} fill="#0d2a3a" accent />
+        <Arrow x1={532} y1={123} x2={580} y2={70} label="f/m" />
+        <Arrow x1={532} y1={123} x2={580} y2={123} />
+        <Arrow x1={532} y1={123} x2={580} y2={176} />
+        <Box x={582} y={28} w={120} h={54} title="Painel" sub="VFO / PTT" fill="#12324a" />
+        <Box x={582} y={96} w={120} h={54} title="WSJT-X" sub="Hamlib NET" fill="#2a2410" />
+        <Box x={582} y={164} w={120} h={54} title="WaveLogGate" sub="PUBLISH_CAT" fill="#2a2410" />
+      </svg>
+    </Figure>
+  );
+}
+
+/** Badges tipográficos dos fabricantes (wordmarks, não logos oficiais). */
+export function FigMakerBadges({ caption }: { caption: string }) {
+  const makers = [
+    ["ICOM", "#4fc3f7"],
+    ["KENWOOD", "#4fc3f7"],
+    ["YAESU", "#ffb300"],
+    ["FLEXRADIO", "#4fc3f7"],
+    ["TEN-TEC", "#4fc3f7"],
+    ["XIEGU", "#ffb300"],
+    ["HERMES LITE", "#34d399"],
+    ["ANAN", "#34d399"],
+  ] as const;
+  return (
+    <Figure caption={caption}>
+      <svg viewBox="0 0 720 200" className="h-auto w-full" role="img" aria-label={caption}>
+        <rect width="720" height="200" rx="12" fill="#071018" />
+        {makers.map(([name, color], i) => {
+          const col = i % 4;
+          const row = Math.floor(i / 4);
+          const x = 16 + col * 176;
+          const y = 24 + row * 84;
+          return (
+            <g key={name}>
+              <rect x={x} y={y} width={160} height={64} rx="10" fill="#0b1520" stroke={`${color}55`} />
+              <rect x={x} y={y} width="6" height={64} rx="3" fill={color} />
+              <text
+                x={x + 20}
+                y={y + 38}
+                fill="#e8eef4"
+                fontSize="14"
+                fontFamily="Space Grotesk, sans-serif"
+                fontWeight="700"
+                letterSpacing="0.06em"
+              >
+                {name}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    </Figure>
+  );
+}
+
+export function FigIcomLan({ caption }: { caption: string }) {
+  return (
+    <Figure caption={caption}>
+      <svg viewBox="0 0 720 160" className="h-auto w-full" role="img" aria-label={caption}>
+        <rect width="720" height="160" rx="12" fill="#071018" />
+        <Box x={24} y={36} w={160} h={90} title="Icom LAN/WLAN" sub={"Network User\n+ senha"} fill="#12324a" />
+        <Arrow x1={184} y1={70} x2={250} y2={50} label="50001" />
+        <Arrow x1={184} y1={81} x2={250} y2={81} label="50002" />
+        <Arrow x1={184} y1={92} x2={250} y2={112} label="50003" />
+        <Box x={252} y={20} w={140} h={40} title="Control UDP" sub="sessão / login" fill="#2a2410" />
+        <Box x={252} y={70} w={140} h={40} title="Serial UDP" sub="CI-V" fill="#2a2410" />
+        <Box x={252} y={120} w={140} h={28} title="Áudio UDP" sub="" fill="#2a2410" />
+        <Arrow x1={392} y1={81} x2={460} y2={81} />
+        <Box x={462} y={46} w={230} h={70} title="Cliente (futuro / wfview)" sub={"Hoje: use USB+Hamlib\nou GATT no 705"} fill="#0d2a3a" accent />
+      </svg>
+    </Figure>
+  );
+}
+
+export function FigOpenHpsdr({ caption }: { caption: string }) {
+  return (
+    <Figure caption={caption}>
+      <svg viewBox="0 0 720 180" className="h-auto w-full" role="img" aria-label={caption}>
+        <rect width="720" height="180" rx="12" fill="#071018" />
+        <Box x={20} y={40} w={140} h={100} title="HL2 / Anan" sub={"Ethernet\nP1 :1024 ou P2"} fill="#12324a" />
+        <Arrow x1={160} y1={90} x2={230} y2={90} label="IQ UDP" />
+        <Box x={232} y={40} w={170} h={100} title="Thetis / piHPSDR" sub={"DSP + panadapter\nCAT TCP / TCI"} fill="#0d2a3a" accent />
+        <Arrow x1={402} y1={70} x2={480} y2={55} label="13013" />
+        <Arrow x1={402} y1={110} x2={480} y2={125} label="19090" />
+        <Box x={482} y={28} w={210} h={54} title="Hamlib -m 2054" sub="Thetis → rigctld" fill="#2a2410" />
+        <Box x={482} y={100} w={210} h={54} title="Hamlib -m 2040" sub="piHPSDR → rigctld" fill="#2a2410" />
+      </svg>
+    </Figure>
+  );
+}
+
+export function FigFlexNet({ caption }: { caption: string }) {
+  return (
+    <Figure caption={caption}>
+      <svg viewBox="0 0 720 150" className="h-auto w-full" role="img" aria-label={caption}>
+        <rect width="720" height="150" rx="12" fill="#071018" />
+        <Box x={24} y={30} w={160} h={90} title="FLEX-6000/8000" sub="Ethernet Signature" fill="#12324a" />
+        <Arrow x1={184} y1={55} x2={260} y2={40} label="4992" />
+        <Arrow x1={184} y1={75} x2={260} y2={75} label="4992" />
+        <Arrow x1={184} y1={95} x2={260} y2={110} label="4991" />
+        <Box x={262} y={18} w={150} h={36} title="Discovery UDP" sub="" fill="#2a2410" />
+        <Box x={262} y={58} w={150} h={36} title="Command TCP" sub="SmartSDR API" fill="#2a2410" />
+        <Box x={262} y={98} w={150} h={36} title="VITA-49 UDP" sub="meters / FFT" fill="#2a2410" />
+        <Arrow x1={412} y1={75} x2={480} y2={75} />
+        <Box x={482} y={40} w={210} h={70} title="Hamlib Hub" sub={"via proxy CAT\naté driver nativo"} fill="#0d2a3a" accent />
+      </svg>
+    </Figure>
+  );
+}
+
 export function FigBoot({ caption }: { caption: string }) {
   return (
     <Figure caption={caption}>

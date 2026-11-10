@@ -28,6 +28,15 @@ import {
   mmdvmSave,
   mmdvmStatus,
 } from "./mmdvm";
+import {
+  hubCatalog,
+  hubPlanOne,
+  hubRemoveBinding,
+  hubRigctl,
+  hubSaveBindings,
+  hubStatus,
+  hubUpsertBinding,
+} from "./hamlib-hub";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -245,6 +254,67 @@ async function startServer() {
       res.json(await radiosRemove(req.params.id));
     } catch (err) {
       res.status(500).json({ ok: false, radios: [], error: String(err) });
+    }
+  });
+
+  app.get("/api/equipment", (_req, res) => {
+    try {
+      const maker = typeof _req.query.maker === "string" ? _req.query.maker : undefined;
+      res.json(hubCatalog(maker as never));
+    } catch (err) {
+      res.status(500).json({ ok: false, equipment: [], error: String(err) });
+    }
+  });
+  app.get("/api/hamlib", (_req, res) => {
+    try {
+      res.json(hubStatus());
+    } catch (err) {
+      res.status(500).json({ ok: false, bindings: [], plans: [], error: String(err) });
+    }
+  });
+  app.put("/api/hamlib/bindings", (req, res) => {
+    try {
+      res.json(hubSaveBindings(req.body ?? {}));
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/hamlib/bindings", (req, res) => {
+    try {
+      const body = hubUpsertBinding(req.body ?? {});
+      res.status(body.ok ? 200 : 400).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.delete("/api/hamlib/bindings/:id", (req, res) => {
+    try {
+      res.json(hubRemoveBinding(req.params.id));
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/hamlib/plan", (req, res) => {
+    try {
+      const body = hubPlanOne(req.body ?? {});
+      res.status(body.ok || body.plan ? 200 : 400).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/hamlib/cmd", async (req, res) => {
+    try {
+      const port = Number(req.body?.port ?? 4532);
+      const host = String(req.body?.host ?? "127.0.0.1");
+      const command = String(req.body?.command ?? "");
+      if (!command.trim()) {
+        res.status(400).json({ ok: false, error: "command obrigatório" });
+        return;
+      }
+      const out = await hubRigctl(port, command, host);
+      res.status(out.ok ? 200 : 502).json(out);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
     }
   });
 

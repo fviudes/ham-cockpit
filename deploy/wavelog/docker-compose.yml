@@ -1,7 +1,7 @@
 # Wavelog logbook — pasta e porta isoladas do Ham Cockpit.
 # Instalar em: /opt/wavelog
 # LAN: http://<pi-ip>:8086   instalador: /install
-# NÃO publique 3306. NÃO coloque isto em /opt/ham-cockpit nem na porta 80.
+# NÃO publique 3306. NÃO coloque isso em /opt/ham-cockpit nem na porta 80.
 
 name: wavelog
 

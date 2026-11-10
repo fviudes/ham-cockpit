@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+﻿import { useEffect, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 import NavBar from "@/components/NavBar";
@@ -20,6 +20,7 @@ import {
 import { PRODUCT, Photo } from "./product-media";
 import { useSiteLang, type Pair } from "./site-lang";
 import { DOCS_TOC } from "./site-copy";
+import { EquipmentGuide } from "@/console/equipment-guide";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 12 },
@@ -65,7 +66,7 @@ export default function Docs() {
               </h1>
               <p className="mt-4 max-w-2xl text-lg leading-relaxed text-[#94a3b8]">
                 {t({
-                  pt: "Arquitetura, imagem Ubuntu, Bluetooth GATT e SPP, ser2net, Hamlib, Wavelog, MMDVM (WPSD/Pi-Star), acessórios RS232 e o mapa de portas do Raspberry Pi. O manual bilingue do operador continua no console (Sistema → Manual).",
+                  pt: "Arquitetura, imagem Ubuntu, Bluetooth GATT e SPP, ser2net, Hamlib, Wavelog, MMDVM (WPSD/Pi-Star), acessórios RS232 e o mapa de portas do Raspberry Pi. O manual bilíngue do operador continua no console (Sistema → Manual).",
                   en: "Architecture, Ubuntu image, Bluetooth GATT and SPP, ser2net, Hamlib, Wavelog, MMDVM (WPSD/Pi-Star), RS232 accessories, and the Raspberry Pi port map. The bilingual operator manual stays in the console (System → Manual).",
                 })}
               </p>
@@ -77,8 +78,8 @@ export default function Docs() {
                 en: "Ham Cockpit Raspberry Pi with a Bluetooth dongle, USB-serial adapters, and the OS image card",
               })}
               caption={t({
-                pt: "Produto: Raspberry Pi 3/4/5, Ubuntu Server 24.04 ARM64, cartão ham-cockpit-0.1.02-raspi.img.xz.",
-                en: "Product: Raspberry Pi 3/4/5, Ubuntu Server 24.04 ARM64, ham-cockpit-0.1.02-raspi.img.xz card.",
+                pt: "Produto: Raspberry Pi 3/4/5, Ubuntu Server 24.04 ARM64, cartão ham-cockpit-0.1.03-raspi.img.xz.",
+                en: "Product: Raspberry Pi 3/4/5, Ubuntu Server 24.04 ARM64, ham-cockpit-0.1.03-raspi.img.xz card.",
               })}
             />
           </div>
@@ -145,7 +146,7 @@ export default function Docs() {
               </ul>
             </Sec>
 
-            <Sec id="arquitectura" title={t({ pt: "Arquitetura do sistema", en: "System architecture" })}>
+            <Sec id="arquitetura" title={t({ pt: "Arquitetura do sistema", en: "System architecture" })}>
               <Photo
                 src={PRODUCT.shack}
                 alt={t({ pt: "Pi, rádio e wattímetro no mesmo posto", en: "Pi, radio, and wattmeter on the same desk" })}
@@ -156,7 +157,7 @@ export default function Docs() {
               />
               <FigStation
                 caption={t({
-                  pt: "Planos: browser (GATT + HTTP) · Node/nginx · ser2net · Hamlib · Docker Wavelog · SPP Lextel · MMDVMHost.",
+                  pt: "Planos: navegador (GATT + HTTP) · Node/nginx · ser2net · Hamlib · Docker Wavelog · SPP Lextel · MMDVMHost.",
                   en: "Planes: browser (GATT + HTTP) · Node/nginx · ser2net · Hamlib · Docker Wavelog · Lextel SPP · MMDVMHost.",
                 })}
               />
@@ -172,7 +173,7 @@ export default function Docs() {
                 <li>
                   <strong>{t({ pt: "Web Bluetooth é no Chrome.", en: "Web Bluetooth is in Chrome." })}</strong>{" "}
                   {t({
-                    pt: "O GATT do 705 não roda no Node. O login (Entrar) é o gesto que o browser exige; depois o console insiste a cada 2 s, no mesmo espírito do Lextel.",
+                    pt: "O GATT do 705 não roda no Node. O login (Entrar) é o gesto que o navegador exige; depois o console insiste a cada 2 s, no mesmo espírito do Lextel.",
                     en: "The 705 GATT does not run in Node. Sign in is the gesture the browser requires; then the console retries every 2 s, same idea as Lextel.",
                   })}
                 </li>
@@ -265,7 +266,7 @@ export default function Docs() {
                 <li>
                   <strong>{t({ pt: "Painel.", en: "Panel." })}</strong>{" "}
                   {t({
-                    pt: "VFO, modo, PTT, bandas. Com CI-V grant 0x64, o que você toca no browser mexe no 705 (freq, PTT 1C 00, modo 26 00, S-meter 15 02).",
+                    pt: "VFO, modo, PTT, bandas. Com CI-V grant 0x64, o que você toca no navegador mexe no 705 (freq, PTT 1C 00, modo 26 00, S-meter 15 02).",
                     en: "VFO, mode, PTT, bands. With CI-V grant 0x64, what you touch in the browser moves the 705 (freq, PTT 1C 00, mode 26 00, S-meter 15 02).",
                   })}
                 </li>
@@ -315,6 +316,10 @@ export default function Docs() {
               </ul>
             </Sec>
 
+            <Sec id="equipamentos" title={t({ pt: "Rádios suportados", en: "Supported radios" })}>
+              <EquipmentGuide lang={lang} />
+            </Sec>
+
             <Sec id="radio-ble" title={t({ pt: "IC-705 por Bluetooth (GATT CI-V)", en: "IC-705 over Bluetooth (GATT CI-V)" })}>
               <Photo
                 src={PRODUCT.radio}
@@ -346,7 +351,7 @@ export default function Docs() {
               </ul>
               <p>
                 {t({
-                  pt: "Depois de uma autorização neste browser, o rádio Principal reconecta no login sem “escolher outro dispositivo”. Deixe Pairing Reception fechado nas vezes seguintes; Bluetooth ON no 705. O áudio RX não vem no GATT — USB áudio é o caminho Icom para o PC.",
+                  pt: "Depois de uma autorização neste navegador, o rádio Principal reconecta no login sem “escolher outro dispositivo”. Deixe Pairing Reception fechado nas vezes seguintes; Bluetooth ON no 705. O áudio RX não vem no GATT — USB áudio é o caminho Icom para o PC.",
                   en: "After a grant in this browser, the Primary radio reconnects at login without “choose another device”. Leave Pairing Reception closed later; Bluetooth ON on the 705. RX audio is not on GATT — USB audio is the Icom path to the PC.",
                 })}
               </p>
@@ -483,11 +488,11 @@ export default function Docs() {
                   en="CAT radio: POST /index.php/api/radio (legacy) or /api/v2/radio. Ham Cockpit Gate publishes freq/mode every 4 s; the logbook shows the radio in the Hardware Interfaces dropdown."
                 />
                 <Li
-                  pt="Bandmap / cluster: clique num spot dispara o callback QSY (GET http://IP:54321/{freqHz}/{mode}). Não use 127.0.0.1 se o browser não for o Pi."
+                  pt="Bandmap / cluster: clique em um spot dispara o callback QSY (GET http://IP:54321/{freqHz}/{mode}). Não use 127.0.0.1 se o navegador não for o Pi."
                   en="Bandmap / cluster: clicking a spot fires the QSY callback (GET http://IP:54321/{freqHz}/{mode}). Do not use 127.0.0.1 if the browser is not the Pi."
                 />
                 <Li
-                  pt="Winkeyer: macros F1–F10, WPM, Tune, no motor de contest quando habilitado nas settings."
+                  pt="Winkeyer: macros F1–F10, WPM, Tune, no motor de contest quando habilitado nas configurações."
                   en="Winkeyer: F1–F10 macros, WPM, Tune, in the contest engine when enabled in settings."
                 />
                 <Li
@@ -564,7 +569,7 @@ export default function Docs() {
                   en="Builds ADIF (call, grid, mode, freq, RST, power, comment, operator, my call/grid, contest STX/SRX) and POSTs api/qso with key + station_profile_id."
                 />
                 <Li
-                  pt="Se o Wavelog estiver fora, o QSO vai para queue.jsonl e a fila baixa a cada 20 s."
+                  pt="Se o Wavelog estiver fora, o QSO vai para queue.jsonl e a fila esvazia a cada 20 s."
                   en="If Wavelog is down, the QSO goes to queue.jsonl and the queue flushes every 20 s."
                 />
                 <Li
@@ -617,7 +622,7 @@ export default function Docs() {
               />
               <p>
                 {t({
-                  pt: "O motor de contest foi reescrito no Wavelog 3.0.0 (antes era o logger Cloudlog). Serve SO e multi-op / club station. No Pi você abre http://IP:8086 → Contesting.",
+                  pt: "O motor de contest foi reescrito no Wavelog 3.0.0 (antes era o logger Cloudlog). Cobre SO e multi-op / club station. No Pi você abre http://IP:8086 → Contesting.",
                   en: "The contest engine was rewritten in Wavelog 3.0.0 (it used to be the Cloudlog logger). It covers SO and multi-op / club station. On the Pi you open http://IP:8086 → Contesting.",
                 })}
               </p>
@@ -663,7 +668,7 @@ export default function Docs() {
                   en="Quick QSY: kHz number in the call field + Tab/Space/Enter. In-band offset or band QSY. The Gate sends F/M on Hamlib."
                 />
                 <Li
-                  pt="SCP (Super Check Partial): matching local no browser; ? é curinga (DL?A)."
+                  pt="SCP (Super Check Partial): correspondência local no navegador; ? é curinga (DL?A)."
                   en="SCP (Super Check Partial): local matching in the browser; ? is a wildcard (DL?A)."
                 />
                 <Li
@@ -694,7 +699,7 @@ export default function Docs() {
               />
               <p>
                 {t({
-                  pt: "WPSD (W0CHP-PiStar-Dash) é a suíte DV sucessor do Pi-Star. O site canônico é wpsd.radio; o Gitea repo.w0chp.net está atrás de Anubis. O Ham Cockpit usa a mesma pilha de daemons, não o dashboard PHP: o console React na aba Operação → MMDVM segue Space Grotesk, IBM Plex Mono, navy #0d1b2a, ciano #4fc3f7 e âmbar #FFB300.",
+                  pt: "WPSD (W0CHP-PiStar-Dash) é a suíte DV sucessora do Pi-Star. O site canônico é wpsd.radio; o Gitea repo.w0chp.net está atrás de Anubis. O Ham Cockpit usa a mesma pilha de daemons, não o dashboard PHP: o console React na aba Operação → MMDVM segue Space Grotesk, IBM Plex Mono, navy #0d1b2a, ciano #4fc3f7 e âmbar #FFB300.",
                   en: "WPSD (W0CHP-PiStar-Dash) is the DV suite that grew out of Pi-Star. The canonical site is wpsd.radio; the Gitea at repo.w0chp.net sits behind Anubis. Ham Cockpit uses the same daemon stack, not the PHP dashboard: the React console on Operate → MMDVM follows Space Grotesk, IBM Plex Mono, navy #0d1b2a, cyan #4fc3f7, and amber #FFB300.",
                 })}
               </p>

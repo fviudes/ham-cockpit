@@ -62,8 +62,8 @@ export type Port = {
 export type WifiNet = { ssid: string; rssi: number; open: boolean };
 export type NetLink = "wifi" | "ethernet";
 export type LogKind = "BLE" | "CIV" | "IC705" | "RADIO" | "WiFi" | "SYS" | "WLOG" | "S2N" | "ACOM" | "LEXTEL" | "LDG" | "LP100A" | "MMDVM" | "ERRO";
-export type RadioMaker = "icom" | "kenwood" | "yaesu" | "flex" | "tentec";
-export type RadioLink = "usb" | "bluetooth";
+export type RadioMaker = "icom" | "kenwood" | "yaesu" | "flex" | "tentec" | "xiegu" | "hermes" | "anan";
+export type RadioLink = "usb" | "bluetooth" | "network";
 export type RadioProto = "cat" | "civ";
 export type StationRadio = {
   id: string;
@@ -81,6 +81,14 @@ export type StationRadio = {
   connected: boolean;
   primary: boolean;
   error: string;
+  equipmentId?: string;
+  /** Host/IP quando link === network. */
+  host?: string;
+  /** Perfil de rede (kind::via) do catálogo. */
+  netProfile?: string;
+  /** Network User / login Icom LAN. */
+  netUser?: string;
+  netPassword?: string;
 };
 export type RadioPick = { id: string; label: string; kind: RadioLink; path: string };
 export type LextelPhase = "idle" | "scanning" | "pairing" | "connecting" | "streaming" | "error";

@@ -1,4 +1,4 @@
-import type { Pair } from "./site-lang";
+﻿import type { Pair } from "./site-lang";
 
 export const NAV = {
   station: { pt: "ESTAÇÃO", en: "STATION" } satisfies Pair,
@@ -10,7 +10,7 @@ export const NAV = {
 export const HOME = {
   kicker: { pt: "APPLIANCE DA ESTAÇÃO", en: "STATION APPLIANCE" } satisfies Pair,
   h1a: { pt: "O computador do shack.", en: "The shack computer." } satisfies Pair,
-  h1b: { pt: " Um Pi, um browser, toda a estação.", en: " One Pi, one browser, the whole station." } satisfies Pair,
+  h1b: { pt: " Um Pi, um navegador, toda a estação.", en: " One Pi, one browser, the whole station." } satisfies Pair,
     lead: {
     pt: "Ham Cockpit é a imagem Ubuntu Server que transforma um Raspberry Pi 3, 4 ou 5 no hub da estação: IC-705 por Web Bluetooth GATT, Lextel por SPP Classic, Cat-USB via ser2net, Hamlib NET, Wavelog, MMDVM (WPSD/Pi-Star), SPE, Hamplus, Palstar, LDG, LP-100A e ACOM — sem ESP32 e sem seis programas Windows donos da mesma COM.",
     en: "Ham Cockpit is the Ubuntu Server image that turns a Raspberry Pi 3, 4 or 5 into the station hub: IC-705 over Web Bluetooth GATT, Lextel over Classic SPP, Cat-USB through ser2net, Hamlib NET, Wavelog, MMDVM (WPSD/Pi-Star), SPE, Hamplus, Palstar, LDG, LP-100A, and ACOM — no ESP32 and no six Windows programs fighting over the same COM port.",
@@ -57,8 +57,8 @@ export const HOME = {
     en: "From the SD card to a QSO, in the order the station wakes up",
   } satisfies Pair,
   figBoot: {
-    pt: "Grave ham-cockpit-0.1.02-raspi.img.xz → ligue o Pi → Wi‑Fi Ham-Cockpit-XXXX (senha hamcockpit) → 192.168.4.1 → admin / 1234.",
-    en: "Flash ham-cockpit-0.1.02-raspi.img.xz → power the Pi → Wi‑Fi Ham-Cockpit-XXXX (password hamcockpit) → 192.168.4.1 → admin / 1234.",
+    pt: "Grave ham-cockpit-0.1.03-raspi.img.xz → ligue o Pi → Wi‑Fi Ham-Cockpit-XXXX (senha hamcockpit) → 192.168.4.1 → admin / 1234.",
+    en: "Flash ham-cockpit-0.1.03-raspi.img.xz → power the Pi → Wi‑Fi Ham-Cockpit-XXXX (password hamcockpit) → 192.168.4.1 → admin / 1234.",
   } satisfies Pair,
   figIc705: {
     pt: "IC-705: Pairing Reception no rádio, Conectar no console, aceite Ham-Cockpit-Web01. Marque Principal — o login reconecta o GATT.",
@@ -108,8 +108,8 @@ export const HOME = {
   thNotes: { pt: "Notas", en: "Notes" } satisfies Pair,
   gearLabel: { pt: "Equipamento", en: "Gear" } satisfies Pair,
   gearTitle: {
-    pt: "Rádios, wattímetros e amps no mesmo cadastro",
-    en: "Radios, wattmeters, and amps in one roster",
+    pt: "Icom, Kenwood, Yaesu, Flex, Xiegu, HL2, Anan e acessórios no mesmo cadastro",
+    en: "Icom, Kenwood, Yaesu, Flex, Xiegu, HL2, Anan, and accessories in one roster",
   } satisfies Pair,
   photoRadio: {
     pt: "IC-705: Web Bluetooth serviço 14cf8001, handshake CI-V 0x61–0x64, endereço 0xA4, nome Ham-Cockpit-Web01.",
@@ -163,7 +163,7 @@ export const HOME = {
 
 export const HOME_LAYERS: { layer: Pair; runs: Pair; talks: Pair }[] = [
   {
-    layer: { pt: "Browser", en: "Browser" },
+    layer: { pt: "Navegador", en: "Browser" },
     runs: { pt: "Console React (Chrome/Edge)", en: "React console (Chrome/Edge)" },
     talks: { pt: "HTTP :80 · Web Bluetooth GATT do IC-705", en: "HTTP :80 · IC-705 Web Bluetooth GATT" },
   },
@@ -209,8 +209,8 @@ export const HOME_FLOW: { n: string; title: Pair; body: Pair }[] = [
     n: "01",
     title: { pt: "Boot do cartão", en: "Card boot" },
     body: {
-      pt: "Ubuntu 24.04 ARM64 + ham-cockpit.target: docker, nginx:80, ser2net, Wavelog :8086, Gate UDP 2333. Sem Ethernet sobe o AP 192.168.4.1.",
-      en: "Ubuntu 24.04 ARM64 + ham-cockpit.target: docker, nginx:80, ser2net, Wavelog :8086, Gate UDP 2333. No Ethernet brings up AP 192.168.4.1.",
+      pt: "Ubuntu 24.04 ARM64 + ham-cockpit.target: docker, nginx:80, ser2net, Wavelog :8086, Gate UDP 2333. AP 192.168.4.1 sobe com ou sem cabo.",
+      en: "Ubuntu 24.04 ARM64 + ham-cockpit.target: docker, nginx:80, ser2net, Wavelog :8086, Gate UDP 2333. AP 192.168.4.1 comes up with or without a cable.",
     },
   },
   {
@@ -327,8 +327,14 @@ export const HOME_FEATURES: { title: Pair; body: Pair }[] = [
 
 export const HOME_DEVICES: { name: string; link: Pair; serial: Pair; proto: Pair }[] = [
   { name: "IC-705", link: { pt: "Bluetooth GATT", en: "Bluetooth GATT" }, serial: { pt: "— (Web BT)", en: "— (Web BT)" }, proto: { pt: "CI-V 0xA4 · HS Ham-Cockpit-Web01", en: "CI-V 0xA4 · HS Ham-Cockpit-Web01" } },
-  { name: "IC-7300 / 7610 / 9700", link: { pt: "USB CI-V", en: "USB CI-V" }, serial: { pt: "115200 8N1", en: "115200 8N1" }, proto: { pt: "ser2net → rigctld -m 3073/3078/3081", en: "ser2net → rigctld -m 3073/3078/3081" } },
-  { name: "Kenwood / Yaesu / Flex", link: { pt: "USB CAT", en: "USB CAT" }, serial: { pt: "38400 (Kenwood/Yaesu)", en: "38400 (Kenwood/Yaesu)" }, proto: { pt: "ser2net + modelo Hamlib do rádio", en: "ser2net + the radio's Hamlib model" } },
+  { name: "IC-7300 / 7610 / 9700 / 7100", link: { pt: "USB CI-V (+ LAN nos 7610/9700)", en: "USB CI-V (+ LAN on 7610/9700)" }, serial: { pt: "19200–115200", en: "19200–115200" }, proto: { pt: "ser2net → Hamlib · LAN UDP 50001–3", en: "ser2net → Hamlib · LAN UDP 50001–3" } },
+  { name: "Kenwood TS-590 / 890 / 990", link: { pt: "USB CAT", en: "USB CAT" }, serial: { pt: "38400–115200", en: "38400–115200" }, proto: { pt: "ser2net + Hamlib", en: "ser2net + Hamlib" } },
+  { name: "Yaesu FT-991A / FTDX / FT-710", link: { pt: "USB CAT", en: "USB CAT" }, serial: { pt: "38400", en: "38400" }, proto: { pt: "ser2net + Hamlib", en: "ser2net + Hamlib" } },
+  { name: "FlexRadio 6400 / 6600 / 8600", link: { pt: "Ethernet SmartSDR", en: "SmartSDR Ethernet" }, serial: { pt: "TCP/UDP 4992 · VITA 4991", en: "TCP/UDP 4992 · VITA 4991" }, proto: { pt: "Proxy CAT → Hamlib (driver nativo depois)", en: "CAT proxy → Hamlib (native driver later)" } },
+  { name: "Ten-Tec Omni / Eagle", link: { pt: "USB CAT", en: "USB CAT" }, serial: { pt: "57600", en: "57600" }, proto: { pt: "ser2net + Hamlib", en: "ser2net + Hamlib" } },
+  { name: "Xiegu X6100 / X6200 / G90", link: { pt: "USB DEV SERIAL-B", en: "USB DEV SERIAL-B" }, serial: { pt: "19200 CI-V", en: "19200 CI-V" }, proto: { pt: "ser2net + Hamlib", en: "ser2net + Hamlib" } },
+  { name: "Hermes Lite 2", link: { pt: "Ethernet OpenHPSDR P1", en: "Ethernet OpenHPSDR P1" }, serial: { pt: "UDP 1024 / 1025", en: "UDP 1024 / 1025" }, proto: { pt: "Thetis/piHPSDR CAT → Hamlib 2054/2040", en: "Thetis/piHPSDR CAT → Hamlib 2054/2040" } },
+  { name: "Anan 10E / 100D / 7000 / G2", link: { pt: "Ethernet OpenHPSDR P2", en: "Ethernet OpenHPSDR P2" }, serial: { pt: "UDP 1024+", en: "UDP 1024+" }, proto: { pt: "Thetis/piHPSDR CAT → Hamlib", en: "Thetis/piHPSDR CAT → Hamlib" } },
   { name: "Lextel MS-2000", link: { pt: "BT Classic SPP", en: "Classic BT SPP" }, serial: { pt: "rfcomm", en: "rfcomm" }, proto: { pt: "Escuta; decoder ASCII/CSV/binário", en: "Listen-only; ASCII/CSV/binary decoder" } },
   { name: "SPE Expert", link: { pt: "USB-RS232", en: "USB-RS232" }, serial: { pt: "9600 8N1", en: "9600 8N1" }, proto: { pt: "ampctld · MAX3232", en: "ampctld · MAX3232" } },
   { name: "Hamplus AS-603WL", link: { pt: "USB-RS232", en: "USB-RS232" }, serial: { pt: "9600 8N1", en: "9600 8N1" }, proto: { pt: "ANT 1–6 · rádio 1–3 · rotor", en: "ANT 1–6 · radio 1–3 · rotator" } },
@@ -384,10 +390,11 @@ export const HOME_RECIPES: { kicker: Pair; title: Pair; points: Pair[] }[] = [
 
 export const DOCS_TOC: { id: string; label: Pair }[] = [
   { id: "visao", label: { pt: "O que é", en: "What it is" } },
-  { id: "arquitectura", label: { pt: "Arquitetura", en: "Architecture" } },
+  { id: "arquitetura", label: { pt: "Arquitetura", en: "Architecture" } },
   { id: "imagem", label: { pt: "Imagem OS", en: "OS image" } },
   { id: "fluxo", label: { pt: "Fluxo de funcionamento", en: "How it runs" } },
   { id: "console", label: { pt: "Console", en: "Console" } },
+  { id: "equipamentos", label: { pt: "Rádios suportados", en: "Supported radios" } },
   { id: "radio-ble", label: { pt: "IC-705 Bluetooth", en: "IC-705 Bluetooth" } },
   { id: "radio-usb", label: { pt: "USB / CAT / Hamlib", en: "USB / CAT / Hamlib" } },
   { id: "lextel", label: { pt: "Lextel MS-2000", en: "Lextel MS-2000" } },

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { UPDATE_IDS, type UpdateId } from "@shared/const";
@@ -565,7 +565,7 @@ export function StatusPage() {
         <Mini k={tx("hardware")} v="Ubuntu Server" />
         <Mini k="SoC" v="BCM2711 · 4×1.8 GHz" />
         <Mini k="Uptime" v="14h 22m" />
-        <Mini k="Firmware" v="Ham Cockpit 0.1.02" />
+        <Mini k="Firmware" v="Ham Cockpit 0.1.03" />
       </div>
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <Panel>

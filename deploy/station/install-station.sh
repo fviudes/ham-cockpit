@@ -154,6 +154,10 @@ install -m 0644 "$HERE/nginx-ham-cockpit.conf" /etc/nginx/sites-available/ham-co
 ln -sfn /etc/nginx/sites-available/ham-cockpit /etc/nginx/sites-enabled/ham-cockpit
 rm -f /etc/nginx/sites-enabled/default
 systemctl disable dnsmasq.service 2>/dev/null || true
+systemctl mask dnsmasq.service 2>/dev/null || true
+# hostapd só sobe pelo ham-cockpit-ap.sh (fallback); o unit default conflita com o NM.
+systemctl disable hostapd.service 2>/dev/null || true
+systemctl mask hostapd.service 2>/dev/null || true
 systemctl daemon-reload || true
 systemctl unmask ssh.service 2>/dev/null || true
 systemctl enable ssh.service 2>/dev/null || systemctl enable sshd.service 2>/dev/null || true
@@ -163,7 +167,7 @@ systemctl enable ser2net.service rigctld@ic705.service wavelog.service wavelogga
 systemctl enable nextiondriver.service mmdvmhost.service dmrgateway.service ysfgateway.service ircddbgateway.service 2>/dev/null || true
 systemctl enable seatd.service ham-cockpit-vfo.service ham-cockpit-vfo-idle.service || true
 systemctl enable waveloggate.service || true
-mkdir -p /etc/netplan
+mkdir -p /etc/netplan /etc/NetworkManager/conf.d
 if [[ ! -f /etc/netplan/99-ham-cockpit-nm.yaml ]]; then
   cat >/etc/netplan/99-ham-cockpit-nm.yaml <<'EOF'
 network:
@@ -172,6 +176,22 @@ network:
 EOF
   chmod 600 /etc/netplan/99-ham-cockpit-nm.yaml
 fi
+# País / powersave — sem REGDOMAIN o AP do Pi falha em silêncio com frequência.
+cat >/etc/NetworkManager/conf.d/90-ham-cockpit-wifi.conf <<'EOF'
+[device]
+wifi.scan-rand-mac-address=no
+wifi.powersave=2
+
+[connection]
+wifi.powersave=2
+EOF
+if [[ -f /etc/default/crda ]]; then
+  sed -i 's/^REGDOMAIN=.*/REGDOMAIN=BR/' /etc/default/crda || true
+  grep -q '^REGDOMAIN=' /etc/default/crda || echo 'REGDOMAIN=BR' >>/etc/default/crda
+else
+  echo 'REGDOMAIN=BR' >/etc/default/crda
+fi
+iw reg set BR 2>/dev/null || true
 if [[ "$CHROOT" != "1" ]]; then
   systemctl enable --now ham-cockpit.target || systemctl start ham-cockpit.target || true
   systemctl restart waveloggate.service || systemctl start waveloggate.service || true

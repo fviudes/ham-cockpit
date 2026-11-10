@@ -1,5 +1,5 @@
 #!/bin/bash
-# Só usado se alguém gravar um Pi OS vanilla. A imagem Ham Cockpit OS já vem assada.
+# Só usado se alguém gravar um Pi OS vanilla. A imagem Ham Cockpit OS já vem pronta no bake.
 set +e
 if [[ -x /opt/ham-cockpit/index.js ]] || systemctl cat ham-cockpit.target >/dev/null 2>&1; then
   systemctl enable --now ham-cockpit.target

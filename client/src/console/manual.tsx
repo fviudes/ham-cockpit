@@ -1,4 +1,4 @@
-import type { Lang } from "./i18n";
+﻿import type { Lang } from "./i18n";
 import { useConsole } from "./state";
 import { GhostBtn, PageHead, Panel, PanelTitle } from "./widgets";
 import {
@@ -16,6 +16,7 @@ import {
   FigWavelogContest,
   FigMmdvm,
 } from "./manual-diagrams";
+import { EquipmentGuide } from "./equipment-guide";
 import { PRODUCT, Photo } from "@/pages/product-media";
 import { useLocation } from "wouter";
 import type { ReactNode } from "react";
@@ -27,6 +28,7 @@ const TOC: { id: string; title: Pair }[] = [
   { id: "mapa", title: { pt: "Mapa da estação", en: "Station map" } },
   { id: "primeiro", title: { pt: "Primeiro acesso", en: "First login" } },
   { id: "tela", title: { pt: "Como ler a tela", en: "How to read the screen" } },
+  { id: "equipamentos", title: { pt: "Rádios suportados", en: "Supported radios" } },
   { id: "radio-ble", title: { pt: "Conectar o IC-705 (Bluetooth)", en: "Connect the IC-705 (Bluetooth)" } },
   { id: "radio-usb", title: { pt: "Outros rádios (USB / CAT)", en: "Other radios (USB / CAT)" } },
   { id: "principal", title: { pt: "Rádio principal", en: "Primary radio" } },
@@ -83,8 +85,8 @@ export function ManualPage() {
             src={PRODUCT.hero}
             alt="Raspberry Pi Ham Cockpit, dongle Bluetooth e cartão da imagem OS"
             caption={t({
-              pt: "O produto: Pi 3/4/5, Ubuntu 24.04, imagem ham-cockpit-0.1.02-raspi.img.xz em image/out.",
-              en: "The product: Pi 3/4/5, Ubuntu 24.04, ham-cockpit-0.1.02-raspi.img.xz in image/out.",
+              pt: "O produto: Pi 3/4/5, Ubuntu 24.04, imagem ham-cockpit-0.1.03-raspi.img.xz em image/out.",
+              en: "The product: Pi 3/4/5, Ubuntu 24.04, ham-cockpit-0.1.03-raspi.img.xz in image/out.",
             })}
           />
           <P
@@ -143,7 +145,7 @@ export function ManualPage() {
                 en: "Flash the Ham Cockpit OS image on the microSD card (flash.ps1). Seat it in a Pi 3, 4 or 5 and use the official PSU (Pi 5: 27 W / 5 A).",
               },
               {
-                pt: "No telefone ou notebook, abra a lista de Wi‑Fi. Entre em Ham-Cockpit-XXXX (os quatro caracteres mudam por aparelho). Senha: hamcockpit.",
+                pt: "No celular ou notebook, abra a lista de Wi‑Fi. Entre em Ham-Cockpit-XXXX (os quatro caracteres mudam por aparelho). Senha: hamcockpit.",
                 en: "On the phone or laptop, open Wi‑Fi. Join Ham-Cockpit-XXXX (the four characters change per unit). Password: hamcockpit.",
               },
               {
@@ -167,7 +169,7 @@ export function ManualPage() {
         <Section id="tela" title={t(TOC[3]!.title)}>
           <Photo
             src={PRODUCT.console}
-            alt="Console Ham Cockpit no portátil"
+            alt="Console Ham Cockpit no notebook"
             caption={t({
               pt: "A tela do operador: VFO, chips CI-V/SPP, menu à esquerda. Chrome ou Edge.",
               en: "Operator screen: VFO, CI-V/SPP chips, left menu. Chrome or Edge.",
@@ -201,7 +203,15 @@ export function ManualPage() {
           />
         </Section>
 
-        <Section id="radio-ble" title={t(TOC[4]!.title)}>
+        <Section id="equipamentos" title={t(TOC[4]!.title)}>
+          <P
+            pt="Catálogo completo dos rádios: fabricantes, protocolos, portas, Hamlib e caminhos de conexão. O hub CAT da estação é o rigctld (:4532)."
+            en="Full radio catalog: makers, protocols, ports, Hamlib, and connection paths. The station CAT hub is rigctld (:4532)."
+          />
+          <EquipmentGuide lang={lang} />
+        </Section>
+
+        <Section id="radio-ble" title={t(TOC[5]!.title)}>
           <P
             pt="O IC-705 não usa cabo. O Chrome fala GATT com o rádio (serviço 14cf8001), faz um handshake CI-V (0x61, 0x62, 0x63) e espera o rádio liberar (0x64). Endereço CI-V padrão do 705: 0xA4."
             en="The IC-705 needs no cable. Chrome speaks GATT with the radio (service 14cf8001), does a CI-V handshake (0x61, 0x62, 0x63) and waits for the radio to grant (0x64). Default CI-V address of the 705: 0xA4."
@@ -246,10 +256,10 @@ export function ManualPage() {
           </Callout>
         </Section>
 
-        <Section id="radio-usb" title={t(TOC[5]!.title)}>
+        <Section id="radio-usb" title={t(TOC[6]!.title)}>
           <P
-            pt="Kenwood, Yaesu, Flex, Ten-Tec e Icom por cabo usam Cat-USB. A serial do rádio entra primeiro no ser2net (IP 127.0.0.1, porta sequencial, TTY). Na aba Rádio escolha fabricante, Cat-USB e a conexão ser2net já cadastrada — IP/porta/serial vêm dali. Só o Bluetooth configura o dispositivo direto. Icom no cabo pode ser CI-V (0x94 no 7300, 0xA4 no 705) ou CAT serial clássico."
-            en="Kenwood, Yaesu, Flex, Ten-Tec and cabled Icom use Cat-USB. Register the radio serial in ser2net first (IP 127.0.0.1, sequential port, TTY). On the Radio tab pick maker, Cat-USB and that ser2net connection — IP/port/serial come from there. Only Bluetooth configures the device directly. Cabled Icom can be CI-V (0x94 on a 7300, 0xA4 on a 705) or classic serial CAT."
+            pt="Kenwood, Yaesu, Flex, Ten-Tec, Xiegu e Icom por cabo usam Cat-USB. A serial do rádio entra primeiro no ser2net (IP 127.0.0.1, porta sequencial, TTY). Na aba Rádio escolha fabricante, Cat-USB e a conexão ser2net já cadastrada — IP/porta/serial vêm dali. Só o Bluetooth configura o dispositivo direto. Icom no cabo pode ser CI-V (0x94 no 7300, 0xA4 no 705) ou CAT serial clássico. HL2/Anan usam proxy CAT (Thetis/piHPSDR), não a TTY. Catálogo completo (protocolos, portas, Hamlib): seção Rádios suportados acima."
+            en="Kenwood, Yaesu, Flex, Ten-Tec, Xiegu and cabled Icom use Cat-USB. Register the radio serial in ser2net first (IP 127.0.0.1, sequential port, TTY). On the Radio tab pick maker, Cat-USB and that ser2net connection — IP/port/serial come from there. Only Bluetooth configures the device directly. Cabled Icom can be CI-V (0x94 on a 7300, 0xA4 on a 705) or classic serial CAT. HL2/Anan use a CAT proxy (Thetis/piHPSDR), not the TTY. Full catalog (protocols, ports, Hamlib): Supported radios section above."
           />
           <Example title={t({ pt: "Exemplo — IC-7300 no USB", en: "Example — IC-7300 on USB" })}>
             <Steps
@@ -267,12 +277,12 @@ export function ManualPage() {
             />
           </Example>
           <P
-            pt="Velocidades típicas: Icom CI-V 19200 ou 115200; Kenwood/Yaesu 38400; Ten-Tec 57600; Bluetooth não-Icom 9600."
-            en="Typical bauds: Icom CI-V 19200 or 115200; Kenwood/Yaesu 38400; Ten-Tec 57600; non-Icom Bluetooth 9600."
+            pt="Velocidades típicas: Icom CI-V 19200 ou 115200; Kenwood/Yaesu 38400; Xiegu 19200; Ten-Tec 57600; Bluetooth não-Icom 9600."
+            en="Typical bauds: Icom CI-V 19200 or 115200; Kenwood/Yaesu 38400; Xiegu 19200; Ten-Tec 57600; non-Icom Bluetooth 9600."
           />
         </Section>
 
-        <Section id="principal" title={t(TOC[6]!.title)}>
+        <Section id="principal" title={t(TOC[7]!.title)}>
           <P
             pt="Na tabela Rádios cadastrados a primeira coluna é Principal. Só um rádio fica marcado. Ao abrir o console, a estação tenta ligar sozinha nesse rádio. Marcar outro como principal não derruba o Lextel nem os outros Bluetooth."
             en="In Registered radios the first column is Primary. Only one radio is ticked. When you open the console the station tries to connect that radio by itself. Ticking another primary does not drop Lextel or the other Bluetooth links."
@@ -291,7 +301,7 @@ export function ManualPage() {
           />
         </Section>
 
-        <Section id="painel" title={t(TOC[7]!.title)}>
+        <Section id="painel" title={t(TOC[8]!.title)}>
           <P
             pt="Operação → Painel é o VFO da estação. Com o IC-705 em CI-V OK, mudar frequência, modo ou PTT aqui mexe no rádio de verdade."
             en="Operation → Panel is the station VFO. With the IC-705 on CI-V OK, changing frequency, mode or PTT here moves the real radio."
@@ -308,7 +318,7 @@ export function ManualPage() {
           <GoTab page="radio" label={t({ pt: "Abrir o Painel", en: "Open the Panel" })} />
         </Section>
 
-        <Section id="varios-bt" title={t(TOC[8]!.title)}>
+        <Section id="varios-bt" title={t(TOC[9]!.title)}>
           <P
             pt="O adaptador Bluetooth do Pi ou do PC aguenta vários aparelhos ao mesmo tempo. O IC-705 (BLE) não deve derrubar o MS-2000 (Classic). Se o Windows soltar o COM do Lextel no instante do GATT, o Ham Cockpit reabre o SPP sozinho — o chip MS-2000 SPP permanece verde."
             en="The Pi or PC Bluetooth adapter can hold several devices at once. The IC-705 (BLE) must not drop the MS-2000 (Classic). If Windows drops the Lextel COM the moment GATT comes up, Ham Cockpit reopens SPP by itself — the MS-2000 SPP chip stays green."
@@ -321,7 +331,7 @@ export function ManualPage() {
           />
         </Section>
 
-        <Section id="lextel" title={t(TOC[9]!.title)}>
+        <Section id="lextel" title={t(TOC[10]!.title)}>
           <P
             pt="O Monitor Station (MS-600 a MS-2000) manda PEP, média, refletida, ROE, tensão, Z e AM por Bluetooth Classic SPP. O Ham Cockpit só escuta — nunca manda comando ao wattímetro. Não é BLE: o Chrome não abre esse rádio."
             en="The Monitor Station (MS-600 through MS-2000) sends PEP, average, reflected, SWR, voltage, Z and AM over Bluetooth Classic SPP. Ham Cockpit only listens — it never sends a command to the wattmeter. It is not BLE: Chrome cannot open that radio."
@@ -355,7 +365,7 @@ export function ManualPage() {
           </Callout>
         </Section>
 
-        <Section id="spe" title={t(TOC[10]!.title)}>
+        <Section id="spe" title={t(TOC[11]!.title)}>
           <P
             pt="Aba SPE mostra o Expert 1.3K-FA como o painel frontal: RF OUT, PWR L/M/H, SWR ATU/ANT, V/I PA, banda, antena, input. Os chips On / Off / OP / PWR / Antena / Input repetem as teclas do amp. Crie a conexão IP no ser2net (RS232 9600 via USB-serial + MAX3232 — nunca no GPIO 3,3 V) e selecione-a nesta aba. O amp fala só em TCP."
             en="The SPE tab mirrors the Expert 1.3K-FA front panel: RF OUT, PWR L/M/H, SWR ATU/ANT, V/I PA, band, antenna, input. On / Off / OP / PWR / Antenna / Input chips match the amp keys. Create the IP connection in ser2net (RS232 9600 via USB-serial + MAX3232 — never the 3.3 V GPIO) and select it on this tab. The amp talks TCP only."
@@ -363,7 +373,7 @@ export function ManualPage() {
           <GoTab page="spe" label={t({ pt: "Abrir SPE", en: "Open SPE" })} />
         </Section>
 
-        <Section id="hamplus" title={t(TOC[11]!.title)}>
+        <Section id="hamplus" title={t(TOC[12]!.title)}>
           <P
             pt="Hamplus AS-603WL: LEDs Power / Send / Split, graus do rotor (Rotor 1 ou 2), chave de antena ANT 1–6 e chave de rádio 1–3. RS232 ±12 V — conversor MAX3232. Crie a conexão no ser2net e selecione-a nesta aba. As posições 7–10 e rádios 4–5 ficam apagadas neste modelo."
             en="Hamplus AS-603WL: Power / Send / Split LEDs, rotor degrees (Rotor 1 or 2), antenna switch ANT 1–6 and radio switch 1–3. RS232 ±12 V — MAX3232 converter. Create the ser2net connection and select it on this tab. Positions 7–10 and radios 4–5 stay dimmed on this model."
@@ -371,7 +381,7 @@ export function ManualPage() {
           <GoTab page="hamplus" label={t({ pt: "Abrir Hamplus", en: "Open Hamplus" })} />
         </Section>
 
-        <Section id="palstar" title={t(TOC[12]!.title)}>
+        <Section id="palstar" title={t(TOC[13]!.title)}>
           <P
             pt="Palstar AT-AUTO: modos Auto / Manual / Bypass, antena Coax ou Balanced, Tune e Home L&C. Também é RS232 de nível de PC — crie a conexão no ser2net e selecione-a nesta aba. Use o conversor; o GPIO do Pi queima se ligar o cabo direto."
             en="Palstar AT-AUTO: Auto / Manual / Bypass, Coax or Balanced antenna, Tune and Home L&C. Also PC-level RS232 — create the ser2net connection and select it on this tab. Use a converter; the Pi GPIO will fry on a direct cable."
@@ -379,7 +389,7 @@ export function ManualPage() {
           <GoTab page="palstar" label={t({ pt: "Abrir Palstar", en: "Open Palstar" })} />
         </Section>
 
-        <Section id="ldg" title={t(TOC[13]!.title)}>
+        <Section id="ldg" title={t(TOC[14]!.title)}>
           <P
             pt="AT-1000ProII e AT-600ProII usam o jack mini-DIN de 4 pinos do medidor (M-1000/M-600): TTL 5 V, 38400 8N1. Cadastre o USB-TTL no ser2net e selecione a conexão IP nesta aba — o acoplador não abre a serial. Comando = espaço + um byte. O AT-100ProII não tem este jack."
             en="AT-1000ProII and AT-600ProII use the 4-pin mini-DIN meter jack (M-1000/M-600): TTL 5 V, 38400 8N1. Register the USB-TTL in ser2net and pick the IP connection on this tab — the tuner never opens the serial port. Command = space + one byte. The AT-100ProII has no such jack."
@@ -387,7 +397,7 @@ export function ManualPage() {
           <GoTab page="ldg" label={t({ pt: "Abrir LDG AT", en: "Open LDG AT" })} />
         </Section>
 
-        <Section id="lp100a" title={t(TOC[14]!.title)}>
+        <Section id="lp100a" title={t(TOC[15]!.title)}>
           <P
             pt="Wattímetro vetorial TelePost. RS232 115200 8N1, cabo reto DB9 (não null-modem). Cadastre o USB-RS232 no ser2net e escolha a conexão IP na aba LP-100A. O console pede P ~5 vezes por segundo e lê Power, Z, fase, alarme de ROE, indicativo, faixa, Peak/Avg/Tune, dBm e SWR. A e F ciclam alarme e modo do medidor. Não envie M — muda a tela e a telemetria para. Deixe o medidor em Watts. PTT RCA e segundo coupler são só no hardware."
             en="TelePost vector RF wattmeter. RS232 115200 8N1, straight-through DB9 (not null-modem). Register the USB-RS232 in ser2net and pick the IP connection on the LP-100A tab. The console polls P ~5 times per second and reads Power, Z, phase, SWR alarm, callsign, range, Peak/Avg/Tune, dBm and SWR. A and F cycle alarm and meter mode. Do not send M — it changes the screen and telemetry stops. Keep the meter on Watts. RCA PTT loop and dual coupler are hardware-only."
@@ -395,7 +405,7 @@ export function ManualPage() {
           <GoTab page="lp100a" label={t({ pt: "Abrir LP-100A", en: "Open LP-100A" })} />
         </Section>
 
-        <Section id="acom" title={t(TOC[15]!.title)}>
+        <Section id="acom" title={t(TOC[16]!.title)}>
           <P
             pt="O 2000A fala RS232 1200 8N1 na DB9 traseira, no estilo ACOM Director Classic. O CAT do rádio vai no conector CAT do RCU, não nesta serial."
             en="The 2000A speaks RS232 1200 8N1 on the rear DB9, ACOM Director Classic style. Radio CAT goes to the RCU CAT jack, not this serial."
@@ -425,7 +435,7 @@ export function ManualPage() {
           <GoTab page="acom" label={t({ pt: "Abrir ACOM", en: "Open ACOM" })} />
         </Section>
 
-        <Section id="wavelog" title={t(TOC[16]!.title)}>
+        <Section id="wavelog" title={t(TOC[17]!.title)}>
           <Photo
             src={PRODUCT.logbook}
             alt={t({ pt: "Logbook Wavelog no notebook", en: "Wavelog logbook on a laptop" })}
@@ -451,7 +461,7 @@ export function ManualPage() {
             })}
           />
           <P
-            pt="Integrações nativas do Wavelog: LoTW, eQSL, Club Log, HRDlog, OQRS, ADIF, DXCC/WAS/IOTA/SOTA/POTA/WWFF, callbook QRZ/HamQTH/QRZCQ, bandmap/cluster, Winkeyer, motor de contest 3.0, API legado e API v2."
+            pt="Integrações nativas do Wavelog: LoTW, eQSL, Club Log, HRDlog, OQRS, ADIF, DXCC/WAS/IOTA/SOTA/POTA/WWFF, callbook QRZ/HamQTH/QRZCQ, bandmap/cluster, Winkeyer, motor de contest 3.0, API legada e API v2."
             en="Native Wavelog integrations: LoTW, eQSL, Club Log, HRDlog, OQRS, ADIF, DXCC/WAS/IOTA/SOTA/POTA/WWFF, QRZ/HamQTH/QRZCQ callbook, bandmap/cluster, Winkeyer, 3.0 contest engine, legacy API and API v2."
           />
           <FigWavelogCat
@@ -475,7 +485,7 @@ export function ManualPage() {
                 en: "WSJT-X / JTDX: Secondary UDP = Pi IP, port 2333, Enable logged ADIF broadcast. Rig = Hamlib NET 127.0.0.1:4532 (3085 on the 705). No Internal Hamlib on the Gate.",
               },
               {
-                pt: "Hardware Interfaces no Wavelog: Callback URL = http://IP-do-Pi:54321 (não 127.0.0.1 se o browser for o notebook). Clique no cluster = QSY no rádio.",
+                pt: "Hardware Interfaces no Wavelog: Callback URL = http://IP-do-Pi:54321 (não 127.0.0.1 se o navegador for o notebook). Clique no cluster = QSY no rádio.",
                 en: "Hardware Interfaces in Wavelog: Callback URL = http://PI-IP:54321 (not 127.0.0.1 if the browser is the laptop). Click the cluster = QSY on the radio.",
               },
             ]}
@@ -519,7 +529,7 @@ export function ManualPage() {
           <GoTab page="wavelog" label={t({ pt: "Abrir Wavelog", en: "Open Wavelog" })} />
         </Section>
 
-        <Section id="mmdvm" title={t(TOC[17]!.title)}>
+        <Section id="mmdvm" title={t(TOC[18]!.title)}>
           <P
             pt="A aba Operação → MMDVM controla um hotspot ou repetidora digital no mesmo Pi. A pilha é a do WPSD (e do Pi-Star): MMDVMHost no UART do modem e DMRGateway em loopback. O dashboard PHP não é instalado — o console Ham Cockpit já é o site, com as mesmas cores, fontes e painéis."
             en="Operate → MMDVM drives a digital hotspot or repeater on the same Pi. The stack is WPSD's (and Pi-Star's): MMDVMHost on the modem UART and DMRGateway on loopback. The PHP dashboard is not installed — the Ham Cockpit console already is the site, with the same colors, fonts, and panels."
@@ -548,14 +558,14 @@ export function ManualPage() {
           />
           <Callout tone="warn">
             <S
-              pt="HAT ADF7021 (ZUMspot, HS_Hat, Dual Hat) ouve um modo de cada vez. Duplexo (TS1+TS2) só em modem duplex. Não instale Apache/PHP do Pi-Star na porta 80."
+              pt="HAT ADF7021 (ZUMspot, HS_Hat, Dual Hat) ouve um modo de cada vez. Duplex (TS1+TS2) só em modem duplex. Não instale Apache/PHP do Pi-Star na porta 80."
               en="ADF7021 HATs (ZUMspot, HS_Hat, Dual Hat) hear one mode at a time. Duplex (TS1+TS2) needs a duplex modem. Do not install Pi-Star Apache/PHP on port 80."
             />
           </Callout>
           <GoTab page="mmdvm" label={t({ pt: "Abrir MMDVM", en: "Open MMDVM" })} />
         </Section>
 
-        <Section id="ser2net" title={t(TOC[18]!.title)}>
+        <Section id="ser2net" title={t(TOC[19]!.title)}>
           <P
             pt="O ser2net é o único processo que pode abrir a TTY de CAT e acessório. Rádio Cat-USB, SPE, Hamplus, Palstar, LDG, LP-100A e ACOM falam só em IP (127.0.0.1:porta). Bluetooth do rádio (GATT/SPP) continua direto. A exceção é o modem MMDVM: MMDVMHost é o dono exclusivo dessa UART."
             en="ser2net is the only process allowed to open the CAT and accessory TTY. Cat-USB radio, SPE, Hamplus, Palstar, LDG, LP-100A and ACOM talk IP only (127.0.0.1:port). Radio Bluetooth (GATT/SPP) stays direct. The exception is the MMDVM modem: MMDVMHost exclusively owns that UART."
@@ -587,7 +597,7 @@ export function ManualPage() {
           <GoTab page="ser2net" label={t({ pt: "Abrir ser2net", en: "Open ser2net" })} />
         </Section>
 
-        <Section id="wizard" title={t(TOC[19]!.title)}>
+        <Section id="wizard" title={t(TOC[20]!.title)}>
           <P
             pt="O Config Device Wizard (topo do menu) cadastra um acessório em três passos: (1) IP 127.0.0.1 e porta TCP sequencial a partir de 4001, ligada a uma serial livre; (2) o dispositivo (SPE, Hamplus, Palstar, LDG, LP-100A, ACOM); (3) início automático e Finalizar. Lextel e o rádio no Bluetooth não entram. Cat-USB do rádio usa uma conexão tipo Rádio na aba ser2net."
             en="Config Device Wizard (top of the menu) registers an accessory in three steps: (1) IP 127.0.0.1 and a sequential TCP port from 4001 bound to a free serial; (2) the device (SPE, Hamplus, Palstar, LDG, LP-100A, ACOM); (3) autostart and Finish. Lextel and Bluetooth radio stay out. Cat-USB radio uses a Radio-type connection on the ser2net tab."
@@ -595,7 +605,7 @@ export function ManualPage() {
           <GoTab page="wizard" label={t({ pt: "Abrir o wizard", en: "Open the wizard" })} />
         </Section>
 
-        <Section id="wifi" title={t(TOC[20]!.title)}>
+        <Section id="wifi" title={t(TOC[21]!.title)}>
           <P
             pt="Aba WiFi: (1) nome na rede, que vira nome.local na LAN; (2) tipo de conexão — cabo Ethernet ou Wi‑Fi da casa; (3) Procurar redes e Conectar com a senha; (4) DHCP ou IP fixo (IP, máscara, gateway, DNS primário e secundário); (5) Access Point Ham Cockpit em 192.168.4.1 para o campo. Redes gravadas voltam sozinhas no boot do Pi."
             en="WiFi tab: (1) device name, which becomes name.local on the LAN; (2) uplink — Ethernet cable or house Wi‑Fi; (3) Scan networks and Connect with the password; (4) DHCP or static IP (address, mask, gateway, primary and secondary DNS); (5) Ham Cockpit AP at 192.168.4.1 for the field. Saved networks rejoin on Pi boot."
@@ -603,7 +613,7 @@ export function ManualPage() {
           <GoTab page="wifi" label={t({ pt: "Abrir WiFi", en: "Open WiFi" })} />
         </Section>
 
-        <Section id="bluetooth" title={t(TOC[21]!.title)}>
+        <Section id="bluetooth" title={t(TOC[22]!.title)}>
           <P
             pt="A aba Bluetooth é um atalho: um painel para o IC-705 (GATT) e outro para o Lextel (SPP), mais o nome/PIN do adaptador. O fluxo completo do 705 está em Rádio; o do wattímetro em Lextel. Scan nesta aba também abre o seletor Chrome."
             en="The Bluetooth tab is a shortcut: one panel for the IC-705 (GATT) and one for Lextel (SPP), plus adapter name/PIN. The full 705 flow lives under Radio; the wattmeter under Lextel. Scan here also opens the Chrome picker."
@@ -611,7 +621,7 @@ export function ManualPage() {
           <GoTab page="bluetooth" label={t({ pt: "Abrir Bluetooth", en: "Open Bluetooth" })} />
         </Section>
 
-        <Section id="sistema" title={t(TOC[22]!.title)}>
+        <Section id="sistema" title={t(TOC[23]!.title)}>
           <Ul
             items={[
               {
@@ -634,7 +644,7 @@ export function ManualPage() {
           />
         </Section>
 
-        <Section id="niveis" title={t(TOC[23]!.title)}>
+        <Section id="niveis" title={t(TOC[24]!.title)}>
           <P
             pt="USB e Bluetooth não precisam de conversor. Tudo que nasceu RS232 de PC (±12 V) precisa de MAX3232 (ou cabo USB-RS232 pronto). GPIO uart2–5 do Pi é 3,3 V — um cabo SPE/Palstar/Hamplus/ACOM direto no header mata o SoC."
             en="USB and Bluetooth need no converter. Anything born as PC RS232 (±12 V) needs MAX3232 (or a ready USB-RS232 cable). Pi GPIO uart2–5 is 3.3 V — a SPE/Palstar/Hamplus/ACOM cable straight on the header kills the SoC."
@@ -681,7 +691,7 @@ export function ManualPage() {
           />
         </Section>
 
-        <Section id="receitas" title={t(TOC[24]!.title)}>
+        <Section id="receitas" title={t(TOC[25]!.title)}>
           <Example title={t({ pt: "Receita A — Só o IC-705 no campo", en: "Recipe A — IC-705 only, portable" })}>
             <Ul
               items={[
@@ -713,7 +723,7 @@ export function ManualPage() {
           </Example>
         </Section>
 
-        <Section id="problemas" title={t(TOC[25]!.title)}>
+        <Section id="problemas" title={t(TOC[26]!.title)}>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="text-[11px] tracking-wide text-[#ffb300] uppercase">

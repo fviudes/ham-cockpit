@@ -1,4 +1,4 @@
-﻿# ISO com Ham Cockpit OS já assado (img.xz) + flash.ps1.
+﻿# ISO com Ham Cockpit OS já pronto no bake (img.xz) + flash.ps1.
 # Gere a imagem antes: wsl bash image/appliance/build.sh
 param(
   [string]$OutFile = ""

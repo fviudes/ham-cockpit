@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * WaveLogGate headless — escuta UDP (WSJT-X/JTDX/FLDigi) e cadastra o QSO no Wavelog.
- * Sem WebKit / DISPLAY: corre no Raspberry Pi OS Lite via systemd.
+ * Sem WebKit / DISPLAY: roda no Raspberry Pi OS Lite via systemd.
  */
 import { existsSync, readFileSync, appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";

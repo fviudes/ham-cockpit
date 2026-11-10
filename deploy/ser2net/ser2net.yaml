@@ -1,7 +1,7 @@
 %YAML 1.1
 ---
 # ser2net 4 — único processo na TTY. Acessórios (SPE, Palstar, ACOM, …)
-# ligam-se a tcp,127.0.0.1,porta. O rádio CAT usa Hamlib, nunca o cabo.
+# conectam em tcp,127.0.0.1,porta. O rádio CAT usa Hamlib, nunca o cabo.
 # LAN usa rigctld/ampctld, nunca estas portas cruas.
 # Instalar em: /opt/ser2net/ser2net.yaml
 
@@ -33,8 +33,8 @@ connection: &spe
       kickolduser: true
     connector: serialdev,/dev/serial/by-id/usb-FTDI-SPE,9600n81,local
 
-# TelePost LP-100A — wattímetro vectorial: 115200 8N1, cabo reto DB9 (não null-modem).
-# Poll ASCII P; A = alarme ROE; F = Avg/Peak/Tune. Não envie M (muda o ecrã).
+# TelePost LP-100A — wattímetro vetorial: 115200 8N1, cabo reto DB9 (não null-modem).
+# Poll ASCII P; A = alarme ROE; F = Avg/Peak/Tune. Não envie M (muda a tela).
 connection: &lp100a
     accepter: tcp,127.0.0.1,4006
     enable: on

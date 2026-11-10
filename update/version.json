@@ -1,6 +1,6 @@
-{
-  "version": "0.1.02",
+﻿{
+  "version": "0.1.03",
   "channel": "main",
   "file": "",
-  "notes": "Ham Cockpit v0.1.02 — rede first-boot: NetworkManager + end0/eth0, Avahi, AP Wi-Fi mais robusto"
+  "notes": "Ham Cockpit v0.1.03 — AP Wi-Fi: nmcli hotspot (propaga SSID no Ubuntu 24.04) + fallback hostapd; sobe com ou sem cabo"
 }

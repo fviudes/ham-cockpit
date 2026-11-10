@@ -7,6 +7,8 @@ iw
 rfkill
 wireless-regdb
 wpasupplicant
+linux-firmware
+hostapd
 dnsmasq
 iptables
 avahi-daemon

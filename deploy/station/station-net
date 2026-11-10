@@ -132,17 +132,23 @@ case "${1:-}" in
     psk="$(cat - || true)"
     [[ -n "$ssid" ]] || { echo "ssid vazio" >&2; exit 2; }
     [[ ${#psk} -ge 8 ]] || { echo "senha do AP precisa de 8 caracteres" >&2; exit 2; }
+    rfkill unblock wifi 2>/dev/null || true
+    iw reg set BR 2>/dev/null || true
+    nmcli radio wifi on 2>/dev/null || true
+    systemctl stop dnsmasq.service 2>/dev/null || true
     nmcli con delete "$AP_CONN" >/dev/null 2>&1 || true
     nmcli con add type wifi ifname "$WLAN" con-name "$AP_CONN" autoconnect yes ssid "$ssid"
     nmcli con modify "$AP_CONN" \
       802-11-wireless.mode ap \
       802-11-wireless.band bg \
+      802-11-wireless.channel 6 \
       wifi-sec.key-mgmt wpa-psk \
       wifi-sec.psk "$psk" \
       ipv4.method shared \
       ipv4.addresses 192.168.4.1/24 \
-      ipv6.method disabled
-    nmcli con up "$AP_CONN"
+      ipv6.method disabled \
+      connection.autoconnect yes
+    nmcli -w 30 con up "$AP_CONN" ifname "$WLAN"
     ;;
   managed)
     nmcli -t -f NAME,TYPE,AUTOCONNECT con show | awk -F: '$2=="802-11-wireless" && $1!="Ham-Cockpit-AP" {print $1 "\t" $3}'

@@ -1,4 +1,4 @@
-# Ham Cockpit v0.1.02
+﻿# Ham Cockpit v0.1.03
 
 Appliance da estação de rádio amador: um Raspberry Pi com console no navegador. Fala com o rádio (Bluetooth ou CAT/USB via ser2net), wattímetro Lextel, amplificadores, chave de antenas, acoplador LDG e o logbook Wavelog.
 
@@ -20,11 +20,11 @@ A imagem já é o **Ubuntu Server 24.04 LTS ARM64** com tudo instalado e habilit
 - Docker + Wavelog (logbook) na **8086**
 - WaveLogGate UDP **2333** → cadastra QSO no Wavelog
 - ser2net + Hamlib (`127.0.0.1:4532`)
-- Access Point `Ham-Cockpit-XXXX` em **192.168.4.1** se não houver cabo de rede
+- Access Point `Ham-Cockpit-XXXX` em **192.168.4.1** (2,4 GHz; sobe mesmo com cabo Ethernet)
 - SSH na porta **22** (usuários `hamcockpit` e `admin`)
 - HDMI: VFO em tela cheia; `CTRL+X` volta ao console; 10 min parado no CLI reabre o VFO
 
-Não grave o Ubuntu vanilla e não rode `install-station.sh` nesta imagem — o sistema e os pacotes já vêm assados.
+Não grave o Ubuntu vanilla e não rode `install-station.sh` nesta imagem — o sistema e os pacotes já vêm prontos no bake.
 
 ---
 
@@ -39,9 +39,9 @@ Não grave o Ubuntu vanilla e não rode `install-station.sh` nesta imagem — o 
 
 ### 1. Baixe a imagem
 
-Arquivo: **`ham-cockpit-0.1.02-raspi.img.xz`** (Ubuntu Server 24.04 LTS + Ham Cockpit).
+Arquivo: **`ham-cockpit-0.1.03-raspi.img.xz`** (Ubuntu Server 24.04 LTS + Ham Cockpit).
 
-Na [Release v0.1.02](https://github.com/fviudes/ham-cockpit/releases/tag/v0.1.02) ou:
+Na [Release v0.1.03](https://github.com/fviudes/ham-cockpit/releases/tag/v0.1.03) ou:
 
 ```bash
 gh release download --repo fviudes/ham-cockpit --pattern "ham-cockpit-*-raspi.img.xz" --dir instaladores
@@ -51,7 +51,7 @@ Scripts de gravação: [`instaladores/flash.ps1`](instaladores/flash.ps1) (Windo
 
 ### 2. Grave no cartão ou SSD
 
-Abra o Raspberry Pi Imager → **Use custom** → escolha `ham-cockpit-0.1.02-raspi.img.xz` → selecione o microSD ou o SSD USB → grave.
+Abra o Raspberry Pi Imager → **Use custom** → escolha `ham-cockpit-0.1.03-raspi.img.xz` → selecione o microSD ou o SSD USB → grave.
 
 Windows (PowerShell **como Administrador**), com o Imager instalado:
 
@@ -68,14 +68,15 @@ sudo bash instaladores/flash.sh /dev/sdX
 
 No primeiro boot o Ubuntu expande o disco (pode levar alguns minutos) e sobe o console.
 
-- **Sem cabo de rede:** o AP `Ham-Cockpit-XXXX` sobe em 2,4 GHz (senha `hamcockpit`) → http://192.168.4.1/console  
-- **Com cabo Ethernet:** o AP **não sobe** (de propósito). O Pi pega IP por DHCP na LAN → http://ham-cockpit.local/console ou o IP no roteador.  
-- Não procure o AP Wi‑Fi com o cabo plugado — ou tira o cabo, ou usa a LAN.
+- **AP Wi‑Fi:** `Ham-Cockpit-XXXX` em 2,4 GHz (senha `hamcockpit`) → http://192.168.4.1/console — sobe **com ou sem** cabo Ethernet. Celulares em “só 5 GHz” não veem.
+- O AP usa `nmcli device wifi hotspot` (no Ubuntu 24.04 o perfil AP “manual” às vezes ativa sem propagar o SSID). Se o NM falhar, cai para `hostapd`.
+- **Com cabo Ethernet:** também na LAN → http://ham-cockpit.local/console ou o IP no roteador.
+- No primeiro boot aguarde 2–5 min (expansão do disco + firmware do Wi‑Fi) antes de procurar o SSID.
 
 ### 3. Primeiro acesso
 
-1. Sem Ethernet: no telefone ou notebook, entre no Wi‑Fi **Ham-Cockpit-XXXX** (os quatro caracteres mudam por aparelho). Senha: **hamcockpit**. Rede **2,4 GHz** (celulares em “só 5 GHz” não veem).
-2. Com Ethernet: abra **http://ham-cockpit.local/console** ou descubra o IP no roteador (cliente `ham-cockpit`) / `arp -a` no PC.
+1. No celular ou notebook (Wi‑Fi **2,4 GHz**), entre em **Ham-Cockpit-XXXX** (os quatro caracteres mudam por aparelho). Senha: **hamcockpit**. Celulares em “só 5 GHz” não veem o AP.
+2. Abra **http://192.168.4.1/console**. Com cabo na LAN: **http://ham-cockpit.local/console** ou o IP no roteador.
 3. Login: **admin** / **1234**. Troque a senha em Admin.
 
 Se nada responder: aguarde 3–5 min no primeiro boot, confira HDMI (login no console) e SSH `hamcockpit` / `1234`.
@@ -122,7 +123,7 @@ USB e Bluetooth não precisam de conversor. RS232 de PC (±12 V) precisa de MAX3
 - **Admin → Atualização** — card **Ham Cockpit** compara a versão instalada com [`update/version.json`](update/version.json) na branch `main`. Os outros cards são Ubuntu, ser2net, Hamlib, Wavelog e WaveLogGate.
 - **Admin → Backup** — restore devolve a estação à data/hora do arquivo; o que veio depois se perde.
 
-Idioma PT/EN no canto do console. O **Manual** completo (com diagramas) está em Sistema → Manual.
+Idioma PT/EN no canto do console. O **Manual** completo (com diagramas) está em Sistema → Manual. Catálogo de rádios (Icom, Kenwood, Yaesu, Flex, Ten-Tec, Xiegu, Hermes Lite 2, Anan — protocolos, portas, Hamlib): documentação do site em `/docs#equipamentos` e Manual → **Rádios suportados**; resumo em [`docs/equipamentos.md`](docs/equipamentos.md).
 
 ---
 
@@ -146,4 +147,4 @@ Quando `version.json` na `main` tiver um número maior que o instalado, o botão
 
 ---
 
-Ham Cockpit v0.1.02 · Raspberry Pi 3 / 4 / 5 · Ubuntu Server 24.04 LTS
+Ham Cockpit v0.1.03 · Raspberry Pi 3 / 4 / 5 · Ubuntu Server 24.04 LTS

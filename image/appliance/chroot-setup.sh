@@ -123,7 +123,11 @@ systemctl disable snapd.service snapd.socket 2>/dev/null || true
 # Preferir NetworkManager (AP + STA); evita conflito com systemd-networkd.
 systemctl disable systemd-networkd.service systemd-networkd.socket 2>/dev/null || true
 systemctl mask systemd-networkd.service 2>/dev/null || true
-mkdir -p /etc/cloud/cloud.cfg.d /etc/netplan
+systemctl disable dnsmasq.service 2>/dev/null || true
+systemctl mask dnsmasq.service 2>/dev/null || true
+systemctl disable hostapd.service 2>/dev/null || true
+systemctl mask hostapd.service 2>/dev/null || true
+mkdir -p /etc/cloud/cloud.cfg.d /etc/netplan /etc/NetworkManager/conf.d
 # Garante renderer NM mesmo se o cloud-init da FAT atrasar.
 cat >/etc/netplan/99-ham-cockpit-nm.yaml <<'EOF'
 network:
@@ -131,6 +135,15 @@ network:
   renderer: NetworkManager
 EOF
 chmod 600 /etc/netplan/99-ham-cockpit-nm.yaml
+cat >/etc/NetworkManager/conf.d/90-ham-cockpit-wifi.conf <<'EOF'
+[device]
+wifi.scan-rand-mac-address=no
+wifi.powersave=2
+
+[connection]
+wifi.powersave=2
+EOF
+echo 'REGDOMAIN=BR' >/etc/default/crda
 cat >/etc/cloud/cloud.cfg.d/99-ham-cockpit.cfg <<'EOF'
 ssh_pwauth: true
 disable_root: true

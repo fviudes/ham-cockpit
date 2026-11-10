@@ -1,7 +1,7 @@
 ﻿#Requires -RunAsAdministrator
 # Grava Ham Cockpit OS (Ubuntu Server 24.04 + estação) no cartão / SSD.
 # Uso:  .\flash.ps1 -DiskNumber 2
-#       .\flash.ps1 -DiskNumber 2 -Image .\ham-cockpit-0.1.02-raspi.img.xz
+#       .\flash.ps1 -DiskNumber 2 -Image .\ham-cockpit-0.1.03-raspi.img.xz
 param(
   [int]$DiskNumber = -1,
   [string]$Image = ""
@@ -49,5 +49,5 @@ if (-not $imager) {
 if ($LASTEXITCODE -ne 0) { throw "rpi-imager falhou ($LASTEXITCODE)" }
 
 Write-Host "Cartao/SSD pronto (Pi 3 / 4 / 5). Ubuntu Server 24.04 + Ham Cockpit ja sobem no boot."
-Write-Host "Sem Ethernet: SSID Ham-Cockpit-XXXX  senha hamcockpit  http://192.168.4.1/console  admin/1234"
+Write-Host "SSID Ham-Cockpit-XXXX (2,4 GHz)  senha hamcockpit  http://192.168.4.1/console  admin/1234  (AP sobe com ou sem cabo)"
 Write-Host "SSH: hamcockpit / 1234"

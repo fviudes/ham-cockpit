@@ -4,7 +4,7 @@ A distribuição gravável é um disco Ubuntu Server 24.04 LTS ARM64 (`+raspi`) 
 
 ## Por que o bake em QEMU no x64 foi abandonado
 
-Assar a imagem num runner `ubuntu-latest` (x86) com `qemu-user-static` emula cada `apt-get` do ARM. Isso:
+Gerar a imagem num runner `ubuntu-latest` (x86) com `qemu-user-static` emula cada `apt-get` do ARM. Isso:
 
 - leva 1–2 horas
 - trava no esbuild/pnpm

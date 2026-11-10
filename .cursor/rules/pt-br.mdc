@@ -20,12 +20,19 @@ alwaysApply: true
 | utilizador | usuário |
 | guardar (salvar) | salvar |
 | descarregar / descarrega | baixar / baixa |
-| telemóvel | celular |
+| telemóvel / telefone (móvel) | celular |
+| portátil (laptop) | notebook |
+| Gama (faixa de medição) | Faixa |
+| a + infinitivo (A atualizar, a medir) | gerúndio (Atualizando, medindo) |
+| sistema operativo | sistema operacional |
 | aplicação corre / só corre | aplicativo roda / só roda |
 | meio de ligação (rede) | tipo de conexão |
 | é o omissão | é o padrão |
 | palavra-passe | senha |
 | contacto | contato |
 | excepção / acção / direcção | exceção / ação / direção |
+| está assando / assar a imagem | está gerando / montar a imagem |
+| vectorial / arquitectura | vetorial / arquitetura |
+| browser (texto de UI em pt) | navegador |
 
-Manter termos técnicos do projeto (SSID, bake, INI, console, Pi, UART) quando já forem o vocabulário da estação.
+Manter termos técnicos do projeto (SSID, bake, INI, console, Pi, UART) quando já forem o vocabulário da estação. Em prosa pt-BR, preferir “gerar/montar a imagem” ou “o bake”; evitar “assar/assando”.

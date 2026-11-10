@@ -31,7 +31,7 @@ function bindSocket(ws: WebSocket) {
 
   send(
     process.platform === "win32"
-      ? "Ham Cockpit · PowerShell (neste PC Windows). No Raspberry Pi isto é root.\r\n"
+      ? "Ham Cockpit · PowerShell (neste PC Windows). No Raspberry Pi isso é root.\r\n"
       : "Ham Cockpit · shell root\r\n",
   );
 
