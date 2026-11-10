@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.03** (`version.json`).
+Versão atual neste canal: **0.1.04** (`version.json`).
 
 ## Como o console usa esta pasta
 
@@ -12,10 +12,10 @@ Versão atual neste canal: **0.1.03** (`version.json`).
 
 ```json
 {
-  "version": "0.1.03",
+  "version": "0.1.04",
   "channel": "main",
-  "file": "ham-cockpit-0.1.03.tgz",
-  "notes": "Ham Cockpit v0.1.03 — AP Wi-Fi: nmcli hotspot (propaga SSID no Ubuntu 24.04) + fallback hostapd; sobe com ou sem cabo; catálogo de equipamentos"
+  "file": "ham-cockpit-0.1.04.tgz",
+  "notes": "Ham Cockpit v0.1.04 — corrige EACCES ao gravar rádios: dados em /opt/ham-cockpit/radios (+ equipment) com pastas criadas no install/OTA"
 }
 ```
 
