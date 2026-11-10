@@ -74,6 +74,9 @@ elif [[ -f "$ROOT/package.json" ]] && command -v node >/dev/null; then
   cp -a "$ROOT/dist/." /opt/ham-cockpit/
 fi
 cp -a "$HERE/runtime-package.json" /opt/ham-cockpit/package.json
+if [[ -f "$HERE/ota-hooks.sh" ]]; then
+  install -m 0755 "$HERE/ota-hooks.sh" /opt/ham-cockpit/ota-hooks.sh
+fi
 if [[ -f "$ROOT/VERSION" ]]; then
   install -m 0644 "$ROOT/VERSION" /opt/ham-cockpit/VERSION
 fi

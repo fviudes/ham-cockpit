@@ -92,6 +92,8 @@ jspm_packages/
 
 # Output of 'npm pack'
 *.tgz
+# Canal OTA (Admin → Atualização) — publicar o tarball em update/
+!update/*.tgz
 
 # Yarn Integrity file
 .yarn-integrity

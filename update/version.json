@@ -1,6 +1,6 @@
 {
   "version": "0.1.03",
   "channel": "main",
-  "file": "",
-  "notes": "Ham Cockpit v0.1.03 — AP Wi-Fi: nmcli hotspot (propaga SSID no Ubuntu 24.04) + fallback hostapd; sobe com ou sem cabo"
+  "file": "ham-cockpit-0.1.03.tgz",
+  "notes": "Ham Cockpit v0.1.03 — AP Wi-Fi: nmcli hotspot (propaga SSID no Ubuntu 24.04) + fallback hostapd; sobe com ou sem cabo; catálogo de equipamentos"
 }

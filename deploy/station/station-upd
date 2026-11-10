@@ -69,12 +69,12 @@ app_ver() {
   if [[ -f "$APP_HOME/VERSION" ]]; then
     tr -d '[:space:]' <"$APP_HOME/VERSION"
   else
-    echo "0.1.02"
+    echo "0.1.03"
   fi
 }
 
 github_app_meta() {
-  curl -fsSL -A "Ham-Cockpit/0.1.02" "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/version.json" || true
+  curl -fsSL -A "Ham-Cockpit/0.1.03" "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/version.json" || true
 }
 
 check_app() {
@@ -83,8 +83,10 @@ check_app() {
   emit_item app "$cur" "$cur" "false" "github.com/fviudes/ham-cockpit/update"
 }
 
+# Copia o console (dist) + bin/ sem apagar configs da estação
+# (layouts, net, services, equipment, radios, ldg, lp100a, mmdvm…).
 apply_app() {
-  local meta ver file tmp src
+  local meta ver file tmp src unit
   meta="$(github_app_meta)"
   if [[ -z "${meta:-}" ]]; then
     echo "update/version.json ausente em github.com/fviudes/ham-cockpit" >&2
@@ -96,31 +98,69 @@ apply_app() {
   # shellcheck disable=SC2064
   trap "rm -rf '$tmp'" RETURN
   if [[ -n "$file" ]]; then
-    curl -fsSL -A "Ham-Cockpit/0.1.02" "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/${file}" -o "$tmp/pkg.tgz"
+    curl -fsSL -A "Ham-Cockpit/0.1.03" "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/${file}" -o "$tmp/pkg.tgz"
     tar -xzf "$tmp/pkg.tgz" -C "$tmp"
   else
-    curl -fsSL -A "Ham-Cockpit/0.1.02" -L "https://github.com/fviudes/ham-cockpit/archive/refs/heads/main.tar.gz" -o "$tmp/main.tgz"
-    tar -xzf "$tmp/main.tgz" -C "$tmp"
+    echo "canal de update sem arquivo .tgz (version.json.file vazio)" >&2
+    return 1
   fi
   src="$(find "$tmp" -maxdepth 4 -type d -name public -printf '%h\n' 2>/dev/null | head -n 1 || true)"
   if [[ -z "${src:-}" ]]; then
     src="$(find "$tmp" -maxdepth 4 -name index.js | head -n 1 || true)"
     [[ -n "${src:-}" ]] && src="$(dirname "$src")"
   fi
-  if [[ -z "${src:-}" || ! -e "$src" ]]; then
-    echo "pacote de update sem dist/" >&2
+  if [[ -z "${src:-}" || ! -f "$src/index.js" || ! -d "$src/public" ]]; then
+    echo "pacote de update sem dist/ (index.js + public/)" >&2
     return 1
   fi
-  mkdir -p "$APP_HOME"
-  cp -a "$src/." "$APP_HOME/"
+  mkdir -p "$APP_HOME" "$APP_HOME/bin"
+  # Só sobrescreve artefatos do pacote; pastas de config existentes permanecem.
+  cp -a "$src/index.js" "$APP_HOME/index.js"
+  rm -rf "$APP_HOME/public"
+  cp -a "$src/public" "$APP_HOME/public"
+  if [[ -f "$src/package.json" ]]; then
+    cp -a "$src/package.json" "$APP_HOME/package.json"
+  fi
+  if [[ -f "$src/ota-hooks.sh" ]]; then
+    cp -a "$src/ota-hooks.sh" "$APP_HOME/ota-hooks.sh"
+    chmod 0755 "$APP_HOME/ota-hooks.sh"
+  fi
+  if [[ -f "$src/versions.json" ]]; then
+    cp -a "$src/versions.json" "$APP_HOME/versions.json"
+  fi
+  if [[ -d "$src/bin" ]]; then
+    cp -a "$src/bin/." "$APP_HOME/bin/"
+    find "$APP_HOME/bin" -maxdepth 1 -type f -exec chmod 0755 {} +
+  fi
+  if [[ -d "$src/systemd" ]]; then
+    mkdir -p "$APP_HOME/systemd"
+    cp -a "$src/systemd/." "$APP_HOME/systemd/"
+    for unit in "$src"/systemd/*.service "$src"/systemd/*.target; do
+      [[ -f "$unit" ]] || continue
+      install -m 0644 "$unit" "/etc/systemd/system/$(basename "$unit")"
+    done
+    systemctl daemon-reload 2>/dev/null || true
+  fi
   if [[ -n "${ver:-}" ]]; then
     printf '%s\n' "$ver" >"$APP_HOME/VERSION"
+  elif [[ -f "$src/VERSION" ]]; then
+    cp -a "$src/VERSION" "$APP_HOME/VERSION"
   fi
   if [[ -f "$APP_HOME/package.json" ]]; then
     (cd "$APP_HOME" && npm install --omit=dev) || true
   fi
+  # Garante units/bin mesmo se o postinstall do npm não rodou.
+  if [[ -x "$APP_HOME/ota-hooks.sh" ]]; then
+    bash "$APP_HOME/ota-hooks.sh" || true
+  fi
   chown -R hamcockpit:hamcockpit "$APP_HOME" 2>/dev/null || chown -R catbridge:catbridge "$APP_HOME" 2>/dev/null || true
+  # Helpers root ficam root:root (sudoers -n).
+  if [[ -d "$APP_HOME/bin" ]]; then
+    chown root:root "$APP_HOME"/bin/* 2>/dev/null || true
+    chmod 0755 "$APP_HOME"/bin/* 2>/dev/null || true
+  fi
   systemctl restart ham-cockpit.service 2>/dev/null || systemctl restart cat-bridge.service 2>/dev/null || true
+  systemctl try-restart ham-cockpit-ap.service 2>/dev/null || true
 }
 
 compose_wavelog() {
