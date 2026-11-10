@@ -1,4 +1,4 @@
-﻿# Canal de atualização — Ham Cockpit
+# Canal de atualização — Ham Cockpit
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 

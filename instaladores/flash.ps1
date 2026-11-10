@@ -1,4 +1,4 @@
-﻿#Requires -RunAsAdministrator
+#Requires -RunAsAdministrator
 # Grava Ham Cockpit OS (Ubuntu Server 24.04 + estação) no cartão / SSD.
 # Uso:  .\flash.ps1 -DiskNumber 2
 #       .\flash.ps1 -DiskNumber 2 -Image .\ham-cockpit-0.1.03-raspi.img.xz

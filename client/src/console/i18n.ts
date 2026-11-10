@@ -1,4 +1,4 @@
-﻿export type Lang = "pt" | "en";
+export type Lang = "pt" | "en";
 
 export const DEFAULT_USER = "admin";
 export const DEFAULT_PASS = "1234";

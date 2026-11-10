@@ -1,4 +1,4 @@
-﻿import type { Pair } from "./site-lang";
+import type { Pair } from "./site-lang";
 
 export const NAV = {
   station: { pt: "ESTAÇÃO", en: "STATION" } satisfies Pair,

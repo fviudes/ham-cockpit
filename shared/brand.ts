@@ -1,4 +1,4 @@
-﻿export const APP_NAME = "Ham Cockpit";
+export const APP_NAME = "Ham Cockpit";
 export const APP_SLUG = "ham-cockpit";
 export const APP_USER = "hamcockpit";
 export const APP_VERSION = "0.1.03";

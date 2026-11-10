@@ -1,4 +1,4 @@
-﻿import type { Lang } from "./i18n";
+import type { Lang } from "./i18n";
 import { useConsole } from "./state";
 import { GhostBtn, PageHead, Panel, PanelTitle } from "./widgets";
 import {

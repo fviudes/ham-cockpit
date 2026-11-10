@@ -1,4 +1,4 @@
-﻿# Arquitetura — Ham Cockpit v0.1.03
+# Arquitetura — Ham Cockpit v0.1.03
 
 Visão interna da estação. Operadores usam o [README](../README.md) e o Manual do console.
 

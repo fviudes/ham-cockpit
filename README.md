@@ -1,4 +1,4 @@
-﻿# Ham Cockpit v0.1.03
+# Ham Cockpit v0.1.03
 
 Appliance da estação de rádio amador: um Raspberry Pi com console no navegador. Fala com o rádio (Bluetooth ou CAT/USB via ser2net), wattímetro Lextel, amplificadores, chave de antenas, acoplador LDG e o logbook Wavelog.
 
