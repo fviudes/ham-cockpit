@@ -146,8 +146,9 @@ cleanup
 trap - EXIT
 LOOP=""
 
-echo "comprimindo $IMG_XZ ..."
-xz -T0 -4 -v -k -f "$IMG_RAW"
+echo "comprimindo $IMG_XZ (xz -9 — Release GitHub limita asset a 2 GiB) ..."
+# -4 da 0.1.03 passou de 2 GiB; -9 mantém o .img.xz publicável na Release.
+xz -T0 -9 -v -k -f "$IMG_RAW"
 mv -f "${IMG_RAW}.xz" "$IMG_XZ"
 rm -f "$IMG_RAW"
 sha256sum "$IMG_XZ" | tee "$IMG_XZ.sha256"

@@ -86,4 +86,11 @@ jobs:
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
             --title "Ham Cockpit ${TAG}" \
             --notes "Imagem Ubuntu Server 24.04 LTS ARM64 (+raspi) com Ham Cockpit ${TAG} para Raspberry Pi 3 / 4 / 5 (Docker, ser2net, Hamlib, console, AP Wi-Fi). Wavelog baixa as imagens Docker no primeiro boot com Ethernet. Grave no cartão/SSD com o Raspberry Pi Imager (Use custom)."
+          ls -lh "$IMG" "$SUM"
+          # GitHub Release asset ≤ 2 GiB. Se passar, o artifact Actions ainda fica disponível.
+          BYTES=$(stat -c%s "$IMG")
+          if [[ "$BYTES" -ge 2147483648 ]]; then
+            echo "AVISO: $IMG tem $BYTES bytes (≥ 2 GiB) — upload na Release bloqueado; use o artifact Ham-Cockpit-OS." >&2
+            exit 1
+          fi
           gh release upload "$TAG" "$IMG" "$SUM" --clobber

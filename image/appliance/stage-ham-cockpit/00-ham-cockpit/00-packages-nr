@@ -3,7 +3,6 @@ iw
 rfkill
 wireless-regdb
 wpasupplicant
-linux-firmware
 hostapd
 iptables
 docker.io
