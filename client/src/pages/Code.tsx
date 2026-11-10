@@ -16,8 +16,8 @@ const fadeUp = {
 const codeSections = [
   {
     id: "includes",
-    title: "Includes e Definições",
-    description: "Bibliotecas necessárias, definições de pinos das 4 portas CI-V, LED status.",
+    title: "Includes e configurações",
+    description: "Bibliotecas necessárias, definição dos pinos das 4 portas CI-V, LED de status.",
     lines: `#include <Arduino.h>
 #include <WiFi.h>
 #include <WebServer.h>

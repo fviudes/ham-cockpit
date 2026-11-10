@@ -1,5 +1,5 @@
 ﻿# Baixa a imagem Ham Cockpit OS (já assada no GitHub Actions) para image/out.
-# O Git ignora este ficheiro (~1,8 GB). Não faz commit.
+# O Git ignora este arquivo (~1,8 GB). Não faz commit.
 # Uso:  powershell -File image/fetch-image.ps1
 param(
   [string]$Repo = "fviudes/ham-cockpit",

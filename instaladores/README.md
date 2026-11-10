@@ -2,11 +2,11 @@
 
 Imagem **Ubuntu Server 24.04 LTS ARM64** para gravar no microSD ou SSD do Raspberry Pi 3 / 4. Já vem com Docker, Wavelog, WaveLogGate, ser2net, Hamlib, nginx e o console Ham Cockpit.
 
-O ficheiro `.img.xz` tem ~1–2 GB e **não cabe no Git**. Está na [Release v0.1.01](https://github.com/fviudes/ham-cockpit/releases/tag/v0.1.01).
+O arquivo `.img.xz` tem ~1–2 GB e **não cabe no Git**. Está na [Release v0.1.02](https://github.com/fviudes/ham-cockpit/releases/tag/v0.1.02).
 
 | Artefato | Versão | Uso |
 | --- | --- | --- |
-| `ham-cockpit-0.1.01-raspi.img.xz` | v0.1.01 | Grave com o Raspberry Pi Imager (Use custom) |
+| `ham-cockpit-0.1.02-raspi.img.xz` | v0.1.02 | Grave com o Raspberry Pi Imager (Use custom) |
 
 ```bash
 gh release download --repo fviudes/ham-cockpit --pattern "ham-cockpit-*-raspi.img.xz" --dir instaladores

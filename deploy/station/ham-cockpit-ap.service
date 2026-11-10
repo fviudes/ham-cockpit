@@ -1,12 +1,18 @@
 [Unit]
-Description=Ham Cockpit first-boot WiFi AP (192.168.4.1)
-After=NetworkManager.service
+Description=Ham Cockpit WiFi AP (192.168.4.1) quando não há cabo
+After=NetworkManager.service network.target
 Wants=NetworkManager.service
+# Não depende de network-online: no campo sem cabo o online pode nunca chegar.
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/bin/bash /opt/ham-cockpit/bin/ham-cockpit-ap.sh
+# Se o wlan0 atrasar no boot, tenta de novo.
+Restart=on-failure
+RestartSec=8
+StartLimitIntervalSec=120
+StartLimitBurst=8
 
 [Install]
 WantedBy=ham-cockpit.target

@@ -1,6 +1,18 @@
+# Cloud-init / netplan — NetworkManager cuida de cabo e Wi‑Fi (AP + STA).
+# No Ubuntu 24.04 do Pi 4 a interface costuma ser end0 (não eth0).
 network:
   version: 2
+  renderer: NetworkManager
   ethernets:
     eth0:
+      dhcp4: true
+      optional: true
+    end0:
+      dhcp4: true
+      optional: true
+    eno1:
+      dhcp4: true
+      optional: true
+    enp1s0:
       dhcp4: true
       optional: true

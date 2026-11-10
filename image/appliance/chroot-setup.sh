@@ -113,12 +113,24 @@ fi
 
 systemctl enable ssh.service 2>/dev/null || systemctl enable sshd.service || true
 systemctl enable docker.service nginx.service || true
+systemctl enable NetworkManager.service || true
+systemctl enable avahi-daemon.service || true
 systemctl enable ham-cockpit.target ham-cockpit.service ham-cockpit-ap.service first-boot.service || true
 systemctl enable ser2net.service rigctld@ic705.service wavelog.service waveloggate.service || true
 systemctl enable ham-cockpit-vfo.service ham-cockpit-vfo-idle.service || true
 systemctl set-default multi-user.target
 systemctl disable snapd.service snapd.socket 2>/dev/null || true
-mkdir -p /etc/cloud/cloud.cfg.d
+# Preferir NetworkManager (AP + STA); evita conflito com systemd-networkd.
+systemctl disable systemd-networkd.service systemd-networkd.socket 2>/dev/null || true
+systemctl mask systemd-networkd.service 2>/dev/null || true
+mkdir -p /etc/cloud/cloud.cfg.d /etc/netplan
+# Garante renderer NM mesmo se o cloud-init da FAT atrasar.
+cat >/etc/netplan/99-ham-cockpit-nm.yaml <<'EOF'
+network:
+  version: 2
+  renderer: NetworkManager
+EOF
+chmod 600 /etc/netplan/99-ham-cockpit-nm.yaml
 cat >/etc/cloud/cloud.cfg.d/99-ham-cockpit.cfg <<'EOF'
 ssh_pwauth: true
 disable_root: true

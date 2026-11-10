@@ -143,7 +143,7 @@ function helperExists() {
 
 async function runHelper(args: string[], timeout = 30_000): Promise<string> {
   if (!helperExists()) {
-    const err = new Error("BlueZ helper ausente — o SPP Classic corre no Raspberry Pi");
+    const err = new Error("BlueZ helper ausente — o SPP Classic roda no Raspberry Pi");
     (err as Error & { code?: string }).code = "NO_BLUEZ";
     throw err;
   }

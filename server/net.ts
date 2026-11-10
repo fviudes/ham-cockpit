@@ -535,8 +535,8 @@ export async function netSetLink(link: NetLink): Promise<NetSnapshot> {
     } else {
       lastNote =
         saved.link === "ethernet"
-          ? "Cabo selecionado. No Raspberry Pi a STA Wi‑Fi desliga e o Ethernet sobe. Neste Windows só guarda a preferência."
-          : "Wi‑Fi selecionado. No Raspberry Pi o cabo deixa de ser o uplink. Neste Windows só guarda a preferência.";
+          ? "Cabo selecionado. No Raspberry Pi a STA Wi‑Fi desliga e o Ethernet sobe. Neste Windows só salva a preferência."
+          : "Wi‑Fi selecionado. No Raspberry Pi o cabo deixa de ser o uplink. Neste Windows só salva a preferência.";
     }
   } catch (err) {
     lastError = err instanceof Error ? err.message : String(err);

@@ -157,19 +157,28 @@ systemctl disable dnsmasq.service 2>/dev/null || true
 systemctl daemon-reload || true
 systemctl unmask ssh.service 2>/dev/null || true
 systemctl enable ssh.service 2>/dev/null || systemctl enable sshd.service 2>/dev/null || true
-systemctl enable docker.service nginx.service || true
+systemctl enable docker.service nginx.service NetworkManager.service avahi-daemon.service || true
 systemctl enable ham-cockpit.target ham-cockpit.service ham-cockpit-ap.service first-boot.service || true
 systemctl enable ser2net.service rigctld@ic705.service wavelog.service waveloggate.service || true
 systemctl enable nextiondriver.service mmdvmhost.service dmrgateway.service ysfgateway.service ircddbgateway.service 2>/dev/null || true
 systemctl enable seatd.service ham-cockpit-vfo.service ham-cockpit-vfo-idle.service || true
 systemctl enable waveloggate.service || true
+mkdir -p /etc/netplan
+if [[ ! -f /etc/netplan/99-ham-cockpit-nm.yaml ]]; then
+  cat >/etc/netplan/99-ham-cockpit-nm.yaml <<'EOF'
+network:
+  version: 2
+  renderer: NetworkManager
+EOF
+  chmod 600 /etc/netplan/99-ham-cockpit-nm.yaml
+fi
 if [[ "$CHROOT" != "1" ]]; then
   systemctl enable --now ham-cockpit.target || systemctl start ham-cockpit.target || true
   systemctl restart waveloggate.service || systemctl start waveloggate.service || true
 fi
 
 echo "estação habilitada no boot · ham-cockpit.target"
-echo "console  http://192.168.4.1  (AP)  ou  http://$(hostname -I | awk '{print $1}')"
+echo "console  http://192.168.4.1  (AP sem cabo)  ou  http://ham-cockpit.local  /  http://$(hostname -I | awk '{print $1}')"
 echo "wavelog  http://IP:8086/install  (DB host: wavelog-db)"
-echo "ssh      utilizadores sudo (hamcockpit / admin) · porta 22 · sem root por senha"
+echo "ssh      usuários sudo (hamcockpit / admin) · porta 22 · sem root por senha"
 echo "hdmi     VFO em tela cheia · CTRL+X volta ao console · 10 min no CLI reabre o VFO"

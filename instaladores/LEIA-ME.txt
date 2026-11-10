@@ -1,6 +1,6 @@
-Ham Cockpit v0.1.01 — imagem Ubuntu Server 24.04 LTS para Raspberry Pi 3 / 4
+Ham Cockpit v0.1.02 — imagem Ubuntu Server 24.04 LTS para Raspberry Pi 3 / 4
 
-Grave o arquivo ham-cockpit-0.1.01-raspi.img.xz no cartão microSD ou SSD USB
+Grave o arquivo ham-cockpit-0.1.02-raspi.img.xz no cartão microSD ou SSD USB
 com o Raspberry Pi Imager (Use custom). Não instale o Ubuntu à parte: a
 imagem já contém o sistema e a estação.
 
@@ -23,8 +23,10 @@ Linux:
   sudo bash flash.sh /dev/sdX
 
 Primeiro acesso
-  Wi-Fi AP:  Ham-Cockpit-XXXX   senha hamcockpit
-  Console:   http://192.168.4.1/console    admin / 1234
+  Sem cabo:  Wi-Fi AP Ham-Cockpit-XXXX (2,4 GHz) senha hamcockpit
+             http://192.168.4.1/console    admin / 1234
+  Com cabo:  AP NAO sobe — use http://ham-cockpit.local/console
+             ou o IP do Pi no roteador (DHCP)
   Wavelog:   http://IP:8086/install        banco wavelog-db
   SSH:       hamcockpit / 1234  ou  admin / 1234
 

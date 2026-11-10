@@ -1,4 +1,4 @@
-# Ham Cockpit v0.1.01
+# Ham Cockpit v0.1.02
 
 Appliance da estação de rádio amador: um Raspberry Pi com console no navegador. Fala com o rádio (Bluetooth ou CAT/USB via ser2net), wattímetro Lextel, amplificadores, chave de antenas, acoplador LDG e o logbook Wavelog.
 
@@ -39,9 +39,9 @@ Não grave o Ubuntu vanilla e não rode `install-station.sh` nesta imagem — o 
 
 ### 1. Baixe a imagem
 
-Arquivo: **`ham-cockpit-0.1.01-raspi.img.xz`** (Ubuntu Server 24.04 LTS + Ham Cockpit).
+Arquivo: **`ham-cockpit-0.1.02-raspi.img.xz`** (Ubuntu Server 24.04 LTS + Ham Cockpit).
 
-Na [Release v0.1.01](https://github.com/fviudes/ham-cockpit/releases/tag/v0.1.01) ou:
+Na [Release v0.1.02](https://github.com/fviudes/ham-cockpit/releases/tag/v0.1.02) ou:
 
 ```bash
 gh release download --repo fviudes/ham-cockpit --pattern "ham-cockpit-*-raspi.img.xz" --dir instaladores
@@ -51,7 +51,7 @@ Scripts de gravação: [`instaladores/flash.ps1`](instaladores/flash.ps1) (Windo
 
 ### 2. Grave no cartão ou SSD
 
-Abra o Raspberry Pi Imager → **Use custom** → escolha `ham-cockpit-0.1.01-raspi.img.xz` → selecione o microSD ou o SSD USB → grave.
+Abra o Raspberry Pi Imager → **Use custom** → escolha `ham-cockpit-0.1.02-raspi.img.xz` → selecione o microSD ou o SSD USB → grave.
 
 Windows (PowerShell **como Administrador**), com o Imager instalado:
 
@@ -66,13 +66,19 @@ Linux:
 sudo bash instaladores/flash.sh /dev/sdX
 ```
 
-Ligue o Pi **com Ethernet**. No primeiro boot o Ubuntu expande o disco, sobe o console e o Wavelog baixa as imagens Docker (MariaDB + PHP). Sem cabo, o AP `Ham-Cockpit-XXXX` sobe na mesma; o logbook em :8086 fica para quando houver rede.
+No primeiro boot o Ubuntu expande o disco (pode levar alguns minutos) e sobe o console.
+
+- **Sem cabo de rede:** o AP `Ham-Cockpit-XXXX` sobe em 2,4 GHz (senha `hamcockpit`) → http://192.168.4.1/console  
+- **Com cabo Ethernet:** o AP **não sobe** (de propósito). O Pi pega IP por DHCP na LAN → http://ham-cockpit.local/console ou o IP no roteador.  
+- Não procure o AP Wi‑Fi com o cabo plugado — ou tira o cabo, ou usa a LAN.
 
 ### 3. Primeiro acesso
 
-1. Sem Ethernet: no telefone ou notebook, entre no Wi‑Fi **Ham-Cockpit-XXXX** (os quatro caracteres mudam por aparelho). Senha: **hamcockpit**.
-2. Abra **http://192.168.4.1/console** (ou `http://IP-do-Pi/console` / `http://ham-cockpit.local/console` na LAN).
+1. Sem Ethernet: no telefone ou notebook, entre no Wi‑Fi **Ham-Cockpit-XXXX** (os quatro caracteres mudam por aparelho). Senha: **hamcockpit**. Rede **2,4 GHz** (celulares em “só 5 GHz” não veem).
+2. Com Ethernet: abra **http://ham-cockpit.local/console** ou descubra o IP no roteador (cliente `ham-cockpit`) / `arp -a` no PC.
 3. Login: **admin** / **1234**. Troque a senha em Admin.
+
+Se nada responder: aguarde 3–5 min no primeiro boot, confira HDMI (login no console) e SSH `hamcockpit` / `1234`.
 
 Logbook: **http://IP:8086/install** — no instalador do Wavelog o host do banco é `wavelog-db`.
 
@@ -140,4 +146,4 @@ Quando `version.json` na `main` tiver um número maior que o instalado, o botão
 
 ---
 
-Ham Cockpit v0.1.01 · Raspberry Pi 3 / 4 · Ubuntu Server 24.04 LTS
+Ham Cockpit v0.1.02 · Raspberry Pi 3 / 4 · Ubuntu Server 24.04 LTS

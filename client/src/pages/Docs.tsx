@@ -77,8 +77,8 @@ export default function Docs() {
                 en: "Ham Cockpit Raspberry Pi with a Bluetooth dongle, USB-serial adapters, and the OS image card",
               })}
               caption={t({
-                pt: "Produto: Raspberry Pi 3/4, Ubuntu Server 24.04 ARM64, cartão ham-cockpit-0.1.01-raspi.img.xz.",
-                en: "Product: Raspberry Pi 3/4, Ubuntu Server 24.04 ARM64, ham-cockpit-0.1.01-raspi.img.xz card.",
+                pt: "Produto: Raspberry Pi 3/4, Ubuntu Server 24.04 ARM64, cartão ham-cockpit-0.1.02-raspi.img.xz.",
+                en: "Product: Raspberry Pi 3/4, Ubuntu Server 24.04 ARM64, ham-cockpit-0.1.02-raspi.img.xz card.",
               })}
             />
           </div>
@@ -564,7 +564,7 @@ export default function Docs() {
                   en="Builds ADIF (call, grid, mode, freq, RST, power, comment, operator, my call/grid, contest STX/SRX) and POSTs api/qso with key + station_profile_id."
                 />
                 <Li
-                  pt="Se o Wavelog estiver fora, o QSO vai para queue.jsonl e a fila descarrega a cada 20 s."
+                  pt="Se o Wavelog estiver fora, o QSO vai para queue.jsonl e a fila baixa a cada 20 s."
                   en="If Wavelog is down, the QSO goes to queue.jsonl and the queue flushes every 20 s."
                 />
                 <Li

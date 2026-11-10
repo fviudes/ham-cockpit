@@ -1,7 +1,7 @@
 # Ham Cockpit OS — Ubuntu Server 24.04 LTS.
 # Pacotes da estação; sobem via systemd ham-cockpit.target.
 
-# Rede / primeiro acesso AP
+# Rede / primeiro acesso AP + descoberta na LAN
 network-manager
 iw
 rfkill
@@ -9,6 +9,8 @@ wireless-regdb
 wpasupplicant
 dnsmasq
 iptables
+avahi-daemon
+libnss-mdns
 
 # Docker (Wavelog PHP + MariaDB)
 docker.io

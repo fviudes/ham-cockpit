@@ -19,7 +19,7 @@ import { updatesApply, updatesRefresh, updatesStatus } from "./server/updates";
 import { layoutGet, layoutSave } from "./server/layouts";
 import { ldgCmd, ldgConnect, ldgDisconnect, ldgPeek, ldgSave } from "./server/ldg";
 import { backupCreate, backupDelete, backupList, backupRestore } from "./server/backup";
-import { mmdvmControl, mmdvmRemote, mmdvmSave, mmdvmStatus } from "./server/mmdvm";
+// mmdvm/lp100a: import dinâmico nos handlers — evita restart do Vite a cada edição.
 
 // =============================================================================
 // Manus Debug Collector - Vite Plugin
@@ -237,14 +237,19 @@ function vitePluginSerials(): Plugin {
   };
 }
 
-function readBody(req: { on: (ev: string, fn: (c?: Buffer) => void) => void }): Promise<string> {
+function readBody(req: { on: (ev: string, fn: (c?: Buffer) => void) => void }, timeoutMs = 15_000): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
+    const timer = setTimeout(() => reject(new Error("body timeout")), timeoutMs);
+    const done = (fn: () => void) => {
+      clearTimeout(timer);
+      fn();
+    };
     req.on("data", (c) => {
       if (c) chunks.push(c);
     });
-    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
-    req.on("error", reject);
+    req.on("end", () => done(() => resolve(Buffer.concat(chunks).toString("utf8"))));
+    req.on("error", (err) => done(() => reject(err)));
   });
 }
 
@@ -655,10 +660,20 @@ function vitePluginMmdvm(): Plugin {
   return {
     name: "mmdvm-api",
     configureServer(server: ViteDevServer) {
-      server.middlewares.use(async (req, res, next) => {
+      server.middlewares.use((req, res, next) => {
         const url = req.url?.split("?")[0] ?? "";
         if (!url.startsWith("/api/mmdvm")) return next();
-        try {
+        void (async () => {
+          const {
+            mmdvmControl,
+            mmdvmLink,
+            mmdvmModePause,
+            mmdvmModeResumeAll,
+            mmdvmNetworkSet,
+            mmdvmRemote,
+            mmdvmSave,
+            mmdvmStatus,
+          } = await import("./server/mmdvm");
           if (req.method === "GET" && url === "/api/mmdvm") {
             return sendJson(res, 200, await mmdvmStatus());
           }
@@ -683,10 +698,65 @@ function vitePluginMmdvm(): Plugin {
             const result = await mmdvmRemote(String(body.cmd || ""));
             return sendJson(res, result.ok ? 200 : 400, result);
           }
-        } catch (err) {
-          return sendJson(res, 500, { ok: false, error: String(err) });
-        }
-        next();
+          if (req.method === "POST" && url === "/api/mmdvm/modes/resume-all") {
+            return sendJson(res, 200, await mmdvmModeResumeAll());
+          }
+          const modeHit = url.match(/^\/api\/mmdvm\/mode\/([^/]+)\/(pause|resume)$/);
+          if (req.method === "POST" && modeHit) {
+            return sendJson(res, 200, await mmdvmModePause(decodeURIComponent(modeHit[1]!), modeHit[2] === "pause"));
+          }
+          if (req.method === "POST" && url === "/api/mmdvm/network") {
+            const raw = await readBody(req);
+            const body = raw ? (JSON.parse(raw) as { id?: string; section?: string; enabled?: boolean }) : {};
+            return sendJson(res, 200, await mmdvmNetworkSet(body));
+          }
+          if (req.method === "POST" && url === "/api/mmdvm/link") {
+            const raw = await readBody(req);
+            const body = raw ? (JSON.parse(raw) as { mode?: string; target?: string; module?: string }) : {};
+            return sendJson(res, 200, await mmdvmLink(body));
+          }
+          return sendJson(res, 404, { ok: false, error: "not found" });
+        })().catch((err: unknown) => sendJson(res, 500, { ok: false, error: String(err) }));
+      });
+    },
+  };
+}
+
+function vitePluginLp100a(): Plugin {
+  return {
+    name: "lp100a-api",
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use((req, res, next) => {
+        const url = req.url?.split("?")[0] ?? "";
+        if (!url.startsWith("/api/lp100a")) return next();
+        void (async () => {
+          const { lp100aCmd, lp100aConnect, lp100aDisconnect, lp100aPeek, lp100aSave, lp100aStatus } = await import("./server/lp100a");
+          if (req.method === "GET" && url === "/api/lp100a") {
+            try {
+              return sendJson(res, 200, await lp100aPeek());
+            } catch {
+              return sendJson(res, 200, lp100aStatus());
+            }
+          }
+          if (req.method === "PUT" && url === "/api/lp100a") {
+            const raw = await readBody(req);
+            const body = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+            return sendJson(res, 200, await lp100aSave(body));
+          }
+          if (req.method === "POST" && url === "/api/lp100a/connect") {
+            const body = await lp100aConnect();
+            return sendJson(res, body.ok ? 200 : 503, body);
+          }
+          if (req.method === "POST" && url === "/api/lp100a/disconnect") {
+            return sendJson(res, 200, await lp100aDisconnect());
+          }
+          if (req.method === "POST" && url === "/api/lp100a/cmd") {
+            const raw = await readBody(req);
+            const body = raw ? (JSON.parse(raw) as { cmd?: string }) : {};
+            return sendJson(res, 200, await lp100aCmd(String(body.cmd || "")));
+          }
+          return sendJson(res, 404, { ok: false, error: "not found" });
+        })().catch((err: unknown) => sendJson(res, 500, { ok: false, error: String(err) }));
       });
     },
   };
@@ -744,6 +814,7 @@ export default defineConfig(({ command }) => ({
           vitePluginUpdates(),
           vitePluginWavelog(),
           vitePluginMmdvm(),
+          vitePluginLp100a(),
           vitePluginBackup(),
           vitePluginUsers(),
           vitePluginTerm(),
@@ -764,7 +835,7 @@ export default defineConfig(({ command }) => ({
   },
   server: {
     port: 3000,
-    strictPort: false, // Will find next available port if 3000 is busy
+    strictPort: true,
     host: true,
     allowedHosts: [
       ".manuspre.computer",

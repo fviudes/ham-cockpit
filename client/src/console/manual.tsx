@@ -83,8 +83,8 @@ export function ManualPage() {
             src={PRODUCT.hero}
             alt="Raspberry Pi Ham Cockpit, dongle Bluetooth e cartão da imagem OS"
             caption={t({
-              pt: "O produto: Pi 3/4, Ubuntu 24.04, imagem ham-cockpit-0.1.01-raspi.img.xz em image/out.",
-              en: "The product: Pi 3/4, Ubuntu 24.04, ham-cockpit-0.1.01-raspi.img.xz in image/out.",
+              pt: "O produto: Pi 3/4, Ubuntu 24.04, imagem ham-cockpit-0.1.02-raspi.img.xz em image/out.",
+              en: "The product: Pi 3/4, Ubuntu 24.04, ham-cockpit-0.1.02-raspi.img.xz in image/out.",
             })}
           />
           <P
@@ -302,7 +302,7 @@ export function ManualPage() {
               { pt: "Botões de banda (160 m … 70 cm): QSY para o centro da faixa.", en: "Band buttons (160 m … 70 cm): QSY to the band center." },
               { pt: "USB / LSB / CW / AM / FM / RTTY: modo. PTT ON / OFF: transmite (cuidado com a antena).", en: "USB / LSB / CW / AM / FM / RTTY: mode. PTT ON / OFF: transmits (watch the antenna)." },
               { pt: "RF gain e AF gain: deslizantes. O selo BLE CAT verde confirma que o Painel está falando com o rádio.", en: "RF gain and AF gain sliders. The green BLE CAT badge confirms the Panel is talking to the radio." },
-              { pt: "+ dispositivo abre a lista do que ainda não está no painel. O X no canto do card tira o dispositivo. Salvar o layout guarda a página neste usuário.", en: "+ device lists what is not on the panel yet. The X on a card removes it. Save layout keeps the page for this user." },
+              { pt: "+ dispositivo abre a lista do que ainda não está no painel. O X no canto do card tira o dispositivo. Salvar o layout salva a página neste usuário.", en: "+ device lists what is not on the panel yet. The X on a card removes it. Save layout keeps the page for this user." },
             ]}
           />
           <GoTab page="radio" label={t({ pt: "Abrir o Painel", en: "Open the Panel" })} />
@@ -597,7 +597,7 @@ export function ManualPage() {
 
         <Section id="wifi" title={t(TOC[20]!.title)}>
           <P
-            pt="Aba WiFi: (1) nome na rede, que vira nome.local na LAN; (2) meio de ligação — cabo Ethernet ou Wi‑Fi da casa; (3) Procurar redes e Conectar com a senha; (4) DHCP ou IP fixo (IP, máscara, gateway, DNS primário e secundário); (5) Access Point Ham Cockpit em 192.168.4.1 para o campo. Redes gravadas voltam sozinhas no boot do Pi."
+            pt="Aba WiFi: (1) nome na rede, que vira nome.local na LAN; (2) tipo de conexão — cabo Ethernet ou Wi‑Fi da casa; (3) Procurar redes e Conectar com a senha; (4) DHCP ou IP fixo (IP, máscara, gateway, DNS primário e secundário); (5) Access Point Ham Cockpit em 192.168.4.1 para o campo. Redes gravadas voltam sozinhas no boot do Pi."
             en="WiFi tab: (1) device name, which becomes name.local on the LAN; (2) uplink — Ethernet cable or house Wi‑Fi; (3) Scan networks and Connect with the password; (4) DHCP or static IP (address, mask, gateway, primary and secondary DNS); (5) Ham Cockpit AP at 192.168.4.1 for the field. Saved networks rejoin on Pi boot."
           />
           <GoTab page="wifi" label={t({ pt: "Abrir WiFi", en: "Open WiFi" })} />

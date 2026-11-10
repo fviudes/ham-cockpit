@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.01** (`version.json`).
+Versão atual neste canal: **0.1.02** (`version.json`).
 
 ## Como o console usa esta pasta
 
@@ -12,9 +12,9 @@ Versão atual neste canal: **0.1.01** (`version.json`).
 
 ```json
 {
-  "version": "0.1.01",
+  "version": "0.1.02",
   "channel": "main",
-  "file": "ham-cockpit-0.1.01.tgz",
+  "file": "ham-cockpit-0.1.02.tgz",
   "notes": "…"
 }
 ```

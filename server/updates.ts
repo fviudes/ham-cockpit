@@ -137,7 +137,7 @@ async function githubTag(repo: string): Promise<string> {
     const t = setTimeout(() => ctrl.abort(), 4500);
     const r = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
       signal: ctrl.signal,
-      headers: { Accept: "application/vnd.github+json", "User-Agent": "Ham-Cockpit/0.1.01" },
+      headers: { Accept: "application/vnd.github+json", "User-Agent": "Ham-Cockpit/0.1.02" },
     });
     clearTimeout(t);
     if (!r.ok) return "";
@@ -149,7 +149,7 @@ async function githubTag(repo: string): Promise<string> {
 }
 
 async function githubAppVersion(): Promise<string> {
-  const headers = { Accept: "application/vnd.github+json", "User-Agent": "Ham-Cockpit/0.1.01" };
+  const headers = { Accept: "application/vnd.github+json", "User-Agent": "Ham-Cockpit/0.1.02" };
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 6000);
@@ -302,7 +302,7 @@ export async function updatesApply(id: string): Promise<UpdatesSnapshot> {
     return {
       ...cur,
       ok: false,
-      error: "A aplicação corre no Ubuntu Server da estação. Neste host só a verificação está disponível.",
+      error: "O aplicativo roda no Ubuntu Server da estação. Neste host só a verificação está disponível.",
     };
   }
   applying.add(sid);

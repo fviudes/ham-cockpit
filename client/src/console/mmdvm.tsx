@@ -665,7 +665,7 @@ export function MmdvmPage() {
         </div>
         <p className="mt-2 font-['IBM_Plex_Mono'] text-[11px] text-[#8ea0b3]">
           {st?.ysfIni || "/opt/ham-cockpit/mmdvm/ysfgateway.ini"}
-          {st && !st.ysfBinary ? " · YSFGateway ausente" : ""}
+          {st && !st.ysfBinary ? ` · ${tx(st.appliance ? "mmdvmNoYsf" : "mmdvmNoYsfDev")}` : ""}
         </p>
       </Panel>
 
@@ -734,7 +734,7 @@ export function MmdvmPage() {
         </div>
         <p className="mt-2 font-['IBM_Plex_Mono'] text-[11px] text-[#8ea0b3]">
           {st?.dstarIni || "/opt/ham-cockpit/mmdvm/ircddbgateway.conf"}
-          {st && !st.dstarBinary ? " · ircddbgatewayd ausente" : ""}
+          {st && !st.dstarBinary ? ` · ${tx(st.appliance ? "mmdvmNoDstar" : "mmdvmNoDstarDev")}` : ""}
         </p>
       </Panel>
 

@@ -1,6 +1,6 @@
 {
-  "version": "0.1.01",
+  "version": "0.1.02",
   "channel": "main",
   "file": "",
-  "notes": "Ham Cockpit v0.1.01 — MMDVM D-Star/YSF, display Nextion/OLED, persistência de config"
+  "notes": "Ham Cockpit v0.1.02 — rede first-boot: NetworkManager + end0/eth0, Avahi, AP Wi-Fi mais robusto"
 }

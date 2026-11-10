@@ -1,0 +1,31 @@
+---
+description: Responder e redigir textos do produto em português do Brasil (pt-BR)
+alwaysApply: true
+---
+
+# Português do Brasil
+
+- Respostas ao usuário: sempre **português brasileiro (pt-BR)**, nunca português europeu.
+- Textos de UI, i18n (`pt`), docs, commits, LEIA-ME e mensagens de servidor: **pt-BR**.
+- O seletor de idioma do console já é `PT-BR` / `Português (Brasil)`.
+
+## Trocas típicas (PT → BR)
+
+| Evitar (PT) | Preferir (BR) |
+| --- | --- |
+| ficheiro | arquivo |
+| ecrã | tela |
+| secção | seção |
+| actual / actualizar | atual / atualizar |
+| utilizador | usuário |
+| guardar (salvar) | salvar |
+| descarregar / descarrega | baixar / baixa |
+| telemóvel | celular |
+| aplicação corre / só corre | aplicativo roda / só roda |
+| meio de ligação (rede) | tipo de conexão |
+| é o omissão | é o padrão |
+| palavra-passe | senha |
+| contacto | contato |
+| excepção / acção / direcção | exceção / ação / direção |
+
+Manter termos técnicos do projeto (SSID, bake, INI, console, Pi, UART) quando já forem o vocabulário da estação.
