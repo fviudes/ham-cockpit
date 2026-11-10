@@ -85,8 +85,8 @@ export function ManualPage() {
             src={PRODUCT.hero}
             alt="Raspberry Pi Ham Cockpit, dongle Bluetooth e cartão da imagem OS"
             caption={t({
-              pt: "O produto: Pi 3/4/5, Ubuntu 24.04, imagem ham-cockpit-0.1.03-raspi.img.xz em image/out.",
-              en: "The product: Pi 3/4/5, Ubuntu 24.04, ham-cockpit-0.1.03-raspi.img.xz in image/out.",
+              pt: "O produto: Pi 3/4/5, Ubuntu 24.04, imagem ham-cockpit-0.1.04-raspi.img.xz em image/out.",
+              en: "The product: Pi 3/4/5, Ubuntu 24.04, ham-cockpit-0.1.04-raspi.img.xz in image/out.",
             })}
           />
           <P

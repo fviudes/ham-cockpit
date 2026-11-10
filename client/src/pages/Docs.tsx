@@ -78,8 +78,8 @@ export default function Docs() {
                 en: "Ham Cockpit Raspberry Pi with a Bluetooth dongle, USB-serial adapters, and the OS image card",
               })}
               caption={t({
-                pt: "Produto: Raspberry Pi 3/4/5, Ubuntu Server 24.04 ARM64, cartão ham-cockpit-0.1.03-raspi.img.xz.",
-                en: "Product: Raspberry Pi 3/4/5, Ubuntu Server 24.04 ARM64, ham-cockpit-0.1.03-raspi.img.xz card.",
+                pt: "Produto: Raspberry Pi 3/4/5, Ubuntu Server 24.04 ARM64, cartão ham-cockpit-0.1.04-raspi.img.xz.",
+                en: "Product: Raspberry Pi 3/4/5, Ubuntu Server 24.04 ARM64, ham-cockpit-0.1.04-raspi.img.xz card.",
               })}
             />
           </div>
