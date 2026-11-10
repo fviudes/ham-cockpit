@@ -47,6 +47,6 @@ if (-not $imager) {
 & $imager --cli $Image $diskPath
 if ($LASTEXITCODE -ne 0) { throw "rpi-imager falhou ($LASTEXITCODE)" }
 
-Write-Host "Cartao/SSD pronto (Pi 3 ou Pi 4). Ubuntu Server 24.04 + Ham Cockpit ja sobem no boot."
+Write-Host "Cartao/SSD pronto (Pi 3 / 4 / 5). Ubuntu Server 24.04 + Ham Cockpit ja sobem no boot."
 Write-Host "Sem Ethernet: SSID Ham-Cockpit-XXXX  senha hamcockpit  http://192.168.4.1  admin/1234"
 Write-Host "SSH: hamcockpit / 1234"

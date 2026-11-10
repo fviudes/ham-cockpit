@@ -1,6 +1,6 @@
 # Imagem Ham Cockpit OS
 
-A distribuição gravável é um disco Ubuntu Server 24.04 LTS ARM64 para o Raspberry Pi Imager gravar no microSD ou SSD USB.
+A distribuição gravável é um disco Ubuntu Server 24.04 LTS ARM64 (`+raspi`) para Raspberry Pi **3, 4 e 5**. Grave com o Raspberry Pi Imager no microSD ou SSD USB.
 
 ## Por que o bake em QEMU no x64 foi abandonado
 

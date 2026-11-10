@@ -77,8 +77,8 @@ export default function Docs() {
                 en: "Ham Cockpit Raspberry Pi with a Bluetooth dongle, USB-serial adapters, and the OS image card",
               })}
               caption={t({
-                pt: "Produto: Raspberry Pi 3/4, Ubuntu Server 24.04 ARM64, cartão ham-cockpit-0.1.02-raspi.img.xz.",
-                en: "Product: Raspberry Pi 3/4, Ubuntu Server 24.04 ARM64, ham-cockpit-0.1.02-raspi.img.xz card.",
+                pt: "Produto: Raspberry Pi 3/4/5, Ubuntu Server 24.04 ARM64, cartão ham-cockpit-0.1.02-raspi.img.xz.",
+                en: "Product: Raspberry Pi 3/4/5, Ubuntu Server 24.04 ARM64, ham-cockpit-0.1.02-raspi.img.xz card.",
               })}
             />
           </div>
@@ -215,8 +215,8 @@ export default function Docs() {
                   })}
                 </li>
                 <Li
-                  pt="Grave com Raspberry Pi Imager → Use custom. Pi 3 ou Pi 4."
-                  en="Flash with Raspberry Pi Imager → Use custom. Pi 3 or Pi 4."
+                  pt="Grave com Raspberry Pi Imager → Use custom. Pi 3, 4 ou 5."
+                  en="Flash with Raspberry Pi Imager → Use custom. Pi 3, 4 or 5."
                 />
                 <li>
                   {t({ pt: "No boot,", en: "At boot," })} <code>ham-cockpit.target</code>{" "}

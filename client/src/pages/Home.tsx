@@ -330,7 +330,7 @@ export default function Home() {
       <footer className="border-t border-[rgba(79,195,247,0.1)] py-8">
         <div className="container flex flex-wrap items-center justify-between gap-3 text-xs text-[#5d7184]">
           <span className="font-['IBM_Plex_Mono']">
-            Ham Cockpit v{APP_VERSION} · Raspberry Pi 3 / 4 · Ubuntu Server 24.04 LTS
+            Ham Cockpit v{APP_VERSION} · Raspberry Pi 3 / 4 / 5 · Ubuntu Server 24.04 LTS
           </span>
           <span>{t(HOME.footerRight)}</span>
         </div>

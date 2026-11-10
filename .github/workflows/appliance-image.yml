@@ -85,5 +85,5 @@ jobs:
           SUM="${IMG}.sha256"
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
             --title "Ham Cockpit ${TAG}" \
-            --notes "Imagem Ubuntu Server 24.04 LTS ARM64 com Ham Cockpit ${TAG} (Docker, ser2net, Hamlib, console). Wavelog baixa as imagens Docker no primeiro boot com Ethernet. Grave no cartão/SSD com o Raspberry Pi Imager (Use custom)."
+            --notes "Imagem Ubuntu Server 24.04 LTS ARM64 (+raspi) com Ham Cockpit ${TAG} para Raspberry Pi 3 / 4 / 5 (Docker, ser2net, Hamlib, console, AP Wi-Fi). Wavelog baixa as imagens Docker no primeiro boot com Ethernet. Grave no cartão/SSD com o Raspberry Pi Imager (Use custom)."
           gh release upload "$TAG" "$IMG" "$SUM" --clobber

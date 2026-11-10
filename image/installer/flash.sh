@@ -16,4 +16,4 @@ if [[ $IMG == *.xz ]]; then
 else
   dd if="$IMG" of="$DEV" bs=8M status=progress conv=fsync
 fi
-echo "cartão pronto · Pi 3/4 · SSID Ham-Cockpit-XXXX · http://192.168.4.1"
+echo "cartão pronto · Pi 3/4/5 · SSID Ham-Cockpit-XXXX · http://192.168.4.1"

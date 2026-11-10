@@ -32,7 +32,7 @@ Não grave o Ubuntu vanilla e não rode `install-station.sh` nesta imagem — o 
 
 ### Material
 
-- Raspberry Pi 3 ou Pi 4, fonte oficial
+- Raspberry Pi 3, 4 ou 5 (fonte oficial; no Pi 5 use a fonte de 27 W / 5 A)
 - Cartão microSD (16 GB ou mais) **ou** SSD USB
 - PC Windows ou Linux
 - [Raspberry Pi Imager](https://www.raspberrypi.com/software/)
@@ -146,4 +146,4 @@ Quando `version.json` na `main` tiver um número maior que o instalado, o botão
 
 ---
 
-Ham Cockpit v0.1.02 · Raspberry Pi 3 / 4 · Ubuntu Server 24.04 LTS
+Ham Cockpit v0.1.02 · Raspberry Pi 3 / 4 / 5 · Ubuntu Server 24.04 LTS

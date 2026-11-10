@@ -140,4 +140,4 @@ apt-get clean
 rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 rm -f /usr/sbin/policy-rc.d
 
-echo "Ham Cockpit OS pronto (Ubuntu Server 24.04 LTS · Pi 3/4)"
+echo "Ham Cockpit OS pronto (Ubuntu Server 24.04 LTS · Pi 3/4/5)"

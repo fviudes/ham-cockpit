@@ -12,8 +12,8 @@ export const HOME = {
   h1a: { pt: "O computador do shack.", en: "The shack computer." } satisfies Pair,
   h1b: { pt: " Um Pi, um browser, toda a estação.", en: " One Pi, one browser, the whole station." } satisfies Pair,
     lead: {
-    pt: "Ham Cockpit é a imagem Ubuntu Server que transforma um Raspberry Pi 3/4 no hub da estação: IC-705 por Web Bluetooth GATT, Lextel por SPP Classic, Cat-USB via ser2net, Hamlib NET, Wavelog, MMDVM (WPSD/Pi-Star), SPE, Hamplus, Palstar, LDG, LP-100A e ACOM — sem ESP32 e sem seis programas Windows donos da mesma COM.",
-    en: "Ham Cockpit is the Ubuntu Server image that turns a Raspberry Pi 3/4 into the station hub: IC-705 over Web Bluetooth GATT, Lextel over Classic SPP, Cat-USB through ser2net, Hamlib NET, Wavelog, MMDVM (WPSD/Pi-Star), SPE, Hamplus, Palstar, LDG, LP-100A, and ACOM — no ESP32 and no six Windows programs fighting over the same COM port.",
+    pt: "Ham Cockpit é a imagem Ubuntu Server que transforma um Raspberry Pi 3, 4 ou 5 no hub da estação: IC-705 por Web Bluetooth GATT, Lextel por SPP Classic, Cat-USB via ser2net, Hamlib NET, Wavelog, MMDVM (WPSD/Pi-Star), SPE, Hamplus, Palstar, LDG, LP-100A e ACOM — sem ESP32 e sem seis programas Windows donos da mesma COM.",
+    en: "Ham Cockpit is the Ubuntu Server image that turns a Raspberry Pi 3, 4 or 5 into the station hub: IC-705 over Web Bluetooth GATT, Lextel over Classic SPP, Cat-USB through ser2net, Hamlib NET, Wavelog, MMDVM (WPSD/Pi-Star), SPE, Hamplus, Palstar, LDG, LP-100A, and ACOM — no ESP32 and no six Windows programs fighting over the same COM port.",
   } satisfies Pair,
   openConsole: { pt: "Abrir o console", en: "Open the console" } satisfies Pair,
   fullDocs: { pt: "Documentação completa", en: "Full documentation" } satisfies Pair,

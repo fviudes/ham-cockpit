@@ -83,8 +83,8 @@ export function ManualPage() {
             src={PRODUCT.hero}
             alt="Raspberry Pi Ham Cockpit, dongle Bluetooth e cartão da imagem OS"
             caption={t({
-              pt: "O produto: Pi 3/4, Ubuntu 24.04, imagem ham-cockpit-0.1.02-raspi.img.xz em image/out.",
-              en: "The product: Pi 3/4, Ubuntu 24.04, ham-cockpit-0.1.02-raspi.img.xz in image/out.",
+              pt: "O produto: Pi 3/4/5, Ubuntu 24.04, imagem ham-cockpit-0.1.02-raspi.img.xz em image/out.",
+              en: "The product: Pi 3/4/5, Ubuntu 24.04, ham-cockpit-0.1.02-raspi.img.xz in image/out.",
             })}
           />
           <P
@@ -139,8 +139,8 @@ export function ManualPage() {
           <Steps
             items={[
               {
-                pt: "Grave a imagem Ham Cockpit OS no cartão microSD (script flash.ps1). Encaixe no Pi 3 ou Pi 4 e ligue a fonte oficial.",
-                en: "Flash the Ham Cockpit OS image on the microSD card (flash.ps1). Seat it in a Pi 3 or Pi 4 and use the official PSU.",
+                pt: "Grave a imagem Ham Cockpit OS no cartão microSD (script flash.ps1). Encaixe no Pi 3, 4 ou 5 e ligue a fonte oficial (Pi 5: 27 W / 5 A).",
+                en: "Flash the Ham Cockpit OS image on the microSD card (flash.ps1). Seat it in a Pi 3, 4 or 5 and use the official PSU (Pi 5: 27 W / 5 A).",
               },
               {
                 pt: "No telefone ou notebook, abra a lista de Wi‑Fi. Entre em Ham-Cockpit-XXXX (os quatro caracteres mudam por aparelho). Senha: hamcockpit.",

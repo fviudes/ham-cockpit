@@ -24,5 +24,5 @@ systemctl enable ssh
 systemctl enable ham-cockpit.target
 systemctl enable waveloggate.service
 systemctl set-default multi-user.target
-echo "Ham Cockpit OS pronto (Debian Bookworm Lite · Pi 3/4)"
+echo "Ham Cockpit OS pronto (Debian Bookworm Lite · Pi 3/4/5)"
 EOF

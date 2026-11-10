@@ -1,4 +1,4 @@
-Ham Cockpit OS — Ubuntu Server 24.04 LTS ARM64 (Raspberry Pi 3 / 4)
+Ham Cockpit OS — Ubuntu Server 24.04 LTS ARM64 (Raspberry Pi 3 / 4 / 5)
 
 A imagem ham-cockpit-*-raspi.img.xz já contém o Ubuntu e a estação
 (Docker, Wavelog, WaveLogGate, ser2net, Hamlib, console). Grave com o

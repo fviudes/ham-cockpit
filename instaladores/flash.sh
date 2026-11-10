@@ -19,4 +19,4 @@ if [[ $IMG == *.xz ]]; then
 else
   dd if="$IMG" of="$DEV" bs=8M status=progress conv=fsync
 fi
-echo "pronto · Pi 3/4 · Ubuntu Server 24.04 · SSID Ham-Cockpit-XXXX · http://192.168.4.1/console"
+echo "pronto · Pi 3/4/5 · Ubuntu Server 24.04 · SSID Ham-Cockpit-XXXX · http://192.168.4.1/console"

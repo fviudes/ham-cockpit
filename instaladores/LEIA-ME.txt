@@ -1,4 +1,4 @@
-Ham Cockpit v0.1.02 — imagem Ubuntu Server 24.04 LTS para Raspberry Pi 3 / 4
+Ham Cockpit v0.1.02 — imagem Ubuntu Server 24.04 LTS para Raspberry Pi 3 / 4 / 5
 
 Grave o arquivo ham-cockpit-0.1.02-raspi.img.xz no cartão microSD ou SSD USB
 com o Raspberry Pi Imager (Use custom). Não instale o Ubuntu à parte: a
