@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { currentLayoutUser } from "./panel-layout";
 import { useConsole } from "./state";
-import { GhostBtn, PageHead, Panel, PanelTitle, PrimaryBtn } from "./widgets";
+import { ActionProgress, GhostBtn, PageHead, Panel, PanelTitle, PrimaryBtn } from "./widgets";
 
 type BackupItem = {
   id: string;
@@ -46,6 +46,7 @@ export function BackupPage({ embedded = false }: { embedded?: boolean }) {
   const [folder, setFolder] = useState("/backup");
   const [items, setItems] = useState<BackupItem[]>([]);
   const [busy, setBusy] = useState<"create" | "restore" | "delete" | null>(null);
+  const [progress, setProgress] = useState(0);
   const [target, setTarget] = useState<BackupItem | null>(null);
   const [ack, setAck] = useState(false);
 
@@ -63,8 +64,22 @@ export function BackupPage({ embedded = false }: { embedded?: boolean }) {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (busy !== "create" && busy !== "restore") return;
+    setProgress(8);
+    const timer = window.setInterval(() => {
+      setProgress((p) => {
+        if (p >= 92) return p;
+        const step = Math.max(0.35, (92 - p) * 0.05);
+        return Math.min(92, p + step);
+      });
+    }, 450);
+    return () => window.clearInterval(timer);
+  }, [busy]);
+
   const create = async () => {
     setBusy("create");
+    setProgress(8);
     try {
       const j = await api<{ ok?: boolean; item?: BackupItem; error?: string }>("/api/backup", {
         method: "POST",
@@ -75,13 +90,16 @@ export function BackupPage({ embedded = false }: { embedded?: boolean }) {
         toast.error(j.error || tx("backupFail"));
         return;
       }
+      setProgress(100);
       toast.success(tx("backupOk"));
       pushLog("SYS", `backup ${j.item?.id || ""}`);
+      await new Promise((resolve) => window.setTimeout(resolve, 400));
       await load();
     } catch {
       toast.error(tx("backupFail"));
     } finally {
       setBusy(null);
+      setProgress(0);
     }
   };
 
@@ -111,6 +129,7 @@ export function BackupPage({ embedded = false }: { embedded?: boolean }) {
   const restore = async () => {
     if (!target || !ack) return;
     setBusy("restore");
+    setProgress(8);
     try {
       const j = await api<{ ok?: boolean; error?: string; warnings?: string[] }>(
         `/api/backup/${encodeURIComponent(target.id)}/restore`,
@@ -124,9 +143,11 @@ export function BackupPage({ embedded = false }: { embedded?: boolean }) {
         toast.error(j.error || tx("backupRestoreFail"));
         return;
       }
+      setProgress(100);
       toast.success(tx("backupRestoreOk"));
       pushLog("SYS", `restore ${target.id}`);
       if (j.warnings?.length) toast.message(j.warnings.slice(0, 3).join(" · "));
+      await new Promise((resolve) => window.setTimeout(resolve, 400));
       setTarget(null);
       setAck(false);
       await load();
@@ -134,6 +155,7 @@ export function BackupPage({ embedded = false }: { embedded?: boolean }) {
       toast.error(tx("backupRestoreFail"));
     } finally {
       setBusy(null);
+      setProgress(0);
     }
   };
 
@@ -155,16 +177,19 @@ export function BackupPage({ embedded = false }: { embedded?: boolean }) {
         <p className="mb-4 font-['IBM_Plex_Mono'] text-[11px] text-[#4fc3f7]">
           {tx("backupFolder")}: {folder}
         </p>
-        <div className="mb-5 flex flex-wrap gap-2">
-          <PrimaryBtn disabled={busy !== null} onClick={() => void create()}>
-            <span className="inline-flex items-center gap-2">
-              <Archive size={16} />
-              {busy === "create" ? tx("backupRunning") : tx("backupRun")}
-            </span>
-          </PrimaryBtn>
-          <GhostBtn disabled={busy !== null || items.length === 0} onClick={() => openRestore(items[0])}>
-            {tx("backupRestore")}
-          </GhostBtn>
+        <div className="mb-5 flex items-center gap-3">
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <PrimaryBtn disabled={busy !== null} onClick={() => void create()}>
+              <span className="inline-flex items-center gap-2">
+                <Archive size={16} />
+                {busy === "create" ? tx("backupRunning") : tx("backupRun")}
+              </span>
+            </PrimaryBtn>
+            <GhostBtn disabled={busy !== null || items.length === 0} onClick={() => openRestore(items[0])}>
+              {tx("backupRestore")}
+            </GhostBtn>
+          </div>
+          <ActionProgress active={busy === "create"} value={progress} label={tx("updProgress")} />
         </div>
         {items.length === 0 ? (
           <p className="text-sm text-[#8ea0b3]">{tx("backupEmpty")}</p>
@@ -255,13 +280,16 @@ export function BackupPage({ embedded = false }: { embedded?: boolean }) {
               />
               <span>{tx("backupDlgCheck")}</span>
             </label>
-            <div className="mt-5 flex justify-end gap-2">
-              <GhostBtn disabled={busy === "restore"} onClick={() => (setTarget(null), setAck(false))}>
-                {tx("cancelEdit")}
-              </GhostBtn>
-              <PrimaryBtn disabled={!ack || busy === "restore"} onClick={() => void restore()}>
-                {busy === "restore" ? tx("backupRestoring") : tx("backupDlgGo")}
-              </PrimaryBtn>
+            <div className="mt-5 flex items-center gap-3">
+              <div className="flex shrink-0 justify-end gap-2">
+                <GhostBtn disabled={busy === "restore"} onClick={() => (setTarget(null), setAck(false))}>
+                  {tx("cancelEdit")}
+                </GhostBtn>
+                <PrimaryBtn disabled={!ack || busy === "restore"} onClick={() => void restore()}>
+                  {busy === "restore" ? tx("backupRestoring") : tx("backupDlgGo")}
+                </PrimaryBtn>
+              </div>
+              <ActionProgress active={busy === "restore"} value={progress} label={tx("updProgress")} />
             </div>
           </div>
         </div>

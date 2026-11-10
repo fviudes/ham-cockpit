@@ -18,6 +18,7 @@ import { isLoopback, vfoDisplayExit } from "./vfo-display";
 import { ldgCmd, ldgConnect, ldgDisconnect, ldgPeek, ldgSave, ldgStatus } from "./ldg";
 import { lp100aCmd, lp100aConnect, lp100aDisconnect, lp100aPeek, lp100aSave, lp100aStatus } from "./lp100a";
 import { backupCreate, backupDelete, backupList, backupRestore } from "./backup";
+import { hostStatus } from "./host-status";
 import {
   mmdvmControl,
   mmdvmLink,
@@ -619,6 +620,22 @@ async function startServer() {
       res.status(body.ok ? 200 : 400).json(body);
     } catch (err) {
       res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+
+  app.get("/api/host", async (_req, res) => {
+    try {
+      res.json(await hostStatus());
+    } catch (err) {
+      res.status(500).json({
+        ok: false,
+        cpuTempC: null,
+        diskTotalBytes: 0,
+        diskFreeBytes: 0,
+        diskUsedBytes: 0,
+        diskPath: "/",
+        error: String(err),
+      });
     }
   });
 

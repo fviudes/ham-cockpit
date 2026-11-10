@@ -1,23 +1,11 @@
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
-import { ic705Ble } from "./ic705-ble";
+import { resolvePrimaryRoute, sendPrimaryCmd } from "./radio-cmd";
 import { BANDS, formatVfo, MODES, sMeterLabel, useConsole } from "./state";
 import { Chip, ConsoleSelect, Lcd } from "./widgets";
 
 const AGC = ["OFF", "FAST", "MID", "SLOW"] as const;
 const PRE = ["OFF", "ON1", "ON2"] as const;
-
-async function lanCiv(cmd: string, body: Record<string, unknown> = {}) {
-  try {
-    await fetch("/api/radios/civ", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cmd, ...body }),
-    });
-  } catch {
-    /* */
-  }
-}
 
 export function VfoPanel() {
   const { s, setS, setFreq, tx, pushLog } = useConsole();
@@ -25,22 +13,31 @@ export function VfoPanel() {
   const activeHz = s.vfo === "B" ? s.freqB : s.freq;
   const activeMode = s.vfo === "B" ? s.modeB : s.mode;
   const bandId = bandOf(activeHz);
-  const bleCat = s.ic705.phase === "ready" && s.ic705.ble;
-  const lanCat = Boolean(
-    s.radios.items.some((r) => r.connected && r.link === "network" && r.maker === "icom" && r.proto !== "cat"),
-  );
-  /** Preferir BLE se ambos; senão LAN UDP no Pi. */
-  const liveCat = bleCat || lanCat;
+  const bleReady = s.ic705.phase === "ready" && s.ic705.ble;
+  const route = resolvePrimaryRoute(s.radios.items, { bleReady });
+  const liveCat = route.live;
   const filterVal = s.nr && s.nb ? "nrnb" : s.nr ? "nr" : s.nb ? "nb" : "off";
+  const transportLabel =
+    route.transport === "ble"
+      ? "BLE CAT"
+      : route.transport === "lan"
+        ? "LAN CI-V"
+        : route.transport === "hamlib"
+          ? "Hamlib"
+          : tx("bleTransport");
+
+  const send = (action: Parameters<typeof sendPrimaryCmd>[1]) => {
+    void sendPrimaryCmd(s.radios.items, action, {
+      bleReady,
+      hamlibPort: s.wlg.hamlibPort || 4532,
+    });
+  };
 
   const applyFreq = (which: "A" | "B", hz: number) => {
     const next = Math.max(100_000, hz);
     if (which === "A") setFreq(next);
     else setS((p) => ({ ...p, freqB: next }));
-    if (s.vfo === which) {
-      if (bleCat) void ic705Ble.setFreq(next);
-      else if (lanCat) void lanCiv("setFreq", { hz: next });
-    }
+    if (s.vfo === which) send({ type: "setFreq", hz: next });
     if (s.wlg.publishCat && s.wavelog.running && s.vfo === which) {
       pushLog("WLOG", `CAT ${next} ${which === "B" ? s.modeB : s.mode} → ${s.wlg.radioName}`);
     }
@@ -49,15 +46,9 @@ export function VfoPanel() {
   const selectVfo = (which: "A" | "B") => {
     if (s.vfo === which) return;
     setS((p) => ({ ...p, vfo: which }));
-    if (bleCat) {
-      void ic705Ble.selectVfo(which);
-      void ic705Ble.setFreq(which === "B" ? s.freqB : s.freq);
-      void ic705Ble.setMode(which === "B" ? s.modeB : s.mode);
-    } else if (lanCat) {
-      void lanCiv("setVfo", { vfo: which });
-      void lanCiv("setFreq", { hz: which === "B" ? s.freqB : s.freq });
-      void lanCiv("setMode", { mode: which === "B" ? s.modeB : s.mode });
-    }
+    send({ type: "setVfo", vfo: which });
+    send({ type: "setFreq", hz: which === "B" ? s.freqB : s.freq });
+    send({ type: "setMode", mode: which === "B" ? s.modeB : s.mode });
   };
 
   const applyPtt = (on: boolean) => {
@@ -68,15 +59,13 @@ export function VfoPanel() {
       swr: liveCat ? p.swr : on ? (p.lextel.connected && p.lextel.swr >= 1 ? p.lextel.swr : 1.12) : 1,
     }));
     pushLog("CIV", on ? "PTT ON" : "PTT OFF");
-    if (bleCat) void ic705Ble.setPtt(on);
-    else if (lanCat) void lanCiv("setPtt", { on });
+    send({ type: "setPtt", on });
   };
 
   const applyMode = (mode: (typeof MODES)[number]) => {
     if (s.vfo === "B") setS((p) => ({ ...p, modeB: mode }));
     else setS((p) => ({ ...p, mode }));
-    if (bleCat) void ic705Ble.setMode(mode);
-    else if (lanCat) void lanCiv("setMode", { mode });
+    send({ type: "setMode", mode });
     if (s.wlg.publishCat && s.wavelog.running) {
       pushLog("WLOG", `CAT ${activeHz} ${mode} → ${s.wlg.radioName}`);
     }
@@ -86,25 +75,23 @@ export function VfoPanel() {
     const nr = v === "nr" || v === "nrnb";
     const nb = v === "nb" || v === "nrnb";
     setS((p) => ({ ...p, nr, nb }));
-    if (bleCat) {
-      void ic705Ble.setNr(nr);
-      void ic705Ble.setNb(nb);
-    }
+    send({ type: "setNr", on: nr });
+    send({ type: "setNb", on: nb });
   };
 
   const applyPre = (v: (typeof PRE)[number]) => {
     setS((p) => ({ ...p, pre: v }));
-    if (bleCat) void ic705Ble.setPre(v);
+    send({ type: "setPre", pre: v });
   };
 
   const applyAtt = (on: boolean) => {
     setS((p) => ({ ...p, att: on }));
-    if (bleCat) void ic705Ble.setAtt(on);
+    send({ type: "setAtt", on });
   };
 
   const applyAgc = (v: (typeof AGC)[number]) => {
     setS((p) => ({ ...p, agc: v }));
-    if (bleCat) void ic705Ble.setAgc(v);
+    send({ type: "setAgc", agc: v });
   };
 
   return (
@@ -128,10 +115,10 @@ export function VfoPanel() {
           </span>
           <span
             className={`rounded-md px-2 py-0.5 font-['IBM_Plex_Mono'] text-[11px] font-semibold ${
-              bleCat ? "bg-[#10b981]/15 text-[#34d399]" : "bg-white/5 text-[#8ea0b3]"
+              liveCat ? "bg-[#10b981]/15 text-[#34d399]" : "bg-white/5 text-[#8ea0b3]"
             }`}
           >
-            {bleCat ? "BLE CAT" : tx("bleTransport")}
+            {liveCat ? transportLabel : tx("bleTransport")}
           </span>
         </div>
       </div>

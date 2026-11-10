@@ -60,6 +60,9 @@ const SYSTEMD_UNITS = [
   "first-boot.service",
 ];
 
+/** Units fora de deploy/station (caminho relativo ao ROOT). */
+const SYSTEMD_EXTRA = [["deploy/wavelog/wavelog.service", "wavelog.service"]];
+
 function argValue(flag) {
   const i = process.argv.indexOf(flag);
   if (i < 0) return "";
@@ -138,6 +141,14 @@ function main() {
   for (const name of SYSTEMD_UNITS) {
     const src = join(STATION, name);
     if (!existsSync(src)) continue;
+    cpSync(src, join(stage, "systemd", name));
+  }
+  for (const [rel, name] of SYSTEMD_EXTRA) {
+    const src = join(ROOT, rel);
+    if (!existsSync(src)) {
+      console.error("unit ausente:", src);
+      process.exit(1);
+    }
     cpSync(src, join(stage, "systemd", name));
   }
 

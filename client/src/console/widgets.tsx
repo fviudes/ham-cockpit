@@ -326,3 +326,20 @@ export function MeterBar({ value, max = 9 }: { value: number; max?: number }) {
     </div>
   );
 }
+
+/** Barra de progresso de ação longa (Atualizações / Backup) — tema escuro, cyan. */
+export function ActionProgress({ active, value, label }: { active: boolean; value: number; label: string }) {
+  if (!active) return null;
+  const pct = Math.max(0, Math.min(100, Math.round(value)));
+  return (
+    <div className="min-w-0 flex-1" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={label}>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="text-[10px] tracking-wide text-[#8ea0b3] uppercase">{label}</span>
+        <span className="font-['IBM_Plex_Mono'] text-[11px] text-[#4fc3f7]">{pct}%</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-[#16232e]">
+        <div className="h-full rounded-full bg-[#4fc3f7] transition-[width] duration-300 ease-out" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}

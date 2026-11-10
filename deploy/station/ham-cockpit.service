@@ -7,6 +7,8 @@ Wants=network-online.target
 Type=simple
 User=hamcockpit
 Group=hamcockpit
+# Acesso ao docker.sock para status/backup do Wavelog (grupo docker em /etc/group).
+SupplementaryGroups=docker
 WorkingDirectory=/opt/ham-cockpit
 Environment=NODE_ENV=production
 Environment=PORT=3000

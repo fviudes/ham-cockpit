@@ -145,7 +145,8 @@ export function Ic705Page() {
   const s2nRow = useMemo(() => radioSvcs.find((x) => x.id === device), [radioSvcs, device]);
   const s2nEndpoint = s2nRow ? `${s.ser2net.bind}:${s2nRow.tcpPort}` : "";
   const picks = catUsb || useNet ? [] : [...webBle, ...s.radios.bluetooth];
-  const live = s.radios.items.find((r) => r.connected);
+  const primary = s.radios.items.find((r) => r.primary);
+  const live = (primary?.connected ? primary : undefined) || s.radios.items.find((r) => r.connected) || primary;
   const gattUp = s.ic705.phase === "ready" || s.ic705.civ;
   const bleOn = gattUp || s.ic705.phase === "handshake" || s.ic705.phase === "connecting" || s.ic705.phase === "scanning";
   const lanCiv = Boolean(live && live.link === "network" && live.maker === "icom" && live.proto !== "cat");

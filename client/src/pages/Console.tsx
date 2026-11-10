@@ -1,7 +1,7 @@
 import { BluetoothPage, WifiPage } from "@/console/network";
 import { AcomPage, HamplusPage, Ic705Page, LdgPage, LextelPage, Lp100aPage, PalstarPage, SpePage } from "@/console/devices";
 import { DEFAULT_PASS, DEFAULT_USER, type I18nKey } from "@/console/i18n";
-import { ic705Ble } from "@/console/ic705-ble";
+import { resolvePrimaryRoute, sendPrimaryCmd } from "@/console/radio-cmd";
 import { ConsoleProvider, formatVfo, useConsole } from "@/console/state";
 import { SVC_LABEL, serviceLive } from "@/console/services-ui";
 import { LangToggle, UserMenu } from "@/console/widgets";
@@ -220,12 +220,21 @@ function Shell({ onLogout }: { onLogout: () => void }) {
   const vfoMode = vfoLetter === "B" ? s.modeB : s.mode;
   const primaryRadio = s.radios.items.find((r) => r.primary);
   const liveRadio = s.radios.items.find((r) => r.connected) || primaryRadio;
+  const bleReady = s.ic705.phase === "ready" && s.ic705.ble;
+  const route = resolvePrimaryRoute(s.radios.items, { bleReady });
   const gattUp = s.ic705.phase === "ready" || s.ic705.civ;
-  const radioChip = gattUp
-    ? `${s.ic705.bleName || primaryRadio?.deviceName || liveRadio?.deviceName || tx("ic705")} · CI-V`
-    : liveRadio && !(liveRadio.link === "bluetooth" && liveRadio.proto === "civ")
-      ? `${liveRadio.maker === "tentec" ? "Ten-Tec" : liveRadio.maker[0]!.toUpperCase() + liveRadio.maker.slice(1)} ${liveRadio.link === "bluetooth" ? "BT" : "USB"}`
-      : `${tx("ic705")} —`;
+  const makerLabel = (r: typeof liveRadio) =>
+    !r ? "" : r.maker === "tentec" ? "Ten-Tec" : r.maker[0]!.toUpperCase() + r.maker.slice(1);
+  const radioChip =
+    route.transport === "lan" && route.live
+      ? `${primaryRadio?.deviceName || primaryRadio?.name || tx("ic705")} · LAN CI-V`
+      : gattUp || (route.transport === "ble" && route.live)
+        ? `${s.ic705.bleName || primaryRadio?.deviceName || liveRadio?.deviceName || tx("ic705")} · CI-V`
+        : route.live && route.radio
+          ? `${makerLabel(route.radio)} ${route.radio.link === "network" ? "Rede" : route.radio.link === "bluetooth" ? "BT" : "USB"}`
+          : liveRadio && !(liveRadio.link === "bluetooth" && liveRadio.proto === "civ")
+            ? `${makerLabel(liveRadio)} ${liveRadio.link === "network" ? "Rede" : liveRadio.link === "bluetooth" ? "BT" : "USB"}`
+            : `${tx("ic705")} —`;
   const liveSvcs = s.services.filter(
     (row) =>
       row.id !== "radio" &&
@@ -252,11 +261,15 @@ function Shell({ onLogout }: { onLogout: () => void }) {
       const next = Math.max(100_000, cur + dir * step);
       if (which === "A") setFreq(next);
       else setS((p) => ({ ...p, freqB: next }));
-      if (s.ic705.phase === "ready") void ic705Ble.setFreq(next);
+      void sendPrimaryCmd(
+        s.radios.items,
+        { type: "setFreq", hz: next },
+        { bleReady: s.ic705.phase === "ready" && s.ic705.ble, hamlibPort: s.wlg.hamlibPort || 4532 },
+      );
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [s.vfo, s.freq, s.freqB, s.ic705.cat, s.ic705.phase, setFreq, setS]);
+  }, [s.vfo, s.freq, s.freqB, s.radios.items, s.ic705.ble, s.ic705.phase, s.wlg.hamlibPort, setFreq, setS]);
 
   const nav = (
     <nav className="flex h-full flex-col">

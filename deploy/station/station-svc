@@ -1,5 +1,5 @@
 #!/bin/bash
-# Liga/desliga unidades no boot. Chamado via sudo -n.
+# Liga/desliga unidades no boot e start/stop sob demanda. Chamado via sudo -n.
 set -euo pipefail
 
 unit_of() {
@@ -12,8 +12,27 @@ unit_of() {
     wifi) echo ham-cockpit-ap.service ;;
     bluetooth) echo bluetooth.service ;;
     web) echo ham-cockpit.service ;;
+    docker) echo docker.service ;;
     *) echo "" ;;
   esac
+}
+
+wait_docker_api() {
+  local i
+  for i in $(seq 1 60); do
+    if docker info >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+ensure_docker() {
+  systemctl unmask docker.service docker.socket 2>/dev/null || true
+  systemctl enable docker.service docker.socket 2>/dev/null || true
+  systemctl start docker.service 2>/dev/null || systemctl start docker.socket 2>/dev/null || true
+  wait_docker_api
 }
 
 cmd="${1:-}"
@@ -27,6 +46,9 @@ case "$cmd" in
     if [[ "$id" == "web" ]]; then
       systemctl enable nginx.service >/dev/null 2>&1 || true
     fi
+    if [[ "$id" == "wavelog" || "$id" == "docker" ]]; then
+      systemctl enable docker.service docker.socket >/dev/null 2>&1 || true
+    fi
     echo enabled
     ;;
   disable)
@@ -37,6 +59,23 @@ case "$cmd" in
     fi
     echo disabled
     ;;
+  start)
+    if [[ "$id" == "wavelog" || "$id" == "docker" ]]; then
+      ensure_docker || { echo "docker não respondeu" >&2; exit 1; }
+    fi
+    if [[ "$id" != "docker" ]]; then
+      systemctl start "$unit"
+    fi
+    echo started
+    ;;
+  stop)
+    if [[ "$id" == "docker" ]]; then
+      echo "recusado: não para o Docker da estação" >&2
+      exit 1
+    fi
+    systemctl stop "$unit"
+    echo stopped
+    ;;
   is-enabled)
     systemctl is-enabled "$unit" 2>/dev/null || echo disabled
     ;;
@@ -44,7 +83,7 @@ case "$cmd" in
     systemctl is-active "$unit" 2>/dev/null || echo inactive
     ;;
   *)
-    echo "uso: station-svc enable|disable|is-enabled|is-active ID" >&2
+    echo "uso: station-svc enable|disable|start|stop|is-enabled|is-active ID" >&2
     exit 1
     ;;
 esac

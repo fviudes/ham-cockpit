@@ -1,6 +1,6 @@
 {
-  "version": "0.1.04.01",
+  "version": "0.1.04.02",
   "channel": "main",
-  "file": "ham-cockpit-0.1.04.01.tgz",
-  "notes": "Ham Cockpit v0.1.04.01 — OTA na base 0.1.04: backup privilegiado (station-backup / EACCES no Wavelog .env), transporte Icom LAN (RS-BA1 / CI-V UDP) e versionamento imagem x.y.zz vs OTA x.y.zz.NN"
+  "file": "ham-cockpit-0.1.04.02.tgz",
+  "notes": "Ham Cockpit v0.1.04.02 — OTA na base 0.1.04: Docker no boot (enable via symlinks/chroot, SupplementaryGroups=docker, wavelog espera sock, ota-hooks, docker-down vs no-docker); Icom LAN (NR/NB/PRE/ATT/AGC), radio-cmd, backup com progresso, status host (CPU/disco)"
 }

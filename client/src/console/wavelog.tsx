@@ -41,6 +41,7 @@ export function WavelogPage() {
       return;
     }
     if (st.reason === "no-docker") setDetail(tx("wavelogNoDocker"));
+    else if (st.reason === "docker-down") setDetail(tx("wavelogDockerDown"));
     else setDetail(st.error ? `${tx("apiFail")} (${st.error})` : tx("apiFail"));
   };
 
@@ -136,7 +137,12 @@ export function WavelogPage() {
                   pushLog("WLOG", `wavelog.service · ${w.folder} :${w.port} (boot)`);
                   toast.success(tx("wavelogRunning"));
                 } else {
-                  const msg = st.reason === "no-docker" ? tx("wavelogNoDocker") : tx("apiFail");
+                  const msg =
+                    st.reason === "no-docker"
+                      ? tx("wavelogNoDocker")
+                      : st.reason === "docker-down"
+                        ? tx("wavelogDockerDown")
+                        : tx("apiFail");
                   pushLog("ERRO", msg);
                   toast.error(msg);
                 }
@@ -174,7 +180,12 @@ export function WavelogPage() {
                   toast.success(tx("apiOk"));
                   pushLog("WLOG", `GET ${book} ${st.httpStatus ?? ""}`.trim());
                 } else {
-                  const msg = st.reason === "no-docker" ? tx("wavelogNoDocker") : tx("apiFail");
+                  const msg =
+                    st.reason === "no-docker"
+                      ? tx("wavelogNoDocker")
+                      : st.reason === "docker-down"
+                        ? tx("wavelogDockerDown")
+                        : tx("apiFail");
                   toast.error(msg);
                   pushLog("ERRO", `${msg}${st.error ? ` · ${st.error}` : ""}`);
                 }

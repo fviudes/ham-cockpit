@@ -7,6 +7,7 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const STATION_SVC = "/opt/ham-cockpit/bin/station-svc";
 
 export type WavelogStatus = {
   ok: boolean;
@@ -14,7 +15,7 @@ export type WavelogStatus = {
   port: number;
   docker: boolean;
   compose: string;
-  reason: "ok" | "down" | "no-docker" | "no-compose" | "error";
+  reason: "ok" | "down" | "no-docker" | "docker-down" | "no-compose" | "error";
   error?: string;
   httpStatus?: number;
 };
@@ -26,7 +27,22 @@ async function composeDir(): Promise<string> {
   return join(ROOT, "deploy", "wavelog");
 }
 
+async function stationSvc(action: "start" | "stop" | "enable" | "is-active", id: string): Promise<string> {
+  if (!(await fileExists(STATION_SVC))) return "";
+  try {
+    const { stdout } = await execFileAsync("sudo", ["-n", STATION_SVC, action, id], {
+      timeout: 180_000,
+      windowsHide: true,
+    });
+    return String(stdout || "").trim();
+  } catch {
+    return "";
+  }
+}
+
 async function systemctlWavelog(action: "start" | "stop" | "enable"): Promise<boolean> {
+  const viaHelper = await stationSvc(action, "wavelog");
+  if (viaHelper === "started" || viaHelper === "stopped" || viaHelper === "enabled") return true;
   try {
     await execFileAsync("systemctl", [action, "wavelog.service"], {
       timeout: 120_000,
@@ -60,15 +76,29 @@ export function probeWavelog(port = 8086, host = "127.0.0.1"): Promise<{
   });
 }
 
-async function dockerAvailable(): Promise<boolean> {
+async function dockerBinaryPresent(): Promise<boolean> {
+  for (const p of ["/usr/bin/docker", "/bin/docker"]) {
+    if (await fileExists(p)) return true;
+  }
   try {
-    await execFileAsync("docker", ["version", "--format", "{{.Server.Version}}"], {
-      timeout: 4000,
+    await execFileAsync("docker", ["--version"], { timeout: 3000, windowsHide: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Daemon responde no sock (precisa grupo docker / root). */
+async function dockerDaemonUp(): Promise<boolean> {
+  try {
+    await execFileAsync("docker", ["info", "--format", "{{.ServerVersion}}"], {
+      timeout: 5000,
       windowsHide: true,
     });
     return true;
   } catch {
-    return false;
+    const active = await stationSvc("is-active", "docker");
+    return active === "active";
   }
 }
 
@@ -84,19 +114,32 @@ async function fileExists(path: string): Promise<boolean> {
 export async function wavelogStatus(port = 8086): Promise<WavelogStatus> {
   const compose = await composeDir();
   const url = `http://127.0.0.1:${port}/`;
-  const docker = await dockerAvailable();
+  const hasBin = await dockerBinaryPresent();
+  const daemon = hasBin ? await dockerDaemonUp() : false;
+  const docker = hasBin && daemon;
   const hasCompose = await fileExists(join(compose, "docker-compose.yml"));
   const probe = await probeWavelog(port);
   if (probe.ok) {
-    return { ok: true, url, port, docker, compose, reason: "ok", httpStatus: probe.httpStatus };
+    return { ok: true, url, port, docker: hasBin, compose, reason: "ok", httpStatus: probe.httpStatus };
   }
   if (!hasCompose) {
-    return { ok: false, url, port, docker, compose, reason: "no-compose", error: probe.error };
+    return { ok: false, url, port, docker: hasBin, compose, reason: "no-compose", error: probe.error };
   }
-  if (!docker) {
-    return { ok: false, url, port, docker, compose, reason: "no-docker", error: probe.error };
+  if (!hasBin) {
+    return { ok: false, url, port, docker: false, compose, reason: "no-docker", error: probe.error };
   }
-  return { ok: false, url, port, docker, compose, reason: "down", error: probe.error };
+  if (!daemon) {
+    return {
+      ok: false,
+      url,
+      port,
+      docker: false,
+      compose,
+      reason: "docker-down",
+      error: probe.error,
+    };
+  }
+  return { ok: false, url, port, docker: true, compose, reason: "down", error: probe.error };
 }
 
 async function ensureEnv(dir: string): Promise<void> {
@@ -109,12 +152,14 @@ async function ensureEnv(dir: string): Promise<void> {
 export async function wavelogUp(port = 8086): Promise<WavelogStatus> {
   const status = await wavelogStatus(port);
   if (status.ok) return status;
-  if (!status.docker) return status;
+  if (status.reason === "no-docker") return status;
   if (status.reason === "no-compose") return status;
   try {
     await ensureEnv(status.compose);
+    // Sobe docker (se parado) + wavelog.service via sudo station-svc.
     const viaSystemd = (await systemctlWavelog("enable")) && (await systemctlWavelog("start"));
     if (!viaSystemd) {
+      await stationSvc("start", "docker");
       await execFileAsync("docker", ["compose", "up", "-d"], {
         cwd: status.compose,
         timeout: 120_000,
@@ -130,7 +175,7 @@ export async function wavelogUp(port = 8086): Promise<WavelogStatus> {
 
 export async function wavelogDown(port = 8086): Promise<WavelogStatus> {
   const stopped = await systemctlWavelog("stop");
-  if (!stopped && (await dockerAvailable())) {
+  if (!stopped && (await dockerDaemonUp())) {
     try {
       await execFileAsync("docker", ["compose", "stop"], {
         cwd: await composeDir(),

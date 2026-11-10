@@ -8,7 +8,7 @@ import type { I18nKey } from "./i18n";
 import { formatWatts, useConsole, type LogKind } from "./state";
 import { TermPage } from "./term";
 import { BackupPage } from "./backup";
-import { Chip, ConsoleInput, Field, GhostBtn, MeterBar, PageHead, Panel, PanelTitle, PrimaryBtn } from "./widgets";
+import { ActionProgress, Chip, ConsoleInput, Field, GhostBtn, MeterBar, PageHead, Panel, PanelTitle, PrimaryBtn } from "./widgets";
 
 type LinuxUser = { name: string; sudo: boolean };
 
@@ -412,22 +412,6 @@ const UPD_HINT: Record<UpdateId, I18nKey> = {
   wlg: "updWlgHint",
 };
 
-function UpdateApplyProgress({ active, value, label }: { active: boolean; value: number; label: string }) {
-  if (!active) return null;
-  const pct = Math.max(0, Math.min(100, Math.round(value)));
-  return (
-    <div className="min-w-0 flex-1" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={label}>
-      <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="text-[10px] tracking-wide text-[#8ea0b3] uppercase">{label}</span>
-        <span className="font-['IBM_Plex_Mono'] text-[11px] text-[#4fc3f7]">{pct}%</span>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full bg-[#16232e]">
-        <div className="h-full rounded-full bg-[#4fc3f7] transition-[width] duration-300 ease-out" style={{ width: `${pct}%` }} />
-      </div>
-    </div>
-  );
-}
-
 export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
   const { s, tx, setS, pushLog } = useConsole();
   const [checking, setChecking] = useState(false);
@@ -574,7 +558,7 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
                 <PrimaryBtn disabled={!row.updatable || applying || busy !== null} onClick={() => void applyOne(row.id)}>
                   {applying ? tx("updApplying") : tx("updApply")}
                 </PrimaryBtn>
-                <UpdateApplyProgress active={applying} value={busy === row.id ? progress : applying ? 12 : 0} label={tx("updProgress")} />
+                <ActionProgress active={applying} value={busy === row.id ? progress : applying ? 12 : 0} label={tx("updProgress")} />
               </div>
             </Panel>
           );
@@ -584,11 +568,35 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
   );
 }
 
+type HostSnap = {
+  ok: boolean;
+  cpuTempC: number | null;
+  diskTotalBytes: number;
+  diskFreeBytes: number;
+  diskUsedBytes: number;
+  diskPath: string;
+  error: string;
+};
+
+function formatBytes(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return "—";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let v = n;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  const digits = i === 0 ? 0 : v >= 100 ? 0 : v >= 10 ? 1 : 2;
+  return `${v.toFixed(digits)} ${units[i]}`;
+}
+
 export function StatusPage() {
   const { s, tx } = useConsole();
   const cpu = 18;
   const ram = 32;
   const net = 11;
+  const [host, setHost] = useState<HostSnap | null>(null);
   const hist = useMemo(
     () =>
       Array.from({ length: 40 }, (_, i) => ({
@@ -599,6 +607,32 @@ export function StatusPage() {
       })),
     []
   );
+
+  useEffect(() => {
+    let alive = true;
+    const load = () => {
+      void fetch("/api/host")
+        .then((r) => r.json())
+        .then((j: HostSnap) => {
+          if (alive) setHost(j);
+        })
+        .catch(() => {
+          if (alive) setHost(null);
+        });
+    };
+    load();
+    const t = window.setInterval(load, 5000);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
+  }, []);
+
+  const tempC = host?.cpuTempC ?? null;
+  const diskTotal = host?.diskTotalBytes ?? 0;
+  const diskFree = host?.diskFreeBytes ?? 0;
+  const diskUsed = host?.diskUsedBytes ?? Math.max(0, diskTotal - diskFree);
+
   return (
     <div>
       <PageHead kicker={tx("status")} title={tx("statusTitle")} />
@@ -623,6 +657,26 @@ export function StatusPage() {
           <PanelTitle>{tx("network")}</PanelTitle>
           <p className="mb-2 font-['IBM_Plex_Mono'] text-2xl text-[#ffb300]">{net}%</p>
           <MeterBar value={net} max={100} />
+        </Panel>
+      </div>
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Panel>
+          <PanelTitle>{tx("cpuTemp")}</PanelTitle>
+          <p className="mb-2 font-['IBM_Plex_Mono'] text-2xl text-[#f87171]">
+            {tempC == null ? "—" : `${tempC.toFixed(1)} °C`}
+          </p>
+          <MeterBar value={tempC ?? 0} max={85} />
+        </Panel>
+        <Panel>
+          <PanelTitle>{tx("disk")}</PanelTitle>
+          <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+            <DiskChart used={diskUsed} free={diskFree} usedLabel={tx("diskUsed")} freeLabel={tx("diskFree")} />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Mini k={tx("diskTotal")} v={formatBytes(diskTotal)} />
+              <Mini k={tx("diskFree")} v={formatBytes(diskFree)} />
+              <Mini k={tx("diskUsed")} v={formatBytes(diskUsed)} />
+            </div>
+          </div>
         </Panel>
       </div>
       <Panel className="mt-4">
@@ -685,5 +739,59 @@ function Spark({
       <path d={path("ram", 50)} fill="none" stroke="#34d399" strokeWidth="2" />
       <path d={path("net", 20)} fill="none" stroke="#ffb300" strokeWidth="2" />
     </svg>
+  );
+}
+
+function DiskChart({
+  used,
+  free,
+  usedLabel,
+  freeLabel,
+}: {
+  used: number;
+  free: number;
+  usedLabel: string;
+  freeLabel: string;
+}) {
+  const total = Math.max(0, used + free);
+  const usedPct = total > 0 ? used / total : 0;
+  const freePct = total > 0 ? free / total : 0;
+  const r = 42;
+  const c = 2 * Math.PI * r;
+  const usedLen = usedPct * c;
+  const freeLen = freePct * c;
+  const usedPctLabel = total > 0 ? Math.round(usedPct * 100) : 0;
+  return (
+    <div className="relative mx-auto h-36 w-36 shrink-0">
+      <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90" role="img" aria-label={`${usedLabel} / ${freeLabel}`}>
+        <circle cx="60" cy="60" r={r} fill="none" stroke="#16232e" strokeWidth="14" />
+        <circle
+          cx="60"
+          cy="60"
+          r={r}
+          fill="none"
+          stroke="#f59e0b"
+          strokeWidth="14"
+          strokeDasharray={`${usedLen} ${c - usedLen}`}
+          strokeDashoffset={0}
+          strokeLinecap="butt"
+        />
+        <circle
+          cx="60"
+          cy="60"
+          r={r}
+          fill="none"
+          stroke="#34d399"
+          strokeWidth="14"
+          strokeDasharray={`${freeLen} ${c - freeLen}`}
+          strokeDashoffset={-usedLen}
+          strokeLinecap="butt"
+        />
+      </svg>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+        <span className="font-['IBM_Plex_Mono'] text-xl text-[#4fc3f7]">{usedPctLabel}%</span>
+        <span className="text-[10px] tracking-wide text-[#8ea0b3] uppercase">{usedLabel}</span>
+      </div>
+    </div>
   );
 }

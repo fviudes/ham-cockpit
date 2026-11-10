@@ -8,6 +8,8 @@ import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
 import { lextelConnect, lextelDisconnect, lextelKeepalive, lextelLearn, lextelOpenBluetooth, lextelSave, lextelScan, lextelStatus } from "./server/lextel";
 import { listSerialDevices } from "./server/list-serials";
 import { radiosConnect, radiosDisconnect, radiosMarkBle, radiosRemove, radiosSave, radiosSetPrimary, radiosStatus, radiosUpsert } from "./server/radios";
+import { icomLanCmd, icomLanStatus } from "./server/icom-lan";
+import { hubRigctl } from "./server/hamlib-hub";
 import { loadSer2net, saveSer2net } from "./server/ser2net-store";
 import { attachTerminal } from "./server/term";
 import { createUser, deleteUser, listUsers, sshStatus } from "./server/users";
@@ -19,6 +21,7 @@ import { updatesApply, updatesRefresh, updatesStatus } from "./server/updates";
 import { layoutGet, layoutSave } from "./server/layouts";
 import { ldgCmd, ldgConnect, ldgDisconnect, ldgPeek, ldgSave } from "./server/ldg";
 import { backupCreate, backupDelete, backupList, backupRestore } from "./server/backup";
+import { hostStatus } from "./server/host-status";
 // mmdvm/lp100a: import dinâmico nos handlers — evita restart do Vite a cada edição.
 
 // =============================================================================
@@ -298,6 +301,29 @@ function vitePluginTerm(): Plugin {
   };
 }
 
+function vitePluginHamlib(): Plugin {
+  return {
+    name: "hamlib-api",
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use(async (req, res, next) => {
+        const url = req.url?.split("?")[0] ?? "";
+        if (url !== "/api/hamlib/cmd") return next();
+        try {
+          if (req.method !== "POST") return next();
+          const raw = await readBody(req);
+          const body = raw ? (JSON.parse(raw) as { port?: number; host?: string; command?: string }) : {};
+          const command = String(body.command ?? "");
+          if (!command.trim()) return sendJson(res, 400, { ok: false, error: "command obrigatório" });
+          const out = await hubRigctl(Number(body.port ?? 4532), command, String(body.host ?? "127.0.0.1"));
+          return sendJson(res, out.ok ? 200 : 502, out);
+        } catch (err) {
+          return sendJson(res, 500, { ok: false, error: String(err) });
+        }
+      });
+    },
+  };
+}
+
 function vitePluginRadios(): Plugin {
   return {
     name: "radios-api",
@@ -343,6 +369,17 @@ function vitePluginRadios(): Plugin {
               200,
               await radiosMarkBle(String(body.id || ""), Boolean(body.connected), body.name, body.error),
             );
+          }
+          if (req.method === "GET" && url === "/api/radios/lan") {
+            return sendJson(res, 200, icomLanStatus());
+          }
+          if (req.method === "POST" && url === "/api/radios/civ") {
+            const raw = await readBody(req);
+            const body = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+            const cmd = String(body.cmd ?? body.command ?? "");
+            if (!cmd.trim()) return sendJson(res, 400, { ok: false, error: "cmd obrigatório" });
+            const out = await icomLanCmd(cmd, body);
+            return sendJson(res, out.ok ? 200 : 502, out);
           }
           const del = url.match(/^\/api\/radios\/([^/]+)$/);
           if (req.method === "DELETE" && del) {
@@ -618,6 +655,34 @@ function vitePluginServices(): Plugin {
   };
 }
 
+function vitePluginHost(): Plugin {
+  return {
+    name: "host-api",
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use(async (req, res, next) => {
+        const url = req.url?.split("?")[0] ?? "";
+        if (url !== "/api/host") return next();
+        try {
+          if (req.method === "GET") {
+            return sendJson(res, 200, await hostStatus());
+          }
+        } catch (err) {
+          return sendJson(res, 500, {
+            ok: false,
+            cpuTempC: null,
+            diskTotalBytes: 0,
+            diskFreeBytes: 0,
+            diskUsedBytes: 0,
+            diskPath: "/",
+            error: String(err),
+          });
+        }
+        next();
+      });
+    },
+  };
+}
+
 function vitePluginBackup(): Plugin {
   return {
     name: "backup-api",
@@ -805,6 +870,7 @@ export default defineConfig(({ command }) => ({
           vitePluginStorageProxy(),
           vitePluginSerials(),
           vitePluginRadios(),
+          vitePluginHamlib(),
           vitePluginSer2net(),
           vitePluginLextel(),
           vitePluginLdg(),
@@ -816,6 +882,7 @@ export default defineConfig(({ command }) => ({
           vitePluginMmdvm(),
           vitePluginLp100a(),
           vitePluginBackup(),
+          vitePluginHost(),
           vitePluginUsers(),
           vitePluginTerm(),
         ]),

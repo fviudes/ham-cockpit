@@ -26,6 +26,9 @@ elif ! command -v node >/dev/null 2>&1 || ! node -v | grep -qE '^v(2[0-9]|[3-9])
   apt-get install -y nodejs
 fi
 
+# Grupo docker antes do unit SupplementaryGroups=docker (senão o console não sobe).
+getent group docker >/dev/null 2>&1 || groupadd --system docker || true
+
 add_station_user() {
   local user="$1" pass="$2"
   if ! id "$user" >/dev/null 2>&1; then
@@ -181,13 +184,46 @@ systemctl disable hostapd.service 2>/dev/null || true
 systemctl mask hostapd.service 2>/dev/null || true
 systemctl daemon-reload || true
 systemctl unmask ssh.service 2>/dev/null || true
-systemctl enable ssh.service 2>/dev/null || systemctl enable sshd.service 2>/dev/null || true
-systemctl enable docker.service nginx.service NetworkManager.service avahi-daemon.service || true
-systemctl enable ham-cockpit.target ham-cockpit.service ham-cockpit-ap.service first-boot.service || true
-systemctl enable ser2net.service rigctld@ic705.service wavelog.service waveloggate.service || true
-systemctl enable nextiondriver.service mmdvmhost.service dmrgateway.service ysfgateway.service ircddbgateway.service 2>/dev/null || true
-systemctl enable seatd.service ham-cockpit-vfo.service ham-cockpit-vfo-idle.service || true
-systemctl enable waveloggate.service || true
+systemctl unmask docker.service docker.socket 2>/dev/null || true
+
+# systemctl enable falha em chroot sem D-Bus — cria symlinks WantedBy à mão.
+enable_units() {
+  local u src wants w dir
+  for u in "$@"; do
+    if systemctl enable "$u" 2>/dev/null; then
+      continue
+    fi
+    src=""
+    for dir in /etc/systemd/system /lib/systemd/system /usr/lib/systemd/system; do
+      if [[ -f "$dir/$u" ]]; then
+        src="$dir/$u"
+        break
+      fi
+    done
+    if [[ -z "$src" ]]; then
+      echo "AVISO: unit $u não encontrada para enable" >&2
+      continue
+    fi
+    wants="$(awk -F= '/^WantedBy=/{print $2}' "$src" | tr ' ' '\n' | grep -v '^$' || true)"
+    [[ -n "$wants" ]] || wants="multi-user.target"
+    for w in $wants; do
+      mkdir -p "/etc/systemd/system/${w}.wants"
+      ln -sfn "$src" "/etc/systemd/system/${w}.wants/$u"
+    done
+  done
+}
+
+enable_units ssh.service
+enable_units sshd.service
+enable_units docker.service docker.socket nginx.service NetworkManager.service avahi-daemon.service
+enable_units ham-cockpit.target ham-cockpit.service ham-cockpit-ap.service first-boot.service
+enable_units ser2net.service 'rigctld@ic705.service' wavelog.service waveloggate.service
+enable_units nextiondriver.service mmdvmhost.service dmrgateway.service ysfgateway.service ircddbgateway.service
+enable_units seatd.service ham-cockpit-vfo.service ham-cockpit-vfo-idle.service
+# docker.io deve existir após packages.list (bake) / apt (install vivo).
+if ! command -v docker >/dev/null 2>&1; then
+  echo "AVISO: binário docker ausente — instale docker.io (nova imagem bake se for appliance)" >&2
+fi
 mkdir -p /etc/netplan /etc/NetworkManager/conf.d
 if [[ ! -f /etc/netplan/99-ham-cockpit-nm.yaml ]]; then
   cat >/etc/netplan/99-ham-cockpit-nm.yaml <<'EOF'

@@ -746,12 +746,17 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
         if (Array.isArray(saved.radios)) applyList(saved.radios);
         return;
       }
+      // USB / Rede (Icom LAN): já conectado = ok; senão tenta /api/radios/connect.
+      if (primary.connected) {
+        usbTried.current = false;
+        return;
+      }
       if (usbTried.current) return;
       usbTried.current = true;
       const res = await fetch("/api/radios/connect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(primary),
+        body: JSON.stringify({ ...primary, primary: true }),
       });
       const out = (await res.json()) as { radios?: StationRadio[]; ok?: boolean };
       if (Array.isArray(out.radios)) applyList(out.radios);
@@ -767,14 +772,38 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
     if (!active) return;
     void kickPrimary({ picker: false, gesture: false });
     const kick = window.setTimeout(() => void kickPrimary({ picker: false, gesture: false }), 800);
+    const needKick = () => {
+      const primary =
+        radiosRef.current.find((row) => row.primary) ||
+        (radiosRef.current.length === 1 ? radiosRef.current[0] : undefined);
+      if (!primary) return false;
+      if (primary.link === "bluetooth" && primary.maker === "icom" && primary.proto !== "cat") {
+        return !ic705Ble.connected;
+      }
+      return !primary.connected;
+    };
     const id = window.setInterval(() => {
-      if (!ic705Ble.connected) void kickPrimary({ picker: false, gesture: false });
+      if (needKick()) {
+        usbTried.current = false;
+        void kickPrimary({ picker: false, gesture: false });
+      }
     }, 3000);
     const onVis = () => {
-      if (document.visibilityState === "visible" && !ic705Ble.connected) void kickPrimary({ picker: false, gesture: false });
+      if (document.visibilityState === "visible" && needKick()) {
+        usbTried.current = false;
+        void kickPrimary({ picker: false, gesture: false });
+      }
     };
     const onPointer = () => {
-      if (ic705Ble.connected || ic705Ble.busy) return;
+      const primary =
+        radiosRef.current.find((row) => row.primary) ||
+        (radiosRef.current.length === 1 ? radiosRef.current[0] : undefined);
+      const icomBle = primary?.link === "bluetooth" && primary.maker === "icom" && primary.proto !== "cat";
+      if (icomBle) {
+        if (ic705Ble.connected || ic705Ble.busy) return;
+      } else if (primary?.connected) {
+        return;
+      }
       const gesture = pickerArmed.current;
       pickerArmed.current = false;
       void kickPrimary({ picker: false, gesture });

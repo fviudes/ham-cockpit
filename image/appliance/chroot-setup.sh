@@ -88,6 +88,11 @@ if ! printf '%s\n' "${PKGS[@]}" | grep -qxE 'libhamlib-utils|hamlib-utils'; then
 fi
 apt-get install -y --no-install-recommends "${PKGS[@]}"
 
+if ! command -v docker >/dev/null 2>&1 && [[ ! -x /usr/bin/docker ]]; then
+  echo "ERRO: docker.io não instalou no chroot — Wavelog (:8086) exige Docker" >&2
+  exit 1
+fi
+
 if ! command -v node >/dev/null 2>&1 || ! node -v | grep -qE '^v(2[0-9]|[3-9])'; then
   arch="$(uname -m)"
   case "$arch" in
@@ -122,14 +127,41 @@ if ls /opt/wavelog-seed-images/*.tar >/dev/null 2>&1; then
   cp -a /opt/wavelog-seed-images/*.tar /opt/wavelog/images/
 fi
 
-systemctl enable ssh.service 2>/dev/null || systemctl enable sshd.service || true
-systemctl enable docker.service nginx.service || true
-systemctl enable NetworkManager.service || true
-systemctl enable avahi-daemon.service || true
-systemctl enable ham-cockpit.target ham-cockpit.service ham-cockpit-ap.service first-boot.service || true
-systemctl enable ser2net.service rigctld@ic705.service wavelog.service waveloggate.service || true
-systemctl enable ham-cockpit-vfo.service ham-cockpit-vfo-idle.service || true
+# enable já feito em install-station.sh (com fallback de symlinks no chroot).
+# Reforça docker + target sem depender do D-Bus.
+systemctl unmask docker.service docker.socket 2>/dev/null || true
+for u in docker.service docker.socket ham-cockpit.target wavelog.service first-boot.service; do
+  if [[ -f /etc/systemd/system/$u || -f /lib/systemd/system/$u || -f /usr/lib/systemd/system/$u ]]; then
+    systemctl enable "$u" 2>/dev/null || true
+  fi
+done
+# Garante WantedBy=multi-user mesmo se systemctl enable falhar no chroot.
+for pair in \
+  "docker.service:multi-user.target" \
+  "docker.socket:sockets.target" \
+  "ham-cockpit.target:multi-user.target" \
+  "wavelog.service:ham-cockpit.target" \
+  "first-boot.service:ham-cockpit.target"; do
+  u="${pair%%:*}"
+  t="${pair##*:}"
+  src=""
+  for dir in /etc/systemd/system /lib/systemd/system /usr/lib/systemd/system; do
+    [[ -f "$dir/$u" ]] && src="$dir/$u" && break
+  done
+  if [[ -n "$src" ]]; then
+    mkdir -p "/etc/systemd/system/${t}.wants"
+    ln -sfn "$src" "/etc/systemd/system/${t}.wants/$u"
+  fi
+done
 systemctl set-default multi-user.target
+if [[ ! -e /etc/systemd/system/multi-user.target.wants/docker.service ]]; then
+  echo "ERRO: docker.service não habilitado no boot (symlink ausente)" >&2
+  exit 1
+fi
+if [[ ! -e /etc/systemd/system/multi-user.target.wants/ham-cockpit.target ]]; then
+  echo "ERRO: ham-cockpit.target não habilitado no boot" >&2
+  exit 1
+fi
 systemctl disable snapd.service snapd.socket 2>/dev/null || true
 # Preferir NetworkManager (AP + STA); evita conflito com systemd-networkd.
 systemctl disable systemd-networkd.service systemd-networkd.socket 2>/dev/null || true

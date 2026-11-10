@@ -1,12 +1,13 @@
 [Unit]
 Description=Ham Cockpit first boot
-After=docker.service ham-cockpit.target
-Wants=docker.service
+After=docker.service docker.socket network-online.target ham-cockpit.target
+Wants=docker.service docker.socket network-online.target
 ConditionPathExists=!/var/lib/hamcockpit/first-boot-done
 
 [Service]
 Type=oneshot
 ExecStart=/bin/bash /opt/ham-cockpit/bin/first-boot.sh
+TimeoutStartSec=0
 
 [Install]
 WantedBy=ham-cockpit.target

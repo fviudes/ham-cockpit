@@ -370,6 +370,15 @@ export async function icomLanDisconnect(opts?: { keepRadioMark?: boolean }): Pro
   return snap();
 }
 
+const PRE_BYTE = { OFF: 0x00, ON1: 0x01, ON2: 0x02 } as const;
+const AGC_BYTE = { OFF: 0x00, FAST: 0x01, MID: 0x02, SLOW: 0x03 } as const;
+
+/** Monta frame CI-V FE FE to e0 … FD para comandos sem wrapper na lib. */
+function civPayload(...body: number[]): Buffer {
+  const to = parseCivAddr(civAddr);
+  return Buffer.from([CIV_PRE, CIV_PRE, to, 0xe0, ...body, CIV_END]);
+}
+
 export async function icomLanCmd(
   cmd: string,
   body: Record<string, unknown> = {},
@@ -402,6 +411,35 @@ export async function icomLanCmd(
       case "setVfo": {
         const which = String(body.vfo ?? body.which ?? "A").toUpperCase() === "B" ? "B" : "A";
         await rig.setVfo(which);
+        return { ok: true };
+      }
+      case "setNr":
+      case "nr": {
+        await rig.setFunction("NR", Boolean(body.on ?? body.nr));
+        return { ok: true };
+      }
+      case "setNb":
+      case "nb": {
+        await rig.setFunction("NB", Boolean(body.on ?? body.nb));
+        return { ok: true };
+      }
+      case "setPre":
+      case "pre": {
+        const v = String(body.pre ?? body.value ?? "OFF").toUpperCase();
+        const byte = v === "ON1" || v === "ON2" ? PRE_BYTE[v] : PRE_BYTE.OFF;
+        rig.sendCiv(civPayload(0x16, 0x02, byte));
+        return { ok: true };
+      }
+      case "setAtt":
+      case "att": {
+        rig.sendCiv(civPayload(0x11, Boolean(body.on ?? body.att) ? 0x20 : 0x00));
+        return { ok: true };
+      }
+      case "setAgc":
+      case "agc": {
+        const v = String(body.agc ?? body.value ?? "OFF").toUpperCase() as keyof typeof AGC_BYTE;
+        const byte = v === "OFF" ? 0x01 : AGC_BYTE[v] ?? AGC_BYTE.MID;
+        rig.sendCiv(civPayload(0x16, 0x12, byte));
         return { ok: true };
       }
       case "readFreq": {

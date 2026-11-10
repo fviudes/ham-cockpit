@@ -2,6 +2,7 @@
 # Rodado no pós-install do pacote OTA (npm). Idempotente; não toca configs.
 # Não instala MMDVMHost/NextionDriver: binários nativos vêm do bake da imagem
 # (deploy/mmdvm/build-binaries.sh). Estação sem eles precisa de nova imagem.
+# Docker.io: se o pacote não estiver na imagem, OTA não instala apt — precisa bake.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 [[ "$(id -u)" -eq 0 ]] || exit 0
@@ -49,5 +50,25 @@ install -d -o hamcockpit -g hamcockpit -m 0775 \
   /opt/ham-cockpit/ldg \
   /opt/ham-cockpit/lp100a \
   2>/dev/null || true
+
+# Docker + Wavelog no boot (units/perms). Sem docker.io no apt → só bake resolve.
+getent group docker >/dev/null 2>&1 || groupadd --system docker 2>/dev/null || true
+if getent passwd hamcockpit >/dev/null 2>&1; then
+  getent group docker >/dev/null 2>&1 && usermod -aG docker hamcockpit 2>/dev/null || true
+fi
+if command -v docker >/dev/null 2>&1 || [[ -x /usr/bin/docker ]]; then
+  systemctl unmask docker.service docker.socket 2>/dev/null || true
+  systemctl enable docker.service docker.socket 2>/dev/null || true
+  systemctl enable ham-cockpit.target wavelog.service first-boot.service 2>/dev/null || true
+  systemctl start docker.service 2>/dev/null || true
+  # Reinicia o console para herdar SupplementaryGroups=docker.
+  systemctl try-restart ham-cockpit.service 2>/dev/null || true
+  if systemctl cat wavelog.service >/dev/null 2>&1; then
+    systemctl reset-failed wavelog.service 2>/dev/null || true
+    systemctl restart wavelog.service 2>/dev/null || systemctl start wavelog.service 2>/dev/null || true
+  fi
+else
+  echo "ota-hooks: docker ausente neste host — grave imagem bake com docker.io" >&2
+fi
 
 exit 0

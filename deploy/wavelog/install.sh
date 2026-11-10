@@ -62,7 +62,14 @@ fi
 chown -R hamcockpit:hamcockpit "$GATE_DEST" 2>/dev/null || true
 
 systemctl daemon-reload
+systemctl unmask docker.service docker.socket 2>/dev/null || true
+systemctl enable docker.service docker.socket 2>/dev/null || true
 systemctl enable --now docker.service
+# Espera o sock antes do compose (mesmo critério do wavelog.service).
+for _ in $(seq 1 60); do
+  docker info >/dev/null 2>&1 && break
+  sleep 1
+done
 systemctl enable --now wavelog.service
 if systemctl cat waveloggate.service >/dev/null 2>&1; then
   systemctl enable waveloggate.service
