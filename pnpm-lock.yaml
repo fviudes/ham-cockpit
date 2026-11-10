@@ -124,6 +124,9 @@ importers:
       framer-motion:
         specifier: ^12.23.22
         version: 12.23.22(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+      icom-wlan-node:
+        specifier: ^0.8.1
+        version: 0.8.1
       input-otp:
         specifier: ^1.4.2
         version: 1.4.2(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
@@ -2459,6 +2462,9 @@ packages:
   http-errors@2.0.0:
     resolution: {integrity: sha512-FtwrG/euBzaEjYeRqOgly7G0qviiXoJWnvEH2Z1plBdXgbyjv34pHTSb9zoeHMyDy33+DWy5Wt9Wo+TURtOYSQ==}
     engines: {node: '>= 0.8'}
+
+  icom-wlan-node@0.8.1:
+    resolution: {integrity: sha512-Mb8YFJybChfTo3mIVDsBkAszwNbbYTqq8QPR9eRH0vIzKllEo7Y6MABEfd6HkvJMDvpGWjmTnKz356GFDsZgoQ==}
 
   iconv-lite@0.4.24:
     resolution: {integrity: sha512-v3MXnZAcvnywkTUEZomIActle7RXXeedOR31wwl7VlyoXO4Qi9arvSenNQWne1TcRwhCL1HwLI21bEqdpj8/rA==}
@@ -5856,6 +5862,8 @@ snapshots:
       setprototypeof: 1.2.0
       statuses: 2.0.1
       toidentifier: 1.0.1
+
+  icom-wlan-node@0.8.1: {}
 
   iconv-lite@0.4.24:
     dependencies:

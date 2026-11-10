@@ -7,6 +7,10 @@
  *   node scripts/pack-update.mjs --skip-build
  *   node scripts/pack-update.mjs --notes "…"
  *
+ * Versão vem de VERSION (3 partes = alinhado à imagem; 4 partes = OTA-only).
+ * Ex.: 0.1.05 → ham-cockpit-0.1.05.tgz | 0.1.04.01 → ham-cockpit-0.1.04.01.tgz
+ * Ver docs/versionamento.md.
+ *
  * Gera update/ham-cockpit-<versão>.tgz e atualiza update/version.json.
  * Não inclui configs da estação (rádios, Wi‑Fi, bindings, layouts…).
  */
@@ -35,6 +39,7 @@ const BIN_FROM_STATION = [
   "station-net",
   "station-svc",
   "station-upd",
+  "station-backup",
   "vfo-display-ctl",
   "vfo-display-kiosk",
   "vfo-display-idle",
@@ -61,6 +66,9 @@ function argValue(flag) {
   return String(process.argv[i + 1] || "").trim();
 }
 
+/** Aceita x.y.zz ou x.y.zz.NN (NN = 00–99). */
+const VERSION_RE = /^\d+\.\d+\.\d+(?:\.\d{1,2})?$/;
+
 function readVersion() {
   const fromFile = readFileSync(join(ROOT, "VERSION"), "utf8").trim().replace(/^v/i, "");
   if (fromFile) return fromFile;
@@ -76,10 +84,13 @@ function main() {
   const skipBuild = process.argv.includes("--skip-build");
   const notesArg = argValue("--notes");
   const version = readVersion();
-  if (!/^\d+\.\d+/.test(version)) {
-    console.error("VERSION inválida:", version);
+  if (!VERSION_RE.test(version)) {
+    console.error("VERSION inválida (use x.y.zz ou x.y.zz.NN):", version);
     process.exit(1);
   }
+  const parts = version.split(".");
+  const kind = parts.length === 4 ? "OTA-only (4 partes)" : "base de imagem / OTA alinhado (3 partes)";
+  console.log(`versão ${version} — ${kind}`);
 
   if (!skipBuild) {
     console.log("compilando console (pnpm build)…");
@@ -104,6 +115,7 @@ function main() {
   cpSync(distPublic, join(stage, "public"), { recursive: true });
   cpSync(join(STATION, "runtime-package.json"), join(stage, "package.json"));
   cpSync(join(STATION, "ota-hooks.sh"), join(stage, "ota-hooks.sh"));
+  cpSync(join(STATION, "sudoers-hamcockpit"), join(stage, "sudoers-hamcockpit"));
   cpSync(join(ROOT, "VERSION"), join(stage, "VERSION"));
   cpSync(join(STATION, "versions.json"), join(stage, "versions.json"));
 
@@ -169,6 +181,14 @@ Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
 Versão atual neste canal: **${version}** (\`version.json\`).
 
+## Versionamento
+
+- **Imagem (bake):** base \`x.y.zz\` → \`ham-cockpit-x.y.zz-raspi.img.xz\` (sem sufixo OTA).
+- **OTA-only:** mesma base + \`.01\` … \`.99\` → \`ham-cockpit-x.y.zz.NN.tgz\`.
+- Comparação: \`0.1.04\` < \`0.1.04.01\` < \`0.1.04.02\` < \`0.1.05\`.
+
+Guia completo: [docs/versionamento.md](../docs/versionamento.md).
+
 ## Como o console usa esta pasta
 
 1. Lê \`version.json\` na branch \`main\`.
@@ -181,6 +201,7 @@ ${JSON.stringify(meta, null, 2)}
 
 - \`"file"\` preenchido: baixa \`update/<file>\` desta pasta.
 - \`"file"\` vazio: inválido para apply — publique o \`.tgz\` com \`node scripts/pack-update.mjs\`.
+- Notas de release: passe \`--notes "…"\` no pack (convenção: \`Ham Cockpit vX.Y.ZZ[.NN] — …\`).
 
 O pacote traz o console compilado (\`index.js\` + \`public/\`), \`package.json\` de runtime, helpers em \`bin/\` e units em \`systemd/\`. **Não** inclui configs da estação (rádios, Wi‑Fi, bindings, layouts, ser2net…).
 

@@ -1,4 +1,4 @@
-# Arquitetura — Ham Cockpit v0.1.04
+# Arquitetura — Ham Cockpit v0.1.04.01
 
 Visão interna da estação. Operadores usam o [README](../README.md) e o Manual do console.
 
@@ -47,6 +47,8 @@ Usuário de serviço: `hamcockpit`. Target systemd: `ham-cockpit.target`.
 ## Atualização do console
 
 `server/updates.ts` lê `update/version.json` em `github.com/fviudes/ham-cockpit` (branch `main`). `deploy/station/station-upd apply app` baixa o artefato ou o snapshot de `main` e reinicia `ham-cockpit.service`.
+
+Versões: imagem = `x.y.zz`; OTA-only = `x.y.zz.NN`. Comparação e helpers em [`shared/version.ts`](../shared/version.ts). Guia: [versionamento.md](versionamento.md).
 
 ## Backup
 

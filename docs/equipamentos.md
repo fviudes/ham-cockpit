@@ -13,7 +13,7 @@ Ambos renderizam `EquipmentGuide` a partir do mesmo catálogo (diagramas SVG, wo
 
 | Maker | Protocolo principal | Caminho Hamlib hoje |
 | --- | --- | --- |
-| Icom | CI-V · GATT · LAN UDP 50001–3 | USB→ser2net; GATT no Chrome; LAN = driver futuro |
+| Icom | CI-V · GATT · LAN UDP 50001–3 | USB→ser2net; GATT no Chrome; LAN→gateway UDP→TCP 45002→rigctld |
 | Kenwood | CAT serial | ser2net → `rigctld` |
 | Yaesu | CAT serial | ser2net → `rigctld` |
 | FlexRadio | SmartSDR TCP/UDP 4992 · VITA 4991 | proxy CAT → Hamlib |

@@ -34,7 +34,8 @@ export type EquipmentProtocol = (typeof EQUIPMENT_PROTOCOLS)[number];
 /**
  * Transporte físico / lógico.
  * - usb-serial / bluetooth-*: cabo ou BT no host
- * - icom-lan-udp / flex-tcp / openhpsdr-*: nativos (drivers futuros)
+ * - icom-lan-udp: gateway Node (UDP 50001–3) → TCP CI-V local → Hamlib
+ * - flex-tcp / openhpsdr-*: nativos (drivers futuros)
  * - sdr-cat-proxy / tci: CAT/TCI do app SDR (Thetis, piHPSDR…) → Hamlib
  * - hamlib-net: já é um rigctld remoto
  */
@@ -103,10 +104,11 @@ export type EquipmentCapabilities = {
  * Como o Hamlib Hub alcança o rádio.
  * ser2net: -r 127.0.0.1:<ser2netPort>
  * cat-proxy: -r <host>:<catPort> (Thetis/piHPSDR)
+ * icom-lan: -r 127.0.0.1:45002 (TCP CI-V do gateway UDP)
  * hamlib-net: já é NET; só cliente
  * none: só catálogo / driver futuro
  */
-export type HamlibBackend = "ser2net" | "cat-proxy" | "hamlib-net" | "none";
+export type HamlibBackend = "ser2net" | "cat-proxy" | "icom-lan" | "hamlib-net" | "none";
 
 export type EquipmentRadio = {
   id: string;

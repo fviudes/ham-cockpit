@@ -28,8 +28,14 @@ chmod +x "$DEST/wavelog-ctl.sh" "$DEST/install.sh"
 if [[ ! -f "$DEST/.env" ]]; then
   PW="$(openssl rand -base64 18 | tr -dc 'A-Za-z0-9' | head -c 20)"
   printf 'WAVELOG_DB_PASSWORD=%s\n' "$PW" >"$DEST/.env"
-  chmod 600 "$DEST/.env"
   echo "criado $DEST/.env (senha do MariaDB gerada)"
+fi
+# Serviço hamcockpit precisa ler/gravar no backup/restore (não world-readable).
+if [[ -f "$DEST/.env" ]]; then
+  if getent passwd hamcockpit >/dev/null 2>&1; then
+    chown hamcockpit:hamcockpit "$DEST/.env"
+  fi
+  chmod 640 "$DEST/.env"
 fi
 
 install -m 0644 "$HERE/wavelog.service" /etc/systemd/system/wavelog.service

@@ -37,6 +37,7 @@ function proxyModel(via: string | undefined, fallback: number | null): number | 
 function resolveBackend(eq: EquipmentRadio, conn: EquipmentConnection): HamlibBackend {
   if (conn.kind === "hamlib-net") return "hamlib-net";
   if (conn.kind === "sdr-cat-proxy") return "cat-proxy";
+  if (conn.kind === "icom-lan-udp") return "icom-lan";
   if (conn.kind === "usb-serial" && eq.hamlibBackend === "ser2net") return "ser2net";
   if (eq.hamlibBackend !== "none" && conn.hamlibReady) return eq.hamlibBackend;
   return "none";
@@ -77,11 +78,17 @@ function buildRigDevice(
     return { rigDevice: `${host}:${cat}`, ready: true };
   }
 
+  if (backend === "icom-lan") {
+    // Gateway Node autentica UDP e espelha CI-V em TCP local (ver server/icom-lan.ts).
+    const local = binding.ports?.serial ?? 45002;
+    return { rigDevice: `127.0.0.1:${local}`, ready: true };
+  }
+
   return {
     rigDevice: "",
     ready: false,
     deferReason:
-      "Este transporte ainda não tem driver no hub Hamlib (GATT, Icom LAN UDP, Flex TCP, OpenHPSDR nativo, TCI).",
+      "Este transporte ainda não tem driver no hub Hamlib (GATT, Flex TCP, OpenHPSDR nativo, TCI).",
   };
 }
 
@@ -160,7 +167,7 @@ export function planHamlib(binding: EquipmentBinding): HamlibPlan | null {
 
   const argv = ["-m", String(model), "-r", rigDevice, "-t", String(listenPort)];
   if (baud > 0 && backend === "ser2net") argv.push("-s", String(baud));
-  if (civAddr && eq.protocol === "civ" && backend === "ser2net") {
+  if (civAddr && eq.protocol === "civ" && (backend === "ser2net" || backend === "icom-lan")) {
     const n = Number.parseInt(civAddr, 16);
     if (Number.isFinite(n)) argv.push("-c", `0x${n.toString(16).toUpperCase()}`);
   }

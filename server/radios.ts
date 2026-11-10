@@ -1,11 +1,12 @@
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { randomBytes } from "node:crypto";
 import { SER2NET_RADIO_ID } from "../shared/const";
-import { EQUIPMENT_MAKERS, type EquipmentMaker } from "../shared/equipment";
+import { EQUIPMENT_MAKERS, getEquipment, type EquipmentMaker } from "../shared/equipment";
+import { icomLanConnect, icomLanDisconnect, icomLanLive, icomLanStatus, resolveIcomLanModel } from "./icom-lan";
 import { listSerialDevices } from "./list-serials";
 import { loadSer2net, saveSer2net } from "./ser2net-store";
 
@@ -44,6 +45,8 @@ export type StationRadio = {
   /** Network User / login Icom LAN. */
   netUser?: string;
   netPassword?: string;
+  /** Senha gravada (não ecoa o valor). */
+  hasNetPassword?: boolean;
 };
 
 export type RadioPick = {
@@ -91,6 +94,45 @@ function writeAtomic(file: string, body: string) {
   const tmp = `${file}.${process.pid}.tmp`;
   writeFileSync(tmp, body, { encoding: "utf8" });
   renameSync(tmp, file);
+  try {
+    chmodSync(file, 0o600);
+  } catch {
+    /* Windows / FS sem chmod */
+  }
+}
+
+/** Remove senha da resposta HTTP; mantém flag hasNetPassword. */
+function publicRadio(r: StationRadio): StationRadio {
+  const { netPassword, ...rest } = r;
+  if (r.link !== "network") return rest;
+  return {
+    ...rest,
+    ...(netPassword ? { hasNetPassword: true } : {}),
+  };
+}
+
+function publicList(list: StationRadio[]): StationRadio[] {
+  return list.map(publicRadio);
+}
+
+function isIcomLan(row: StationRadio): boolean {
+  if (row.link !== "network" || row.maker !== "icom") return false;
+  if (row.netProfile?.startsWith("icom-lan-udp")) return true;
+  // Sem perfil explícito: Icom Rede = LAN UDP (padrão da UI).
+  return !row.netProfile || row.netProfile.includes("icom");
+}
+
+function hamlibModelFor(row: StationRadio): number {
+  if (row.equipmentId) {
+    const eq = getEquipment(row.equipmentId);
+    if (eq?.hamlibModel) return eq.hamlibModel;
+  }
+  const model = resolveIcomLanModel(row.equipmentId, `${row.name} ${row.deviceName}`);
+  if (model === "IC-705") return 3085;
+  if (model === "IC-9700") return 3081;
+  if (model === "IC-7610") return 3078;
+  if (model === "IC-7300" || model === "IC-7300MK2") return 3073;
+  return 3085;
 }
 
 function asMaker(v: unknown): RadioMaker {
@@ -146,7 +188,14 @@ function sanitize(raw: Partial<StationRadio>, fallback?: StationRadio): StationR
   const host = String(raw.host ?? fallback?.host ?? "").trim();
   const netProfile = String(raw.netProfile ?? fallback?.netProfile ?? "").trim();
   const netUser = String(raw.netUser ?? fallback?.netUser ?? "").trim();
-  const netPassword = String(raw.netPassword ?? fallback?.netPassword ?? "");
+  // Senha vazia no payload = manter a gravada (formulário não reenvia).
+  const incomingPass = raw.netPassword;
+  const netPassword =
+    incomingPass === undefined || incomingPass === null
+      ? String(fallback?.netPassword ?? "")
+      : String(incomingPass) === "" && fallback?.netPassword
+        ? String(fallback.netPassword)
+        : String(incomingPass);
   const port =
     link === "network"
       ? String(raw.port ?? fallback?.port ?? "").trim()
@@ -323,7 +372,22 @@ export async function radiosStatus(): Promise<RadiosSnapshot> {
   } catch {
     bluetooth = [];
   }
-  return { ok: true, folder: dataDir(), radios, usb, bluetooth };
+  // Espelha sessão LAN ao vivo na lista (sem persistir a cada poll).
+  const lan = icomLanStatus();
+  const view = radios.map((r) => {
+    if (!isIcomLan(r)) return r;
+    if (lan.connected && lan.radioId === r.id) {
+      return { ...r, connected: true, error: "", ...(lan.civAddr ? { civAddr: lan.civAddr } : {}) };
+    }
+    if (lan.connected && lan.radioId && lan.radioId !== r.id) {
+      return { ...r, connected: false };
+    }
+    if (!lan.connected && r.connected && !icomLanLive()) {
+      return { ...r, connected: false };
+    }
+    return r;
+  });
+  return { ok: true, folder: dataDir(), radios: publicList(view), usb, bluetooth };
 }
 
 export async function radiosSave(body: { radios?: unknown }): Promise<RadiosSnapshot> {
@@ -359,6 +423,10 @@ function findRadio(id: string) {
 }
 
 export async function radiosRemove(id: string): Promise<RadiosSnapshot> {
+  const row = findRadio(id);
+  if (row && (isIcomLan(row) || icomLanStatus().radioId === id)) {
+    await icomLanDisconnect();
+  }
   radios = radios.map((r) => (r.id === id ? { ...r, connected: false } : r)).filter((r) => r.id !== id);
   normalizePrimary();
   persist();
@@ -376,10 +444,35 @@ export async function radiosConnect(raw: Partial<StationRadio>): Promise<RadiosS
     } else if (!next.port || !/^\d{1,5}$/.test(next.port) || Number(next.port) < 1 || Number(next.port) > 65535) {
       next.connected = false;
       next.error = "Informe a porta de rede (1–65535)";
-    } else if (next.netProfile?.startsWith("icom-lan-udp") && !next.netUser) {
+    } else if (isIcomLan(next) && !next.netUser) {
       next.connected = false;
       next.error = "Informe o Network User do Icom LAN";
+    } else if (isIcomLan(next)) {
+      next.device = next.host;
+      next.deviceName = next.deviceName || `${next.host}:${next.port}`;
+      const lan = await icomLanConnect({
+        radioId: next.id,
+        host: next.host,
+        controlPort: Number(next.port) || 50001,
+        userName: next.netUser || "",
+        password: next.netPassword || "",
+        civAddr: next.civAddr,
+        hamlibModel: hamlibModelFor(next),
+        equipmentId: next.equipmentId,
+        deviceName: next.deviceName || next.name,
+      });
+      if (lan.connected) {
+        next.connected = true;
+        next.error = "";
+        if (lan.civAddr) next.civAddr = lan.civAddr;
+        if (lan.deviceName) next.deviceName = lan.deviceName;
+        radios = radios.map((r) => (r.id === next.id ? r : { ...r, connected: false }));
+      } else {
+        next.connected = false;
+        next.error = lan.error || "Falha ao autenticar no Icom LAN (UDP 50001)";
+      }
     } else {
+      // Flex / HL2 / Anan: ainda sem driver nativo — marca conectado só se host:porta ok.
       next.device = next.host;
       next.deviceName = next.deviceName || `${next.host}:${next.port}`;
       next.connected = true;
@@ -467,11 +560,45 @@ export async function radiosConnect(raw: Partial<StationRadio>): Promise<RadiosS
 export async function radiosDisconnect(id: string): Promise<RadiosSnapshot> {
   const row = findRadio(id);
   if (row) {
+    if (isIcomLan(row) || icomLanStatus().radioId === id) {
+      await icomLanDisconnect();
+    }
     row.connected = false;
     row.error = "";
     persist();
   }
   return radiosStatus();
+}
+
+/** Reabre sessão LAN se o rádio Icom Rede estava marcado conectado no boot. */
+export async function radiosResumeIcomLan(): Promise<void> {
+  const row = radios.find((r) => r.connected && isIcomLan(r));
+  if (!row?.host || !row.netUser) return;
+  const lan = await icomLanConnect({
+    radioId: row.id,
+    host: row.host,
+    controlPort: Number(row.port) || 50001,
+    userName: row.netUser,
+    password: row.netPassword || "",
+    civAddr: row.civAddr,
+    hamlibModel: hamlibModelFor(row),
+    equipmentId: row.equipmentId,
+    deviceName: row.deviceName || row.name,
+  });
+  const idx = radios.findIndex((r) => r.id === row.id);
+  if (idx < 0) return;
+  if (lan.connected) {
+    radios[idx] = {
+      ...radios[idx]!,
+      connected: true,
+      error: "",
+      ...(lan.civAddr ? { civAddr: lan.civAddr } : {}),
+      ...(lan.deviceName ? { deviceName: lan.deviceName } : {}),
+    };
+  } else {
+    radios[idx] = { ...radios[idx]!, connected: false, error: lan.error || "Icom LAN offline no boot" };
+  }
+  persist();
 }
 
 export async function radiosMarkBle(id: string, connected: boolean, name?: string, error?: string): Promise<RadiosSnapshot> {

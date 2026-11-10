@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { useLocation } from "wouter";
 import NavBar from "@/components/NavBar";
-import { APP_BLE_NAME, APP_VERSION } from "@shared/brand";
+import { APP_BLE_NAME, APP_IMAGE_VERSION, APP_VERSION } from "@shared/brand";
 import {
   FigAcomCable,
   FigBoot,
@@ -193,9 +193,15 @@ export default function Docs() {
                   pt: "O bake roda no GitHub Actions (ARM). O arquivo não vai para o Git (~1,7 GB). Fica em",
                   en: "The bake runs on GitHub Actions (ARM). The file does not go into Git (~1.7 GB). It lives at",
                 })}{" "}
-                <code>image/out/ham-cockpit-{APP_VERSION}-raspi.img.xz</code>{" "}
+                <code>image/out/ham-cockpit-{APP_IMAGE_VERSION}-raspi.img.xz</code>{" "}
                 {t({ pt: "neste PC, ou no release", en: "on this PC, or on the" })}{" "}
-                <a href={`https://github.com/fviudes/ham-cockpit/releases/tag/v${APP_VERSION}`}>v{APP_VERSION}</a>.
+                <a href={`https://github.com/fviudes/ham-cockpit/releases/tag/v${APP_IMAGE_VERSION}`}>
+                  v{APP_IMAGE_VERSION}
+                </a>
+                {t({
+                  pt: ` (console em campo: v${APP_VERSION}).`,
+                  en: ` (field console: v${APP_VERSION}).`,
+                })}
               </p>
               <FigBoot
                 caption={t({
@@ -839,8 +845,9 @@ Lextel PIN     1234 ${pin} 0000
 MMDVM UART     /dev/ttyAMA0 115200
 DMRGateway     127.0.0.1:62031 ↔ Host :62032
 Remote         TCP 7642
-${t({ pt: "Imagem", en: "Image" }).padEnd(14)}image/out/ham-cockpit-${APP_VERSION}-raspi.img.xz
-Release        github.com/fviudes/ham-cockpit/releases/tag/v${APP_VERSION}`}</pre>
+${t({ pt: "Imagem", en: "Image" }).padEnd(14)}image/out/ham-cockpit-${APP_IMAGE_VERSION}-raspi.img.xz
+Release        github.com/fviudes/ham-cockpit/releases/tag/v${APP_IMAGE_VERSION}
+OTA            v${APP_VERSION}`}</pre>
             </Sec>
 
             <Sec id="receitas" title={t({ pt: "Estações de exemplo", en: "Sample stations" })}>

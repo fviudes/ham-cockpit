@@ -327,7 +327,7 @@ export const HOME_FEATURES: { title: Pair; body: Pair }[] = [
 
 export const HOME_DEVICES: { name: string; link: Pair; serial: Pair; proto: Pair }[] = [
   { name: "IC-705", link: { pt: "Bluetooth GATT", en: "Bluetooth GATT" }, serial: { pt: "— (Web BT)", en: "— (Web BT)" }, proto: { pt: "CI-V 0xA4 · HS Ham-Cockpit-Web01", en: "CI-V 0xA4 · HS Ham-Cockpit-Web01" } },
-  { name: "IC-7300 / 7610 / 9700 / 7100", link: { pt: "USB CI-V (+ LAN nos 7610/9700)", en: "USB CI-V (+ LAN on 7610/9700)" }, serial: { pt: "19200–115200", en: "19200–115200" }, proto: { pt: "ser2net → Hamlib · LAN UDP 50001–3", en: "ser2net → Hamlib · LAN UDP 50001–3" } },
+  { name: "IC-7300 / 7610 / 9700 / 7100", link: { pt: "USB CI-V (+ LAN nos 7610/9700)", en: "USB CI-V (+ LAN on 7610/9700)" }, serial: { pt: "19200–115200", en: "19200–115200" }, proto: { pt: "ser2net → Hamlib · LAN UDP→CI-V", en: "ser2net → Hamlib · LAN UDP→CI-V" } },
   { name: "Kenwood TS-590 / 890 / 990", link: { pt: "USB CAT", en: "USB CAT" }, serial: { pt: "38400–115200", en: "38400–115200" }, proto: { pt: "ser2net + Hamlib", en: "ser2net + Hamlib" } },
   { name: "Yaesu FT-991A / FTDX / FT-710", link: { pt: "USB CAT", en: "USB CAT" }, serial: { pt: "38400", en: "38400" }, proto: { pt: "ser2net + Hamlib", en: "ser2net + Hamlib" } },
   { name: "FlexRadio 6400 / 6600 / 8600", link: { pt: "Ethernet SmartSDR", en: "SmartSDR Ethernet" }, serial: { pt: "TCP/UDP 4992 · VITA 4991", en: "TCP/UDP 4992 · VITA 4991" }, proto: { pt: "Proxy CAT → Hamlib (driver nativo depois)", en: "CAT proxy → Hamlib (native driver later)" } },

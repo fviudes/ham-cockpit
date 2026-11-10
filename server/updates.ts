@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { APP_VERSION, UPDATE_REPO } from "../shared/brand";
 import { UPDATE_IDS, type UpdateId } from "../shared/const";
+import { cleanVersion, isNewerVersion } from "../shared/version";
 
 const execFileAsync = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -94,27 +95,10 @@ function wlgShipped(): string {
   return loadShipped().wlg;
 }
 
-function nums(v: string): number[] {
-  return String(v || "")
-    .replace(/^[^\d]+/, "")
-    .split(/[^\d]+/)
-    .filter(Boolean)
-    .map((n) => Number(n) || 0);
-}
-
 function newer(available: string, current: string): boolean {
-  if (!available || !current || available === current || available === "—") return false;
-  if (/pacotes/i.test(available)) return true;
-  const a = nums(available);
-  const b = nums(current);
-  const n = Math.max(a.length, b.length);
-  for (let i = 0; i < n; i++) {
-    const x = a[i] || 0;
-    const y = b[i] || 0;
-    if (x > y) return true;
-    if (x < y) return false;
-  }
-  return false;
+  // App Ham Cockpit: 0.1.04 < 0.1.04.01 < 0.1.05 (shared/version.ts).
+  // Demais componentes (apt/Docker/tags) também caem no comparador numérico por partes.
+  return isNewerVersion(available, current);
 }
 
 function item(id: UpdateId, current: string, available: string, note = "", error = ""): UpdateItem {
@@ -137,19 +121,19 @@ async function githubTag(repo: string): Promise<string> {
     const t = setTimeout(() => ctrl.abort(), 4500);
     const r = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
       signal: ctrl.signal,
-      headers: { Accept: "application/vnd.github+json", "User-Agent": "Ham-Cockpit/0.1.04" },
+      headers: { Accept: "application/vnd.github+json", "User-Agent": `Ham-Cockpit/${APP_VERSION}` },
     });
     clearTimeout(t);
     if (!r.ok) return "";
     const j = (await r.json()) as { tag_name?: string; name?: string };
-    return String(j.tag_name || j.name || "").replace(/^v/i, "").trim();
+    return cleanVersion(String(j.tag_name || j.name || ""));
   } catch {
     return "";
   }
 }
 
 async function githubAppVersion(): Promise<string> {
-  const headers = { Accept: "application/vnd.github+json", "User-Agent": "Ham-Cockpit/0.1.04" };
+  const headers = { Accept: "application/vnd.github+json", "User-Agent": `Ham-Cockpit/${APP_VERSION}` };
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 6000);
@@ -160,7 +144,7 @@ async function githubAppVersion(): Promise<string> {
     clearTimeout(t);
     if (r.ok) {
       const j = (await r.json()) as { version?: string };
-      return String(j.version || "").replace(/^v/i, "").trim();
+      return cleanVersion(String(j.version || ""));
     }
   } catch {
     /* ignore */

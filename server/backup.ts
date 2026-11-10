@@ -1,7 +1,9 @@
 import { execFile, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import {
+  accessSync,
   chmodSync,
+  constants,
   cpSync,
   existsSync,
   mkdirSync,
@@ -21,6 +23,8 @@ import { listUsers } from "./users";
 const execFileAsync = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ID_RE = /^(?:hamcockpit|catbridge)-\d{8}-\d{6}-[a-f0-9]{8}$/;
+const HELPER = "/opt/ham-cockpit/bin/station-backup";
+const WAVELG_OPT_FILES = [".env", "docker-compose.yml", "wavelog-ctl.sh"] as const;
 
 export type BackupItem = {
   id: string;
@@ -108,21 +112,30 @@ function skipName(base: string) {
   return false;
 }
 
-function copyTree(src: string, dest: string) {
-  if (!existsSync(src)) return false;
-  const st = statSync(src);
-  if (st.isFile()) {
-    if (skipName(basename(src))) return false;
-    mkdirSync(dirname(dest), { recursive: true });
-    cpSync(src, dest);
+function isEacces(err: unknown): boolean {
+  return Boolean(err && typeof err === "object" && "code" in err && (err as NodeJS.ErrnoException).code === "EACCES");
+}
+
+function readable(path: string): boolean {
+  try {
+    accessSync(path, constants.R_OK);
     return true;
+  } catch {
+    return false;
   }
-  mkdirSync(dest, { recursive: true });
-  for (const name of readdirSync(src)) {
-    if (skipName(name)) continue;
-    copyTree(join(src, name), join(dest, name));
+}
+
+function writableTarget(path: string): boolean {
+  try {
+    if (existsSync(path)) {
+      accessSync(path, constants.W_OK);
+      return true;
+    }
+    accessSync(dirname(path), constants.W_OK);
+    return true;
+  } catch {
+    return false;
   }
-  return true;
 }
 
 function run(cmd: string, args: string[], opts?: { cwd?: string; timeout?: number; input?: Buffer | string }): Promise<{
@@ -160,24 +173,139 @@ function run(cmd: string, args: string[], opts?: { cwd?: string; timeout?: numbe
   });
 }
 
-function envValue(file: string, key: string) {
-  if (!existsSync(file)) return "";
-  const line = readFileSync(file, "utf8")
-    .split(/\r?\n/)
-    .find((l) => l.startsWith(`${key}=`));
+async function helper(args: string[], timeout = 15_000): Promise<{ ok: boolean; stdout: string; stderr: string }> {
+  if (!linux() || !existsSync(HELPER)) return { ok: false, stdout: "", stderr: "helper ausente" };
+  try {
+    const r = await run("sudo", ["-n", HELPER, ...args], { timeout });
+    return { ok: r.code === 0, stdout: r.stdout, stderr: r.stderr };
+  } catch (err) {
+    return { ok: false, stdout: "", stderr: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+async function ensureWavelogEnvPerms(warnings: string[]) {
+  if (!linux() || !existsSync(join(wavelogDir(), ".env"))) return;
+  if (readable(join(wavelogDir(), ".env"))) return;
+  const r = await helper(["ensure-env"]);
+  if (!r.ok) {
+    warnings.push(`permissões do Wavelog .env: ${r.stderr.trim() || "sudo/station-backup indisponível"}`);
+  }
+}
+
+async function copyPrivilegedFile(src: string, dest: string, warnings: string[], label: string): Promise<boolean> {
+  if (!existsSync(src)) return false;
+  mkdirSync(dirname(dest), { recursive: true });
+  if (readable(src)) {
+    try {
+      cpSync(src, dest);
+      return true;
+    } catch (err) {
+      if (!isEacces(err)) {
+        warnings.push(`${label}: ${err instanceof Error ? err.message : String(err)}`);
+        return false;
+      }
+    }
+  }
+  const r = await helper(["copy", src, dest]);
+  if (r.ok && existsSync(dest)) return true;
+  warnings.push(`${label}: sem permissão para ler ${src}`);
+  return false;
+}
+
+async function installPrivilegedFile(src: string, dest: string, warnings: string[], label: string): Promise<boolean> {
+  if (!existsSync(src)) return false;
+  mkdirSync(dirname(dest), { recursive: true });
+  if (writableTarget(dest)) {
+    try {
+      cpSync(src, dest);
+      return true;
+    } catch (err) {
+      if (!isEacces(err)) {
+        warnings.push(`${label}: ${err instanceof Error ? err.message : String(err)}`);
+        return false;
+      }
+    }
+  }
+  const r = await helper(["install", src, dest]);
+  if (r.ok) return true;
+  warnings.push(`${label}: sem permissão para gravar ${dest}`);
+  return false;
+}
+
+function copyTree(src: string, dest: string, warnings: string[], label: string): boolean {
+  if (!existsSync(src)) return false;
+  let any = false;
+  const walk = (from: string, to: string) => {
+    let st;
+    try {
+      st = statSync(from);
+    } catch (err) {
+      if (isEacces(err)) warnings.push(`${label}: sem permissão para acessar ${from}`);
+      else warnings.push(`${label}: ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
+    if (st.isFile()) {
+      if (skipName(basename(from))) return;
+      try {
+        mkdirSync(dirname(to), { recursive: true });
+        cpSync(from, to);
+        any = true;
+      } catch (err) {
+        if (isEacces(err)) warnings.push(`${label}: sem permissão para copiar ${from}`);
+        else warnings.push(`${label}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return;
+    }
+    try {
+      mkdirSync(to, { recursive: true });
+      for (const name of readdirSync(from)) {
+        if (skipName(name)) continue;
+        walk(join(from, name), join(to, name));
+      }
+      any = true;
+    } catch (err) {
+      if (isEacces(err)) warnings.push(`${label}: sem permissão para listar ${from}`);
+      else warnings.push(`${label}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+  walk(src, dest);
+  return any;
+}
+
+function envValueFromText(text: string, key: string) {
+  const line = text.split(/\r?\n/).find((l) => l.startsWith(`${key}=`));
   return line ? line.slice(key.length + 1).trim().replace(/^["']|["']$/g, "") : "";
+}
+
+async function readEnvValue(file: string, key: string, warnings: string[]): Promise<string> {
+  if (!existsSync(file)) return "";
+  if (readable(file)) {
+    try {
+      return envValueFromText(readFileSync(file, "utf8"), key);
+    } catch (err) {
+      if (!isEacces(err)) {
+        warnings.push(`.env: ${err instanceof Error ? err.message : String(err)}`);
+        return "";
+      }
+    }
+  }
+  const r = await helper(["cat", file]);
+  if (r.ok) return envValueFromText(r.stdout, key);
+  warnings.push(`sem permissão para ler ${file}`);
+  return "";
 }
 
 async function dumpWavelog(dest: string, warnings: string[], parts: string[]) {
   mkdirSync(dest, { recursive: true });
   const home = wavelogDir();
-  for (const name of [".env", "docker-compose.yml", "wavelog-ctl.sh"]) {
+  let copiedOpt = false;
+  for (const name of WAVELG_OPT_FILES) {
     const src = join(home, name);
-    if (existsSync(src)) {
-      mkdirSync(join(dest, "opt"), { recursive: true });
-      cpSync(src, join(dest, "opt", name));
-    }
+    if (!existsSync(src)) continue;
+    const ok = await copyPrivilegedFile(src, join(dest, "opt", name), warnings, `wavelog:${name}`);
+    if (ok) copiedOpt = true;
   }
+  if (copiedOpt) parts.push("wavelog:opt");
   try {
     const { stdout } = await execFileAsync("docker", ["volume", "ls", "-q"], { timeout: 15_000, windowsHide: true });
     const vols = stdout
@@ -195,7 +323,7 @@ async function dumpWavelog(dest: string, warnings: string[], parts: string[]) {
   } catch (err) {
     warnings.push(`docker volumes: ${err instanceof Error ? err.message : String(err)}`);
   }
-  const pass = envValue(join(home, ".env"), "WAVELOG_DB_PASSWORD");
+  const pass = await readEnvValue(join(home, ".env"), "WAVELOG_DB_PASSWORD", warnings);
   if (!pass) {
     warnings.push("WAVELOG_DB_PASSWORD ausente — dump SQL do Wavelog não feito");
     return;
@@ -221,7 +349,21 @@ async function restoreWavelog(src: string, warnings: string[]) {
   if (existsSync(opt)) {
     mkdirSync(home, { recursive: true });
     for (const name of readdirSync(opt)) {
-      cpSync(join(opt, name), join(home, name));
+      const from = join(opt, name);
+      const to = join(home, name);
+      if ((WAVELG_OPT_FILES as readonly string[]).includes(name) || name.endsWith(".env")) {
+        await installPrivilegedFile(from, to, warnings, `restore wavelog:${name}`);
+      } else {
+        try {
+          cpSync(from, to);
+        } catch (err) {
+          warnings.push(
+            isEacces(err)
+              ? `restore wavelog:${name}: sem permissão`
+              : `restore wavelog:${name}: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+      }
     }
   }
   const tgz = existsSync(src)
@@ -237,7 +379,7 @@ async function restoreWavelog(src: string, warnings: string[]) {
     if (r.code !== 0) warnings.push(`restore ${vol}: ${r.stderr.trim() || r.code}`);
   }
   const sql = join(src, "wavelog.sql");
-  const pass = envValue(join(home, ".env"), "WAVELOG_DB_PASSWORD");
+  const pass = await readEnvValue(join(home, ".env"), "WAVELOG_DB_PASSWORD", warnings);
   if (existsSync(sql) && pass) {
     try {
       const dump = readFileSync(sql);
@@ -311,8 +453,11 @@ export async function backupCreate(user: string): Promise<{ ok: boolean; item?: 
   const parts: string[] = [];
   const warnings: string[] = [];
   try {
+    await ensureWavelogEnvPerms(warnings);
     for (const src of stationSources()) {
-      if (copyTree(src.dir, join(staging, "station", src.key))) parts.push(`station:${src.key}`);
+      if (copyTree(src.dir, join(staging, "station", src.key), warnings, `station:${src.key}`)) {
+        parts.push(`station:${src.key}`);
+      }
     }
     try {
       const users = await listUsers();
@@ -321,7 +466,7 @@ export async function backupCreate(user: string): Promise<{ ok: boolean; item?: 
     } catch (err) {
       warnings.push(`users: ${err instanceof Error ? err.message : String(err)}`);
     }
-    if (copyTree(wlgDir(), join(staging, "wlg"))) parts.push("wlg");
+    if (copyTree(wlgDir(), join(staging, "wlg"), warnings, "wlg")) parts.push("wlg");
     await dumpWavelog(join(staging, "wavelog"), warnings, parts);
     writeFileSync(
       join(staging, "manifest.json"),
@@ -379,13 +524,21 @@ export async function backupRestore(
         const from = join(station, src.key);
         if (!existsSync(from)) continue;
         mkdirSync(src.dir, { recursive: true });
-        copyTree(from, src.dir);
+        copyTree(from, src.dir, warnings, `restore station:${src.key}`);
       }
     }
     const wlg = join(staging, "wlg");
-    if (existsSync(wlg)) copyTree(wlg, wlgDir());
+    if (existsSync(wlg)) {
+      const gateEnv = join(wlg, "wavelog-gate.env");
+      const destEnv = join(wlgDir(), "wavelog-gate.env");
+      copyTree(wlg, wlgDir(), warnings, "restore wlg");
+      if (existsSync(gateEnv)) {
+        await installPrivilegedFile(gateEnv, destEnv, warnings, "restore wlg:env");
+      }
+    }
     const wav = join(staging, "wavelog");
     if (existsSync(wav)) await restoreWavelog(wav, warnings);
+    await ensureWavelogEnvPerms(warnings);
     return { ok: true, warnings };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };

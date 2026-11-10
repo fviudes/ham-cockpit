@@ -1,6 +1,6 @@
 {
-  "version": "0.1.04",
+  "version": "0.1.04.01",
   "channel": "main",
-  "file": "ham-cockpit-0.1.04.tgz",
-  "notes": "Ham Cockpit v0.1.04 — corrige EACCES ao gravar rádios em /opt/ham-cockpit/radios (+ equipment); barras de progresso em Admin → Atualizações; bake da imagem inclui MMDVMHost, DMRGateway, YSFGateway, ircddbgatewayd e NextionDriver"
+  "file": "ham-cockpit-0.1.04.01.tgz",
+  "notes": "Ham Cockpit v0.1.04.01 — OTA na base 0.1.04: backup privilegiado (station-backup / EACCES no Wavelog .env), transporte Icom LAN (RS-BA1 / CI-V UDP) e versionamento imagem x.y.zz vs OTA x.y.zz.NN"
 }

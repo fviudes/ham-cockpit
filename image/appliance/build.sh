@@ -12,7 +12,17 @@ MNT="$OUT/mnt"
 CFG="$ROOT/image/appliance/config"
 # shellcheck disable=SC1090
 source "$CFG"
-VER="$(tr -d ' \r\n' <"$ROOT/VERSION")"
+# VERSION pode ser OTA (x.y.zz.NN); o artefato .img usa só a base de 3 partes.
+VER_FULL="$(tr -d ' \r\n' <"$ROOT/VERSION")"
+VER="$(printf '%s\n' "$VER_FULL" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+)(\.[0-9]+)?$/\1/')"
+if [[ ! "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "VERSION inválida para imagem: $VER_FULL (esperado x.y.zz ou x.y.zz.NN)" >&2
+  exit 1
+fi
+if [[ "$VER_FULL" != "$VER" ]]; then
+  echo "aviso: VERSION=$VER_FULL tem sufixo OTA — bake usará base $VER no nome do .img" >&2
+  echo "recomendado: bump de imagem (sem .NN) antes do bake; ver docs/versionamento.md" >&2
+fi
 IMG_RAW="$OUT/${IMG_NAME}-${VER}-raspi.img"
 IMG_XZ="$OUT/${IMG_NAME}-${VER}-raspi.img.xz"
 BASE_XZ="$STAGE/$UBUNTU_IMG"

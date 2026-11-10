@@ -89,6 +89,8 @@ export type StationRadio = {
   /** Network User / login Icom LAN. */
   netUser?: string;
   netPassword?: string;
+  /** Senha gravada no Pi (valor nunca volta na API). */
+  hasNetPassword?: boolean;
 };
 export type RadioPick = { id: string; label: string; kind: RadioLink; path: string };
 export type LextelPhase = "idle" | "scanning" | "pairing" | "connecting" | "streaming" | "error";

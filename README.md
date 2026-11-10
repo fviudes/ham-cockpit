@@ -135,6 +135,11 @@ O card Ham Cockpit lê:
 
 Quando `version.json` na `main` tiver um número maior que o instalado, o botão **Atualizar** aplica o pacote na estação.
 
+- Imagem bake: `x.y.zz` → `ham-cockpit-x.y.zz-raspi.img.xz`
+- OTA-only: `x.y.zz.NN` (ex.: `0.1.04.01`) → `ham-cockpit-x.y.zz.NN.tgz`
+
+Guia: [`docs/versionamento.md`](docs/versionamento.md).
+
 ---
 
 ## Contas padrão (troque depois do primeiro login)
@@ -147,4 +152,4 @@ Quando `version.json` na `main` tiver um número maior que o instalado, o botão
 
 ---
 
-Ham Cockpit v0.1.04 · Raspberry Pi 3 / 4 / 5 · Ubuntu Server 24.04 LTS
+Ham Cockpit v0.1.04.01 (imagem base 0.1.04) · Raspberry Pi 3 / 4 / 5 · Ubuntu Server 24.04 LTS

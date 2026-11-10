@@ -148,8 +148,10 @@ export function Ic705Page() {
   const live = s.radios.items.find((r) => r.connected);
   const gattUp = s.ic705.phase === "ready" || s.ic705.civ;
   const bleOn = gattUp || s.ic705.phase === "handshake" || s.ic705.phase === "connecting" || s.ic705.phase === "scanning";
+  const lanCiv = Boolean(live && live.link === "network" && live.maker === "icom" && live.proto !== "cat");
   const wiredLive = Boolean(live && !(live.link === "bluetooth" && live.proto === "civ"));
   const linked = gattUp || wiredLive;
+  const civOk = gattUp || lanCiv;
   const selected = useMemo(() => picks.find((d) => d.path === device), [picks, device]);
   const phaseLabel: Record<BlePhase, string> = {
     idle: tx("blePhaseIdle"),
@@ -480,6 +482,37 @@ export function Ic705Page() {
         toast.error(j.error || tx("radioConnFail"));
         return;
       }
+      if (viaNet && (body.maker ?? maker) === "icom" && (body.proto ?? proto) !== "cat") {
+        setS((p) => ({
+          ...p,
+          ic705: {
+            ...p.ic705,
+            cat: true,
+            civ: true,
+            ble: false,
+            usb: false,
+            phase: "ready",
+            bleName: saved?.deviceName || saved?.name || body.host || p.ic705.bleName,
+            addr: saved?.civAddr || body.civAddr || civAddr,
+            error: "",
+          },
+        }));
+      } else if (viaS2n && (body.maker ?? maker) === "icom") {
+        setS((p) => ({
+          ...p,
+          ic705: {
+            ...p.ic705,
+            cat: true,
+            civ: (body.proto ?? proto) !== "cat",
+            ble: false,
+            usb: true,
+            phase: "ready",
+            bleName: saved?.deviceName || saved?.name || p.ic705.bleName,
+            addr: saved?.civAddr || body.civAddr || civAddr,
+            error: "",
+          },
+        }));
+      }
       pushLog("RADIO", `${saved?.name || body.name} ${body.link} ${body.proto}`);
       toast.success(tx("radioConnectedOk"));
       resetForm();
@@ -528,6 +561,19 @@ export function Ic705Page() {
       })
     ).json()) as RadiosApi;
     applyRadios(setS, j);
+    if (row?.link === "network" || row?.link === "usb") {
+      setS((p) => ({
+        ...p,
+        ic705: {
+          ...p.ic705,
+          cat: false,
+          civ: false,
+          usb: false,
+          phase: p.ic705.ble ? p.ic705.phase : "idle",
+          error: "",
+        },
+      }));
+    }
     pushLog("RADIO", tx("disconnect"));
   };
 
@@ -565,7 +611,7 @@ export function Ic705Page() {
         <StatusTile
           label="CI-V"
           value={
-            gattUp
+            gattUp || lanCiv
               ? tx("blePhaseReady")
               : bleOn
                 ? phaseLabel[s.ic705.phase]
@@ -575,7 +621,7 @@ export function Ic705Page() {
                     ? tx("radioProtoCiv")
                     : "—"
           }
-          on={gattUp}
+          on={civOk}
         />
       </div>
 
@@ -688,6 +734,11 @@ export function Ic705Page() {
                       type="password"
                       value={netPassword}
                       onChange={(e) => setNetPassword(e.target.value)}
+                      placeholder={
+                        editingId && s.radios.items.find((r) => r.id === editingId)?.hasNetPassword
+                          ? tx("radioNetPasswordKeep")
+                          : ""
+                      }
                       autoComplete="current-password"
                     />
                   </Field>

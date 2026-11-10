@@ -113,7 +113,8 @@ install_bin() {
 # v1.0 = último layout WPSD (arquivo de log + Nextion). Não usar master MQTT.
 clone_once https://github.com/M17-Project/MMDVMHost.git MMDVMHost v1.0
 clone_once https://github.com/g4klx/DMRGateway.git DMRGateway v1.0
-clone_once https://github.com/g4klx/YSFClients.git YSFClients
+# v1.0 = layout WPSD sem nlohmann/json (master exige nlohmann-json3-dev).
+clone_once https://github.com/g4klx/YSFClients.git YSFClients v1.0
 clone_once https://github.com/g4klx/ircDDBGateway.git ircDDBGateway
 clone_once https://github.com/on7lds/NextionDriver.git NextionDriver
 

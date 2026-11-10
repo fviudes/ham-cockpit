@@ -74,7 +74,7 @@ app_ver() {
 }
 
 github_app_meta() {
-  curl -fsSL -A "Ham-Cockpit/0.1.03" "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/version.json" || true
+  curl -fsSL -A "Ham-Cockpit/0.1.04.01" "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/version.json" || true
 }
 
 check_app() {
@@ -124,6 +124,9 @@ apply_app() {
   if [[ -f "$src/ota-hooks.sh" ]]; then
     cp -a "$src/ota-hooks.sh" "$APP_HOME/ota-hooks.sh"
     chmod 0755 "$APP_HOME/ota-hooks.sh"
+  fi
+  if [[ -f "$src/sudoers-hamcockpit" ]]; then
+    cp -a "$src/sudoers-hamcockpit" "$APP_HOME/sudoers-hamcockpit"
   fi
   if [[ -f "$src/versions.json" ]]; then
     cp -a "$src/versions.json" "$APP_HOME/versions.json"

@@ -2,7 +2,15 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.04** (`version.json`).
+Versão atual neste canal: **0.1.04.01** (`version.json`).
+
+## Versionamento
+
+- **Imagem (bake):** base `x.y.zz` → `ham-cockpit-x.y.zz-raspi.img.xz` (sem sufixo OTA).
+- **OTA-only:** mesma base + `.01` … `.99` → `ham-cockpit-x.y.zz.NN.tgz`.
+- Comparação: `0.1.04` < `0.1.04.01` < `0.1.04.02` < `0.1.05`.
+
+Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ## Como o console usa esta pasta
 
@@ -12,15 +20,16 @@ Versão atual neste canal: **0.1.04** (`version.json`).
 
 ```json
 {
-  "version": "0.1.04",
+  "version": "0.1.04.01",
   "channel": "main",
-  "file": "ham-cockpit-0.1.04.tgz",
-  "notes": "Ham Cockpit v0.1.04 — corrige EACCES ao gravar rádios em /opt/ham-cockpit/radios (+ equipment); barras de progresso em Admin → Atualizações; bake da imagem inclui MMDVMHost, DMRGateway, YSFGateway, ircddbgatewayd e NextionDriver"
+  "file": "ham-cockpit-0.1.04.01.tgz",
+  "notes": "Ham Cockpit v0.1.04.01 — OTA na base 0.1.04: backup privilegiado (station-backup / EACCES no Wavelog .env), transporte Icom LAN (RS-BA1 / CI-V UDP) e versionamento imagem x.y.zz vs OTA x.y.zz.NN"
 }
 ```
 
 - `"file"` preenchido: baixa `update/<file>` desta pasta.
 - `"file"` vazio: inválido para apply — publique o `.tgz` com `node scripts/pack-update.mjs`.
+- Notas de release: passe `--notes "…"` no pack (convenção: `Ham Cockpit vX.Y.ZZ[.NN] — …`).
 
 O pacote traz o console compilado (`index.js` + `public/`), `package.json` de runtime, helpers em `bin/` e units em `systemd/`. **Não** inclui configs da estação (rádios, Wi‑Fi, bindings, layouts, ser2net…).
 

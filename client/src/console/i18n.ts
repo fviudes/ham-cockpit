@@ -7,7 +7,7 @@ const dict = {
   pt: {
     brand: "Ham Cockpit",
     tagline: "Gateway da estação",
-    version: "v0.1.04",
+    version: "v0.1.04.01",
     vfoHdmiExit: "Tecle CTRL+X para sair para o console",
     loginTitle: "Acessar o console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -154,8 +154,9 @@ const dict = {
     radioNetPort: "Porta de rede",
     radioNetUser: "Usuário de rede",
     radioNetPassword: "Senha de rede",
+    radioNetPasswordKeep: "Deixe em branco para manter a senha salva",
     radioNetHelp:
-      "Rede fala com o rádio (ou com o app SDR) pelo Ethernet/Wi‑Fi. Preencha IP e porta. Icom LAN usa Network User + senha (UDP 50001–50003). Flex/HL2/Anan usam o proxy CAT do Thetis/piHPSDR até o driver nativo.",
+      "Rede fala com o rádio (ou com o app SDR) pelo Ethernet/Wi‑Fi. Preencha IP e porta. Icom LAN: Network User + senha (UDP 50001–50003); o Pi autentica e abre CI-V no painel e no Hamlib (TCP local 45002 → :4532). Flex/HL2/Anan usam o proxy CAT do Thetis/piHPSDR até o driver nativo.",
     radioNeedNetHost: "Informe o IP ou hostname",
     radioNeedNetPort: "Informe a porta de rede",
     radioNeedNetUser: "Informe o usuário de rede (Network User)",
@@ -417,7 +418,7 @@ const dict = {
     backupNone: "Não há backup para restaurar",
     update: "Atualização",
     updateHelp:
-      "O card Ham Cockpit lê github.com/fviudes/ham-cockpit/update na branch main. Os outros cartões comparam a versão instalada com a publicada (apt ou Docker). Atualizar aplica só esse componente. Um reboot pode ser preciso depois do sistema operacional.",
+      "O card Ham Cockpit lê github.com/fviudes/ham-cockpit/update na branch main (versão x.y.zz ou OTA x.y.zz.NN). Os outros cartões comparam a versão instalada com a publicada (apt ou Docker). Atualizar aplica só esse componente. Um reboot pode ser preciso depois do sistema operacional.",
     pickPackage: "Selecionar pacote",
     updApp: "Ham Cockpit",
     updAppHint: "Console da estação. Versões publicadas em github.com/fviudes/ham-cockpit na pasta update, na branch main.",
@@ -707,7 +708,7 @@ const dict = {
   en: {
     brand: "Ham Cockpit",
     tagline: "Station gateway",
-    version: "v0.1.04",
+    version: "v0.1.04.01",
     vfoHdmiExit: "Press CTRL+X to return to the console",
     loginTitle: "Sign in to the console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -854,8 +855,9 @@ const dict = {
     radioNetPort: "Network port",
     radioNetUser: "Network username",
     radioNetPassword: "Network password",
+    radioNetPasswordKeep: "Leave blank to keep the saved password",
     radioNetHelp:
-      "Network talks to the radio (or SDR app) over Ethernet/Wi‑Fi. Fill in IP and port. Icom LAN needs Network User + password (UDP 50001–50003). Flex/HL2/Anan use the Thetis/piHPSDR CAT proxy until a native driver exists.",
+      "Network talks to the radio (or SDR app) over Ethernet/Wi‑Fi. Fill in IP and port. Icom LAN: Network User + password (UDP 50001–50003); the Pi authenticates and opens CI-V for the panel and Hamlib (local TCP 45002 → :4532). Flex/HL2/Anan use the Thetis/piHPSDR CAT proxy until a native driver exists.",
     radioNeedNetHost: "Enter the IP or hostname",
     radioNeedNetPort: "Enter the network port",
     radioNeedNetUser: "Enter the network username (Network User)",
@@ -1117,7 +1119,7 @@ const dict = {
     backupNone: "There is no backup to restore",
     update: "Update",
     updateHelp:
-      "The Ham Cockpit card reads github.com/fviudes/ham-cockpit/update on main. The other cards compare the installed version with the published one (apt or Docker). Update applies only that component. The OS may need a reboot afterwards.",
+      "The Ham Cockpit card reads github.com/fviudes/ham-cockpit/update on main (version x.y.zz or OTA x.y.zz.NN). The other cards compare the installed version with the published one (apt or Docker). Update applies only that component. The OS may need a reboot afterwards.",
     pickPackage: "Select package",
     updApp: "Ham Cockpit",
     updAppHint: "Station console. Versions are published in github.com/fviudes/ham-cockpit under update/ on the main branch.",

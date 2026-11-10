@@ -49,6 +49,7 @@ install -o root -g root -m 0755 "$HERE/ser2net-ctl" /opt/ham-cockpit/bin/ser2net
 install -o root -g root -m 0755 "$HERE/station-net" /opt/ham-cockpit/bin/station-net
 install -o root -g root -m 0755 "$HERE/station-svc" /opt/ham-cockpit/bin/station-svc
 install -o root -g root -m 0755 "$HERE/station-upd" /opt/ham-cockpit/bin/station-upd
+install -o root -g root -m 0755 "$HERE/station-backup" /opt/ham-cockpit/bin/station-backup
 install -o root -g root -m 0755 "$HERE/vfo-display-ctl" /opt/ham-cockpit/bin/vfo-display-ctl
 install -o root -g root -m 0755 "$HERE/vfo-display-kiosk" /opt/ham-cockpit/bin/vfo-display-kiosk
 install -o root -g root -m 0755 "$HERE/vfo-display-idle" /opt/ham-cockpit/bin/vfo-display-idle
@@ -82,8 +83,8 @@ if [[ -f "$ROOT/VERSION" ]]; then
 fi
 (cd /opt/ham-cockpit && npm install --omit=dev)
 chown -R hamcockpit:hamcockpit /opt/ham-cockpit
-chown root:root /opt/ham-cockpit/bin/root-login /opt/ham-cockpit/bin/station-user /opt/ham-cockpit/bin/ser2net-ctl /opt/ham-cockpit/bin/station-net /opt/ham-cockpit/bin/station-svc /opt/ham-cockpit/bin/station-upd /opt/ham-cockpit/bin/lextel-bt /opt/ham-cockpit/bin/vfo-display-ctl /opt/ham-cockpit/bin/vfo-display-kiosk /opt/ham-cockpit/bin/vfo-display-idle /opt/ham-cockpit/bin/ldg-serial /opt/ham-cockpit/bin/mmdvm-ctl
-chmod 0755 /opt/ham-cockpit/bin/root-login /opt/ham-cockpit/bin/station-user /opt/ham-cockpit/bin/ser2net-ctl /opt/ham-cockpit/bin/station-net /opt/ham-cockpit/bin/station-svc /opt/ham-cockpit/bin/station-upd /opt/ham-cockpit/bin/lextel-bt /opt/ham-cockpit/bin/vfo-display-ctl /opt/ham-cockpit/bin/vfo-display-kiosk /opt/ham-cockpit/bin/vfo-display-idle /opt/ham-cockpit/bin/ldg-serial /opt/ham-cockpit/bin/mmdvm-ctl
+chown root:root /opt/ham-cockpit/bin/root-login /opt/ham-cockpit/bin/station-user /opt/ham-cockpit/bin/ser2net-ctl /opt/ham-cockpit/bin/station-net /opt/ham-cockpit/bin/station-svc /opt/ham-cockpit/bin/station-upd /opt/ham-cockpit/bin/station-backup /opt/ham-cockpit/bin/lextel-bt /opt/ham-cockpit/bin/vfo-display-ctl /opt/ham-cockpit/bin/vfo-display-kiosk /opt/ham-cockpit/bin/vfo-display-idle /opt/ham-cockpit/bin/ldg-serial /opt/ham-cockpit/bin/mmdvm-ctl
+chmod 0755 /opt/ham-cockpit/bin/root-login /opt/ham-cockpit/bin/station-user /opt/ham-cockpit/bin/ser2net-ctl /opt/ham-cockpit/bin/station-net /opt/ham-cockpit/bin/station-svc /opt/ham-cockpit/bin/station-upd /opt/ham-cockpit/bin/station-backup /opt/ham-cockpit/bin/lextel-bt /opt/ham-cockpit/bin/vfo-display-ctl /opt/ham-cockpit/bin/vfo-display-kiosk /opt/ham-cockpit/bin/vfo-display-idle /opt/ham-cockpit/bin/ldg-serial /opt/ham-cockpit/bin/mmdvm-ctl
 chown -R hamcockpit:hamcockpit /opt/lextel
 chmod 0775 /opt/lextel
 
@@ -94,10 +95,15 @@ chown -R hamcockpit:hamcockpit /opt/ser2net
 chmod 0775 /opt/ser2net
 cp -a "$ROOT/deploy/wavelog/docker-compose.yml" "$ROOT/deploy/wavelog/wavelog-ctl.sh" "$ROOT/deploy/wavelog/.env.example" /opt/wavelog/
 chmod +x /opt/wavelog/wavelog-ctl.sh
+chown root:hamcockpit /opt/wavelog/docker-compose.yml /opt/wavelog/wavelog-ctl.sh /opt/wavelog/.env.example 2>/dev/null || true
 if [[ ! -f /opt/wavelog/.env ]]; then
   PW="$(openssl rand -base64 18 | tr -dc 'A-Za-z0-9' | head -c 20)"
   printf 'WAVELOG_DB_PASSWORD=%s\n' "$PW" >/opt/wavelog/.env
-  chmod 600 /opt/wavelog/.env
+fi
+# Legível/gravável pelo serviço hamcockpit (backup/restore); não world-readable.
+if [[ -f /opt/wavelog/.env ]]; then
+  chown hamcockpit:hamcockpit /opt/wavelog/.env
+  chmod 640 /opt/wavelog/.env
 fi
 
 install -o hamcockpit -g hamcockpit -m 0755 "$ROOT/deploy/wavelog-gate/wavelog-gate.mjs" /opt/wavelog-gate/wavelog-gate.mjs

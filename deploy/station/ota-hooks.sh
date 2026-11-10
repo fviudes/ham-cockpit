@@ -19,6 +19,26 @@ if [[ -d "$ROOT/bin" ]]; then
   chown root:root "$ROOT"/bin/* 2>/dev/null || true
 fi
 
+# Sudoers do helper de backup (e demais) — atualiza em aparelhos já instalados.
+if [[ -f "$ROOT/sudoers-hamcockpit" ]]; then
+  if command -v visudo >/dev/null 2>&1; then
+    if visudo -cf "$ROOT/sudoers-hamcockpit" >/dev/null 2>&1; then
+      install -o root -g root -m 0440 "$ROOT/sudoers-hamcockpit" /etc/sudoers.d/ham-cockpit
+    fi
+  else
+    install -o root -g root -m 0440 "$ROOT/sudoers-hamcockpit" /etc/sudoers.d/ham-cockpit
+  fi
+fi
+
+# .env do Wavelog costuma nascer root:root 600 (Docker/install antigo).
+# Sem isso o backup do console falha com EACCES ao copiar /opt/wavelog/.env.
+if [[ -x "$ROOT/bin/station-backup" ]]; then
+  "$ROOT/bin/station-backup" ensure-env >/dev/null 2>&1 || true
+elif [[ -f /opt/wavelog/.env ]] && getent passwd hamcockpit >/dev/null 2>&1; then
+  chown hamcockpit:hamcockpit /opt/wavelog/.env 2>/dev/null || true
+  chmod 640 /opt/wavelog/.env 2>/dev/null || true
+fi
+
 # Pastas de dados graváveis pelo serviço (OTA em aparelhos já instalados).
 install -d -o hamcockpit -g hamcockpit -m 0775 \
   /opt/ham-cockpit/radios \

@@ -4,7 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { lextelConnect, lextelDisconnect, lextelKeepalive, lextelLearn, lextelOpenBluetooth, lextelSave, lextelScan, lextelStatus } from "./lextel";
 import { listSerialDevices } from "./list-serials";
-import { radiosConnect, radiosDisconnect, radiosMarkBle, radiosRemove, radiosSave, radiosSetPrimary, radiosStatus, radiosUpsert } from "./radios";
+import { radiosConnect, radiosDisconnect, radiosMarkBle, radiosRemove, radiosResumeIcomLan, radiosSave, radiosSetPrimary, radiosStatus, radiosUpsert } from "./radios";
 import { loadSer2net, saveSer2net } from "./ser2net-store";
 import { attachTerminal } from "./term";
 import { createUser, deleteUser, listUsers, sshStatus } from "./users";
@@ -37,6 +37,7 @@ import {
   hubStatus,
   hubUpsertBinding,
 } from "./hamlib-hub";
+import { icomLanCmd, icomLanStatus } from "./icom-lan";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -247,6 +248,26 @@ async function startServer() {
       );
     } catch (err) {
       res.status(500).json({ ok: false, radios: [], error: String(err) });
+    }
+  });
+  app.get("/api/radios/lan", (_req, res) => {
+    try {
+      res.json(icomLanStatus());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/radios/civ", async (req, res) => {
+    try {
+      const cmd = String(req.body?.cmd ?? req.body?.command ?? "");
+      if (!cmd.trim()) {
+        res.status(400).json({ ok: false, error: "cmd obrigatório" });
+        return;
+      }
+      const out = await icomLanCmd(cmd, (req.body ?? {}) as Record<string, unknown>);
+      res.status(out.ok ? 200 : 502).json(out);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
     }
   });
   app.delete("/api/radios/:id", async (req, res) => {
@@ -657,6 +678,8 @@ async function startServer() {
   });
 
   const port = process.env.PORT || 3000;
+
+  void radiosResumeIcomLan().catch(() => undefined);
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);

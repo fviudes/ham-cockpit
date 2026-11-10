@@ -20,7 +20,7 @@ GitHub Actions em **`ubuntu-24.04-arm`** (runner ARM nativo, disponível em repo
 2. Baixa `ubuntu-24.04.4-preinstalled-server-arm64+raspi.img.xz`
 3. Faz chroot **sem QEMU** e instala Docker, ser2net, Hamlib, nginx, Node, o console
 4. Compila nativo (ARM64) e instala em `/usr/local/bin`: `MMDVMHost`, `DMRGateway`, `YSFGateway`, `ircddbgatewayd` (g4klx) e `NextionDriver` (on7lds) via `deploy/mmdvm/build-binaries.sh`
-5. Publica `ham-cockpit-<versão>-raspi.img.xz` na Release
+5. Publica `ham-cockpit-<base>-raspi.img.xz` na Release (só 3 partes `x.y.zz`; ver [versionamento.md](versionamento.md))
 
 Wavelog/MariaDB fazem `docker compose pull` no primeiro boot com Ethernet (não vão em tarball, para caber no disco de 14 GB do runner e acelerar o bake).
 

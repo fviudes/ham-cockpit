@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useLocation } from "wouter";
 import NavBar from "@/components/NavBar";
-import { APP_VERSION } from "@shared/brand";
+import { APP_IMAGE_VERSION, APP_VERSION } from "@shared/brand";
 import {
   FigAcomCable,
   FigBoot,
@@ -88,7 +88,7 @@ export default function Home() {
                 {t(HOME.fullDocs)}
               </button>
               <a
-                href={`https://github.com/fviudes/ham-cockpit/releases/tag/v${APP_VERSION}`}
+                href={`https://github.com/fviudes/ham-cockpit/releases/tag/v${APP_IMAGE_VERSION}`}
                 className="inline-flex items-center gap-2 rounded-lg border border-[rgba(255,179,0,0.45)] px-7 py-3.5 font-bold text-[#FFB300] hover:bg-[rgba(255,179,0,0.08)]"
               >
                 <Download size={18} />

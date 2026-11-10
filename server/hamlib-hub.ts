@@ -1,6 +1,7 @@
 /**
  * Hamlib Hub — ponto central de CAT entre o console e os equipamentos do catálogo.
- * Não implementa drivers nativos (Icom UDP, Flex, Metis); sobe/consulta via rigctld.
+ * Icom LAN UDP é tratado em server/icom-lan.ts (TCP 45002 → rigctld).
+ * Flex/Metis nativos ainda não; sobe/consulta via rigctld quando o plano estiver pronto.
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
