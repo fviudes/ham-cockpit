@@ -15,7 +15,7 @@ Versão atual neste canal: **0.1.04** (`version.json`).
   "version": "0.1.04",
   "channel": "main",
   "file": "ham-cockpit-0.1.04.tgz",
-  "notes": "Ham Cockpit v0.1.04 — corrige EACCES ao gravar rádios: dados em /opt/ham-cockpit/radios (+ equipment) com pastas criadas no install/OTA"
+  "notes": "Ham Cockpit v0.1.04 — corrige EACCES ao gravar rádios em /opt/ham-cockpit/radios (+ equipment); barras de progresso em Admin → Atualizações; bake da imagem inclui MMDVMHost, DMRGateway, YSFGateway, ircddbgatewayd e NextionDriver"
 }
 ```
 
