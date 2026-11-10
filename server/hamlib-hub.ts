@@ -37,7 +37,10 @@ export type HubSnapshot = {
 };
 
 function dataDir(): string {
-  if (existsSync(OPT_DIR)) return OPT_DIR;
+  if (existsSync("/opt/ham-cockpit")) {
+    mkdirSync(OPT_DIR, { recursive: true });
+    return OPT_DIR;
+  }
   const local = join(ROOT, "data", "equipment");
   mkdirSync(local, { recursive: true });
   return local;

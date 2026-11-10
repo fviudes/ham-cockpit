@@ -411,10 +411,40 @@ const UPD_HINT: Record<UpdateId, I18nKey> = {
   wlg: "updWlgHint",
 };
 
+function UpdateApplyProgress({ active, value, label }: { active: boolean; value: number; label: string }) {
+  if (!active) return null;
+  const pct = Math.max(0, Math.min(100, Math.round(value)));
+  return (
+    <div className="min-w-0 flex-1" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={label}>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="text-[10px] tracking-wide text-[#8ea0b3] uppercase">{label}</span>
+        <span className="font-['IBM_Plex_Mono'] text-[11px] text-[#4fc3f7]">{pct}%</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-[#16232e]">
+        <div className="h-full rounded-full bg-[#4fc3f7] transition-[width] duration-300 ease-out" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
+
 export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
   const { s, tx, setS, pushLog } = useConsole();
   const [checking, setChecking] = useState(false);
   const [busy, setBusy] = useState<UpdateId | null>(null);
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    if (!busy) return;
+    setProgress(8);
+    const timer = window.setInterval(() => {
+      setProgress((p) => {
+        if (p >= 92) return p;
+        const step = Math.max(0.35, (92 - p) * 0.05);
+        return Math.min(92, p + step);
+      });
+    }, 450);
+    return () => window.clearInterval(timer);
+  }, [busy]);
 
   const applySnap = (j: {
     ok?: boolean;
@@ -466,6 +496,7 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
 
   const applyOne = async (id: UpdateId) => {
     setBusy(id);
+    setProgress(8);
     setS((p) => ({
       ...p,
       updates: {
@@ -485,12 +516,15 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
         toast.error(j.error || tx("updFail"));
         return;
       }
+      setProgress(100);
       toast.success(tx("updOk"));
       pushLog("SYS", `${tx(UPD_LABEL[id])} → ${j.items?.find((row) => row.id === id)?.current || ""}`);
+      await new Promise((resolve) => window.setTimeout(resolve, 400));
     } catch {
       toast.error(tx("updFail"));
     } finally {
       setBusy(null);
+      setProgress(0);
     }
   };
 
@@ -509,35 +543,41 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
         ) : null}
       </div>
       <div className="grid gap-4 md:grid-cols-2">
-        {s.updates.items.map((row) => (
-          <Panel key={row.id} className={row.updatable ? "border-[#ffb300]/40" : undefined}>
-            <div className="mb-3 flex items-start justify-between gap-3">
-              <div>
-                <PanelTitle>{tx(UPD_LABEL[row.id])}</PanelTitle>
-                <p className="-mt-2 text-xs text-[#8ea0b3]">{tx(UPD_HINT[row.id])}</p>
+        {s.updates.items.map((row) => {
+          const applying = busy === row.id || row.applying;
+          return (
+            <Panel key={row.id} className={row.updatable ? "border-[#ffb300]/40" : undefined}>
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <PanelTitle>{tx(UPD_LABEL[row.id])}</PanelTitle>
+                  <p className="-mt-2 text-xs text-[#8ea0b3]">{tx(UPD_HINT[row.id])}</p>
+                </div>
+                <Chip active={row.updatable} tone={row.updatable ? "amber" : "ok"}>
+                  {row.updatable ? tx("updReady") : tx("updNone")}
+                </Chip>
               </div>
-              <Chip active={row.updatable} tone={row.updatable ? "amber" : "ok"}>
-                {row.updatable ? tx("updReady") : tx("updNone")}
-              </Chip>
-            </div>
-            <div className="mb-4 grid grid-cols-2 gap-3">
-              <div className="rounded-lg bg-[#101c28] px-3 py-2">
-                <p className="text-[10px] tracking-wide text-[#8ea0b3] uppercase">{tx("updCurrent")}</p>
-                <p className="font-['IBM_Plex_Mono'] text-sm text-[#4fc3f7]">{row.current}</p>
+              <div className="mb-4 grid grid-cols-2 gap-3">
+                <div className="rounded-lg bg-[#101c28] px-3 py-2">
+                  <p className="text-[10px] tracking-wide text-[#8ea0b3] uppercase">{tx("updCurrent")}</p>
+                  <p className="font-['IBM_Plex_Mono'] text-sm text-[#4fc3f7]">{row.current}</p>
+                </div>
+                <div className="rounded-lg bg-[#101c28] px-3 py-2">
+                  <p className="text-[10px] tracking-wide text-[#8ea0b3] uppercase">{tx("updAvailable")}</p>
+                  <p className={`font-['IBM_Plex_Mono'] text-sm ${row.updatable ? "text-[#ffb300]" : "text-[#34d399]"}`}>
+                    {row.available}
+                  </p>
+                </div>
               </div>
-              <div className="rounded-lg bg-[#101c28] px-3 py-2">
-                <p className="text-[10px] tracking-wide text-[#8ea0b3] uppercase">{tx("updAvailable")}</p>
-                <p className={`font-['IBM_Plex_Mono'] text-sm ${row.updatable ? "text-[#ffb300]" : "text-[#34d399]"}`}>
-                  {row.available}
-                </p>
+              {row.error ? <p className="mb-3 text-xs text-[#f87171]">{row.error}</p> : null}
+              <div className="flex items-center gap-3">
+                <PrimaryBtn disabled={!row.updatable || applying || busy !== null} onClick={() => void applyOne(row.id)}>
+                  {applying ? tx("updApplying") : tx("updApply")}
+                </PrimaryBtn>
+                <UpdateApplyProgress active={applying} value={busy === row.id ? progress : applying ? 12 : 0} label={tx("updProgress")} />
               </div>
-            </div>
-            {row.error ? <p className="mb-3 text-xs text-[#f87171]">{row.error}</p> : null}
-            <PrimaryBtn disabled={!row.updatable || busy === row.id || row.applying} onClick={() => void applyOne(row.id)}>
-              {busy === row.id || row.applying ? tx("updApplying") : tx("updApply")}
-            </PrimaryBtn>
-          </Panel>
-        ))}
+            </Panel>
+          );
+        })}
       </div>
     </div>
   );

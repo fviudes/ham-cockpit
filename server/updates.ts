@@ -137,7 +137,7 @@ async function githubTag(repo: string): Promise<string> {
     const t = setTimeout(() => ctrl.abort(), 4500);
     const r = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
       signal: ctrl.signal,
-      headers: { Accept: "application/vnd.github+json", "User-Agent": "Ham-Cockpit/0.1.03" },
+      headers: { Accept: "application/vnd.github+json", "User-Agent": "Ham-Cockpit/0.1.04" },
     });
     clearTimeout(t);
     if (!r.ok) return "";
@@ -149,7 +149,7 @@ async function githubTag(repo: string): Promise<string> {
 }
 
 async function githubAppVersion(): Promise<string> {
-  const headers = { Accept: "application/vnd.github+json", "User-Agent": "Ham-Cockpit/0.1.03" };
+  const headers = { Accept: "application/vnd.github+json", "User-Agent": "Ham-Cockpit/0.1.04" };
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 6000);

@@ -7,6 +7,16 @@ packages.list text eol=lf
 cmdline.txt text eol=lf
 **/root-login text eol=lf
 **/station-user text eol=lf
+**/station-upd text eol=lf
+**/station-net text eol=lf
+**/station-svc text eol=lf
+**/ser2net-ctl text eol=lf
+**/ldg-serial text eol=lf
+**/lextel-bt text eol=lf
+**/mmdvm-ctl text eol=lf
+**/vfo-display-ctl text eol=lf
+**/vfo-display-kiosk text eol=lf
+**/vfo-display-idle text eol=lf
 **/sudoers-hamcockpit text eol=lf
 *.iso binary
 *.img binary

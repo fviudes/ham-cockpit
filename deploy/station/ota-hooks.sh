@@ -17,4 +17,15 @@ if [[ -d "$ROOT/bin" ]]; then
   chown root:root "$ROOT"/bin/* 2>/dev/null || true
 fi
 
+# Pastas de dados graváveis pelo serviço (OTA em aparelhos já instalados).
+install -d -o hamcockpit -g hamcockpit -m 0775 \
+  /opt/ham-cockpit/radios \
+  /opt/ham-cockpit/equipment \
+  /opt/ham-cockpit/layouts \
+  /opt/ham-cockpit/net \
+  /opt/ham-cockpit/services \
+  /opt/ham-cockpit/ldg \
+  /opt/ham-cockpit/lp100a \
+  2>/dev/null || true
+
 exit 0

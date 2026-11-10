@@ -531,7 +531,7 @@ function initial(): Station {
       dmrId: "0000000",
     },
     radios: {
-      folder: "/opt/radios",
+      folder: "/opt/ham-cockpit/radios",
       items: [],
       usb: [],
       bluetooth: [],

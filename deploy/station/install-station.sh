@@ -40,7 +40,7 @@ add_station_user() {
 add_station_user hamcockpit 1234
 add_station_user admin 1234
 
-install -d -o hamcockpit -g hamcockpit /opt/ham-cockpit /opt/ham-cockpit/bin /opt/ser2net /opt/wavelog /opt/wavelog-gate /opt/lextel /backup
+install -d -o hamcockpit -g hamcockpit /opt/ham-cockpit /opt/ham-cockpit/bin /opt/ham-cockpit/radios /opt/ham-cockpit/equipment /opt/ser2net /opt/wavelog /opt/wavelog-gate /opt/lextel /backup
 install -m 0755 "$HERE/ham-cockpit-ap.sh" /opt/ham-cockpit/bin/ham-cockpit-ap.sh
 install -m 0755 "$HERE/first-boot.sh" /opt/ham-cockpit/bin/first-boot.sh
 install -o root -g root -m 0755 "$HERE/root-login" /opt/ham-cockpit/bin/root-login

@@ -68,7 +68,15 @@ function stationSources(): { key: string; dir: string }[] {
   const cat = existsSync("/opt/ham-cockpit");
   return [
     { key: "ser2net", dir: existsSync("/opt/ser2net") ? "/opt/ser2net" : local("ser2net") },
-    { key: "radios", dir: existsSync("/opt/radios") ? "/opt/radios" : local("radios") },
+    {
+      key: "radios",
+      dir: cat
+        ? existsSync("/opt/radios") && !existsSync("/opt/ham-cockpit/radios")
+          ? "/opt/radios"
+          : "/opt/ham-cockpit/radios"
+        : local("radios"),
+    },
+    { key: "equipment", dir: cat ? "/opt/ham-cockpit/equipment" : local("equipment") },
     { key: "layouts", dir: cat ? "/opt/ham-cockpit/layouts" : local("layouts") },
     { key: "ldg", dir: cat ? "/opt/ham-cockpit/ldg" : local("ldg") },
     { key: "lp100a", dir: cat ? "/opt/ham-cockpit/lp100a" : local("lp100a") },

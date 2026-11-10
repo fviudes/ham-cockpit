@@ -11,7 +11,8 @@ import { loadSer2net, saveSer2net } from "./ser2net-store";
 
 const execFileAsync = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const OPT_DIR = "/opt/radios";
+const OPT_DIR = "/opt/ham-cockpit/radios";
+const LEGACY_DIR = "/opt/radios";
 const BAUDS = new Set([1200, 4800, 9600, 19200, 38400, 57600, 115200, 230400]);
 
 export type RadioMaker = EquipmentMaker;
@@ -66,7 +67,13 @@ export type RadiosSnapshot = {
 const MAKERS: RadioMaker[] = [...EQUIPMENT_MAKERS];
 
 function dataDir(): string {
-  if (existsSync(OPT_DIR)) return OPT_DIR;
+  // No appliance o bundle fica em /opt/ham-cockpit; ROOT vira /opt e
+  // data/radios cairia em /opt/data/radios (EACCES). Grava sob /opt/ham-cockpit.
+  if (existsSync("/opt/ham-cockpit")) {
+    if (existsSync(LEGACY_DIR) && !existsSync(OPT_DIR)) return LEGACY_DIR;
+    mkdirSync(OPT_DIR, { recursive: true });
+    return OPT_DIR;
+  }
   const local = join(ROOT, "data", "radios");
   mkdirSync(local, { recursive: true });
   return local;

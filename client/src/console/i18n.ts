@@ -7,7 +7,7 @@ const dict = {
   pt: {
     brand: "Ham Cockpit",
     tagline: "Gateway da estação",
-    version: "v0.1.03",
+    version: "v0.1.04",
     vfoHdmiExit: "Tecle CTRL+X para sair para o console",
     loginTitle: "Acessar o console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -432,6 +432,7 @@ const dict = {
     updReady: "Atualização disponível",
     updApply: "Atualizar",
     updApplying: "Atualizando…",
+    updProgress: "Progresso",
     updCheck: "Verificar agora",
     updOk: "Componente atualizado",
     updFail: "Não foi possível atualizar",
@@ -706,7 +707,7 @@ const dict = {
   en: {
     brand: "Ham Cockpit",
     tagline: "Station gateway",
-    version: "v0.1.03",
+    version: "v0.1.04",
     vfoHdmiExit: "Press CTRL+X to return to the console",
     loginTitle: "Sign in to the console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -1131,6 +1132,7 @@ const dict = {
     updReady: "Update available",
     updApply: "Update",
     updApplying: "Updating…",
+    updProgress: "Progress",
     updCheck: "Check now",
     updOk: "Component updated",
     updFail: "Could not update",
