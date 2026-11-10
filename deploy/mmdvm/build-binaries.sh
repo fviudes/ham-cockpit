@@ -32,16 +32,17 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
-# Instala só pacotes que existem neste Ubuntu (evita apt-get único com || true
-# que no 24.04 falhava em libwxgtk3.0-* e não instalava build-essential).
+# Instala só pacotes com Candidate real (apt-cache show ainda lista
+# pacotes obsoletos tipo libwxgtk3.0-dev sem candidato no 24.04).
 apt_try_install() {
-  local pkg
+  local pkg cand
   local ok=()
   for pkg in "$@"; do
-    if apt-cache show "$pkg" >/dev/null 2>&1; then
+    cand="$(apt-cache policy "$pkg" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
+    if [[ -n "$cand" && "$cand" != "(none)" ]]; then
       ok+=("$pkg")
     else
-      echo "AVISO: pacote $pkg ausente neste Ubuntu (ignorado)" >&2
+      echo "AVISO: pacote $pkg sem candidato neste Ubuntu (ignorado)" >&2
     fi
   done
   if [[ ${#ok[@]} -eq 0 ]]; then
@@ -52,11 +53,13 @@ apt_try_install() {
 
 if command -v apt-get >/dev/null 2>&1; then
   apt-get update -qq
+  # Ubuntu 24.04: libwxgtk3.2-dev. Nomes 3.0 ficam só como fallback em releases antigas.
   apt_try_install \
     build-essential git cmake pkg-config \
     libusb-1.0-0-dev libsamplerate0-dev \
     libmosquitto-dev \
-    libwxgtk3.2-dev libwxgtk3.0-gtk3-dev libwxgtk3.0-dev
+    libwxgtk3.2-dev \
+    libwxgtk3.0-gtk3-dev libwxgtk3.0-dev
 fi
 
 need git
