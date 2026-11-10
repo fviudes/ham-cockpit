@@ -58,6 +58,7 @@ if command -v apt-get >/dev/null 2>&1; then
     build-essential git cmake pkg-config \
     libusb-1.0-0-dev libsamplerate0-dev \
     libmosquitto-dev \
+    nlohmann-json3-dev \
     libwxgtk3.2-dev \
     libwxgtk3.0-gtk3-dev libwxgtk3.0-dev
 fi
@@ -195,6 +196,7 @@ if [[ "$PURGE" == "1" ]]; then
   if command -v apt-get >/dev/null 2>&1; then
     apt-get purge -y \
       libusb-1.0-0-dev libsamplerate0-dev libmosquitto-dev \
+      nlohmann-json3-dev \
       libwxgtk3.2-dev libwxgtk3.0-gtk3-dev libwxgtk3.0-dev \
       cmake 2>/dev/null || true
     # Runtime de ircddbgatewayd: apt não sabe que o binário em /usr/local liga neles.
