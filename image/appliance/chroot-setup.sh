@@ -102,9 +102,20 @@ if ! command -v node >/dev/null 2>&1 || ! node -v | grep -qE '^v(2[0-9]|[3-9])';
 fi
 
 chmod +x "$SEED/deploy/station/install-station.sh"
-# Compila MMDVMHost + DMRGateway (g4klx) no bake ARM64; MMDVM_BUILD_BINARIES=0 para pular.
+# Compila g4klx (Host/DMR/YSF/ircDDB) + NextionDriver no bake ARM64 nativo.
+# MMDVM_BUILD_BINARIES=0 para pular (só em debug — a imagem de release exige os binários).
 export MMDVM_BUILD_BINARIES="${MMDVM_BUILD_BINARIES:-1}"
+export MMDVM_PURGE_BUILD="${MMDVM_PURGE_BUILD:-1}"
 bash "$SEED/deploy/station/install-station.sh"
+
+echo "verificando binários MMDVM em /usr/local/bin…"
+for b in MMDVMHost DMRGateway YSFGateway ircddbgatewayd NextionDriver; do
+  if [[ ! -x "/usr/local/bin/$b" ]]; then
+    echo "ERRO: bake sem /usr/local/bin/$b — compile falhou ou foi pulado" >&2
+    exit 1
+  fi
+  ls -lh "/usr/local/bin/$b"
+done
 
 if ls /opt/wavelog-seed-images/*.tar >/dev/null 2>&1; then
   mkdir -p /opt/wavelog/images

@@ -1,5 +1,7 @@
 #!/bin/bash
 # Rodado no pós-install do pacote OTA (npm). Idempotente; não toca configs.
+# Não instala MMDVMHost/NextionDriver: binários nativos vêm do bake da imagem
+# (deploy/mmdvm/build-binaries.sh). Estação sem eles precisa de nova imagem.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 [[ "$(id -u)" -eq 0 ]] || exit 0

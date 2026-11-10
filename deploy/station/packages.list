@@ -39,6 +39,20 @@ bsdutils
 # Relógio / série
 fake-hwclock
 
+# Build MMDVM (g4klx + on7lds) no bake / install-station — toolchain + runtime.
+# libwxgtk3.2-dev + libmosquitto-dev: ircddbgatewayd. build-binaries.sh pode
+# purgear os -dev (MMDVM_PURGE_BUILD=1) e reinsere os runtime abaixo.
+build-essential
+cmake
+pkg-config
+libusb-1.0-0-dev
+libsamplerate0-dev
+libmosquitto-dev
+libwxgtk3.2-dev
+libmosquitto1
+libwxbase3.2-1t64
+libwxgtk3.2-1t64
+
 # HDMI VFO (tela cheia no monitor do Pi)
 cage
 seatd

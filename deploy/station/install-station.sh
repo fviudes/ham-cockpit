@@ -141,11 +141,23 @@ install_unit dmrgateway.service
 install_unit ysfgateway.service
 install_unit ircddbgateway.service
 install_unit nextiondriver.service
-# Binários g4klx (Host + DMR + YSF + D-Star). MMDVM_BUILD_BINARIES=0 para pular.
+# Binários g4klx + NextionDriver. MMDVM_BUILD_BINARIES=0 para pular.
+# No bake (CHROOT=1 ou MMDVM_BUILD_BINARIES=1) a falha aborta a imagem.
 if [[ "${MMDVM_BUILD_BINARIES:-auto}" != "0" ]]; then
-  if [[ "${MMDVM_BUILD_BINARIES:-}" == "1" || ! -x /usr/local/bin/MMDVMHost ]]; then
-    chmod +x "$ROOT/deploy/mmdvm/build-binaries.sh" || true
-    bash "$ROOT/deploy/mmdvm/build-binaries.sh" || echo "AVISO: build MMDVM falhou — console grava INI mesmo assim" >&2
+  if [[ "${MMDVM_BUILD_BINARIES:-}" == "1" || ! -x /usr/local/bin/MMDVMHost || ! -x /usr/local/bin/NextionDriver ]]; then
+    chmod +x "$ROOT/deploy/mmdvm/build-binaries.sh"
+    if [[ "${MMDVM_BUILD_BINARIES:-}" == "1" || "$CHROOT" == "1" ]]; then
+      export MMDVM_PURGE_BUILD="${MMDVM_PURGE_BUILD:-1}"
+      bash "$ROOT/deploy/mmdvm/build-binaries.sh"
+      for b in MMDVMHost DMRGateway YSFGateway ircddbgatewayd NextionDriver; do
+        if [[ ! -x "/usr/local/bin/$b" ]]; then
+          echo "ERRO: bake sem /usr/local/bin/$b" >&2
+          exit 1
+        fi
+      done
+    else
+      bash "$ROOT/deploy/mmdvm/build-binaries.sh" || echo "AVISO: build MMDVM falhou — console grava INI mesmo assim" >&2
+    fi
   fi
 fi
 install -m 0644 "$HERE/ham-cockpit-vfo.service" /etc/systemd/system/ham-cockpit-vfo.service

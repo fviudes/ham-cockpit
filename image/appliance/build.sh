@@ -128,7 +128,7 @@ install -m 0644 "$ROOT/image/appliance/user-data" "$MNT/boot/firmware/user-data"
 install -m 0644 "$ROOT/image/appliance/network-config" "$MNT/boot/firmware/network-config"
 
 df -h
-echo "chroot ARM64 — instalando Docker, ser2net, Hamlib, console..."
+echo "chroot ARM64 — instalando Docker, ser2net, Hamlib, console, MMDVM…"
 if [[ $NATIVE_ARM -eq 1 ]]; then
   chroot "$MNT" /bin/bash -c \
     "NODE_VER='$NODE_VER' HAMCOCKPIT_SEED=/opt/ham-cockpit-seed bash /tmp/chroot-setup.sh"
@@ -136,6 +136,14 @@ else
   chroot "$MNT" /usr/bin/qemu-aarch64-static /bin/bash -c \
     "NODE_VER='$NODE_VER' HAMCOCKPIT_SEED=/opt/ham-cockpit-seed bash /tmp/chroot-setup.sh"
 fi
+
+echo "conferindo binários MMDVM na imagem montada…"
+for b in MMDVMHost DMRGateway YSFGateway ircddbgatewayd NextionDriver; do
+  if [[ ! -x "$MNT/usr/local/bin/$b" ]]; then
+    echo "ERRO: imagem sem /usr/local/bin/$b após chroot" >&2
+    exit 1
+  fi
+done
 
 rm -rf "$MNT/opt/ham-cockpit-seed" "$MNT/opt/wavelog-seed-images" "$MNT/tmp/chroot-setup.sh"
 rm -f "$MNT/usr/bin/qemu-aarch64-static"
