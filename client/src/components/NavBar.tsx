@@ -1,8 +1,13 @@
 import { useLocation } from "wouter";
 import { Radio } from "lucide-react";
+import { APP_VERSION } from "@shared/brand";
+import { LangSwitch } from "@/components/LangSwitch";
+import { useSiteLang } from "@/pages/site-lang";
+import { NAV } from "@/pages/site-copy";
 
 export default function NavBar() {
   const [location, navigate] = useLocation();
+  const { t } = useSiteLang();
   const isActive = (path: string) => location === path;
 
   return (
@@ -14,31 +19,34 @@ export default function NavBar() {
           </span>
           <span className="flex flex-col items-start leading-none">
             <span className="font-['Space_Grotesk'] text-sm font-bold text-white">Ham Cockpit</span>
-            <span className="font-['IBM_Plex_Mono'] text-[10px] tracking-widest text-[#FFB300]">v0.1.00 · ESTAÇÃO</span>
+            <span className="font-['IBM_Plex_Mono'] text-[10px] tracking-widest text-[#FFB300]">
+              v{APP_VERSION} · {t(NAV.station)}
+            </span>
           </span>
         </button>
 
-        <div className="flex items-center gap-4 sm:gap-6">
+        <div className="flex items-center gap-3 sm:gap-6">
           <button
             type="button"
             onClick={() => navigate("/")}
             className={`hidden text-sm sm:inline ${isActive("/") ? "text-[#4fc3f7]" : "text-[#94a3b8] hover:text-[#4fc3f7]"}`}
           >
-            Início
+            {t(NAV.home)}
           </button>
           <button
             type="button"
             onClick={() => navigate("/docs")}
             className={`text-sm ${isActive("/docs") ? "text-[#4fc3f7]" : "text-[#94a3b8] hover:text-[#4fc3f7]"}`}
           >
-            Documentação
+            {t(NAV.docs)}
           </button>
+          <LangSwitch />
           <button
             type="button"
             onClick={() => navigate("/console")}
             className="rounded-md bg-[#4fc3f7] px-3 py-1.5 text-sm font-semibold text-[#0d1b2a] hover:bg-[#80d8ff] sm:px-4"
           >
-            Abrir console
+            {t(NAV.console)}
           </button>
         </div>
       </div>

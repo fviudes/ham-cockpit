@@ -1,0 +1,20 @@
+[Unit]
+Description=NextionDriver (ON7LDS) — LCD Nextion no HAT MMDVM / WPSD
+Documentation=https://github.com/on7lds/NextionDriver
+DefaultDependencies=no
+After=local-fs.target network-online.target
+Before=mmdvmhost.service
+ConditionPathExists=/usr/local/bin/NextionDriver
+
+[Service]
+Type=forking
+User=root
+ExecStartPre=/bin/mkdir -p /var/log/mmdvm /usr/local/etc
+ExecStart=/bin/bash -c 'INI=/opt/ham-cockpit/mmdvm/mmdvmhost.ini; [[ -f /etc/mmdvmhost ]] && INI=/etc/mmdvmhost; exec /usr/local/bin/NextionDriver -i -c "$INI"'
+ExecStop=/usr/bin/killall NextionDriver
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=ham-cockpit.target
+RequiredBy=mmdvmhost.service

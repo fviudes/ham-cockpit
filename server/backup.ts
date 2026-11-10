@@ -71,9 +71,11 @@ function stationSources(): { key: string; dir: string }[] {
     { key: "radios", dir: existsSync("/opt/radios") ? "/opt/radios" : local("radios") },
     { key: "layouts", dir: cat ? "/opt/ham-cockpit/layouts" : local("layouts") },
     { key: "ldg", dir: cat ? "/opt/ham-cockpit/ldg" : local("ldg") },
+    { key: "lp100a", dir: cat ? "/opt/ham-cockpit/lp100a" : local("lp100a") },
     { key: "net", dir: cat ? "/opt/ham-cockpit/net" : local("net") },
     { key: "services", dir: cat ? "/opt/ham-cockpit/services" : local("services") },
     { key: "lextel", dir: existsSync("/opt/lextel") ? "/opt/lextel" : local("lextel") },
+    { key: "mmdvm", dir: existsSync("/opt/ham-cockpit/mmdvm") ? "/opt/ham-cockpit/mmdvm" : local("mmdvm") },
   ];
 }
 

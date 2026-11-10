@@ -146,13 +146,13 @@ export function WizardPage() {
   const applyAutostart = async (id: ServiceId) => {
     if (!autostart) return;
     await setDeviceAutostart(id, true);
-    if (id !== "ldg") return;
-    await fetch("/api/ldg", {
+    if (id !== "ldg" && id !== "lp100a") return;
+    await fetch(`/api/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ autoConnect: true }),
     });
-    await fetch("/api/ldg/connect", {
+    await fetch(`/api/${id}/connect`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: "{}",

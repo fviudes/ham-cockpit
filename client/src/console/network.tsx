@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
-import { bleAvailable, bleErrorMessage, ic705Ble, isBleCancel } from "./ic705-ble";
+import { bleAvailable, bleErrorMessage, ic705Ble, isBleCancel, looksLikeBleId } from "./ic705-ble";
 import { useConsole } from "./state";
 import { Chip, ConsoleInput, Field, GhostBtn, PageHead, Panel, PanelTitle, PrimaryBtn } from "./widgets";
 
@@ -415,15 +415,32 @@ export function BluetoothPage() {
       await ic705Ble.connect({
         chooser: acceptAll,
         acceptAll,
-        reconnect: !acceptAll && Boolean(primary?.device || primary?.hsUuid || primary?.paired),
+        reconnect: !acceptAll && Boolean(primary?.device || primary?.hsUuid || primary?.paired || ic705Ble.deviceId),
         hsUuid: primary?.hsUuid,
         civAddr: d.addr || primary?.civAddr,
-        deviceId: primary?.device,
+        deviceId: looksLikeBleId(primary?.device || "") ? primary?.device : undefined,
         deviceName: primary?.deviceName || primary?.name,
       });
     } catch (err) {
-      const msg = bleErrorMessage(err);
-      const cancelled = isBleCancel(err);
+      let failed: unknown = err;
+      if (!acceptAll && bleErrorMessage(err) === "BLE_SILENT") {
+        try {
+          await ic705Ble.connect({
+            chooser: true,
+            acceptAll: false,
+            reconnect: true,
+            hsUuid: primary?.hsUuid,
+            civAddr: d.addr || primary?.civAddr,
+            deviceId: looksLikeBleId(primary?.device || "") ? primary?.device : undefined,
+            deviceName: primary?.deviceName || primary?.name,
+          });
+          return;
+        } catch (retry) {
+          failed = retry;
+        }
+      }
+      const msg = bleErrorMessage(failed);
+      const cancelled = isBleCancel(failed);
       setS((p) => ({
         ...p,
         ic705: { ...p.ic705, phase: "idle", error: cancelled ? "" : msg, ble: false },

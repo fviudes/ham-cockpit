@@ -7,6 +7,7 @@ unit_of() {
     ser2net) echo ser2net.service ;;
     wavelog) echo wavelog.service ;;
     wlg) echo waveloggate.service ;;
+    mmdvm) echo mmdvmhost.service ;;
     spe) echo 'ampctld@spe.service' ;;
     wifi) echo ham-cockpit-ap.service ;;
     bluetooth) echo bluetooth.service ;;

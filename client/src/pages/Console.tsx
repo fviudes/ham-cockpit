@@ -1,5 +1,5 @@
 import { BluetoothPage, WifiPage } from "@/console/network";
-import { AcomPage, HamplusPage, Ic705Page, LdgPage, LextelPage, PalstarPage, SpePage } from "@/console/devices";
+import { AcomPage, HamplusPage, Ic705Page, LdgPage, LextelPage, Lp100aPage, PalstarPage, SpePage } from "@/console/devices";
 import { DEFAULT_PASS, DEFAULT_USER, type I18nKey } from "@/console/i18n";
 import { ic705Ble } from "@/console/ic705-ble";
 import { ConsoleProvider, formatVfo, useConsole } from "@/console/state";
@@ -11,6 +11,7 @@ import { AdminPage, StatusPage } from "@/console/system";
 import { Ser2netPage } from "@/console/ser2net";
 import { WizardPage } from "@/console/wizard";
 import { WavelogPage } from "@/console/wavelog";
+import { MmdvmPage } from "@/console/mmdvm";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
   Activity,
@@ -29,6 +30,7 @@ import {
   Settings,
   SlidersHorizontal,
   Shield,
+  TowerControl,
   WandSparkles,
   Waves,
   Wifi,
@@ -48,11 +50,13 @@ type PageId =
   | "hamplus"
   | "palstar"
   | "ldg"
+  | "lp100a"
   | "acom"
   | "lextel"
   | "wifi"
   | "bluetooth"
   | "wavelog"
+  | "mmdvm"
   | "ser2net"
   | "logs"
   | "admin"
@@ -73,6 +77,7 @@ const NAV: { group: "navSetup" | "navOp" | "navDev" | "navNet" | "navSys"; items
     items: [
       { id: "radio", icon: Radio },
       { id: "wavelog", icon: BookMarked },
+      { id: "mmdvm", icon: TowerControl },
       { id: "ser2net", icon: Cable },
     ],
   },
@@ -84,6 +89,7 @@ const NAV: { group: "navSetup" | "navOp" | "navDev" | "navNet" | "navSys"; items
       { id: "hamplus", icon: LayoutDashboard },
       { id: "palstar", icon: Cpu },
       { id: "ldg", icon: SlidersHorizontal },
+      { id: "lp100a", icon: Gauge },
       { id: "acom", icon: Gauge },
       { id: "lextel", icon: Waves },
     ],
@@ -107,11 +113,13 @@ const PAGES: Record<PageId, ComponentType> = {
   hamplus: HamplusPage,
   palstar: PalstarPage,
   ldg: LdgPage,
+  lp100a: Lp100aPage,
   acom: AcomPage,
   lextel: LextelPage,
   wifi: WifiPage,
   bluetooth: BluetoothPage,
   wavelog: WavelogPage,
+  mmdvm: MmdvmPage,
   ser2net: Ser2netPage,
   logs: AdminPage,
   admin: AdminPage,
@@ -172,7 +180,7 @@ function Login({ onOk }: { onOk: (name: string) => void }) {
             const p = String(fd.get("pass") || "");
             if (u === DEFAULT_USER && p === DEFAULT_PASS) {
               setErr(false);
-              void kickPrimary({ picker: false });
+              void kickPrimary({ picker: false, gesture: true });
               onOk(u);
             } else setErr(true);
           }}

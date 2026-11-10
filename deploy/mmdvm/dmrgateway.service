@@ -1,0 +1,19 @@
+[Unit]
+Description=DMRGateway (WPSD / Pi-Star stack) — Ham Cockpit
+Documentation=https://wpsd.radio
+After=network-online.target mmdvmhost.service
+Wants=network-online.target
+BindsTo=mmdvmhost.service
+ConditionPathExists=/usr/local/bin/DMRGateway
+
+[Service]
+Type=simple
+User=hamcockpit
+Group=dialout
+ExecStartPre=/bin/mkdir -p /var/log/mmdvm
+ExecStart=/bin/bash -c 'INI=/opt/ham-cockpit/mmdvm/dmrgateway.ini; [[ -f /etc/dmrgateway ]] && INI=/etc/dmrgateway; exec /usr/local/bin/DMRGateway "$INI"'
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=ham-cockpit.target

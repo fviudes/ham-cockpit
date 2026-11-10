@@ -1,0 +1,19 @@
+[Unit]
+Description=YSFGateway (WPSD / Pi-Star stack) — Ham Cockpit
+Documentation=https://wpsd.radio
+After=network-online.target mmdvmhost.service
+Wants=network-online.target
+BindsTo=mmdvmhost.service
+ConditionPathExists=/usr/local/bin/YSFGateway
+
+[Service]
+Type=simple
+User=hamcockpit
+Group=dialout
+ExecStartPre=/bin/mkdir -p /var/log/mmdvm
+ExecStart=/bin/bash -c 'INI=/opt/ham-cockpit/mmdvm/ysfgateway.ini; [[ -f /etc/ysfgateway ]] && INI=/etc/ysfgateway; exec /usr/local/bin/YSFGateway "$INI"'
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=ham-cockpit.target

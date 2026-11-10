@@ -33,6 +33,15 @@ connection: &spe
       kickolduser: true
     connector: serialdev,/dev/serial/by-id/usb-FTDI-SPE,9600n81,local
 
+# TelePost LP-100A — wattímetro vectorial: 115200 8N1, cabo reto DB9 (não null-modem).
+# Poll ASCII P; A = alarme ROE; F = Avg/Peak/Tune. Não envie M (muda o ecrã).
+connection: &lp100a
+    accepter: tcp,127.0.0.1,4006
+    enable: on
+    options:
+      kickolduser: true
+    connector: serialdev,/dev/serial/by-id/usb-FTDI-LP100A-if00,115200n81,local
+
 # ACOM 2000A — Director Classic: 1200 8N1, null-modem só 2–3 / 3–2 / 5–5.
 # Sem ampctld (Hamlib não tem modelo). RTS+DTR só no pulso RPON (10 s).
 connection: &acom2000a

@@ -1,0 +1,21 @@
+[Unit]
+Description=MMDVMHost (WPSD / Pi-Star stack) — Ham Cockpit
+Documentation=https://wpsd.radio
+After=network-online.target nextiondriver.service
+Wants=network-online.target
+Wants=nextiondriver.service
+ConditionPathExists=/usr/local/bin/MMDVMHost
+
+[Service]
+Type=simple
+User=hamcockpit
+Group=dialout
+SupplementaryGroups=tty dialout
+ExecStartPre=/bin/mkdir -p /var/log/mmdvm
+ExecStart=/bin/bash -c 'INI=/opt/ham-cockpit/mmdvm/mmdvmhost.ini; [[ -f /etc/mmdvmhost ]] && INI=/etc/mmdvmhost; exec /usr/local/bin/MMDVMHost "$INI"'
+Restart=on-failure
+RestartSec=3
+Nice=-5
+
+[Install]
+WantedBy=ham-cockpit.target

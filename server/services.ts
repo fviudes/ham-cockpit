@@ -30,11 +30,13 @@ const UNITS: Record<ServiceId, string> = {
   ser2net: "ser2net.service",
   wavelog: "wavelog.service",
   wlg: "waveloggate.service",
+  mmdvm: "mmdvmhost.service",
   radio: "",
   spe: "ampctld@spe.service",
   hamplus: "",
   palstar: "",
   ldg: "",
+  lp100a: "",
   acom: "",
   lextel: "",
   wifi: "ham-cockpit-ap.service",
@@ -159,6 +161,10 @@ export async function servicesApplyBoot(): Promise<void> {
   if (boot.wlg) {
     const { wlgUp } = await import("./wlg-status");
     void wlgUp().catch(() => undefined);
+  }
+  if (boot.mmdvm) {
+    const { mmdvmControl } = await import("./mmdvm");
+    void mmdvmControl("start").catch(() => undefined);
   }
   if (boot.lextel) {
     const { lextelAutoConnect } = await import("./lextel");

@@ -10,7 +10,8 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { t, type I18nKey, type Lang } from "./i18n";
-import { bleAvailable, ic705Ble, isBleCancel, type BlePhase } from "./ic705-ble";
+import { applyHtmlLang, LANG_EVENT, readLang, writeLang } from "./lang-store";
+import { bleAvailable, bleErrorMessage, ic705Ble, isBleCancel, looksLikeBleId, type BlePhase } from "./ic705-ble";
 import { SERVICE_IDS, UPDATE_IDS, asSer2netDevice, type ServiceId, type UpdateId, type Ser2netDevice } from "@shared/const";
 
 export const BANDS = [
@@ -31,6 +32,9 @@ export const MODES = ["USB", "USB-D", "LSB", "LSB-D", "CW", "AM", "FM", "DV"] as
 export type Mode = (typeof MODES)[number];
 export type LdgModel = "at100pro2" | "at600pro2" | "at1000pro2";
 export type LdgPhase = "idle" | "connecting" | "ready" | "tuning" | "error";
+export type Lp100aPhase = "idle" | "connecting" | "ready" | "error";
+export type Lp100aMeter = "AVG" | "PEAK" | "TUNE";
+export type Lp100aRange = "HIGH" | "MID" | "LOW";
 
 export type Proto =
   | "Icom CI-V"
@@ -57,7 +61,7 @@ export type Port = {
 
 export type WifiNet = { ssid: string; rssi: number; open: boolean };
 export type NetLink = "wifi" | "ethernet";
-export type LogKind = "BLE" | "CIV" | "IC705" | "RADIO" | "WiFi" | "SYS" | "WLOG" | "S2N" | "ACOM" | "LEXTEL" | "LDG" | "ERRO";
+export type LogKind = "BLE" | "CIV" | "IC705" | "RADIO" | "WiFi" | "SYS" | "WLOG" | "S2N" | "ACOM" | "LEXTEL" | "LDG" | "LP100A" | "MMDVM" | "ERRO";
 export type RadioMaker = "icom" | "kenwood" | "yaesu" | "flex" | "tentec";
 export type RadioLink = "usb" | "bluetooth";
 export type RadioProto = "cat" | "civ";
@@ -180,6 +184,26 @@ export type Station = {
     swr: number;
     lastRx: string;
   };
+  lp100a: {
+    port: string;
+    autoConnect: boolean;
+    connected: boolean;
+    hardware: boolean;
+    phase: Lp100aPhase;
+    error: string;
+    fwd: number;
+    ref: number;
+    swr: number;
+    z: number;
+    phaseDeg: number;
+    dbm: number;
+    alarm: number;
+    callsign: string;
+    range: Lp100aRange;
+    meter: Lp100aMeter;
+    tx: boolean;
+    lastRx: string;
+  };
   acom: {
     on: boolean;
     comm: boolean;
@@ -269,6 +293,12 @@ export type Station = {
     qsyPort: number;
     wsPort: number;
     publishCat: boolean;
+  };
+  mmdvm: {
+    running: boolean;
+    gatewayRunning: boolean;
+    callsign: string;
+    dmrId: string;
   };
   radios: {
     folder: string;
@@ -376,6 +406,26 @@ function initial(): Station {
       swr: 1,
       lastRx: "",
     },
+    lp100a: {
+      port: "",
+      autoConnect: true,
+      connected: false,
+      hardware: false,
+      phase: "idle",
+      error: "",
+      fwd: 0,
+      ref: 0,
+      swr: 1,
+      z: 0,
+      phaseDeg: 0,
+      dbm: -99,
+      alarm: 2,
+      callsign: "",
+      range: "HIGH",
+      meter: "PEAK",
+      tx: false,
+      lastRx: "",
+    },
     acom: {
       on: false,
       comm: false,
@@ -466,6 +516,12 @@ function initial(): Station {
       wsPort: 54322,
       publishCat: true,
     },
+    mmdvm: {
+      running: false,
+      gatewayRunning: false,
+      callsign: "N0CALL",
+      dmrId: "0000000",
+    },
     radios: {
       folder: "/opt/radios",
       items: [],
@@ -514,6 +570,40 @@ function initial(): Station {
   };
 }
 
+function simLp100a(cur: Station["lp100a"], tx: boolean): Station["lp100a"] {
+  if (!cur.connected || cur.hardware) return cur;
+  if (!tx) return { ...cur, fwd: 0, ref: 0, swr: 1, dbm: -99, tx: false };
+  return { ...cur, fwd: 87.4, ref: 1.2, swr: 1.12, z: 52.1, phaseDeg: 8.4, dbm: 49.4, tx: true };
+}
+
+export function mergeLp100a(cur: Station["lp100a"], j: Record<string, unknown>): Station["lp100a"] {
+  const meter = j.meter === "AVG" || j.meter === "PEAK" || j.meter === "TUNE" ? j.meter : cur.meter;
+  const range = j.range === "HIGH" || j.range === "MID" || j.range === "LOW" ? j.range : cur.range;
+  const phase =
+    j.phase === "idle" || j.phase === "connecting" || j.phase === "ready" || j.phase === "error" ? j.phase : cur.phase;
+  return {
+    ...cur,
+    port: typeof j.port === "string" ? j.port : cur.port,
+    autoConnect: typeof j.autoConnect === "boolean" ? j.autoConnect : cur.autoConnect,
+    connected: Boolean(j.connected),
+    hardware: Boolean(j.hardware),
+    phase,
+    error: typeof j.error === "string" ? j.error : cur.error,
+    fwd: Number.isFinite(Number(j.fwd)) ? Number(j.fwd) : cur.fwd,
+    ref: Number.isFinite(Number(j.ref)) ? Number(j.ref) : cur.ref,
+    swr: Number.isFinite(Number(j.swr)) && Number(j.swr) > 0 ? Number(j.swr) : cur.swr,
+    z: Number.isFinite(Number(j.z)) ? Number(j.z) : cur.z,
+    phaseDeg: Number.isFinite(Number(j.phaseDeg)) ? Number(j.phaseDeg) : cur.phaseDeg,
+    dbm: Number.isFinite(Number(j.dbm)) ? Number(j.dbm) : cur.dbm,
+    alarm: Number.isFinite(Number(j.alarm)) ? Math.max(0, Math.min(5, Math.trunc(Number(j.alarm)))) : cur.alarm,
+    callsign: typeof j.callsign === "string" ? j.callsign : cur.callsign,
+    range,
+    meter,
+    tx: Boolean(j.tx),
+    lastRx: typeof j.lastRx === "string" ? j.lastRx : cur.lastRx,
+  };
+}
+
 type Ctx = {
   lang: Lang;
   setLang: (l: Lang) => void;
@@ -522,13 +612,13 @@ type Ctx = {
   setS: React.Dispatch<React.SetStateAction<Station>>;
   pushLog: (kind: LogKind, msg: string) => void;
   setFreq: (hz: number) => void;
-  kickPrimary: (opts?: { picker?: boolean }) => Promise<void>;
+  kickPrimary: (opts?: { picker?: boolean; gesture?: boolean }) => Promise<void>;
 };
 
 const ConsoleCtx = createContext<Ctx | null>(null);
 
 export function ConsoleProvider({ children, active = true }: { children: ReactNode; active?: boolean }) {
-  const [lang, setLangState] = useState<Lang>(() => (localStorage.getItem("hamcockpit.lang") === "en" ? "en" : "pt"));
+  const [lang, setLangState] = useState<Lang>(readLang);
   const [s, setS] = useState<Station>(initial);
   const radiosRef = useRef<StationRadio[]>([]);
   const servicesRef = useRef(s.services);
@@ -539,14 +629,17 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
   servicesRef.current = s.services;
 
   const setLang = useCallback((l: Lang) => {
+    writeLang(l);
     setLangState(l);
-    localStorage.setItem("hamcockpit.lang", l);
   }, []);
 
   const tx = useCallback((key: I18nKey) => t(lang, key), [lang]);
 
   useEffect(() => {
-    document.documentElement.lang = lang === "en" ? "en" : "pt-BR";
+    applyHtmlLang(lang);
+    const onChange = () => setLangState(readLang());
+    window.addEventListener(LANG_EVENT, onChange);
+    return () => window.removeEventListener(LANG_EVENT, onChange);
   }, [lang]);
 
   useEffect(() => {
@@ -569,9 +662,9 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
       .catch(() => undefined);
   }, []);
 
-  const kickPrimary = useCallback(async (opts?: { picker?: boolean }) => {
+  const kickPrimary = useCallback(async (opts?: { picker?: boolean; gesture?: boolean }) => {
     if (inflightPrimary.current || ic705Ble.connected) return;
-    if (!opts?.picker && ic705Ble.busy) return;
+    if (!opts?.picker && !opts?.gesture && ic705Ble.busy) return;
     inflightPrimary.current = true;
     const applyList = (items: StationRadio[]) => {
       radiosRef.current = items;
@@ -595,21 +688,35 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
       if (icomBle) {
         if (!bleAvailable()) return;
         ic705Ble.setCivAddr(primary.civAddr);
+        const bleOpts = {
+          silent: true as const,
+          reconnect: true,
+          hsUuid: primary.hsUuid,
+          civAddr: primary.civAddr,
+          deviceId: looksLikeBleId(primary.device || "") ? primary.device : undefined,
+          deviceName: primary.deviceName || primary.name,
+        };
+        ic705Ble.armAuto(bleOpts);
         try {
-          await ic705Ble.connect({
-            silent: true,
-            reconnect: Boolean(primary.paired || primary.hsUuid || primary.device),
-            hsUuid: primary.hsUuid,
-            civAddr: primary.civAddr,
-            deviceId: primary.device,
-            deviceName: primary.deviceName || primary.name,
-          });
+          await ic705Ble.connect(bleOpts);
         } catch (err) {
-          if (isBleCancel(err)) {
-            if (!pickerArmed.current) toast.message(t(lang, "radioAutoGrant"));
-            pickerArmed.current = true;
+          if (opts?.gesture && bleErrorMessage(err) === "BLE_SILENT") {
+            try {
+              await ic705Ble.connect({ ...bleOpts, chooser: true, acceptAll: false, silent: false });
+            } catch (retry) {
+              if (isBleCancel(retry) && !pickerArmed.current) {
+                toast.message(t(lang, "radioAutoGrant"));
+                pickerArmed.current = true;
+              }
+              return;
+            }
+          } else {
+            if (isBleCancel(err) && !pickerArmed.current) {
+              toast.message(t(lang, "radioAutoGrant"));
+              pickerArmed.current = true;
+            }
+            return;
           }
-          return;
         }
         pickerArmed.current = false;
         const up = await fetch("/api/radios", {
@@ -621,7 +728,7 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
             primary: true,
             paired: true,
             hsUuid: ic705Ble.hsUuid || primary.hsUuid,
-            device: ic705Ble.deviceId || primary.device,
+            device: looksLikeBleId(ic705Ble.deviceId) ? ic705Ble.deviceId : looksLikeBleId(primary.device || "") ? primary.device : "",
             deviceName: ic705Ble.deviceName || primary.deviceName,
           }),
         });
@@ -648,18 +755,19 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
 
   useEffect(() => {
     if (!active) return;
-    void kickPrimary({ picker: false });
-    const kick = window.setTimeout(() => void kickPrimary({ picker: false }), 1200);
+    void kickPrimary({ picker: false, gesture: false });
+    const kick = window.setTimeout(() => void kickPrimary({ picker: false, gesture: false }), 800);
     const id = window.setInterval(() => {
-      if (!ic705Ble.connected) void kickPrimary({ picker: false });
-    }, 8000);
+      if (!ic705Ble.connected) void kickPrimary({ picker: false, gesture: false });
+    }, 3000);
     const onVis = () => {
-      if (document.visibilityState === "visible" && !ic705Ble.connected) void kickPrimary({ picker: false });
+      if (document.visibilityState === "visible" && !ic705Ble.connected) void kickPrimary({ picker: false, gesture: false });
     };
     const onPointer = () => {
-      if (!pickerArmed.current || ic705Ble.connected || ic705Ble.busy) return;
+      if (ic705Ble.connected || ic705Ble.busy) return;
+      const gesture = pickerArmed.current;
       pickerArmed.current = false;
-      void kickPrimary({ picker: false });
+      void kickPrimary({ picker: false, gesture });
     };
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("focus", onVis);
@@ -813,6 +921,47 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
         })
         .catch(() => undefined);
     }, 1600);
+    return () => window.clearTimeout(tmr);
+  }, [active]);
+
+  useEffect(() => {
+    const apply = (j: Record<string, unknown>) => {
+      if (!j || typeof j !== "object") return;
+      setS((p) => ({
+        ...p,
+        lp100a: mergeLp100a(p.lp100a, j),
+      }));
+    };
+    let inflight = false;
+    const pull = () => {
+      if (inflight) return;
+      inflight = true;
+      void fetch("/api/lp100a")
+        .then((r) => r.json())
+        .then(apply)
+        .catch(() => undefined)
+        .finally(() => {
+          inflight = false;
+        });
+    };
+    pull();
+    const id = window.setInterval(pull, 400);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (!active) return;
+    const tmr = window.setTimeout(() => {
+      const row = servicesRef.current.find((r) => r.id === "lp100a");
+      if (row && row.autostart === false) return;
+      void fetch("/api/lp100a")
+        .then((r) => r.json())
+        .then((j: { autoConnect?: boolean; connected?: boolean; port?: string }) => {
+          if (!j.autoConnect || j.connected) return;
+          void fetch("/api/lp100a/connect", { method: "POST" }).catch(() => undefined);
+        })
+        .catch(() => undefined);
+    }, 1800);
     return () => window.clearTimeout(tmr);
   }, [active]);
 
@@ -1044,6 +1193,7 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
                 ref: prev.ldg.connected && !prev.ldg.hardware ? Math.round(prev.ldg.maxW * 0.02) : prev.ldg.ref,
                 swr: prev.ldg.connected && !prev.ldg.hardware ? 1.12 : prev.ldg.swr,
               },
+              lp100a: simLp100a(prev.lp100a, true),
               acom: {
                 ...prev.acom,
                 tx: prev.acom.operate && prev.acom.on && prev.acom.warmup === 0,
@@ -1058,6 +1208,7 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
             spe: { ...prev.spe, tx: false, pout: 0, ipa: 0.1 },
             palstar: { ...prev.palstar, fwd: 0, ref: 0 },
             ldg: prev.ldg.hardware ? prev.ldg : { ...prev.ldg, fwd: 0, ref: 0, swr: 1 },
+            lp100a: simLp100a(prev.lp100a, false),
             acom: { ...prev.acom, tx: false, fwd: 0, ref: 0 },
             hamplus: { ...prev.hamplus, send: false },
           };
@@ -1078,6 +1229,7 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
               ref: prev.ldg.connected && !prev.ldg.hardware ? Math.round(prev.ldg.maxW * 0.02) : prev.ldg.ref,
               swr: prev.ldg.connected && !prev.ldg.hardware ? 1.12 : prev.ldg.swr,
             },
+            lp100a: simLp100a(prev.lp100a, true),
             acom: {
               ...prev.acom,
               tx: prev.acom.operate && prev.acom.on && prev.acom.warmup === 0,
@@ -1096,6 +1248,7 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
           spe: { ...prev.spe, tx: false, pout: 0, ipa: 0.1 },
           palstar: { ...prev.palstar, fwd: 0, ref: 0 },
           ldg: prev.ldg.hardware ? prev.ldg : { ...prev.ldg, fwd: 0, ref: 0, swr: 1 },
+          lp100a: simLp100a(prev.lp100a, false),
           acom: { ...prev.acom, tx: false, fwd: 0, ref: 0 },
           hamplus: { ...prev.hamplus, send: false },
         };

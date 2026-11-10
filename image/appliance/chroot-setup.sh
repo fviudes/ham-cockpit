@@ -102,6 +102,8 @@ if ! command -v node >/dev/null 2>&1 || ! node -v | grep -qE '^v(2[0-9]|[3-9])';
 fi
 
 chmod +x "$SEED/deploy/station/install-station.sh"
+# Compila MMDVMHost + DMRGateway (g4klx) no bake ARM64; MMDVM_BUILD_BINARIES=0 para pular.
+export MMDVM_BUILD_BINARIES="${MMDVM_BUILD_BINARIES:-1}"
 bash "$SEED/deploy/station/install-station.sh"
 
 if ls /opt/wavelog-seed-images/*.tar >/dev/null 2>&1; then

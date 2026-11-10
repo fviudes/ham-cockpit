@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
-import { bleAvailable, bleErrorMessage, ic705Ble, isBleCancel, type BlePhase } from "./ic705-ble";
+import { bleAvailable, bleErrorMessage, ic705Ble, isBleCancel, looksLikeBleId, type BlePhase } from "./ic705-ble";
 import type { I18nKey } from "./i18n";
 import {
   BANDS,
   formatWatts,
+  mergeLp100a,
   useConsole,
   type LdgModel,
   type RadioLink,
@@ -254,7 +255,7 @@ export function Ic705Page() {
           connected: true,
           paired: true,
           hsUuid: ic705Ble.hsUuid || body.hsUuid,
-          device: ic705Ble.deviceId || ic705Ble.deviceName || body.device,
+          device: looksLikeBleId(ic705Ble.deviceId) ? ic705Ble.deviceId : looksLikeBleId(body.device || "") ? body.device : "",
           deviceName: ic705Ble.deviceName || body.deviceName,
           name: ic705Ble.deviceName ? `Icom · ${ic705Ble.deviceName}` : body.name,
           port: "GATT",
@@ -291,18 +292,37 @@ export function Ic705Page() {
           await ic705Ble.connect({
             chooser: acceptAll,
             acceptAll,
-            reconnect: !acceptAll && Boolean(body.paired || body.hsUuid || body.device),
+            reconnect: !acceptAll && Boolean(body.paired || body.hsUuid || body.device || ic705Ble.deviceId),
             hsUuid: body.hsUuid,
             civAddr: body.civAddr || civAddr,
-            deviceId: body.device,
+            deviceId: looksLikeBleId(body.device || "") ? body.device : undefined,
             deviceName: body.deviceName || body.name,
           });
         } catch (err) {
-          if (!acceptAll && isBleCancel(err)) {
+          if (!acceptAll && bleErrorMessage(err) === "BLE_SILENT") {
+            try {
+              await ic705Ble.connect({
+                chooser: true,
+                acceptAll: false,
+                reconnect: true,
+                hsUuid: body.hsUuid,
+                civAddr: body.civAddr || civAddr,
+                deviceId: looksLikeBleId(body.device || "") ? body.device : undefined,
+                deviceName: body.deviceName || body.name,
+              });
+            } catch (retry) {
+              if (isBleCancel(retry)) {
+                toast.message(tx("bleSilentFail"));
+                return;
+              }
+              throw retry;
+            }
+          } else if (!acceptAll && isBleCancel(err)) {
             toast.message(tx("bleSilentFail"));
             return;
+          } else {
+            throw err;
           }
-          throw err;
         }
         await persistAfterBle(body);
         void fetch("/api/lextel/keepalive", { method: "POST" }).catch(() => undefined);
@@ -1543,6 +1563,172 @@ export function LdgPage() {
           </Chip>
           <Chip onClick={() => void cmd("ant")}>
             {tx("ldgAnt")} {d.ant === 1 ? 2 : 1}
+          </Chip>
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+const LP_ALARM = ["lp100aAlarmOff", "1.5", "2.0", "2.5", "3.0", "lp100aAlarmUser"] as const;
+const LP_RANGE: Record<string, I18nKey> = {
+  HIGH: "lp100aRangeHigh",
+  MID: "lp100aRangeMid",
+  LOW: "lp100aRangeLow",
+};
+
+export function Lp100aPage() {
+  const { s, setS, tx, pushLog } = useConsole();
+  const d = s.lp100a;
+  const link = assignedSvc(s.ser2net.services, "lp100a");
+  const ip = s2nAside(s.ser2net.bind, s.ser2net.services, "lp100a") || tx("s2nPick");
+  const baud = link?.baud || 115200;
+  const barMax = d.range === "LOW" ? 25 : d.range === "MID" ? 250 : 2500;
+  const alarmLabel = d.alarm === 0 || d.alarm === 5 ? tx(LP_ALARM[d.alarm]!) : LP_ALARM[d.alarm] || "—";
+
+  const apply = (j: Record<string, unknown>) => {
+    setS((p) => ({ ...p, lp100a: mergeLp100a(p.lp100a, j) }));
+  };
+
+  const save = async (patch: Record<string, unknown>) => {
+    const r = await fetch("/api/lp100a", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ autoConnect: d.autoConnect, ...patch }),
+    });
+    apply((await r.json()) as Record<string, unknown>);
+  };
+
+  const connect = async () => {
+    if (!link) {
+      toast.error(tx("lp100aNeedPort"));
+      return;
+    }
+    try {
+      const r = await fetch("/api/lp100a/connect", { method: "POST" });
+      const j = (await r.json()) as Record<string, unknown>;
+      apply(j);
+      if (j.error === "sim") toast.message(tx("lp100aSim"));
+      else if (j.error === "noport") toast.error(tx("lp100aNeedPort"));
+      else if (j.hardware) toast.success(tx("lp100aSynced"));
+      else toast.success(tx("connected"));
+      pushLog("LP100A", String(j.error || "up"));
+    } catch (err) {
+      toast.error(String(err));
+    }
+  };
+
+  const disconnect = async () => {
+    const r = await fetch("/api/lp100a/disconnect", { method: "POST" });
+    apply((await r.json()) as Record<string, unknown>);
+    pushLog("LP100A", tx("disconnect"));
+  };
+
+  const cmd = async (c: string) => {
+    try {
+      const r = await fetch("/api/lp100a/cmd", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cmd: c }),
+      });
+      apply((await r.json()) as Record<string, unknown>);
+      pushLog("LP100A", c);
+    } catch (err) {
+      toast.error(String(err));
+    }
+  };
+
+  return (
+    <div>
+      <PageHead kicker={tx("lp100a")} title={tx("lp100aTitle")} aside={<span className="text-xs text-[#8ea0b3]">{ip}</span>} />
+      <p className="mb-4 max-w-3xl text-sm leading-relaxed text-[#8ea0b3]">{tx("lp100aHelp")}</p>
+      <Ser2netLink acc="lp100a" />
+      <Panel className="mb-4">
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label={tx("baud")}>
+            <ConsoleInput value={`${baud} 8N1`} readOnly />
+          </Field>
+          <Field label={tx("s2nEndpoint")}>
+            <ConsoleInput value={ip} readOnly />
+          </Field>
+        </div>
+        <p className="mt-3 text-xs text-[#ffb300]">{tx("lp100aKeepWatts")}</p>
+        <p className="mt-1 text-xs text-[#8ea0b3]">{tx("lp100aOldBaud")}</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {d.connected ? (
+            <GhostBtn onClick={() => void disconnect()}>{tx("disconnect")}</GhostBtn>
+          ) : (
+            <PrimaryBtn onClick={() => void connect()}>{tx("lp100aConnect")}</PrimaryBtn>
+          )}
+          <Chip
+            active={d.autoConnect}
+            onClick={() => {
+              const autoConnect = !d.autoConnect;
+              setS((p) => ({ ...p, lp100a: { ...p.lp100a, autoConnect } }));
+              void save({ autoConnect });
+            }}
+          >
+            {tx("svcAutostart")}
+          </Chip>
+        </div>
+      </Panel>
+
+      <Lcd>
+        <div className="mb-3 flex items-center justify-between border-b border-[#0c2236] pb-3">
+          <span className="text-xs font-semibold tracking-[0.2em] text-[#4fc3f7]">LP-100A</span>
+          <span className="text-[11px] text-[#8ea0b3]">{d.callsign || tx("lp100aCall")}</span>
+          <span className={`rounded px-2 py-0.5 text-[11px] font-bold ${d.tx ? "bg-[#ef4444] text-white" : "text-[#8ea0b3]"}`}>
+            {d.tx ? "TX" : "RX"}
+          </span>
+        </div>
+        <div className="mb-3 flex items-end justify-between">
+          <div>
+            <p className="text-[10px] text-[#5d7184]">{tx("lp100aFwd")}</p>
+            <p className="text-5xl font-semibold tracking-wide text-[#ffb300]">
+              {formatWatts(d.fwd)}
+              <span className="ml-1 text-lg">W</span>
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] text-[#5d7184]">{tx("lp100aAlarm")}</p>
+            <p className={`text-xl font-semibold ${d.alarm > 0 && d.swr >= 2 ? "text-[#f87171]" : "text-[#34d399]"}`}>{alarmLabel}</p>
+          </div>
+        </div>
+        <div className="mb-3">
+          <LedBar value={d.fwd} max={barMax} tone="red" />
+        </div>
+        <div className="grid grid-cols-4 gap-3 border-t border-[#0c2236] pt-3">
+          <LcdCell k={tx("lextelSwr")} v={d.swr.toFixed(2)} tone={d.swr >= 2 ? "red" : "amber"} />
+          <LcdCell k={tx("lp100aRef")} v={`${formatWatts(d.ref)} W`} tone="red" />
+          <LcdCell k={tx("lp100aZ")} v={`${d.z.toFixed(1)} Ω`} tone="green" />
+          <LcdCell k={tx("lp100aPhase")} v={`${d.phaseDeg.toFixed(1)}°`} ink />
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-3">
+          <LcdCell k={tx("lp100aDbm")} v={`${d.dbm.toFixed(1)}`} tone="amber" />
+          <LcdCell k={tx("lp100aRange")} v={tx(LP_RANGE[d.range] || "lp100aRangeHigh")} ink />
+          <LcdCell k={tx("mode")} v={d.meter} ink />
+        </div>
+      </Lcd>
+      <Panel className="mt-4 flex justify-around py-4">
+        <Led on={d.connected} tone="green" label={tx("connected")} />
+        <Led on={d.hardware} tone="cyan" label="RS232" />
+        <Led on={d.tx} tone="red" label="TX" />
+        <Led on={d.alarm > 0 && d.swr >= 2} tone="amber" label={tx("lp100aAlarm")} />
+      </Panel>
+      <Panel className="mt-4">
+        <PanelTitle>{tx("control")}</PanelTitle>
+        <div className="flex flex-wrap gap-2">
+          <Chip active={d.meter === "AVG"} onClick={() => void cmd("meter")}>
+            {tx("lp100aAvg")}
+          </Chip>
+          <Chip active={d.meter === "PEAK"} onClick={() => void cmd("meter")}>
+            {tx("lp100aPeak")}
+          </Chip>
+          <Chip tone="amber" active={d.meter === "TUNE"} onClick={() => void cmd("meter")}>
+            {tx("lp100aTune")}
+          </Chip>
+          <Chip onClick={() => void cmd("alarm")}>
+            {tx("lp100aAlarm")} {alarmLabel}
           </Chip>
         </div>
       </Panel>

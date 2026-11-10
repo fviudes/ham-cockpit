@@ -8,6 +8,9 @@ import Home from "./pages/Home";
 import Docs from "./pages/Docs";
 import Console from "./pages/Console";
 import VfoDisplay from "./pages/VfoDisplay";
+import { applyHtmlLang, readLang } from "./console/lang-store";
+
+applyHtmlLang(readLang());
 
 function Router() {
   return (

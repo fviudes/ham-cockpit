@@ -64,7 +64,9 @@ public static class IsoWriter {
 
 $fs = New-Object -ComObject IMAPI2FS.MsftFileSystemImage
 $fs.FileSystemsToCreate = 3
-$fs.VolumeName = "HAMCKP0100"
+$vol = "HAMCKP" + ($ver -replace '\.', '')
+if ($vol.Length -gt 16) { $vol = $vol.Substring(0, 16) }
+$fs.VolumeName = $vol
 $fs.Root.AddTree($root, $false)
 $result = $fs.CreateResultImage()
 [IsoWriter]::WriteStream($result.ImageStream, $out, [int]$result.BlockSize, [int]$result.TotalBlocks)

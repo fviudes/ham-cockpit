@@ -27,6 +27,7 @@ const TILE_LABEL: Record<TileId, I18nKey> = {
   acom: "acom",
   lextel: "lextel",
   ldg: "ldg",
+  lp100a: "lp100a",
 };
 
 export function RadioPage() {
@@ -110,6 +111,7 @@ export function RadioPage() {
     { id: "spe", node: <SpeViz /> },
     { id: "palstar", node: <PalstarViz s={s} /> },
     { id: "ldg", node: <LdgViz /> },
+    { id: "lp100a", node: <Lp100aViz s={s} tx={tx} /> },
     { id: "hamplus", node: <HamplusViz /> },
     { id: "acom", node: <AcomViz s={s} tx={tx} /> },
     { id: "lextel", node: <LextelViz s={s} tx={tx} /> },
@@ -623,6 +625,46 @@ function LextelViz({ s, tx }: { s: Station; tx: (k: I18nKey) => string }) {
           <LcdCell k={tx("lextelSwr")} v={d.swr.toFixed(2)} tone={d.swr >= 2 ? "red" : "amber"} />
           <LcdCell k={tx("lextelVdc")} v={d.vdc ? `${d.vdc.toFixed(1)} V` : "—"} tone="green" />
           <LcdCell k="SWR/REF" v={String(d.ref)} tone="red" />
+        </div>
+      </Lcd>
+    </>
+  );
+}
+
+function Lp100aViz({ s, tx }: { s: Station; tx: (k: I18nKey) => string }) {
+  const d = s.lp100a;
+  const barMax = d.range === "LOW" ? 25 : d.range === "MID" ? 250 : 2500;
+  return (
+    <>
+      <PanelTitle>TelePost LP-100A</PanelTitle>
+      <Lcd>
+        <div className="mb-2 flex items-center justify-between border-b border-[#0c2236] pb-2">
+          <span className="text-[10px] font-semibold tracking-[0.2em] text-[#4fc3f7]">LP-100A</span>
+          <span className="text-[10px] text-[#8ea0b3]">{d.meter}</span>
+          <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${d.tx ? "bg-[#ef4444] text-white" : "text-[#8ea0b3]"}`}>
+            {d.tx ? "TX" : "RX"}
+          </span>
+        </div>
+        <div className="mb-2 flex items-end justify-between">
+          <div>
+            <p className="text-[9px] text-[#5d7184]">{tx("lp100aFwd")}</p>
+            <p className="text-3xl font-semibold text-[#ffb300]">
+              {formatWatts(d.fwd)}
+              <span className="ml-1 text-sm">W</span>
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-[9px] text-[#5d7184]">{tx("lextelSwr")}</p>
+            <p className={`text-lg font-semibold ${d.swr >= 2 ? "text-[#f87171]" : "text-[#34d399]"}`}>{d.swr.toFixed(2)}</p>
+          </div>
+        </div>
+        <div className="mb-2">
+          <LedBar value={d.fwd} max={barMax} tone="red" />
+        </div>
+        <div className="grid grid-cols-3 gap-2 border-t border-[#0c2236] pt-2">
+          <LcdCell k={tx("lp100aZ")} v={`${d.z.toFixed(0)} Ω`} tone="green" />
+          <LcdCell k={tx("lp100aPhase")} v={`${d.phaseDeg.toFixed(0)}°`} ink />
+          <LcdCell k={tx("lp100aDbm")} v={d.dbm.toFixed(1)} tone="amber" />
         </div>
       </Lcd>
     </>

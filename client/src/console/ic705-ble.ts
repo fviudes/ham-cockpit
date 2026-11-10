@@ -52,9 +52,9 @@ type BtDevice = {
   id: string;
   name?: string;
   gatt?: BtGatt;
-  watchAdvertisements?: () => Promise<void>;
-  addEventListener: (type: string, fn: () => void) => void;
-  removeEventListener: (type: string, fn: () => void) => void;
+  watchAdvertisements?: (opts?: { signal?: AbortSignal }) => Promise<void>;
+  addEventListener: (type: string, fn: (...args: unknown[]) => void) => void;
+  removeEventListener: (type: string, fn: (...args: unknown[]) => void) => void;
 };
 
 type BtGatt = {
@@ -110,6 +110,29 @@ function hexBytes(s: string) {
   return Uint8Array.from(s.trim().split(/\s+/).map((b) => parseInt(b, 16)));
 }
 
+function readStoredDeviceId() {
+  try {
+    return localStorage.getItem(DEVICE_ID_STORE) || "";
+  } catch {
+    return "";
+  }
+}
+
+export function looksLikeBleId(s: string) {
+  const v = s.trim();
+  if (!v || /\s/.test(v)) return false;
+  if (/^(icom|ic-?705|ic705|com\d+)/i.test(v)) return false;
+  if (/^\/dev\//.test(v) || /^tty/i.test(v)) return false;
+  if (/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(v)) return true;
+  if (/^\{?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\}?$/i.test(v)) return true;
+  if (/^[0-9a-f-]{16,}$/i.test(v)) return true;
+  return v.length >= 8;
+}
+
+function icomish(name?: string) {
+  return /icom|ic-?705|ic705/i.test(name || "");
+}
+
 function pickGrantedDevice(known: BtDevice[], deviceId?: string, deviceName?: string): BtDevice | null {
   if (!known.length) return null;
   const id = (deviceId || "").trim();
@@ -117,7 +140,7 @@ function pickGrantedDevice(known: BtDevice[], deviceId?: string, deviceName?: st
     const byId = known.find((d) => d.id === id);
     if (byId) return byId;
   }
-  const want = (deviceName || "").trim().toLowerCase();
+  const want = (deviceName || "").replace(/^icom\s*[·•\-]\s*/i, "").trim().toLowerCase();
   if (want) {
     const byName = known.find((d) => (d.name || "").trim().toLowerCase() === want);
     if (byName) return byName;
@@ -127,11 +150,10 @@ function pickGrantedDevice(known: BtDevice[], deviceId?: string, deviceName?: st
     });
     if (byPart) return byPart;
   }
-  const icom = known.filter((d) => /icom|ic-?705/i.test(d.name || ""));
-  if (icom.length === 1) return icom[0]!;
-  if (icom.length > 1) return icom.find((d) => /705/i.test(d.name || "")) || icom[0]!;
-  if (id && known.length === 1) return known[0]!;
-  return known.length === 1 ? known[0]! : null;
+  const icom = known.filter((d) => icomish(d.name));
+  if (icom.length) return icom.find((d) => /705/i.test(d.name || "")) || icom[0]!;
+  if (known.length === 1) return known[0]!;
+  return null;
 }
 
 export function bleAvailable() {
@@ -166,13 +188,25 @@ class Ic705BleLink {
   private pollTimer = 0;
   private pollN = 0;
   private lastPtt = false;
+  private granted: BtDevice | null = null;
+  private wantOpen = false;
+  private autoOpts: NonNullable<Parameters<Ic705BleLink["connect"]>[0]> = {};
+  private recoverWatch = 0;
+  private opening = false;
 
   get connected() {
     return Boolean(this.gatt?.connected && this.char);
   }
 
   get busy() {
-    return this.attaching || this.hsBusy || this.connected;
+    return this.opening || this.attaching || this.hsBusy || this.connected;
+  }
+
+  /** Like Lextel wantOpen: keep retrying the granted IC-705 until disconnect(). */
+  armAuto(opts: NonNullable<Parameters<Ic705BleLink["connect"]>[0]> = {}) {
+    this.wantOpen = true;
+    this.autoOpts = { ...this.autoOpts, ...opts, chooser: false, acceptAll: false, silent: true, reconnect: true };
+    this.ensureRecoverWatch();
   }
 
   get deviceName() {
@@ -180,7 +214,7 @@ class Ic705BleLink {
   }
 
   get deviceId() {
-    return this.device?.id || "";
+    return this.device?.id || this.granted?.id || readStoredDeviceId();
   }
 
   setListener(l: BleListener | null) {
@@ -207,59 +241,89 @@ class Ic705BleLink {
   }) {
     const bt = (navigator as BtNav).bluetooth;
     if (!bt) throw new Error("Web Bluetooth indisponível");
+    if (this.opening || this.attaching) throw new Error("BLE_BUSY");
     if (opts?.civAddr) this.setCivAddr(opts.civAddr);
     if (opts?.hsUuid) appUuid(opts.hsUuid);
-
-    this.listener?.onPhase("scanning");
-    const hadLink = Boolean(this.gatt || this.device);
-    await this.dropLink(false);
-    if (hadLink) await delay(400);
-    const reconnect = Boolean(opts?.reconnect || opts?.hsUuid || opts?.deviceId);
-    const chooser = Boolean(opts?.chooser || opts?.acceptAll);
-    let device: BtDevice | null = await this.findGrantedDevice(bt, opts?.deviceId, opts?.deviceName);
-    if (!device && chooser) {
-      device = await bt.requestDevice(
-        opts?.acceptAll
-          ? { acceptAllDevices: true, optionalServices: [IC705_SVC] }
-          : {
-              filters: [
-                { namePrefix: "ICOM" },
-                { namePrefix: "Icom" },
-                { namePrefix: "icom" },
-                { namePrefix: "IC-705" },
-                { namePrefix: "IC705" },
-              ],
-              optionalServices: [IC705_SVC],
-            }
-      );
-    }
-    if (!device) {
-      this.listener?.onPhase("idle");
-      throw new Error("BLE_SILENT");
-    }
+    this.armAuto(opts || {});
+    this.opening = true;
     try {
-      await this.attach(device, reconnect && !chooser);
-    } catch (err) {
-      this.clearWaiters(false);
-      if (!chooser) this.listener?.onPhase("idle");
-      else if (!isBleCancel(err) && bleErrorMessage(err) !== "BLE_SILENT") this.listener?.onPhase("error", bleErrorMessage(err));
+      this.listener?.onPhase("scanning");
+      const hadLink = Boolean(this.gatt?.connected);
       await this.dropLink(false);
-      throw err;
+      if (hadLink) await delay(400);
+      const reconnect = Boolean(opts?.reconnect || opts?.hsUuid || opts?.deviceId || this.granted || readStoredDeviceId());
+      const chooser = Boolean(opts?.chooser || opts?.acceptAll);
+      let device: BtDevice | null = chooser ? null : await this.findGrantedDevice(bt, opts?.deviceId, opts?.deviceName);
+      if (!device && chooser) {
+        device = await bt.requestDevice(
+          opts?.acceptAll
+            ? { acceptAllDevices: true, optionalServices: [IC705_SVC] }
+            : {
+                filters: [
+                  { namePrefix: "ICOM" },
+                  { namePrefix: "Icom" },
+                  { namePrefix: "icom" },
+                  { namePrefix: "IC-705" },
+                  { namePrefix: "IC705" },
+                ],
+                optionalServices: [IC705_SVC],
+              }
+        );
+      }
+      if (!device) {
+        this.listener?.onPhase("idle");
+        throw new Error("BLE_SILENT");
+      }
+      this.granted = device;
+      try {
+        await this.attach(device, reconnect);
+      } catch (err) {
+        this.clearWaiters(false);
+        if (!chooser) this.listener?.onPhase("idle");
+        else if (!isBleCancel(err) && bleErrorMessage(err) !== "BLE_SILENT") this.listener?.onPhase("error", bleErrorMessage(err));
+        await this.dropLink(false);
+        throw err;
+      }
+    } finally {
+      this.opening = false;
+    }
+  }
+
+  private ensureRecoverWatch() {
+    if (this.recoverWatch || typeof window === "undefined") return;
+    this.recoverWatch = window.setInterval(() => {
+      if (!this.wantOpen || this.connected || this.opening || this.attaching) return;
+      void this.recover();
+    }, 2000);
+  }
+
+  private stopRecoverWatch() {
+    if (this.recoverWatch) {
+      clearInterval(this.recoverWatch);
+      this.recoverWatch = 0;
+    }
+  }
+
+  private async recover() {
+    if (!this.wantOpen || this.connected || this.opening || this.attaching) return;
+    try {
+      await this.connect({ ...this.autoOpts, chooser: false, acceptAll: false, silent: true, reconnect: true });
+    } catch {
+      /* watch retries like Lextel scheduleReconnect */
     }
   }
 
   private async findGrantedDevice(bt: NonNullable<BtNav["bluetooth"]>, deviceId?: string, deviceName?: string) {
-    let storedId = "";
-    try {
-      storedId = localStorage.getItem(DEVICE_ID_STORE) || "";
-    } catch {
-      storedId = "";
-    }
+    const storedRaw = readStoredDeviceId();
+    const storedId = looksLikeBleId(storedRaw) ? storedRaw : "";
+    const chromeId = looksLikeBleId(deviceId || "") ? (deviceId || "").trim() : storedId;
+    const nameHint = deviceName || (!looksLikeBleId(deviceId || "") ? deviceId : undefined);
+    if (this.granted && (!chromeId || this.granted.id === chromeId)) return this.granted;
     let device: BtDevice | null = null;
     for (let i = 0; i < 4 && !device; i++) {
       try {
         const known = (await bt.getDevices?.()) ?? [];
-        device = pickGrantedDevice(known, deviceId || storedId, deviceName);
+        device = pickGrantedDevice(known, chromeId, nameHint);
       } catch {
         device = null;
       }
@@ -269,6 +333,8 @@ class Ic705BleLink {
   }
 
   async disconnect() {
+    this.wantOpen = false;
+    this.stopRecoverWatch();
     await this.dropLink(true);
   }
 
@@ -435,6 +501,31 @@ class Ic705BleLink {
     }
   }
 
+  private async waitAdvertisement(device: BtDevice, ms: number) {
+    const watch = device.watchAdvertisements?.bind(device);
+    if (typeof watch !== "function") return;
+    const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    await new Promise<void>((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        device.removeEventListener("advertisementreceived", onAdv);
+        try {
+          ctrl?.abort();
+        } catch {
+          /* ignore */
+        }
+        resolve();
+      };
+      const timer = window.setTimeout(finish, ms);
+      const onAdv = () => finish();
+      device.addEventListener("advertisementreceived", onAdv);
+      watch(ctrl ? { signal: ctrl.signal } : undefined).catch(() => finish());
+    });
+  }
+
   private async openGatt(device: BtDevice) {
     let last: unknown;
     for (let i = 0; i < 4; i++) {
@@ -442,6 +533,7 @@ class Ic705BleLink {
         const server = device.gatt;
         if (!server) throw new Error("GATT recusado");
         if (i > 0) {
+          await this.waitAdvertisement(device, 2_000);
           try {
             if (server.connected) server.disconnect();
           } catch {
@@ -479,12 +571,7 @@ class Ic705BleLink {
     const web61 = pkt61(appUuid());
     const web62 = pkt62(HS_NAME_WEB);
     try {
-      if (reconnect) {
-        if (await this.burst(web61, web62, false, 8_000)) return true;
-        if (await this.burst(web61, web62, false, 5_000)) return true;
-        return this.burst(web61, web62, true, 10_000);
-      }
-      if (await this.burst(web61, web62, true, 12_000)) return true;
+      if (await this.burst(web61, web62, true, reconnect ? 10_000 : 12_000)) return true;
       if (await this.burst(web61, web62, false, 8_000)) return true;
       return this.burst(HS_UUID_SPP, web62, true, 8_000);
     } finally {

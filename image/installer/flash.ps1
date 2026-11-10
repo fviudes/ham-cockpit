@@ -31,8 +31,8 @@ if (-not $Image) {
 if (-not $Image -or -not (Test-Path $Image)) {
   throw @"
 Imagem Ham Cockpit OS nao encontrada.
-Baixe: gh release download --repo fviudes/ham-cockpit --pattern "ham-cockpit-*-raspi.img.xz" --dir instaladores
-Gere com Linux:  sudo bash image/appliance/build.sh
+Baixe para image\out:  powershell -File image\fetch-image.ps1
+Gere no Linux/WSL:     sudo bash image/appliance/build.sh
 "@
 }
 

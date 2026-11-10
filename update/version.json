@@ -1,6 +1,6 @@
 {
-  "version": "0.1.00",
+  "version": "0.1.01",
   "channel": "main",
   "file": "",
-  "notes": "Ham Cockpit v0.1.00 — primeira versão pública do canal de update"
+  "notes": "Ham Cockpit v0.1.01 — MMDVM D-Star/YSF, display Nextion/OLED, persistência de config"
 }

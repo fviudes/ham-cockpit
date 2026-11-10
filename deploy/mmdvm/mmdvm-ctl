@@ -1,0 +1,59 @@
+#!/bin/bash
+# Liga/desliga MMDVMHost + gateways (DMR/YSF/D-Star) e grava INI (layout WPSD).
+# Chamado via sudo -n pelo console Ham Cockpit.
+set -euo pipefail
+
+host_unit=mmdvmhost.service
+dmr_unit=dmrgateway.service
+ysf_unit=ysfgateway.service
+dstar_unit=ircddbgateway.service
+nextion_unit=nextiondriver.service
+
+units_of() {
+  case "${1:-all}" in
+    host|mmdvmhost) echo "$host_unit" ;;
+    gateway|gw|dmrgateway|dmr) echo "$dmr_unit" ;;
+    ysfgateway|ysf) echo "$ysf_unit" ;;
+    ircddbgateway|dstar) echo "$dstar_unit" ;;
+    nextion|nextiondriver) echo "$nextion_unit" ;;
+    all) echo "$nextion_unit $host_unit $dmr_unit $ysf_unit $dstar_unit" ;;
+    *) echo "" ;;
+  esac
+}
+
+cmd="${1:-}"
+case "$cmd" in
+  start|stop|restart)
+    for u in $(units_of "${2:-all}"); do
+      systemctl "$cmd" "$u" >/dev/null 2>&1 || true
+    done
+    echo ok
+    ;;
+  is-active)
+    target="${2:-host}"
+    unit="$host_unit"
+    case "$target" in
+      gateway|gw|dmrgateway|dmr) unit="$dmr_unit" ;;
+      ysfgateway|ysf) unit="$ysf_unit" ;;
+      ircddbgateway|dstar) unit="$dstar_unit" ;;
+      nextion|nextiondriver) unit="$nextion_unit" ;;
+      host|mmdvmhost) unit="$host_unit" ;;
+    esac
+    systemctl is-active "$unit" 2>/dev/null || echo inactive
+    ;;
+  install-ini)
+    src="${2:-}"
+    dest="${3:-}"
+    [[ -f "$src" && -n "$dest" ]] || { echo "uso: mmdvm-ctl install-ini SRC DEST" >&2; exit 2; }
+    case "$dest" in
+      /etc/mmdvmhost|/etc/dmrgateway|/etc/ysfgateway|/etc/ircddbgateway|/opt/ham-cockpit/mmdvm/*) ;;
+      *) echo "destino recusado" >&2; exit 3 ;;
+    esac
+    install -m 0644 "$src" "$dest"
+    echo ok
+    ;;
+  *)
+    echo "uso: mmdvm-ctl start|stop|restart|is-active|install-ini" >&2
+    exit 1
+    ;;
+esac

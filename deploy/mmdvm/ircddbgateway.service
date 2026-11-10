@@ -1,0 +1,19 @@
+[Unit]
+Description=ircDDBGateway D-Star (WPSD / Pi-Star stack) — Ham Cockpit
+Documentation=https://wpsd.radio
+After=network-online.target mmdvmhost.service
+Wants=network-online.target
+BindsTo=mmdvmhost.service
+ConditionPathExists=/usr/local/bin/ircddbgatewayd
+
+[Service]
+Type=simple
+User=hamcockpit
+Group=dialout
+ExecStartPre=/bin/mkdir -p /var/log/mmdvm
+ExecStart=/bin/bash -c 'CFG=/opt/ham-cockpit/mmdvm/ircddbgateway.conf; [[ -f /etc/ircddbgateway ]] && CFG=/etc/ircddbgateway; exec /usr/local/bin/ircddbgatewayd -n -c "$CFG"'
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=ham-cockpit.target

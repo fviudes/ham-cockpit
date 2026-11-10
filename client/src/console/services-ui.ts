@@ -6,11 +6,13 @@ export const SVC_LABEL: Record<ServiceId, I18nKey> = {
   ser2net: "svcSer2net",
   wavelog: "svcWavelog",
   wlg: "svcWlg",
+  mmdvm: "svcMmdvm",
   radio: "svcRadio",
   spe: "svcSpe",
   hamplus: "svcHamplus",
   palstar: "svcPalstar",
   ldg: "svcLdg",
+  lp100a: "svcLp100a",
   acom: "svcAcom",
   lextel: "svcLextel",
   wifi: "svcWifi",
@@ -23,11 +25,13 @@ export const SVC_HINT: Record<ServiceId, I18nKey> = {
   ser2net: "svcSer2netHint",
   wavelog: "svcWavelogHint",
   wlg: "svcWlgHint",
+  mmdvm: "svcMmdvmHint",
   radio: "svcRadioHint",
   spe: "svcSpeHint",
   hamplus: "svcHamplusHint",
   palstar: "svcPalstarHint",
   ldg: "svcLdgHint",
+  lp100a: "svcLp100aHint",
   acom: "svcAcomHint",
   lextel: "svcLextelHint",
   wifi: "svcWifiHint",
@@ -41,9 +45,11 @@ export function serviceLive(id: ServiceId, s: Station, running: boolean) {
   if (id === "radio") return s.ic705.phase === "ready" || s.ic705.civ || s.radios.items.some((r) => r.connected);
   if (id === "lextel") return s.lextel.connected;
   if (id === "ldg") return s.ldg.connected;
+  if (id === "lp100a") return s.lp100a.connected;
   if (id === "wifi") return s.wifi.staConnected || s.wifi.ethConnected;
   if (id === "wavelog") return s.wavelog.running;
   if (id === "wlg") return s.wlg.running;
+  if (id === "mmdvm") return s.mmdvm.running || running;
   if (id === "bluetooth") return s.ic705.phase === "ready" || s.ble.connected;
   if (id === "ser2net") return s.ser2net.running || running;
   return running;

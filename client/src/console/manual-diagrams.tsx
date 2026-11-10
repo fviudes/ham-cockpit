@@ -91,6 +91,81 @@ export function FigWavelog({ caption }: { caption: string }) {
   );
 }
 
+export function FigWavelogArch({ caption }: { caption: string }) {
+  return (
+    <Figure caption={caption}>
+      <svg viewBox="0 0 720 250" className="h-auto w-full" role="img" aria-label={caption}>
+        <rect width="720" height="250" rx="12" fill="#071018" />
+        <Box x={16} y={18} w={150} h={64} title="WSJT-X / JTDX" sub="UDP Secondary 2333" fill="#2a2410" />
+        <Box x={16} y={98} w={150} h={64} title="Hamlib NET" sub="rigctld :4532" fill="#2a2410" />
+        <Box x={16} y={178} w={150} h={54} title="Cluster / Bandmap" sub="callback QSY" fill="#2a2410" />
+        <Arrow x1={166} y1={50} x2={248} y2={92} label="QSO" />
+        <Arrow x1={166} y1={130} x2={248} y2={118} label="f / m" />
+        <Arrow x1={248} y1={160} x2={166} y2={200} label="QSY" />
+        <Box x={250} y={78} w={200} h={94} title="WaveLogGate" sub={"headless · /opt/wavelog-gate\nUDP 2333 · HTTP 54321"} fill="#0d2a3a" accent />
+        <Arrow x1={450} y1={110} x2={528} y2={70} label="api/qso" />
+        <Arrow x1={450} y1={140} x2={528} y2={150} label="api/radio" />
+        <Box x={530} y={28} w={174} h={80} title="Wavelog" sub="Docker :8086 · MariaDB" fill="#12324a" />
+        <Box x={530} y={124} w={174} h={54} title="Live CAT" sub="freq + mode" fill="#12324a" />
+        <Box x={530} y={192} w={174} h={40} title="queue.jsonl" sub="if API is down" fill="#1a2e1a" />
+      </svg>
+    </Figure>
+  );
+}
+
+export function FigWavelogCat({ caption }: { caption: string }) {
+  return (
+    <Figure caption={caption}>
+      <svg viewBox="0 0 720 150" className="h-auto w-full" role="img" aria-label={caption}>
+        <rect width="720" height="150" rx="12" fill="#071018" />
+        <Box x={16} y={36} w={130} h={78} title="Rádio" sub="USB CAT / GATT" fill="#12324a" />
+        <Arrow x1={146} y1={75} x2={210} y2={75} />
+        <Box x={212} y={36} w={140} h={78} title="ser2net + rigctld" sub="127.0.0.1:4532" fill="#0d2a3a" accent />
+        <Arrow x1={352} y1={75} x2={416} y2={75} label="f / m 4 s" />
+        <Box x={418} y={36} w={130} h={78} title="Gate" sub="PUBLISH_CAT=1" fill="#2a2410" />
+        <Arrow x1={548} y1={75} x2={592} y2={75} />
+        <Box x={594} y={36} w={110} h={78} title="Wavelog" sub="api/radio" fill="#12324a" />
+      </svg>
+    </Figure>
+  );
+}
+
+export function FigWavelogContest({ caption }: { caption: string }) {
+  return (
+    <Figure caption={caption}>
+      <svg viewBox="0 0 720 150" className="h-auto w-full" role="img" aria-label={caption}>
+        <rect width="720" height="150" rx="12" fill="#071018" />
+        <Step n="1" x={12} w={128} title="Sessão" sub="Contest Manager" />
+        <Chev x={144} />
+        <Step n="2" x={158} w={128} title="START" sub="Logging Engine" />
+        <Chev x={290} />
+        <Step n="3" x={304} w={128} title="CAT radio" sub="freq do Gate" />
+        <Chev x={436} />
+        <Step n="4" x={450} w={128} title="QSO Enter" sub="serial / exch" />
+        <Chev x={582} />
+        <Step n="5" x={580} w={128} title="Logbook" sub="Cabrillo / ADIF" />
+      </svg>
+    </Figure>
+  );
+}
+
+export function FigMmdvm({ caption }: { caption: string }) {
+  return (
+    <Figure caption={caption}>
+      <svg viewBox="0 0 720 160" className="h-auto w-full" role="img" aria-label={caption}>
+        <rect width="720" height="160" rx="12" fill="#071018" />
+        <Box x={12} y={36} w={110} h={88} title="Rádio DV" sub="DMR · YSF · M17" fill="#12324a" />
+        <Arrow x1={122} y1={80} x2={168} y2={80} label="RF" />
+        <Box x={170} y={36} w={120} h={88} title="Modem" sub={"HAT 3,3 V\n/dev/ttyAMA0"} fill="#2a2410" />
+        <Arrow x1={290} y1={80} x2={336} y2={80} label="115200" />
+        <Box x={338} y={28} w={160} h={104} title="MMDVMHost" sub={"WPSD INI\nRemote :7642"} fill="#0d2a3a" accent />
+        <Arrow x1={498} y1={80} x2={544} y2={80} label="62031" />
+        <Box x={546} y={36} w={162} h={88} title="DMRGateway" sub="BM · TGIF · XLX" fill="#12324a" />
+      </svg>
+    </Figure>
+  );
+}
+
 export function FigSer2net({ caption }: { caption: string }) {
   return (
     <Figure caption={caption}>

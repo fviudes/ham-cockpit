@@ -69,12 +69,12 @@ app_ver() {
   if [[ -f "$APP_HOME/VERSION" ]]; then
     tr -d '[:space:]' <"$APP_HOME/VERSION"
   else
-    echo "0.1.00"
+    echo "0.1.01"
   fi
 }
 
 github_app_meta() {
-  curl -fsSL -A "Ham-Cockpit/0.1.00" "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/version.json" || true
+  curl -fsSL -A "Ham-Cockpit/0.1.01" "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/version.json" || true
 }
 
 check_app() {
@@ -96,10 +96,10 @@ apply_app() {
   # shellcheck disable=SC2064
   trap "rm -rf '$tmp'" RETURN
   if [[ -n "$file" ]]; then
-    curl -fsSL -A "Ham-Cockpit/0.1.00" "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/${file}" -o "$tmp/pkg.tgz"
+    curl -fsSL -A "Ham-Cockpit/0.1.01" "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/${file}" -o "$tmp/pkg.tgz"
     tar -xzf "$tmp/pkg.tgz" -C "$tmp"
   else
-    curl -fsSL -A "Ham-Cockpit/0.1.00" -L "https://github.com/fviudes/ham-cockpit/archive/refs/heads/main.tar.gz" -o "$tmp/main.tgz"
+    curl -fsSL -A "Ham-Cockpit/0.1.01" -L "https://github.com/fviudes/ham-cockpit/archive/refs/heads/main.tar.gz" -o "$tmp/main.tgz"
     tar -xzf "$tmp/main.tgz" -C "$tmp"
   fi
   src="$(find "$tmp" -maxdepth 4 -type d -name public -printf '%h\n' 2>/dev/null | head -n 1 || true)"

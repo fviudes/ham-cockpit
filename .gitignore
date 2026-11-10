@@ -6,16 +6,12 @@
 dist/
 build/
 *.dist
-image/out/*.img
-image/out/*.img.xz
-image/out/*.iso
-image/out/*.zip
-image/out/*.tar
-image/out/pi-gen/
-image/out/stage/
-image/out/mnt/
-instaladores/*.img
-instaladores/*.img.xz
+# Imagem OS (~2 GB) — gera em image/out, nunca no git
+image/out/*
+!image/out/.gitkeep
+*.img
+*.img.xz
+*.img.zip
 instaladores/*.iso
 
 # Environment variables
@@ -59,6 +55,8 @@ data/layouts/
 data/backup/
 data/radios/
 data/ldg/
+data/lp100a/
+data/mmdvm/
 pids
 *.pid
 *.seed

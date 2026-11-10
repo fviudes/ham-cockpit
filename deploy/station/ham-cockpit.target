@@ -8,6 +8,7 @@ Wants=ser2net.service
 Wants=rigctld@ic705.service
 Wants=wavelog.service
 Wants=waveloggate.service
+Wants=mmdvmhost.service dmrgateway.service
 Wants=ham-cockpit-vfo.service ham-cockpit-vfo-idle.service
 
 [Install]

@@ -19,6 +19,7 @@ import { updatesApply, updatesRefresh, updatesStatus } from "./server/updates";
 import { layoutGet, layoutSave } from "./server/layouts";
 import { ldgCmd, ldgConnect, ldgDisconnect, ldgPeek, ldgSave } from "./server/ldg";
 import { backupCreate, backupDelete, backupList, backupRestore } from "./server/backup";
+import { mmdvmControl, mmdvmRemote, mmdvmSave, mmdvmStatus } from "./server/mmdvm";
 
 // =============================================================================
 // Manus Debug Collector - Vite Plugin
@@ -650,6 +651,47 @@ function vitePluginBackup(): Plugin {
   };
 }
 
+function vitePluginMmdvm(): Plugin {
+  return {
+    name: "mmdvm-api",
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use(async (req, res, next) => {
+        const url = req.url?.split("?")[0] ?? "";
+        if (!url.startsWith("/api/mmdvm")) return next();
+        try {
+          if (req.method === "GET" && url === "/api/mmdvm") {
+            return sendJson(res, 200, await mmdvmStatus());
+          }
+          if (req.method === "PUT" && url === "/api/mmdvm") {
+            const raw = await readBody(req);
+            const body = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+            return sendJson(res, 200, await mmdvmSave(body));
+          }
+          if (req.method === "POST" && url === "/api/mmdvm/up") {
+            const body = await mmdvmControl("start");
+            return sendJson(res, body.hostRunning || body.installed ? 200 : 503, body);
+          }
+          if (req.method === "POST" && url === "/api/mmdvm/down") {
+            return sendJson(res, 200, await mmdvmControl("stop"));
+          }
+          if (req.method === "POST" && url === "/api/mmdvm/restart") {
+            return sendJson(res, 200, await mmdvmControl("restart"));
+          }
+          if (req.method === "POST" && url === "/api/mmdvm/remote") {
+            const raw = await readBody(req);
+            const body = raw ? (JSON.parse(raw) as { cmd?: string }) : {};
+            const result = await mmdvmRemote(String(body.cmd || ""));
+            return sendJson(res, result.ok ? 200 : 400, result);
+          }
+        } catch (err) {
+          return sendJson(res, 500, { ok: false, error: String(err) });
+        }
+        next();
+      });
+    },
+  };
+}
+
 function vitePluginWavelog(): Plugin {
   return {
     name: "wavelog-api",
@@ -701,6 +743,7 @@ export default defineConfig(({ command }) => ({
           vitePluginLayout(),
           vitePluginUpdates(),
           vitePluginWavelog(),
+          vitePluginMmdvm(),
           vitePluginBackup(),
           vitePluginUsers(),
           vitePluginTerm(),

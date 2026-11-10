@@ -11,7 +11,12 @@ import {
   FigStation,
   FigTtl,
   FigWavelog,
+  FigWavelogArch,
+  FigWavelogCat,
+  FigWavelogContest,
+  FigMmdvm,
 } from "./manual-diagrams";
+import { PRODUCT, Photo } from "@/pages/product-media";
 import { useLocation } from "wouter";
 import type { ReactNode } from "react";
 
@@ -32,15 +37,17 @@ const TOC: { id: string; title: Pair }[] = [
   { id: "hamplus", title: { pt: "Hamplus AS-603WL", en: "Hamplus AS-603WL" } },
   { id: "palstar", title: { pt: "Palstar AT-AUTO", en: "Palstar AT-AUTO" } },
   { id: "ldg", title: { pt: "LDG AT Pro II", en: "LDG AT Pro II" } },
+  { id: "lp100a", title: { pt: "TelePost LP-100A", en: "TelePost LP-100A" } },
   { id: "acom", title: { pt: "ACOM 2000A", en: "ACOM 2000A" } },
   { id: "wavelog", title: { pt: "Wavelog e WaveLogGate", en: "Wavelog and WaveLogGate" } },
+  { id: "mmdvm", title: { pt: "MMDVM (WPSD / Pi-Star)", en: "MMDVM (WPSD / Pi-Star)" } },
   { id: "ser2net", title: { pt: "ser2net e Hamlib", en: "ser2net and Hamlib" } },
   { id: "wizard", title: { pt: "Config Device Wizard", en: "Config Device Wizard" } },
   { id: "wifi", title: { pt: "Wi‑Fi da casa e do Pi", en: "Home Wi‑Fi and the Pi AP" } },
   { id: "bluetooth", title: { pt: "Aba Bluetooth", en: "Bluetooth tab" } },
   { id: "sistema", title: { pt: "Status, logs, terminal, admin, backup", en: "Status, logs, terminal, admin, backup" } },
   { id: "niveis", title: { pt: "Níveis elétricos e cabos", en: "Electrical levels and cables" } },
-  { id: "receitas", title: { pt: "Três estações de exemplo", en: "Three example stations" } },
+  { id: "receitas", title: { pt: "Estações de exemplo", en: "Example stations" } },
   { id: "problemas", title: { pt: "Se algo não ligar", en: "If something will not come up" } },
 ];
 
@@ -72,6 +79,14 @@ export function ManualPage() {
 
       <div className="space-y-6">
         <Section id="o-que-e" title={t(TOC[0]!.title)}>
+          <Photo
+            src={PRODUCT.hero}
+            alt="Raspberry Pi Ham Cockpit, dongle Bluetooth e cartão da imagem OS"
+            caption={t({
+              pt: "O produto: Pi 3/4, Ubuntu 24.04, imagem ham-cockpit-0.1.01-raspi.img.xz em image/out.",
+              en: "The product: Pi 3/4, Ubuntu 24.04, ham-cockpit-0.1.01-raspi.img.xz in image/out.",
+            })}
+          />
           <P
             pt="O Ham Cockpit é o computador da estação. Ele fica sempre ligado no shack, fala com o rádio (USB ou Bluetooth), com o wattímetro Lextel, com amplificadores e chaves, e publica um site. Você abre esse site no celular, no notebook ou no PC da mesa — Chrome ou Edge."
             en="Ham Cockpit is the station computer. It stays on in the shack, talks to the radio (USB or Bluetooth), the Lextel wattmeter, amplifiers and switches, and publishes a website. You open that site on a phone, laptop or desk PC — Chrome or Edge."
@@ -89,9 +104,17 @@ export function ManualPage() {
         </Section>
 
         <Section id="mapa" title={t(TOC[1]!.title)}>
+          <Photo
+            src={PRODUCT.shack}
+            alt="Estação com Pi, rádio e wattímetro"
+            caption={t({
+              pt: "Arquitetura em estrela: o Pi no centro. Rádio GATT/USB, Lextel SPP, acessórios em ser2net.",
+              en: "Star architecture: Pi in the center. Radio GATT/USB, Lextel SPP, accessories on ser2net.",
+            })}
+          />
           <P
             pt="Pense na estação como uma estrela: no centro o Pi, em volta o rádio, o wattímetro, o logbook e o seu computador. Nada disso precisa estar no mesmo cabo."
-            en="Think of the station as a star: the Pi in the centre, radio, wattmeter, logbook and your computer around it. None of that has to share one cable."
+            en="Think of the station as a star: the Pi in the center, radio, wattmeter, logbook and your computer around it. None of that has to share one cable."
           />
           <FigStation
             caption={t({
@@ -142,10 +165,18 @@ export function ManualPage() {
         </Section>
 
         <Section id="tela" title={t(TOC[3]!.title)}>
+          <Photo
+            src={PRODUCT.console}
+            alt="Console Ham Cockpit no portátil"
+            caption={t({
+              pt: "A tela do operador: VFO, chips CI-V/SPP, menu à esquerda. Chrome ou Edge.",
+              en: "Operator screen: VFO, CI-V/SPP chips, left menu. Chrome or Edge.",
+            })}
+          />
           <FigScreen
             caption={t({
-              pt: "Figura 3 — Menu à esquerda, frequência no topo, chips do rádio e do MS-2000, idioma PT/EN à direita.",
-              en: "Figure 3 — Menu on the left, frequency on top, radio and MS-2000 chips, PT/EN language on the right.",
+              pt: "Figura 3 — Menu à esquerda, frequência no topo, chips do rádio e do MS-2000, idioma PT-BR / EN-US à direita.",
+              en: "Figure 3 — Menu on the left, frequency on top, radio and MS-2000 chips, PT-BR / EN-US language on the right.",
             })}
           />
           <Ul
@@ -160,7 +191,7 @@ export function ManualPage() {
               },
               {
                 pt: "PT-BR / EN troca o idioma do console inteiro, inclusive este manual.",
-                en: "PT-BR / EN switches the whole console language, including this manual.",
+                en: "PT-BR / EN-US switches the whole console language, including this manual.",
               },
               {
                 pt: "No celular, o botão de menu (☰) abre a mesma lista.",
@@ -268,7 +299,7 @@ export function ManualPage() {
           <Ul
             items={[
               { pt: "Setas ▲ ▼: ±1 kHz. Campo Frequência manual + Aplicar: vai direto ao Hertz.", en: "▲ ▼ arrows: ±1 kHz. Manual frequency + Apply: jumps to the hertz you typed." },
-              { pt: "Botões de banda (160 m … 70 cm): QSY para o centro da faixa.", en: "Band buttons (160 m … 70 cm): QSY to the band centre." },
+              { pt: "Botões de banda (160 m … 70 cm): QSY para o centro da faixa.", en: "Band buttons (160 m … 70 cm): QSY to the band center." },
               { pt: "USB / LSB / CW / AM / FM / RTTY: modo. PTT ON / OFF: transmite (cuidado com a antena).", en: "USB / LSB / CW / AM / FM / RTTY: mode. PTT ON / OFF: transmits (watch the antenna)." },
               { pt: "RF gain e AF gain: deslizantes. O selo BLE CAT verde confirma que o Painel está falando com o rádio.", en: "RF gain and AF gain sliders. The green BLE CAT badge confirms the Panel is talking to the radio." },
               { pt: "+ dispositivo abre a lista do que ainda não está no painel. O X no canto do card tira o dispositivo. Salvar o layout guarda a página neste usuário.", en: "+ device lists what is not on the panel yet. The X on a card removes it. Save layout keeps the page for this user." },
@@ -356,7 +387,15 @@ export function ManualPage() {
           <GoTab page="ldg" label={t({ pt: "Abrir LDG AT", en: "Open LDG AT" })} />
         </Section>
 
-        <Section id="acom" title={t(TOC[14]!.title)}>
+        <Section id="lp100a" title={t(TOC[14]!.title)}>
+          <P
+            pt="Wattímetro vetorial TelePost. RS232 115200 8N1, cabo reto DB9 (não null-modem). Cadastre o USB-RS232 no ser2net e escolha a conexão IP na aba LP-100A. O console pede P ~5 vezes por segundo e lê Power, Z, fase, alarme de ROE, indicativo, faixa, Peak/Avg/Tune, dBm e SWR. A e F ciclam alarme e modo do medidor. Não envie M — muda a tela e a telemetria para. Deixe o medidor em Watts. PTT RCA e segundo coupler são só no hardware."
+            en="TelePost vector RF wattmeter. RS232 115200 8N1, straight-through DB9 (not null-modem). Register the USB-RS232 in ser2net and pick the IP connection on the LP-100A tab. The console polls P ~5 times per second and reads Power, Z, phase, SWR alarm, callsign, range, Peak/Avg/Tune, dBm and SWR. A and F cycle alarm and meter mode. Do not send M — it changes the screen and telemetry stops. Keep the meter on Watts. RCA PTT loop and dual coupler are hardware-only."
+          />
+          <GoTab page="lp100a" label={t({ pt: "Abrir LP-100A", en: "Open LP-100A" })} />
+        </Section>
+
+        <Section id="acom" title={t(TOC[15]!.title)}>
           <P
             pt="O 2000A fala RS232 1200 8N1 na DB9 traseira, no estilo ACOM Director Classic. O CAT do rádio vai no conector CAT do RCU, não nesta serial."
             en="The 2000A speaks RS232 1200 8N1 on the rear DB9, ACOM Director Classic style. Radio CAT goes to the RCU CAT jack, not this serial."
@@ -386,50 +425,140 @@ export function ManualPage() {
           <GoTab page="acom" label={t({ pt: "Abrir ACOM", en: "Open ACOM" })} />
         </Section>
 
-        <Section id="wavelog" title={t(TOC[15]!.title)}>
+        <Section id="wavelog" title={t(TOC[16]!.title)}>
+          <Photo
+            src={PRODUCT.logbook}
+            alt={t({ pt: "Logbook Wavelog no notebook", en: "Wavelog logbook on a laptop" })}
+            caption={t({
+              pt: "Wavelog em Docker :8086. Não divide a porta 80 com o console. MariaDB fica no container wavelog-db.",
+              en: "Wavelog in Docker :8086. It does not share port 80 with the console. MariaDB stays in container wavelog-db.",
+            })}
+          />
           <P
-            pt="Wavelog (logbook PHP) e Ham Cockpit não partilham pasta nem a porta 80. O logbook vive em /opt/wavelog na 8086. O WaveLogGate vive em /opt/wavelog-gate: escuta UDP (2333). Cada pacote de QSO vira um contato no log."
-            en="Wavelog (PHP logbook) and Ham Cockpit do not share a folder or port 80. The logbook lives in /opt/wavelog on 8086. WaveLogGate lives in /opt/wavelog-gate and listens UDP (2333). Each QSO packet becomes a log contact."
+            pt="Wavelog é o logbook PHP da estação (fork do Cloudlog, imagem ghcr.io/wavelog/wavelog). Ham Cockpit não compartilha pasta nem a porta 80. O logbook vive em /opt/wavelog na 8086. O WaveLogGate headless vive em /opt/wavelog-gate: escuta UDP 2333, publica CAT e faz QSY HTTP. Não é o programa GUI WavelogGate do DJ7NT — é o serviço Node da imagem, sem DISPLAY."
+            en="Wavelog is the station PHP logbook (Cloudlog fork, image ghcr.io/wavelog/wavelog). Ham Cockpit does not share a folder or port 80. The logbook lives in /opt/wavelog on 8086. The headless WaveLogGate lives in /opt/wavelog-gate: it listens UDP 2333, publishes CAT, and does HTTP QSY. It is not DJ7NT's GUI WavelogGate — it is the image's Node service, with no DISPLAY."
+          />
+          <FigWavelogArch
+            caption={t({
+              pt: "Figura 7 — Três fluxos: QSO UDP → api/qso; Hamlib f/m → api/radio; cluster → GET :54321/{Hz}/{modo}.",
+              en: "Figure 7 — Three flows: UDP QSO → api/qso; Hamlib f/m → api/radio; cluster → GET :54321/{Hz}/{mode}.",
+            })}
           />
           <FigWavelog
             caption={t({
-              pt: "Figura 7 — WSJT-X (Secondary UDP 2333) → WaveLogGate → API do Wavelog → QSO no logbook.",
-              en: "Figure 7 — WSJT-X (Secondary UDP 2333) → WaveLogGate → Wavelog API → QSO in the logbook.",
+              pt: "Figura 8 — WSJT-X Secondary UDP 2333 → Gate → API Wavelog → QSO no logbook. Tipo 5 (QSO) ou 12 (ADIF). Duplicata em 15 s é ignorada; se a API cair, queue.jsonl.",
+              en: "Figure 8 — WSJT-X Secondary UDP 2333 → Gate → Wavelog API → QSO in the logbook. Type 5 (QSO) or 12 (ADIF). A duplicate within 15 s is ignored; if the API is down, queue.jsonl.",
+            })}
+          />
+          <P
+            pt="Integrações nativas do Wavelog: LoTW, eQSL, Club Log, HRDlog, OQRS, ADIF, DXCC/WAS/IOTA/SOTA/POTA/WWFF, callbook QRZ/HamQTH/QRZCQ, bandmap/cluster, Winkeyer, motor de contest 3.0, API legado e API v2."
+            en="Native Wavelog integrations: LoTW, eQSL, Club Log, HRDlog, OQRS, ADIF, DXCC/WAS/IOTA/SOTA/POTA/WWFF, QRZ/HamQTH/QRZCQ callbook, bandmap/cluster, Winkeyer, 3.0 contest engine, legacy API and API v2."
+          />
+          <FigWavelogCat
+            caption={t({
+              pt: "Figura 9 — Operação com o rádio: só o ser2net abre a TTY. O Gate lê Hamlib NET :4532 a cada 4 s (PUBLISH_CAT) e o Wavelog mostra o rádio em Hardware Interfaces.",
+              en: "Figure 9 — Operating with the radio: only ser2net opens the TTY. The Gate reads Hamlib NET :4532 every 4 s (PUBLISH_CAT) and Wavelog shows the radio under Hardware Interfaces.",
             })}
           />
           <Steps
             items={[
               {
-                pt: "Primeiro acesso ao logbook: http://IP-do-Pi:8086/install. Host do banco: wavelog-db. A URL da API termina em index.php.",
-                en: "First logbook visit: http://PI-IP:8086/install. Database host: wavelog-db. The API URL ends in index.php.",
+                pt: "Primeiro acesso: http://IP-do-Pi:8086/install. Host do banco: wavelog-db. URL da API termina em index.php.",
+                en: "First visit: http://PI-IP:8086/install. Database host: wavelog-db. The API URL ends in index.php.",
               },
               {
-                pt: "Copie a chave API e o Station ID para a aba Wavelog do console. Salve. Testar API deve ficar verde.",
-                en: "Copy the API key and Station ID into the console Wavelog tab. Save. Test API should go green.",
+                pt: "Admin → API: copie a chave. Station ID do perfil. Cole na aba Wavelog do console. Testar API verde.",
+                en: "Admin → API: copy the key. Station ID of the profile. Paste them on the console Wavelog tab. Test API green.",
               },
               {
-                pt: "Inicie o WaveLogGate. Em WSJT-X / JTDX: Secondary UDP server = IP do Pi, porta 2333. Não ative Internal Hamlib no Gate — use 127.0.0.1:4532.",
-                en: "Start WaveLogGate. In WSJT-X / JTDX: Secondary UDP server = Pi IP, port 2333. Do not enable Internal Hamlib on the Gate — use 127.0.0.1:4532.",
+                pt: "WSJT-X / JTDX: Secondary UDP = IP do Pi, porta 2333, Enable logged ADIF broadcast. Rig = Hamlib NET 127.0.0.1:4532 (3085 no 705). Sem Internal Hamlib no Gate.",
+                en: "WSJT-X / JTDX: Secondary UDP = Pi IP, port 2333, Enable logged ADIF broadcast. Rig = Hamlib NET 127.0.0.1:4532 (3085 on the 705). No Internal Hamlib on the Gate.",
               },
               {
-                pt: "Opcional: Publicar CAT no logbook envia frequência/modo quando mudam, sem abrir a janela do Gate. QSY HTTP: 54321.",
-                en: "Optional: Publish CAT to the logbook POSTs frequency/mode on change, without opening the Gate window. QSY HTTP: 54321.",
+                pt: "Hardware Interfaces no Wavelog: Callback URL = http://IP-do-Pi:54321 (não 127.0.0.1 se o browser for o notebook). Clique no cluster = QSY no rádio.",
+                en: "Hardware Interfaces in Wavelog: Callback URL = http://PI-IP:54321 (not 127.0.0.1 if the browser is the laptop). Click the cluster = QSY on the radio.",
+              },
+            ]}
+          />
+          <Photo
+            src={PRODUCT.contest}
+            alt={t({ pt: "Motor de contest do Wavelog", en: "Wavelog contest engine" })}
+            caption={t({
+              pt: "Contest Logging Engine 3.0: QSO logger, CAT radio, SCP, mapa, UTC. Fonte CAT radio = o rádio que o Gate publica.",
+              en: "Contest Logging Engine 3.0: QSO logger, CAT radio, SCP, map, UTC. CAT radio source = the radio the Gate publishes.",
+            })}
+          />
+          <FigWavelogContest
+            caption={t({
+              pt: "Figura 10 — Contest Manager → START → Logging Engine. CAT radio lê o Gate. Quick QSY (kHz + Tab) chama :54321. Enter grava serial/exch no logbook.",
+              en: "Figure 10 — Contest Manager → START → Logging Engine. CAT radio reads the Gate. Quick QSY (kHz + Tab) hits :54321. Enter writes serial/exch into the logbook.",
+            })}
+          />
+          <Ul
+            items={[
+              {
+                pt: "Sessão: contest ADIF, início/fim, station_id, campos serial / grid / exchange. Multi-op: serial vermelho = preview, verde = reservado.",
+                en: "Session: ADIF contest, start/end, station_id, serial / grid / exchange fields. Multi-op: red serial = preview, green = reserved.",
+              },
+              {
+                pt: "Quick QSY no campo de call: kHz + Tab/Space/Enter. Winkeyer F1–F10 se habilitado. SCP com curinga ?.",
+                en: "Quick QSY in the call field: kHz + Tab/Space/Enter. Winkeyer F1–F10 if enabled. SCP with ? wildcard.",
+              },
+              {
+                pt: "FT8 de contest: o Gate já manda stx_string/srx_string no ADIF. Associe os QSOs à sessão (Import Historical ou API /api/v2/contest).",
+                en: "Contest FT8: the Gate already sends stx_string/srx_string in ADIF. Attach QSOs to the session (Import Historical or API /api/v2/contest).",
               },
             ]}
           />
           <Callout tone="warn">
             <S
-              pt="Não instale Apache/PHP na porta 80 nem publique MariaDB na 3306. O nginx do Ham Cockpit já ocupa a 80."
-              en="Do not install Apache/PHP on port 80 or publish MariaDB on 3306. Ham Cockpit nginx already owns 80."
+              pt="Não instale Apache/PHP na porta 80 nem publique MariaDB na 3306. O nginx do Ham Cockpit já ocupa a 80. Env do Gate: /opt/wavelog-gate/wavelog-gate.env."
+              en="Do not install Apache/PHP on port 80 or publish MariaDB on 3306. Ham Cockpit nginx already owns 80. Gate env: /opt/wavelog-gate/wavelog-gate.env."
             />
           </Callout>
           <GoTab page="wavelog" label={t({ pt: "Abrir Wavelog", en: "Open Wavelog" })} />
         </Section>
 
-        <Section id="ser2net" title={t(TOC[16]!.title)}>
+        <Section id="mmdvm" title={t(TOC[17]!.title)}>
           <P
-            pt="O ser2net é o único processo que pode abrir a TTY. Rádio Cat-USB, SPE, Hamplus, Palstar, LDG e ACOM falam só em IP (127.0.0.1:porta) e escolhem essa conexão na aba do rádio ou do dispositivo. Bluetooth do rádio (GATT/SPP) continua direto. Programas (WSJT-X, WaveLogGate) usam Hamlib NET em cima do IP do rádio."
-            en="ser2net is the only process allowed to open the TTY. Cat-USB radio, SPE, Hamplus, Palstar, LDG and ACOM talk IP only (127.0.0.1:port) and pick that connection on the radio or device tab. Radio Bluetooth (GATT/SPP) stays direct. Apps (WSJT-X, WaveLogGate) use Hamlib NET on top of the radio IP."
+            pt="A aba Operação → MMDVM controla um hotspot ou repetidora digital no mesmo Pi. A pilha é a do WPSD (e do Pi-Star): MMDVMHost no UART do modem e DMRGateway em loopback. O dashboard PHP não é instalado — o console Ham Cockpit já é o site, com as mesmas cores, fontes e painéis."
+            en="Operate → MMDVM drives a digital hotspot or repeater on the same Pi. The stack is WPSD's (and Pi-Star's): MMDVMHost on the modem UART and DMRGateway on loopback. The PHP dashboard is not installed — the Ham Cockpit console already is the site, with the same colors, fonts, and panels."
+          />
+          <FigMmdvm
+            caption={t({
+              pt: "Figura — rádio DV → modem 115200 → MMDVMHost → DMRGateway :62031 (BrandMeister / TGIF / XLX).",
+              en: "Figure — DV radio → modem 115200 → MMDVMHost → DMRGateway :62031 (BrandMeister / TGIF / XLX).",
+            })}
+          />
+          <Steps
+            items={[
+              {
+                pt: "Ligue o HAT MMDVM no GPIO (3,3 V, /dev/ttyAMA0) ou um ZUMspot USB (/dev/ttyACM0). Não coloque essa TTY no ser2net.",
+                en: "Fit the MMDVM HAT on GPIO (3.3 V, /dev/ttyAMA0) or a USB ZUMspot (/dev/ttyACM0). Do not put that TTY on ser2net.",
+              },
+              {
+                pt: "Instale MMDVMHost e DMRGateway em /usr/local/bin (binários WPSD ou compile g4klx). O INI já vive em /opt/ham-cockpit/mmdvm.",
+                en: "Install MMDVMHost and DMRGateway in /usr/local/bin (WPSD binaries or build g4klx). The INI already lives in /opt/ham-cockpit/mmdvm.",
+              },
+              {
+                pt: "No console: indicativo, ID DMR, frequência, color code, modos, redes BrandMeister/TGIF. Salvar e reiniciar.",
+                en: "In the console: callsign, DMR ID, frequency, color code, modes, BrandMeister/TGIF networks. Save and restart.",
+              },
+            ]}
+          />
+          <Callout tone="warn">
+            <S
+              pt="HAT ADF7021 (ZUMspot, HS_Hat, Dual Hat) ouve um modo de cada vez. Duplexo (TS1+TS2) só em modem duplex. Não instale Apache/PHP do Pi-Star na porta 80."
+              en="ADF7021 HATs (ZUMspot, HS_Hat, Dual Hat) hear one mode at a time. Duplex (TS1+TS2) needs a duplex modem. Do not install Pi-Star Apache/PHP on port 80."
+            />
+          </Callout>
+          <GoTab page="mmdvm" label={t({ pt: "Abrir MMDVM", en: "Open MMDVM" })} />
+        </Section>
+
+        <Section id="ser2net" title={t(TOC[18]!.title)}>
+          <P
+            pt="O ser2net é o único processo que pode abrir a TTY de CAT e acessório. Rádio Cat-USB, SPE, Hamplus, Palstar, LDG, LP-100A e ACOM falam só em IP (127.0.0.1:porta). Bluetooth do rádio (GATT/SPP) continua direto. A exceção é o modem MMDVM: MMDVMHost é o dono exclusivo dessa UART."
+            en="ser2net is the only process allowed to open the CAT and accessory TTY. Cat-USB radio, SPE, Hamplus, Palstar, LDG, LP-100A and ACOM talk IP only (127.0.0.1:port). Radio Bluetooth (GATT/SPP) stays direct. The exception is the MMDVM modem: MMDVMHost exclusively owns that UART."
           />
           <FigSer2net
             caption={t({
@@ -458,15 +587,15 @@ export function ManualPage() {
           <GoTab page="ser2net" label={t({ pt: "Abrir ser2net", en: "Open ser2net" })} />
         </Section>
 
-        <Section id="wizard" title={t(TOC[17]!.title)}>
+        <Section id="wizard" title={t(TOC[19]!.title)}>
           <P
-            pt="O Config Device Wizard (topo do menu) cadastra um acessório em três passos: (1) IP 127.0.0.1 e porta TCP sequencial a partir de 4001, ligada a uma serial livre; (2) o dispositivo (SPE, Hamplus, Palstar, LDG, ACOM); (3) início automático e Finalizar. Lextel e o rádio no Bluetooth não entram. Cat-USB do rádio usa uma conexão tipo Rádio na aba ser2net."
-            en="Config Device Wizard (top of the menu) registers an accessory in three steps: (1) IP 127.0.0.1 and a sequential TCP port from 4001 bound to a free serial; (2) the device (SPE, Hamplus, Palstar, LDG, ACOM); (3) autostart and Finish. Lextel and Bluetooth radio stay out. Cat-USB radio uses a Radio-type connection on the ser2net tab."
+            pt="O Config Device Wizard (topo do menu) cadastra um acessório em três passos: (1) IP 127.0.0.1 e porta TCP sequencial a partir de 4001, ligada a uma serial livre; (2) o dispositivo (SPE, Hamplus, Palstar, LDG, LP-100A, ACOM); (3) início automático e Finalizar. Lextel e o rádio no Bluetooth não entram. Cat-USB do rádio usa uma conexão tipo Rádio na aba ser2net."
+            en="Config Device Wizard (top of the menu) registers an accessory in three steps: (1) IP 127.0.0.1 and a sequential TCP port from 4001 bound to a free serial; (2) the device (SPE, Hamplus, Palstar, LDG, LP-100A, ACOM); (3) autostart and Finish. Lextel and Bluetooth radio stay out. Cat-USB radio uses a Radio-type connection on the ser2net tab."
           />
           <GoTab page="wizard" label={t({ pt: "Abrir o wizard", en: "Open the wizard" })} />
         </Section>
 
-        <Section id="wifi" title={t(TOC[18]!.title)}>
+        <Section id="wifi" title={t(TOC[20]!.title)}>
           <P
             pt="Aba WiFi: (1) nome na rede, que vira nome.local na LAN; (2) meio de ligação — cabo Ethernet ou Wi‑Fi da casa; (3) Procurar redes e Conectar com a senha; (4) DHCP ou IP fixo (IP, máscara, gateway, DNS primário e secundário); (5) Access Point Ham Cockpit em 192.168.4.1 para o campo. Redes gravadas voltam sozinhas no boot do Pi."
             en="WiFi tab: (1) device name, which becomes name.local on the LAN; (2) uplink — Ethernet cable or house Wi‑Fi; (3) Scan networks and Connect with the password; (4) DHCP or static IP (address, mask, gateway, primary and secondary DNS); (5) Ham Cockpit AP at 192.168.4.1 for the field. Saved networks rejoin on Pi boot."
@@ -474,7 +603,7 @@ export function ManualPage() {
           <GoTab page="wifi" label={t({ pt: "Abrir WiFi", en: "Open WiFi" })} />
         </Section>
 
-        <Section id="bluetooth" title={t(TOC[19]!.title)}>
+        <Section id="bluetooth" title={t(TOC[21]!.title)}>
           <P
             pt="A aba Bluetooth é um atalho: um painel para o IC-705 (GATT) e outro para o Lextel (SPP), mais o nome/PIN do adaptador. O fluxo completo do 705 está em Rádio; o do wattímetro em Lextel. Scan nesta aba também abre o seletor Chrome."
             en="The Bluetooth tab is a shortcut: one panel for the IC-705 (GATT) and one for Lextel (SPP), plus adapter name/PIN. The full 705 flow lives under Radio; the wattmeter under Lextel. Scan here also opens the Chrome picker."
@@ -482,7 +611,7 @@ export function ManualPage() {
           <GoTab page="bluetooth" label={t({ pt: "Abrir Bluetooth", en: "Open Bluetooth" })} />
         </Section>
 
-        <Section id="sistema" title={t(TOC[20]!.title)}>
+        <Section id="sistema" title={t(TOC[22]!.title)}>
           <Ul
             items={[
               {
@@ -505,7 +634,7 @@ export function ManualPage() {
           />
         </Section>
 
-        <Section id="niveis" title={t(TOC[21]!.title)}>
+        <Section id="niveis" title={t(TOC[23]!.title)}>
           <P
             pt="USB e Bluetooth não precisam de conversor. Tudo que nasceu RS232 de PC (±12 V) precisa de MAX3232 (ou cabo USB-RS232 pronto). GPIO uart2–5 do Pi é 3,3 V — um cabo SPE/Palstar/Hamplus/ACOM direto no header mata o SoC."
             en="USB and Bluetooth need no converter. Anything born as PC RS232 (±12 V) needs MAX3232 (or a ready USB-RS232 cable). Pi GPIO uart2–5 is 3.3 V — a SPE/Palstar/Hamplus/ACOM cable straight on the header kills the SoC."
@@ -530,7 +659,7 @@ export function ManualPage() {
                   ["IC-705", "USB / BLE / CAT", t({ pt: "sem conversor", en: "no converter" })],
                   ["Icom CI-V cabo", "5 V TTL", t({ pt: "divisor no TX", en: "divider on TX" })],
                   ["SPE Expert", "RS232 / 5 V", "MAX3232"],
-                  ["Hamplus / Palstar", "±12 V RS232", "MAX3232"],
+                  ["Hamplus / Palstar / LP-100A", "±12 V RS232", "MAX3232"],
                   ["LDG AT-600/1000ProII", "TTL 5 V 38400", t({ pt: "USB-TTL no jack METER", en: "USB-TTL on the METER jack" })],
                   ["ACOM 2000A", "RS232 1200 8N1", t({ pt: "MAX3232 · null-modem 2–3 / 5–5", en: "MAX3232 · null-modem 2–3 / 5–5" })],
                   ["Lextel MS-2000", "BT Classic SPP", t({ pt: "sem conversor", en: "no converter" })],
@@ -552,7 +681,7 @@ export function ManualPage() {
           />
         </Section>
 
-        <Section id="receitas" title={t(TOC[22]!.title)}>
+        <Section id="receitas" title={t(TOC[24]!.title)}>
           <Example title={t({ pt: "Receita A — Só o IC-705 no campo", en: "Recipe A — IC-705 only, portable" })}>
             <Ul
               items={[
@@ -584,7 +713,7 @@ export function ManualPage() {
           </Example>
         </Section>
 
-        <Section id="problemas" title={t(TOC[23]!.title)}>
+        <Section id="problemas" title={t(TOC[25]!.title)}>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="text-[11px] tracking-wide text-[#ffb300] uppercase">
@@ -733,10 +862,11 @@ function MenuTable({ lang }: { lang: Lang }) {
       ? [
           ["Panel", "VFO, PTT, mode, bands — operate the primary radio"],
           ["Wavelog", "Logbook :8086 + UDP Gate 2333"],
+          ["MMDVM", "WPSD hotspot: MMDVMHost + DMRGateway, last heard"],
           ["ser2net", "Serial over TCP + Hamlib NET"],
           ["Config Device Wizard", "Serial → IP:port, pick device, autostart"],
           ["Radio", "Register IC-705 / USB / CAT, Primary checkbox"],
-          ["SPE · Hamplus · Palstar · ACOM", "Amp, switch, tuner, 2000A"],
+          ["SPE · Hamplus · Palstar · LDG · LP-100A · ACOM", "Amp, switch, tuner, wattmeter, 2000A"],
           ["Lextel", "MS-2000 Classic SPP telemetry"],
           ["WiFi · Bluetooth", "House network, AP, GATT shortcut"],
           ["Status · Admin", "Health; Admin tabs: users, Services, Updates, Backup, Logs, Terminal"],
@@ -744,10 +874,11 @@ function MenuTable({ lang }: { lang: Lang }) {
       : [
           ["Painel", "VFO, PTT, modo, bandas — opera o rádio principal"],
           ["Wavelog", "Logbook :8086 + Gate UDP 2333"],
+          ["MMDVM", "Hotspot WPSD: MMDVMHost + DMRGateway, últimos ouvidos"],
           ["ser2net", "Serial na rede + Hamlib NET"],
           ["Config Device Wizard", "Serial → IP:porta, dispositivo, início automático"],
           ["Rádio", "Cadastra IC-705 / USB / CAT, checkbox Principal"],
-          ["SPE · Hamplus · Palstar · ACOM", "Amp, chave, tuner, 2000A"],
+          ["SPE · Hamplus · Palstar · LDG · LP-100A · ACOM", "Amp, chave, tuner, wattímetro, 2000A"],
           ["Lextel", "Telemetria MS-2000 Classic SPP"],
           ["WiFi · Bluetooth", "Rede da casa, AP, atalho GATT"],
           ["Status · Admin", "Saúde; abas Admin: usuários, Serviços, Atualização, Backup, Logs, Terminal"],

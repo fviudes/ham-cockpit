@@ -1,6 +1,6 @@
 import { DEFAULT_USER } from "./i18n";
 
-export const TILE_IDS = ["vfo", "spe", "palstar", "hamplus", "acom", "lextel", "ldg"] as const;
+export const TILE_IDS = ["vfo", "spe", "palstar", "hamplus", "acom", "lextel", "ldg", "lp100a"] as const;
 export type TileId = (typeof TILE_IDS)[number];
 export type PanelTile = { id: TileId; x: number; y: number; w: number; h: number };
 
@@ -18,6 +18,7 @@ export const DEFAULT_TILES: Record<TileId, PanelTile> = {
   lextel: { id: "lextel", x: 0, y: 21, w: 6, h: 9 },
   acom: { id: "acom", x: 6, y: 21, w: 6, h: 9 },
   ldg: { id: "ldg", x: 0, y: 30, w: 6, h: 10 },
+  lp100a: { id: "lp100a", x: 6, y: 30, w: 6, h: 10 },
 };
 
 const AUTH_USER_KEY = "hamcockpit.user";

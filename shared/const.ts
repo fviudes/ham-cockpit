@@ -5,11 +5,13 @@ export const SERVICE_IDS = [
   "ser2net",
   "wavelog",
   "wlg",
+  "mmdvm",
   "radio",
   "spe",
   "hamplus",
   "palstar",
   "ldg",
+  "lp100a",
   "acom",
   "lextel",
   "wifi",
@@ -24,7 +26,7 @@ export const UPDATE_IDS = ["app", "os", "ser2net", "hamlib", "wavelog", "wlg"] a
 export type UpdateId = (typeof UPDATE_IDS)[number];
 
 /** Accessory devices that talk IP; ser2net owns the TTY. Radio CAT/USB also uses a ser2net row. */
-export const SER2NET_ACC_IDS = ["spe", "hamplus", "palstar", "ldg", "acom"] as const;
+export const SER2NET_ACC_IDS = ["spe", "hamplus", "palstar", "ldg", "lp100a", "acom"] as const;
 export const SER2NET_RADIO_ID = "radio" as const;
 export type Ser2netAccId = (typeof SER2NET_ACC_IDS)[number];
 export type Ser2netDevice = Ser2netAccId | typeof SER2NET_RADIO_ID | "";
@@ -34,6 +36,7 @@ export const SER2NET_ACC_BAUD: Record<Ser2netAccId, number> = {
   hamplus: 9600,
   palstar: 9600,
   ldg: 38400,
+  lp100a: 115200,
   acom: 1200,
 };
 
@@ -42,6 +45,7 @@ export const SER2NET_ACC_NAME: Record<Ser2netAccId, string> = {
   hamplus: "Hamplus",
   palstar: "Palstar",
   ldg: "LDG AT",
+  lp100a: "LP-100A",
   acom: "ACOM",
 };
 

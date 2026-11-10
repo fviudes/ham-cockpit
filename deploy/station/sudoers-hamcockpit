@@ -5,6 +5,7 @@ hamcockpit ALL=(root) NOPASSWD: /opt/ham-cockpit/bin/ser2net-ctl
 hamcockpit ALL=(root) NOPASSWD: /opt/ham-cockpit/bin/lextel-bt
 hamcockpit ALL=(root) NOPASSWD: /opt/ham-cockpit/bin/station-net
 hamcockpit ALL=(root) NOPASSWD: /opt/ham-cockpit/bin/station-svc
+hamcockpit ALL=(root) NOPASSWD: /opt/ham-cockpit/bin/mmdvm-ctl
 hamcockpit ALL=(root) NOPASSWD: /opt/ham-cockpit/bin/station-upd
 hamcockpit ALL=(root) NOPASSWD: /opt/ham-cockpit/bin/vfo-display-ctl
 hamcockpit ALL=(root) NOPASSWD: /usr/bin/script -qefc /opt/ham-cockpit/bin/root-login /dev/null

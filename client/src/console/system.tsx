@@ -11,7 +11,7 @@ import { Chip, ConsoleInput, Field, GhostBtn, MeterBar, PageHead, Panel, PanelTi
 
 type LinuxUser = { name: string; sudo: boolean };
 
-const KINDS: LogKind[] = ["BLE", "CIV", "IC705", "RADIO", "WiFi", "SYS", "WLOG", "S2N", "ACOM", "LEXTEL", "LDG", "ERRO"];
+const KINDS: LogKind[] = ["BLE", "CIV", "IC705", "RADIO", "WiFi", "SYS", "WLOG", "S2N", "ACOM", "LEXTEL", "LDG", "LP100A", "MMDVM", "ERRO"];
 
 export function LogsPage({ embedded = false }: { embedded?: boolean }) {
   const { s, tx } = useConsole();
@@ -27,6 +27,8 @@ export function LogsPage({ embedded = false }: { embedded?: boolean }) {
     ACOM: true,
     LEXTEL: true,
     LDG: true,
+    LP100A: true,
+    MMDVM: true,
     ERRO: true,
   });
   const rows = s.logs.filter((l) => on[l.kind]);
@@ -42,6 +44,8 @@ export function LogsPage({ embedded = false }: { embedded?: boolean }) {
     ACOM: "text-[#fb7185]",
     LEXTEL: "text-[#fbbf24]",
     LDG: "text-[#86efac]",
+    LP100A: "text-[#fbbf24]",
+    MMDVM: "text-[#4fc3f7]",
     ERRO: "text-[#f87171]",
   };
   return (
@@ -561,7 +565,7 @@ export function StatusPage() {
         <Mini k={tx("hardware")} v="Ubuntu Server" />
         <Mini k="SoC" v="BCM2711 · 4×1.8 GHz" />
         <Mini k="Uptime" v="14h 22m" />
-        <Mini k="Firmware" v="Ham Cockpit 0.1.00" />
+        <Mini k="Firmware" v="Ham Cockpit 0.1.01" />
       </div>
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <Panel>
@@ -604,6 +608,7 @@ export function StatusPage() {
           <Mini k="CI-V" v={s.ic705.civ ? s.ic705.addr : "—"} />
           <Mini k="Wavelog" v={s.wavelog.running ? `:${s.wavelog.port}` : tx("disconnected")} />
           <Mini k="WaveLogGate" v={s.wlg.running ? `UDP ${s.wlg.udpPort}` : tx("disconnected")} />
+          <Mini k="MMDVM" v={s.mmdvm.running ? s.mmdvm.callsign : tx("disconnected")} />
           <Mini k="ser2net" v={s.ser2net.running ? `${s.ser2net.services.length} svc` : tx("disconnected")} />
           <Mini k="Hamlib" v={s.ser2net.hamlibRunning ? ":4532" : tx("disconnected")} />
           <Mini k="ACOM 2000A" v={s.acom.on ? (s.acom.operate ? tx("acomOperate") : tx("acomStby")) : tx("acomOff")} />

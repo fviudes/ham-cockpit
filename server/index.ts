@@ -16,7 +16,18 @@ import { updatesApply, updatesRefresh, updatesStatus } from "./updates";
 import { layoutGet, layoutSave } from "./layouts";
 import { isLoopback, vfoDisplayExit } from "./vfo-display";
 import { ldgCmd, ldgConnect, ldgDisconnect, ldgPeek, ldgSave, ldgStatus } from "./ldg";
+import { lp100aCmd, lp100aConnect, lp100aDisconnect, lp100aPeek, lp100aSave, lp100aStatus } from "./lp100a";
 import { backupCreate, backupDelete, backupList, backupRestore } from "./backup";
+import {
+  mmdvmControl,
+  mmdvmLink,
+  mmdvmModePause,
+  mmdvmModeResumeAll,
+  mmdvmNetworkSet,
+  mmdvmRemote,
+  mmdvmSave,
+  mmdvmStatus,
+} from "./mmdvm";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -81,6 +92,43 @@ async function startServer() {
   app.post("/api/ldg/cmd", async (req, res) => {
     try {
       res.json(await ldgCmd(String(req.body?.cmd || "")));
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+
+  app.get("/api/lp100a", async (_req, res) => {
+    try {
+      res.json(await lp100aPeek());
+    } catch {
+      res.json(lp100aStatus());
+    }
+  });
+  app.put("/api/lp100a", async (req, res) => {
+    try {
+      res.json(await lp100aSave(req.body ?? {}));
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/lp100a/connect", async (_req, res) => {
+    try {
+      const body = await lp100aConnect();
+      res.status(body.ok ? 200 : 400).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/lp100a/disconnect", async (_req, res) => {
+    try {
+      res.json(await lp100aDisconnect());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/lp100a/cmd", async (req, res) => {
+    try {
+      res.json(await lp100aCmd(String(req.body?.cmd || "")));
     } catch (err) {
       res.status(500).json({ ok: false, error: String(err) });
     }
@@ -356,6 +404,86 @@ async function startServer() {
   app.post("/api/wlg/down", async (_req, res) => {
     try {
       res.json(await wlgDown());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+
+  app.get("/api/mmdvm", async (_req, res) => {
+    try {
+      res.json(await mmdvmStatus());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.put("/api/mmdvm", async (req, res) => {
+    try {
+      res.json(await mmdvmSave(req.body ?? {}));
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/mmdvm/up", async (_req, res) => {
+    try {
+      const body = await mmdvmControl("start");
+      res.status(body.hostRunning || body.installed ? 200 : 503).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/mmdvm/down", async (_req, res) => {
+    try {
+      res.json(await mmdvmControl("stop"));
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/mmdvm/restart", async (_req, res) => {
+    try {
+      res.json(await mmdvmControl("restart"));
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/mmdvm/remote", async (req, res) => {
+    try {
+      const body = await mmdvmRemote(String(req.body?.cmd || ""));
+      res.status(body.ok ? 200 : 400).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/mmdvm/mode/:mode/pause", async (req, res) => {
+    try {
+      res.json(await mmdvmModePause(String(req.params.mode || ""), true));
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/mmdvm/mode/:mode/resume", async (req, res) => {
+    try {
+      res.json(await mmdvmModePause(String(req.params.mode || ""), false));
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/mmdvm/modes/resume-all", async (_req, res) => {
+    try {
+      res.json(await mmdvmModeResumeAll());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/mmdvm/network", async (req, res) => {
+    try {
+      res.json(await mmdvmNetworkSet(req.body ?? {}));
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/mmdvm/link", async (req, res) => {
+    try {
+      res.json(await mmdvmLink(req.body ?? {}));
     } catch (err) {
       res.status(500).json({ ok: false, error: String(err) });
     }
