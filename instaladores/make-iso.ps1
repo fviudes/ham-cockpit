@@ -64,6 +64,9 @@ public static class IsoWriter {
 
 $fs = New-Object -ComObject IMAPI2FS.MsftFileSystemImage
 $fs.FileSystemsToCreate = 3
+# Capacidade livre em blocos de 2048 B — default IMAPI (~4.7 GB DVD) rejeita o .img.xz ~1.8 GB + overhead.
+$needBytes = (Get-Item $img.FullName).Length + 64MB
+$fs.FreeMediaBlocks = [uint32]([math]::Ceiling($needBytes / 2048.0) + 4096)
 $vol = "HAMCKP" + ($ver -replace '\.', '')
 if ($vol.Length -gt 16) { $vol = $vol.Substring(0, 16) }
 $fs.VolumeName = $vol
