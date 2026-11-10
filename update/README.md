@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.04.02** (`version.json`).
+Versão atual neste canal: **0.1.04.03** (`version.json`).
 
 ## Versionamento
 
@@ -20,10 +20,10 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.04.02",
+  "version": "0.1.04.03",
   "channel": "main",
-  "file": "ham-cockpit-0.1.04.02.tgz",
-  "notes": "Ham Cockpit v0.1.04.02 — OTA na base 0.1.04: Docker no boot (enable via symlinks/chroot, SupplementaryGroups=docker, wavelog espera sock, ota-hooks, docker-down vs no-docker); Icom LAN (NR/NB/PRE/ATT/AGC), radio-cmd, backup com progresso, status host (CPU/disco)"
+  "file": "ham-cockpit-0.1.04.03.tgz",
+  "notes": "Ham Cockpit v0.1.04.03 — OTA instala MMDVMHost/NextionDriver (mmdvm-arm64.tgz ou compilação em segundo plano); station-upd recupera dpkg/apt interrompidos antes de atualizar Hamlib e pacotes; barra de progresso no backup; Status com temperatura da CPU e disco; painel CI-V no rádio primário; correção EACCES no backup do Wavelog; hooks OTA do Docker"
 }
 ```
 

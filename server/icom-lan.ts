@@ -338,19 +338,29 @@ export async function icomLanConnect(opts: ConnectOpts): Promise<IcomLanSnapshot
   }
 }
 
+async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | undefined> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      p,
+      new Promise<undefined>((resolve) => {
+        timer = setTimeout(() => resolve(undefined), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export async function icomLanDisconnect(opts?: { keepRadioMark?: boolean }): Promise<IcomLanSnapshot> {
   connectGen += 1;
+  // Marca idle cedo: o HTTP de Desconectar não fica preso no teardown UDP/Hamlib.
+  phase = "idle";
+  error = "";
   killRigctld();
-  await startSystemdHamlib();
+  void startSystemdHamlib();
   const cur = rig;
   rig = null;
-  if (cur) {
-    try {
-      await cur.disconnect();
-    } catch {
-      /* */
-    }
-  }
   Array.from(tcpClients).forEach((sock) => {
     try {
       sock.destroy();
@@ -359,8 +369,14 @@ export async function icomLanDisconnect(opts?: { keepRadioMark?: boolean }): Pro
     }
   });
   tcpClients.clear();
-  phase = "idle";
-  error = "";
+  if (cur) {
+    try {
+      // Sem timeout o disconnect da lib pode segurar o request e o browser vê Failed to fetch.
+      await withTimeout(cur.disconnect().catch(() => undefined), 2_500);
+    } catch {
+      /* */
+    }
+  }
   if (!opts?.keepRadioMark) {
     radioId = "";
     host = "";

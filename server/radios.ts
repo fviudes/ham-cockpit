@@ -60,8 +60,9 @@ export type RadiosSnapshot = {
   ok: boolean;
   folder: string;
   radios: StationRadio[];
-  usb: RadioPick[];
-  bluetooth: RadioPick[];
+  /** Ausente em respostas rápidas (ex.: disconnect) — o cliente mantém a lista anterior. */
+  usb?: RadioPick[];
+  bluetooth?: RadioPick[];
   error?: string;
   needBle?: boolean;
   bleAddr?: string;
@@ -359,6 +360,29 @@ async function listUsb(): Promise<RadioPick[]> {
   }));
 }
 
+function lanOverlay(list: StationRadio[]): StationRadio[] {
+  // Espelha sessão LAN ao vivo na lista (sem persistir a cada poll).
+  const lan = icomLanStatus();
+  return list.map((r) => {
+    if (!isIcomLan(r)) return r;
+    if (lan.connected && lan.radioId === r.id) {
+      return { ...r, connected: true, error: "", ...(lan.civAddr ? { civAddr: lan.civAddr } : {}) };
+    }
+    if (lan.connected && lan.radioId && lan.radioId !== r.id) {
+      return { ...r, connected: false };
+    }
+    if (!lan.connected && r.connected && !icomLanLive()) {
+      return { ...r, connected: false };
+    }
+    return r;
+  });
+}
+
+/** Snapshot rápido (sem enumerar USB/BT) — usado em disconnect para não segurar o HTTP. */
+function radiosSnapshotFast(): RadiosSnapshot {
+  return { ok: true, folder: dataDir(), radios: publicList(lanOverlay(radios)) };
+}
+
 export async function radiosStatus(): Promise<RadiosSnapshot> {
   let usb: RadioPick[] = [];
   let bluetooth: RadioPick[] = [];
@@ -372,22 +396,7 @@ export async function radiosStatus(): Promise<RadiosSnapshot> {
   } catch {
     bluetooth = [];
   }
-  // Espelha sessão LAN ao vivo na lista (sem persistir a cada poll).
-  const lan = icomLanStatus();
-  const view = radios.map((r) => {
-    if (!isIcomLan(r)) return r;
-    if (lan.connected && lan.radioId === r.id) {
-      return { ...r, connected: true, error: "", ...(lan.civAddr ? { civAddr: lan.civAddr } : {}) };
-    }
-    if (lan.connected && lan.radioId && lan.radioId !== r.id) {
-      return { ...r, connected: false };
-    }
-    if (!lan.connected && r.connected && !icomLanLive()) {
-      return { ...r, connected: false };
-    }
-    return r;
-  });
-  return { ok: true, folder: dataDir(), radios: publicList(view), usb, bluetooth };
+  return { ok: true, folder: dataDir(), radios: publicList(lanOverlay(radios)), usb, bluetooth };
 }
 
 export async function radiosSave(body: { radios?: unknown }): Promise<RadiosSnapshot> {
@@ -424,13 +433,17 @@ function findRadio(id: string) {
 
 export async function radiosRemove(id: string): Promise<RadiosSnapshot> {
   const row = findRadio(id);
-  if (row && (isIcomLan(row) || icomLanStatus().radioId === id)) {
-    await icomLanDisconnect();
-  }
   radios = radios.map((r) => (r.id === id ? { ...r, connected: false } : r)).filter((r) => r.id !== id);
   normalizePrimary();
   persist();
-  return radiosStatus();
+  if (row && (isIcomLan(row) || icomLanStatus().radioId === id)) {
+    try {
+      await icomLanDisconnect();
+    } catch {
+      /* */
+    }
+  }
+  return radiosSnapshotFast();
 }
 
 export async function radiosConnect(raw: Partial<StationRadio>): Promise<RadiosSnapshot> {
@@ -559,15 +572,42 @@ export async function radiosConnect(raw: Partial<StationRadio>): Promise<RadiosS
 
 export async function radiosDisconnect(id: string): Promise<RadiosSnapshot> {
   const row = findRadio(id);
-  if (row) {
-    if (isIcomLan(row) || icomLanStatus().radioId === id) {
+  if (!row) return radiosSnapshotFast();
+
+  // Persiste desconectado primeiro: a UI não fica à mercê do teardown LAN/Hamlib.
+  row.connected = false;
+  row.error = "";
+  persist();
+
+  if (isIcomLan(row) || icomLanStatus().radioId === id) {
+    try {
       await icomLanDisconnect();
+    } catch {
+      /* teardown best-effort — nunca derruba a resposta HTTP */
     }
-    row.connected = false;
-    row.error = "";
-    persist();
   }
-  return radiosStatus();
+
+  if (row.link === "usb") {
+    try {
+      const cfg = await loadSer2net();
+      const hit = cfg.services.find((x) => x.id === row.device || x.device === SER2NET_RADIO_ID);
+      if (hit?.device === SER2NET_RADIO_ID) {
+        await saveSer2net({
+          bind: cfg.bind,
+          folder: cfg.folder,
+          services: cfg.services.map((x) => ({
+            ...x,
+            device: x.device === SER2NET_RADIO_ID ? "" : x.device,
+          })),
+        });
+      }
+    } catch {
+      /* ser2net opcional no disconnect */
+    }
+  }
+
+  // Evita PowerShell/listagem serial no caminho crítico (causa Failed to fetch se o Vite reinicia).
+  return radiosSnapshotFast();
 }
 
 /** Reabre sessão LAN se o rádio Icom Rede estava marcado conectado no boot. */

@@ -1,0 +1,17 @@
+[Unit]
+Description=Ham Cockpit — compila MMDVMHost/NextionDriver (fallback OTA)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Nice=10
+TimeoutStartSec=3600
+Environment=MMDVM_PURGE_BUILD=1
+ExecStart=/opt/ham-cockpit/bin/mmdvm-build-binaries.sh
+ExecStartPost=/bin/systemctl daemon-reload
+ExecStartPost=-/bin/systemctl enable nextiondriver.service mmdvmhost.service dmrgateway.service ysfgateway.service ircddbgateway.service
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

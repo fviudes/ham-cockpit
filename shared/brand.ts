@@ -4,7 +4,7 @@ export const APP_NAME = "Ham Cockpit";
 export const APP_SLUG = "ham-cockpit";
 export const APP_USER = "hamcockpit";
 /** Versão completa (3 ou 4 partes). Ver docs/versionamento.md. */
-export const APP_VERSION = "0.1.04.01";
+export const APP_VERSION = "0.1.04.03";
 /** Base de imagem (sempre 3 partes) para nomes `.img.xz` / release de bake. */
 export const APP_IMAGE_VERSION = imageBase(APP_VERSION);
 export const APP_BLE_NAME = "Ham-Cockpit-Web01";

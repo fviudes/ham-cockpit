@@ -13,6 +13,7 @@ import type { I18nKey } from "./i18n";
 import {
   BANDS,
   formatWatts,
+  holdPrimaryRadio,
   mergeLp100a,
   useConsole,
   type LdgModel,
@@ -369,6 +370,7 @@ export function Ic705Page() {
     const gatt = isIcomBle(row);
     const viaS2n = (body.link ?? link) === "usb";
     const viaNet = (body.link ?? link) === "network";
+    holdPrimaryRadio(false);
     if (viaNet) {
       if (!(body.host || "").trim()) {
         toast.error(tx("radioNeedNetHost"));
@@ -553,29 +555,40 @@ export function Ic705Page() {
 
   const disconnectRadio = async (id: string) => {
     const row = s.radios.items.find((r) => r.id === id);
+    holdPrimaryRadio(true);
     if (row?.link === "bluetooth" && row.proto === "civ") void ic705Ble.disconnect();
-    const j = (await (
-      await fetch("/api/radios/disconnect", {
+    // Otimista: UI desconecta na hora; o autostart não religa enquanto hold estiver ativo.
+    setS((p) => ({
+      ...p,
+      radios: {
+        ...p.radios,
+        items: p.radios.items.map((r) => (r.id === id ? { ...r, connected: false, error: "" } : r)),
+      },
+      ...(row?.link === "network" || row?.link === "usb"
+        ? {
+            ic705: {
+              ...p.ic705,
+              cat: false,
+              civ: false,
+              usb: false,
+              phase: p.ic705.ble ? p.ic705.phase : "idle",
+              error: "",
+            },
+          }
+        : {}),
+    }));
+    try {
+      const res = await fetch("/api/radios/disconnect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
-      })
-    ).json()) as RadiosApi;
-    applyRadios(setS, j);
-    if (row?.link === "network" || row?.link === "usb") {
-      setS((p) => ({
-        ...p,
-        ic705: {
-          ...p.ic705,
-          cat: false,
-          civ: false,
-          usb: false,
-          phase: p.ic705.ble ? p.ic705.phase : "idle",
-          error: "",
-        },
-      }));
+      });
+      const j = (await res.json()) as RadiosApi;
+      applyRadios(setS, j);
+      pushLog("RADIO", tx("disconnect"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : tx("radioDiscFail"));
     }
-    pushLog("RADIO", tx("disconnect"));
   };
 
   const removeRadio = async (id: string) => {

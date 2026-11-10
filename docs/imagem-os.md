@@ -37,7 +37,7 @@ Tempo típico: **35–60 min** no runner ARM (inclui a compilação MMDVM). O `v
 - Dependências: `build-essential`, `libwxgtk3.2-dev`, `libmosquitto-dev`, etc. em `deploy/station/packages.list` e no próprio `build-binaries.sh` (só instala pacotes que existem no apt).
 - A falha de compilação **aborta** o bake (`MMDVM_BUILD_BINARIES=1` no chroot). Em install manual fora do bake, o aviso é soft para o console ainda gravar INI.
 - Após o bake, `MMDVM_PURGE_BUILD=1` remove `/usr/local/src/mmdvm` e os `-dev` (mantém libs runtime de wx/mosquitto).
-- **OTA:** o pacote OTA leva o console JS + scripts; **não** inclui esses binários nativos (tamanho + ABI ARM64). Estações sem `/usr/local/bin/MMDVMHost` precisam de **nova imagem bake**, ou na própria Pi: `sudo MMDVM_FORCE=1 bash deploy/mmdvm/build-binaries.sh` (com rede e deps apt).
+- **OTA:** o pacote leva o console +, quando existir, `mmdvm-arm64.tgz` (binários ARM64). O `ota-hooks.sh` instala em `/usr/local/bin` se faltar; senão baixa `update/mmdvm-arm64.tgz` do GitHub. Publicação: workflow **MMDVM ARM64 binaries** ou o bake (`image/out/mmdvm-arm64.tgz`). Fallback manual na Pi: `sudo MMDVM_FORCE=1 bash deploy/mmdvm/build-binaries.sh`.
 
 ```
 sudo bash image/appliance/build.sh

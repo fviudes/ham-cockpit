@@ -586,6 +586,15 @@ function simLp100a(cur: Station["lp100a"], tx: boolean): Station["lp100a"] {
   return { ...cur, fwd: 87.4, ref: 1.2, swr: 1.12, z: 52.1, phaseDeg: 8.4, dbm: 49.4, tx: true };
 }
 
+/** Após Desconectar manual, o autostart não deve religar o primary até Conectar. */
+let primaryHoldOff = false;
+export function holdPrimaryRadio(hold: boolean) {
+  primaryHoldOff = hold;
+}
+export function isPrimaryHeld() {
+  return primaryHoldOff;
+}
+
 export function mergeLp100a(cur: Station["lp100a"], j: Record<string, unknown>): Station["lp100a"] {
   const meter = j.meter === "AVG" || j.meter === "PEAK" || j.meter === "TUNE" ? j.meter : cur.meter;
   const range = j.range === "HIGH" || j.range === "MID" || j.range === "LOW" ? j.range : cur.range;
@@ -675,6 +684,8 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
   const kickPrimary = useCallback(async (opts?: { picker?: boolean; gesture?: boolean }) => {
     if (inflightPrimary.current || ic705Ble.connected) return;
     if (!opts?.picker && !opts?.gesture && ic705Ble.busy) return;
+    // Desconectar manual: não religar até o usuário clicar Conectar.
+    if (primaryHoldOff) return;
     inflightPrimary.current = true;
     const applyList = (items: StationRadio[]) => {
       radiosRef.current = items;

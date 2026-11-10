@@ -155,6 +155,23 @@ for b in MMDVMHost DMRGateway YSFGateway ircddbgatewayd NextionDriver; do
   fi
 done
 
+# Pacote OTA reutilizável (estações antigas sem bake MMDVM).
+MMDVM_TGZ="$OUT/mmdvm-arm64.tgz"
+STAGE_MMDVM="$(mktemp -d)"
+mkdir -p "$STAGE_MMDVM/bin" "$STAGE_MMDVM/etc"
+for b in MMDVMHost DMRGateway YSFGateway ircddbgatewayd NextionDriver; do
+  install -m 0755 "$MNT/usr/local/bin/$b" "$STAGE_MMDVM/bin/$b"
+done
+for f in groups.txt users.csv YSFHosts.txt; do
+  if [[ -f "$MNT/usr/local/etc/$f" ]]; then
+    install -m 0644 "$MNT/usr/local/etc/$f" "$STAGE_MMDVM/etc/$f"
+  fi
+done
+tar -C "$STAGE_MMDVM" -czf "$MMDVM_TGZ" bin etc
+rm -rf "$STAGE_MMDVM"
+cp -a "$MMDVM_TGZ" "$ROOT/update/mmdvm-arm64.tgz"
+ls -lh "$MMDVM_TGZ"
+
 rm -rf "$MNT/opt/ham-cockpit-seed" "$MNT/opt/wavelog-seed-images" "$MNT/tmp/chroot-setup.sh"
 rm -f "$MNT/usr/bin/qemu-aarch64-static"
 df -h

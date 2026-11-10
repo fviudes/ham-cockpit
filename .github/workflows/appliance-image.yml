@@ -71,6 +71,7 @@ jobs:
           path: |
             image/out/ham-cockpit-*-raspi.img.xz
             image/out/ham-cockpit-*-raspi.img.xz.sha256
+            image/out/mmdvm-arm64.tgz
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
@@ -83,6 +84,7 @@ jobs:
           TAG="v${VER}"
           IMG="$(ls image/out/ham-cockpit-*-raspi.img.xz | head -n 1)"
           SUM="${IMG}.sha256"
+          MMDVM="image/out/mmdvm-arm64.tgz"
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
             --title "Ham Cockpit ${TAG}" \
             --notes "Imagem Ubuntu Server 24.04 LTS ARM64 (+raspi) com Ham Cockpit ${TAG} para Raspberry Pi 3 / 4 / 5 (Docker, ser2net, Hamlib, console, AP Wi-Fi). Wavelog baixa as imagens Docker no primeiro boot com Ethernet. Grave no cartão/SSD com o Raspberry Pi Imager (Use custom)."
@@ -94,3 +96,7 @@ jobs:
             exit 1
           fi
           gh release upload "$TAG" "$IMG" "$SUM" --clobber
+          if [[ -f "$MMDVM" ]]; then
+            cp -a "$MMDVM" update/mmdvm-arm64.tgz
+            gh release upload "$TAG" "$MMDVM" --clobber
+          fi

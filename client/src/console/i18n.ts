@@ -7,7 +7,7 @@ const dict = {
   pt: {
     brand: "Ham Cockpit",
     tagline: "Gateway da estação",
-    version: "v0.1.04.01",
+    version: "v0.1.04.03",
     vfoHdmiExit: "Tecle CTRL+X para sair para o console",
     loginTitle: "Acessar o console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -170,6 +170,7 @@ const dict = {
       "Nenhum rádio cadastrado. Cat-USB escolhe ser2net; Bluetooth o dispositivo; Rede o IP/porta (e login se o rádio exigir). Depois, Conectar.",
     radioConnectedOk: "Rádio conectado",
     radioConnFail: "Não conectou no rádio",
+    radioDiscFail: "Falha ao desconectar o rádio",
     radioNeedDevice: "Selecione um dispositivo Bluetooth",
     radioNeedS2n: "Selecione uma conexão ser2net já configurada (IP/porta/serial)",
     radioUsbS2nHelp:
@@ -565,10 +566,12 @@ const dict = {
     mmdvmLastHeard: "Últimos ouvidos",
     mmdvmLive: "Atividade",
     mmdvmEmptyHeard: "Nenhuma transmissão no log MMDVM de hoje.",
-    mmdvmNoHost: "MMDVMHost não está em /usr/local/bin. Instale os binários WPSD ou compile g4klx (Host, DMRGateway, YSFGateway, ircddbgatewayd).",
+    mmdvmNoHost:
+      "MMDVMHost ainda não está em /usr/local/bin. Após a OTA a estação baixa mmdvm-arm64.tgz ou compila em segundo plano (journalctl -u ham-cockpit-mmdvm-build). Recarregue esta página em alguns minutos.",
     mmdvmNoHostDev:
       "Neste PC não há MMDVMHost — normal fora do Raspberry Pi. Pode editar e salvar a configuração; os binários sobem no bake Ubuntu ARM64 da estação.",
-    mmdvmNoNextion: "NextionDriver não está em /usr/local/bin — compile on7lds/NextionDriver no bake.",
+    mmdvmNoNextion:
+      "NextionDriver ainda não está em /usr/local/bin — a OTA instala com o Host (mmdvm-arm64.tgz ou compilação em segundo plano). Recarregue em alguns minutos.",
     mmdvmNoNextionDev: "NextionDriver só roda no Pi (bake). Aqui a console grava Display/Port no INI.",
     mmdvmNoYsf: "YSFGateway ausente em /usr/local/bin — compile g4klx no bake.",
     mmdvmNoYsfDev: "YSFGateway só no Pi (bake) — aqui grava o INI.",
@@ -715,7 +718,7 @@ const dict = {
   en: {
     brand: "Ham Cockpit",
     tagline: "Station gateway",
-    version: "v0.1.04.01",
+    version: "v0.1.04.03",
     vfoHdmiExit: "Press CTRL+X to return to the console",
     loginTitle: "Sign in to the console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -878,6 +881,7 @@ const dict = {
       "No radio yet. Cat-USB picks ser2net; Bluetooth the device; Network the IP/port (and login if required). Then Connect.",
     radioConnectedOk: "Radio connected",
     radioConnFail: "Could not connect to the radio",
+    radioDiscFail: "Failed to disconnect the radio",
     radioNeedDevice: "Select a Bluetooth device",
     radioNeedS2n: "Pick a ser2net connection already configured (IP/port/serial)",
     radioUsbS2nHelp:
@@ -1273,10 +1277,12 @@ const dict = {
     mmdvmLastHeard: "Last heard",
     mmdvmLive: "Activity",
     mmdvmEmptyHeard: "No transmissions in today's MMDVM log.",
-    mmdvmNoHost: "MMDVMHost is not in /usr/local/bin. Install WPSD binaries or build g4klx (Host, DMRGateway, YSFGateway, ircddbgatewayd).",
+    mmdvmNoHost:
+      "MMDVMHost is not in /usr/local/bin yet. After OTA the station downloads mmdvm-arm64.tgz or builds in the background (journalctl -u ham-cockpit-mmdvm-build). Reload this page in a few minutes.",
     mmdvmNoHostDev:
       "No MMDVMHost on this PC — expected outside the Raspberry Pi. You can edit and save config; binaries are baked on the Ubuntu ARM64 station image.",
-    mmdvmNoNextion: "NextionDriver is not in /usr/local/bin — build on7lds/NextionDriver in the bake.",
+    mmdvmNoNextion:
+      "NextionDriver is not in /usr/local/bin yet — OTA installs it with the Host (mmdvm-arm64.tgz or background build). Reload in a few minutes.",
     mmdvmNoNextionDev: "NextionDriver only runs on the Pi (bake). This console still writes Display/Port into the INI.",
     mmdvmNoYsf: "YSFGateway missing from /usr/local/bin — build g4klx in the bake.",
     mmdvmNoYsfDev: "YSFGateway only on the Pi (bake) — this console still writes the INI.",

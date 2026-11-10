@@ -49,6 +49,7 @@ const BIN_FROM_STATION = [
 const BIN_EXTRA = [
   [join(ROOT, "deploy", "lextel", "lextel-bt"), "lextel-bt"],
   [join(ROOT, "deploy", "mmdvm", "mmdvm-ctl"), "mmdvm-ctl"],
+  [join(ROOT, "deploy", "mmdvm", "build-binaries.sh"), "mmdvm-build-binaries.sh"],
 ];
 
 const SYSTEMD_UNITS = [
@@ -61,7 +62,15 @@ const SYSTEMD_UNITS = [
 ];
 
 /** Units fora de deploy/station (caminho relativo ao ROOT). */
-const SYSTEMD_EXTRA = [["deploy/wavelog/wavelog.service", "wavelog.service"]];
+const SYSTEMD_EXTRA = [
+  ["deploy/wavelog/wavelog.service", "wavelog.service"],
+  ["deploy/mmdvm/mmdvmhost.service", "mmdvmhost.service"],
+  ["deploy/mmdvm/dmrgateway.service", "dmrgateway.service"],
+  ["deploy/mmdvm/ysfgateway.service", "ysfgateway.service"],
+  ["deploy/mmdvm/ircddbgateway.service", "ircddbgateway.service"],
+  ["deploy/mmdvm/nextiondriver.service", "nextiondriver.service"],
+  ["deploy/mmdvm/ham-cockpit-mmdvm-build.service", "ham-cockpit-mmdvm-build.service"],
+];
 
 function argValue(flag) {
   const i = process.argv.indexOf(flag);
@@ -150,6 +159,15 @@ function main() {
       process.exit(1);
     }
     cpSync(src, join(stage, "systemd", name));
+  }
+
+  // Binários nativos ARM64 (opcional até o workflow/bake publicar update/mmdvm-arm64.tgz).
+  const mmdvmTgz = join(UPDATE_DIR, "mmdvm-arm64.tgz");
+  if (existsSync(mmdvmTgz)) {
+    cpSync(mmdvmTgz, join(stage, "mmdvm-arm64.tgz"));
+    console.log("incluindo mmdvm-arm64.tgz no pacote OTA");
+  } else {
+    console.warn("AVISO: update/mmdvm-arm64.tgz ausente — OTA tentará baixar no Pi");
   }
 
   mkdirSync(UPDATE_DIR, { recursive: true });
