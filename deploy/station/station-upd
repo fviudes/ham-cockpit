@@ -77,10 +77,30 @@ github_app_meta() {
   curl -fsSL -A "Ham-Cockpit/0.1.04.01" "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/version.json" || true
 }
 
+# 0.1.05 < 0.1.05.01 < 0.1.06 (partes ausentes = 0).
+app_newer() {
+  python3 -c '
+import re, sys
+def parts(v):
+    n = [int(x) for x in re.findall(r"\d+", (v or "").lstrip("vV"))]
+    n += [0] * 4
+    return n[:4]
+sys.exit(0 if parts(sys.argv[1]) > parts(sys.argv[2]) else 1)
+' "$1" "$2"
+}
+
 check_app() {
-  local cur
+  local cur avail ver upd="false"
   cur="$(app_ver)"
-  emit_item app "$cur" "$cur" "false" "github.com/fviudes/ham-cockpit/update"
+  avail="$cur"
+  ver="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("version",""))' <<<"$(github_app_meta)" 2>/dev/null || true)"
+  if [[ -n "${ver:-}" ]]; then
+    avail="$ver"
+    if app_newer "$avail" "$cur"; then
+      upd="true"
+    fi
+  fi
+  emit_item app "$cur" "$avail" "$upd" "github.com/fviudes/ham-cockpit/update"
 }
 
 # Copia o console (dist) + bin/ sem apagar configs da estação

@@ -23,7 +23,7 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
   "version": "0.1.05.01",
   "channel": "main",
   "file": "ham-cockpit-0.1.05.01.tgz",
-  "notes": "Ham Cockpit v0.1.05.01 — OTA TOTAL: UI (logo, card MMDVM Painel, PageHead F11) e stack MMDVM do lab (NextionDriver patched HC_FD2_GUARD, units PTY, ircDDB 0.0.0.0, mmdvm-ctl LF, anti-stub)."
+  "notes": "Ham Cockpit v0.1.05.01 — OTA TOTAL: UI (logo, MMDVM Painel, PageHead F11), correção Admin/Atualização (instalada vs catálogo), stack MMDVM do lab (HC_FD2_GUARD, PTY, ircDDB 0.0.0.0, mmdvm-ctl LF, anti-stub)."
 }
 ```
 

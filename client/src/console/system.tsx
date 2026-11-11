@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { APP_VERSION } from "@shared/brand";
 import { UPDATE_IDS, type UpdateId } from "@shared/const";
+import { isNewerVersion } from "@shared/version";
 import { SERVICE_IDS, SVC_HINT, SVC_LABEL, serviceLive, type ServiceId } from "./services-ui";
 import type { I18nKey } from "./i18n";
 import { formatWatts, useConsole, type LogKind } from "./state";
@@ -449,11 +450,13 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
     if (!Array.isArray(j.items)) return;
     const items = UPDATE_IDS.map((id) => {
       const hit = j.items!.find((row) => row.id === id);
+      const current = String(hit?.current || "—");
+      const available = String(hit?.available || hit?.current || "—");
       return {
         id,
-        current: String(hit?.current || "—"),
-        available: String(hit?.available || hit?.current || "—"),
-        updatable: Boolean(hit?.updatable),
+        current,
+        available,
+        updatable: isNewerVersion(available, current),
         applying: Boolean(hit?.applying),
         error: String(hit?.error || ""),
         note: String(hit?.note || ""),
@@ -555,7 +558,10 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
               </div>
               {row.error ? <p className="mb-3 text-xs text-[#f87171]">{row.error}</p> : null}
               <div className="flex items-center gap-3">
-                <PrimaryBtn disabled={!row.updatable || applying || busy !== null} onClick={() => void applyOne(row.id)}>
+                <PrimaryBtn
+                  disabled={!row.updatable || !isNewerVersion(row.available, row.current) || applying || busy !== null}
+                  onClick={() => void applyOne(row.id)}
+                >
                   {applying ? tx("updApplying") : tx("updApply")}
                 </PrimaryBtn>
                 <ActionProgress active={applying} value={busy === row.id ? progress : applying ? 12 : 0} label={tx("updProgress")} />

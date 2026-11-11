@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { APP_VERSION, UPDATE_REPO } from "../shared/brand";
 import { UPDATE_IDS, type UpdateId } from "../shared/const";
-import { cleanVersion, isNewerVersion } from "../shared/version";
+import { cleanVersion, compareVersion, isNewerVersion } from "../shared/version";
 
 const execFileAsync = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -18,23 +18,26 @@ function helperPath() {
   return "/opt/ham-cockpit/bin/station-upd";
 }
 
+/**
+ * Versão instalada neste host (arquivo VERSION do pacote em execução).
+ * Nunca usa update/version.json — esse arquivo é o catálogo OTA (nova versão).
+ */
 function appCurrent(): string {
-  for (const p of [join("/opt/ham-cockpit", "VERSION"), join("/opt/cat-bridge", "VERSION"), join(ROOT, "VERSION")]) {
+  const candidates = [
+    join("/opt/ham-cockpit", "VERSION"),
+    join("/opt/cat-bridge", "VERSION"),
+    join(ROOT, "VERSION"),
+  ];
+  for (const p of candidates) {
     try {
       if (!existsSync(p)) continue;
-      const v = readFileSync(p, "utf8").trim().replace(/^v/i, "");
+      const v = cleanVersion(readFileSync(p, "utf8"));
       if (v) return v;
     } catch {
       /* ignore */
     }
   }
-  try {
-    const j = JSON.parse(readFileSync(join(ROOT, "update", "version.json"), "utf8")) as { version?: string };
-    if (j.version) return String(j.version).replace(/^v/i, "");
-  } catch {
-    /* ignore */
-  }
-  return APP_VERSION;
+  return cleanVersion(APP_VERSION);
 }
 
 export type UpdateItem = {
@@ -161,11 +164,7 @@ async function githubAppVersion(): Promise<string> {
           .replace(/^v/i, ""),
       )
       .filter((n) => /^\d+\.\d+/.test(n));
-    vers.sort((a, b) => {
-      if (newer(a, b)) return 1;
-      if (newer(b, a)) return -1;
-      return 0;
-    });
+    vers.sort((a, b) => compareVersion(a, b));
     return vers[vers.length - 1] || "";
   } catch {
     return "";
@@ -192,15 +191,16 @@ async function helper(cmd: string, id = ""): Promise<UpdatesSnapshot | null> {
     const byId = new Map(parsed.items.map((row) => [row.id as UpdateId, row]));
     const items = UPDATE_IDS.map((id) => {
       const hit = byId.get(id);
-      if (id === "app" && !hit) {
-        const cur = appCurrent();
-        return item("app", cur, cur, `github.com/${UPDATE_REPO}/update`);
+      if (id === "app") {
+        const cur = appCurrent() || String(hit?.current || "");
+        const avail = String(hit?.available || cur);
+        return item("app", cur, avail, String(hit?.note || `github.com/${UPDATE_REPO}/update`), String(hit?.error || ""));
       }
       return item(
         id,
-        String(hit?.current || (id === "app" ? appCurrent() : "")),
-        String(hit?.available || hit?.current || (id === "app" ? appCurrent() : "")),
-        String(hit?.note || (id === "app" ? `github.com/${UPDATE_REPO}/update` : "")),
+        String(hit?.current || ""),
+        String(hit?.available || hit?.current || ""),
+        String(hit?.note || ""),
         String(hit?.error || ""),
       );
     });
@@ -244,7 +244,11 @@ async function overlayRemote(base: UpdatesSnapshot): Promise<UpdatesSnapshot> {
     githubTag("wavelog/WaveLogGate"),
   ]);
   const next = base.items.map((row) => {
-    if (row.id === "app" && app) return item(row.id, row.current, app, row.note, row.error);
+    if (row.id === "app") {
+      const installed = appCurrent() || row.current;
+      const remote = app || row.available || installed;
+      return item("app", installed, remote, row.note, row.error);
+    }
     if (row.id === "ser2net" && ser2net) return item(row.id, row.current, ser2net, row.note, row.error);
     if (row.id === "hamlib" && hamlib) return item(row.id, row.current, hamlib, row.note, row.error);
     if (row.id === "wavelog" && wavelog) return item(row.id, row.current, wavelog, row.note, row.error);

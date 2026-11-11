@@ -13,6 +13,7 @@ import { t, type I18nKey, type Lang } from "./i18n";
 import { applyHtmlLang, LANG_EVENT, readLang, writeLang } from "./lang-store";
 import { bleAvailable, bleErrorMessage, ic705Ble, isBleCancel, looksLikeBleId, type BlePhase } from "./ic705-ble";
 import { SERVICE_IDS, UPDATE_IDS, asSer2netDevice, type ServiceId, type UpdateId, type Ser2netDevice } from "@shared/const";
+import { isNewerVersion } from "@shared/version";
 
 export const BANDS = [
   { id: "160m", hz: 1_810_000 },
@@ -1098,11 +1099,13 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
       if (!j || !Array.isArray(j.items)) return;
       const items = UPDATE_IDS.map((id) => {
         const hit = j.items!.find((row) => row.id === id);
+        const current = String(hit?.current || "—");
+        const available = String(hit?.available || hit?.current || "—");
         return {
           id,
-          current: String(hit?.current || "—"),
-          available: String(hit?.available || hit?.current || "—"),
-          updatable: Boolean(hit?.updatable),
+          current,
+          available,
+          updatable: isNewerVersion(available, current),
           applying: Boolean(hit?.applying),
           error: String(hit?.error || ""),
           note: String(hit?.note || ""),
