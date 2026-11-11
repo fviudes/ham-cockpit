@@ -23,7 +23,7 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
   "version": "0.1.05",
   "channel": "main",
   "file": "ham-cockpit-0.1.05.tgz",
-  "notes": "Ham Cockpit v0.1.05 — imagem com stack MMDVM do lab: NextionDriver ON7LDS 1.26 patched, unit Nextion real, INI Dual/LCD, UART disable-bt, ircDDB sem extensão + DPlus 0.0.0.0, mmdvm-ctl LF, OTA unmask/stub e bins MMDVM."
+  "notes": "Ham Cockpit v0.1.05 — imagem com stack MMDVM do lab: NextionDriver ON7LDS 1.26 patched (HC_FD2_GUARD), unit Nextion real, INI Dual/LCD, UART disable-bt, ircDDB sem extensão + DPlus 0.0.0.0, mmdvm-ctl LF, OTA unmask/stub, bins MMDVM + DMRIds/hosts."
 }
 ```
 
