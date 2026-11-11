@@ -172,7 +172,12 @@ for f in groups.txt users.csv YSFHosts.txt DMRIds.dat \
 done
 tar -C "$STAGE_MMDVM" -czf "$MMDVM_TGZ" bin etc
 rm -rf "$STAGE_MMDVM"
-cp -a "$MMDVM_TGZ" "$ROOT/update/mmdvm-arm64.tgz"
+# Cópia para o canal OTA: o bake roda como root; devolver dono ao SUDO_USER
+# senão o passo "Publish GitHub Release" falha com Permission denied no cp.
+install -m 0644 "$MMDVM_TGZ" "$ROOT/update/mmdvm-arm64.tgz"
+if [[ -n ${SUDO_USER:-} && $SUDO_USER != root ]]; then
+  chown "$SUDO_USER:" "$ROOT/update/mmdvm-arm64.tgz" || true
+fi
 ls -lh "$MMDVM_TGZ"
 
 rm -rf "$MNT/opt/ham-cockpit-seed" "$MNT/opt/wavelog-seed-images" "$MNT/tmp/chroot-setup.sh"

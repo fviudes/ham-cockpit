@@ -96,7 +96,11 @@ jobs:
             exit 1
           fi
           gh release upload "$TAG" "$IMG" "$SUM" --clobber
+          # O bake (sudo) deixa update/mmdvm-arm64.tgz root:root — não copiar por cima.
           if [[ -f "$MMDVM" ]]; then
-            cp -a "$MMDVM" update/mmdvm-arm64.tgz
             gh release upload "$TAG" "$MMDVM" --clobber
+          fi
+          OTA="$(ls update/ham-cockpit-*.tgz 2>/dev/null | head -n 1 || true)"
+          if [[ -n "$OTA" && -f "$OTA" ]]; then
+            gh release upload "$TAG" "$OTA" --clobber
           fi
