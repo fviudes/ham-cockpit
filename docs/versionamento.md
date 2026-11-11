@@ -56,6 +56,6 @@ Se `VERSION` tiver sufixo OTA no momento do bake, o script de imagem usa só `im
 | Console Node + UI | sim | sim |
 | Helpers / units | sim | sim |
 | Ubuntu + apt stack | sim | não |
-| Binários MMDVM nativos | sim | não |
+| Binários MMDVM nativos | sim (bake ARM64) | sim, se `mmdvm-arm64.tgz` estiver no pacote / `update/` |
 
 Detalhes do canal OTA: [`update/README.md`](../update/README.md). Bake: [`docs/imagem-os.md`](imagem-os.md).

@@ -33,7 +33,7 @@ install_mmdvm_tgz() {
     fi
   done
   mkdir -p /usr/local/etc /usr/share/ircddbgateway
-  for f in groups.txt users.csv YSFHosts.txt \
+  for f in groups.txt users.csv YSFHosts.txt DMRIds.dat \
     DPlus_Hosts.txt DExtra_Hosts.txt DCS_Hosts.txt CCS_Hosts.txt; do
     if [[ -f "$tmp/etc/$f" ]]; then
       install -m 0644 "$tmp/etc/$f" "/usr/local/etc/$f"
@@ -92,7 +92,7 @@ refresh_mmdvm_data_from_tgz() {
     return 1
   fi
   mkdir -p /usr/local/etc /usr/share/ircddbgateway
-  for f in groups.txt users.csv YSFHosts.txt \
+  for f in groups.txt users.csv YSFHosts.txt DMRIds.dat \
     DPlus_Hosts.txt DExtra_Hosts.txt DCS_Hosts.txt CCS_Hosts.txt; do
     if [[ -f "$tmp/etc/$f" ]]; then
       install -m 0644 "$tmp/etc/$f" "/usr/local/etc/$f"

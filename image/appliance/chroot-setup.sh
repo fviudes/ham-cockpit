@@ -5,6 +5,8 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 export HAMCOCKPIT_CHROOT=1
 export LANG=C.UTF-8
+# Chroot não tem firmware/boot real — flash-kernel trava o dpkg no bake.
+export FLASH_KERNEL_SKIP=1
 
 SEED="${HAMCOCKPIT_SEED:-/opt/ham-cockpit-seed}"
 NODE_VER="${NODE_VER:-20.18.3}"

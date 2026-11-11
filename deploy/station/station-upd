@@ -253,6 +253,19 @@ check_all() {
 apt_prepare() {
   export DEBIAN_FRONTEND=noninteractive
   export APT_LISTCHANGES_FRONTEND=none
+  # Lab: flash-kernel/dpkg lock deixava apt preso e `make` com exit 127.
+  local i
+  for i in $(seq 1 90); do
+    if command -v fuser >/dev/null 2>&1; then
+      if fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 \
+        || fuser /var/lib/dpkg/lock >/dev/null 2>&1 \
+        || fuser /var/lib/apt/lists/lock >/dev/null 2>&1; then
+        sleep 2
+        continue
+      fi
+    fi
+    break
+  done
   # Evita prompts de conffile que deixariam o dpkg a meio de novo.
   local apt_opts=(
     -o Dpkg::Options::=--force-confdef

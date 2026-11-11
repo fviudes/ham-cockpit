@@ -13,6 +13,16 @@ SRC="${MMDVM_SRC:-/usr/local/src/mmdvm}"
 JOBS="${MMDVM_JOBS:-$(nproc 2>/dev/null || echo 2)}"
 # No bake, remove árvore de fontes e -dev após instalar (economiza disco na imagem).
 PURGE="${MMDVM_PURGE_BUILD:-1}"
+# Resolver ANTES do cd "$SRC" — no CI o cwd vira /usr/local/src/mmdvm e
+# dirname(BASH_SOURCE) relativo (deploy/mmdvm) deixa de existir.
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -d "$_SCRIPT_DIR/patches" ]]; then
+  PATCH_DIR="$_SCRIPT_DIR/patches"
+elif [[ -d "$_SCRIPT_DIR/../mmdvm/patches" ]]; then
+  PATCH_DIR="$_SCRIPT_DIR/../mmdvm/patches"
+else
+  PATCH_DIR="$_SCRIPT_DIR/patches"
+fi
 
 BINS=(MMDVMHost DMRGateway YSFGateway ircddbgatewayd NextionDriver)
 
@@ -166,15 +176,22 @@ else
   exit 1
 fi
 # Listas de refletores D-Star (REF*/XRF*/DCS*) — sem isso o gateway sobe mas não liga REF.
-mkdir -p /usr/share/ircddbgateway
+mkdir -p /usr/share/ircddbgateway "$PREFIX/etc"
 for hf in DPlus_Hosts.txt DExtra_Hosts.txt DCS_Hosts.txt CCS_Hosts.txt; do
   src=""
-  for cand in "ircDDBGateway/Data/$hf" "ircDDBGateway/ircDDBGateway/Data/$hf"; do
+  while IFS= read -r cand; do
     [[ -f "$cand" ]] && src="$cand" && break
-  done
+  done < <(find ircDDBGateway -type f -name "$hf" 2>/dev/null || true)
+  if [[ -z "$src" ]]; then
+    for cand in "ircDDBGateway/Data/$hf" "ircDDBGateway/ircDDBGateway/Data/$hf"; do
+      [[ -f "$cand" ]] && src="$cand" && break
+    done
+  fi
   if [[ -n "$src" ]]; then
     install -m 0644 "$src" "/usr/share/ircddbgateway/$hf"
     install -m 0644 "$src" "$PREFIX/etc/$hf" || true
+  else
+    echo "AVISO: $hf não encontrado nas fontes do ircDDBGateway" >&2
   fi
 done
 
@@ -186,14 +203,6 @@ need gcc
 # LimitNOFILE=1024 / Before=docker sozinhos NÃO bastam — o binário precisa do guard.
 # Lab: hunks do .patch podem falhar se ON7LDS mudar linhas → fallback sed obrigatório.
 # Rebuild vivo na Pi: dpkg --configure -a + build-essential (make) antes deste passo.
-_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -d "$_script_dir/patches" ]]; then
-  PATCH_DIR="$_script_dir/patches"
-elif [[ -d "$_script_dir/../mmdvm/patches" ]]; then
-  PATCH_DIR="$_script_dir/../mmdvm/patches"
-else
-  PATCH_DIR="$_script_dir/patches"
-fi
 if ! command -v make >/dev/null 2>&1; then
   echo "ERRO: make ausente — instale build-essential (e rode dpkg --configure -a se apt estiver preso)" >&2
   exit 1
@@ -211,6 +220,10 @@ fi
 if ! grep -q 'if (fd2 < 0) return' NextionDriver/NextionDriver.c; then
   echo "ERRO: NextionDriver.c sem guard fd2 — abortando bake sem binário vulnerável" >&2
   exit 1
+fi
+# String no binário para auditar o tgz (comments do .c não sobrevivem ao compile).
+if ! grep -q 'HC_FD2_GUARD' NextionDriver/NextionDriver.c; then
+  printf '\nconst char hc_fd2_guard[] __attribute__((used)) = "HC_FD2_GUARD";\n' >> NextionDriver/NextionDriver.c
 fi
 make -C NextionDriver clean || true
 make -C NextionDriver NextionDriver
@@ -230,6 +243,32 @@ if [[ -f NextionDriver/users.csv ]]; then
   install -m 0644 NextionDriver/users.csv "$PREFIX/etc/users.csv"
 fi
 
+# DMRIds.dat — WPSD/Pi-Star em /usr/local/etc; Host [DMR Id Lookup]. Ausente no lab.
+# RadioID user.csv (cabeçalho + Radio_ID,Callsign,Name,…). Converte para Id<TAB>call<TAB>nome.
+if [[ ! -s "$PREFIX/etc/DMRIds.dat" ]] && command -v curl >/dev/null 2>&1; then
+  echo "baixando DMRIds.dat (RadioID)…"
+  _dmr_tmp="$(mktemp)"
+  if curl -fsSL --retry 3 --retry-delay 2 -A "Ham-Cockpit/mmdvm" \
+      -o "$_dmr_tmp" "https://database.radioid.net/static/user.csv" \
+    || curl -fsSL --retry 3 --retry-delay 2 -A "Ham-Cockpit/mmdvm" \
+      -o "$_dmr_tmp" "https://www.radioid.net/static/user.csv"; then
+    awk -F',' 'NR>1 && $1 ~ /^[0-9]+$/ {
+      id=$1; call=$2; name=$3;
+      gsub(/\r/, "", id); gsub(/\r/, "", call); gsub(/\r/, "", name);
+      printf "%s\t%s\t%s\n", id, call, name
+    }' "$_dmr_tmp" > "$PREFIX/etc/DMRIds.dat" || true
+    chmod 0644 "$PREFIX/etc/DMRIds.dat" 2>/dev/null || true
+    if [[ ! -s "$PREFIX/etc/DMRIds.dat" ]]; then
+      echo "AVISO: DMRIds.dat vazio após conversão RadioID" >&2
+    else
+      echo "DMRIds.dat: $(wc -l < "$PREFIX/etc/DMRIds.dat") IDs"
+    fi
+  else
+    echo "AVISO: não foi possível baixar DMRIds.dat (RadioID)" >&2
+  fi
+  rm -f "$_dmr_tmp"
+fi
+
 mkdir -p /var/log/mmdvm
 
 missing=0
@@ -242,6 +281,10 @@ for b in "${BINS[@]}"; do
   fi
 done
 if [[ "$missing" -ne 0 ]]; then
+  exit 1
+fi
+if ! grep -a -q 'HC_FD2_GUARD' "$PREFIX/bin/NextionDriver"; then
+  echo "ERRO: NextionDriver compilado sem marca HC_FD2_GUARD (patch fd2 não entrou no binário)" >&2
   exit 1
 fi
 
