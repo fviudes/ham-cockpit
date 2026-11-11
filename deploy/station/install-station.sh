@@ -191,7 +191,10 @@ fi
 # Sem console serial/getty ocupando a porta (padrão WPSD / Pi-Star).
 configure_mmdvm_uart() {
   local cfg cmd model
-  model="$(tr -d '\0' </proc/device-tree/model 2>/dev/null || true)"
+  model=""
+  if [[ -r /proc/device-tree/model ]]; then
+    model="$(tr -d '\0' </proc/device-tree/model 2>/dev/null || true)"
+  fi
   [[ "$model" == *Raspberry* ]] || return 0
   for cfg in /boot/firmware/config.txt /boot/config.txt; do
     [[ -f "$cfg" ]] || continue
@@ -221,9 +224,12 @@ nextion_needs_patch() {
   return 0
 }
 # Tarball patched (bake/OTA). Não basta o bin existir — stock Ubuntu 24 aborta sem a marca.
+# No chroot o arquivo já pode estar em /opt/ham-cockpit — cp origem=destino aborta com set -e.
 for tgz in "$ROOT/update/mmdvm-arm64.tgz" "$ROOT/image/out/mmdvm-arm64.tgz" /opt/ham-cockpit/mmdvm-arm64.tgz; do
   if [[ -f "$tgz" ]]; then
-    cp -a "$tgz" /opt/ham-cockpit/mmdvm-arm64.tgz
+    if [[ "$tgz" != /opt/ham-cockpit/mmdvm-arm64.tgz ]]; then
+      cp -a "$tgz" /opt/ham-cockpit/mmdvm-arm64.tgz
+    fi
     break
   fi
 done
