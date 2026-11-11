@@ -7,6 +7,7 @@ on:
   push:
     paths:
       - "deploy/mmdvm/build-binaries.sh"
+      - "deploy/mmdvm/patches/**"
       - ".github/workflows/mmdvm-binaries.yml"
 
 jobs:
@@ -33,9 +34,12 @@ jobs:
           for b in MMDVMHost DMRGateway YSFGateway ircddbgatewayd NextionDriver; do
             install -m 0755 "/usr/local/bin/$b" "$STAGE/bin/$b"
           done
-          for f in groups.txt users.csv YSFHosts.txt; do
+          for f in groups.txt users.csv YSFHosts.txt \
+            DPlus_Hosts.txt DExtra_Hosts.txt DCS_Hosts.txt CCS_Hosts.txt; do
             if [[ -f "/usr/local/etc/$f" ]]; then
               install -m 0644 "/usr/local/etc/$f" "$STAGE/etc/$f"
+            elif [[ -f "/usr/share/ircddbgateway/$f" ]]; then
+              install -m 0644 "/usr/share/ircddbgateway/$f" "$STAGE/etc/$f"
             fi
           done
           mkdir -p update

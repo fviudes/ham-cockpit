@@ -1,4 +1,4 @@
-# Ham Cockpit v0.1.04
+# Ham Cockpit v0.1.05
 
 Appliance da estação de rádio amador: um Raspberry Pi com console no navegador. Fala com o rádio (Bluetooth ou CAT/USB via ser2net), wattímetro Lextel, amplificadores, chave de antenas, acoplador LDG e o logbook Wavelog.
 
@@ -39,9 +39,9 @@ Não grave o Ubuntu vanilla e não rode `install-station.sh` nesta imagem — o 
 
 ### 1. Baixe a imagem
 
-Arquivo: **`ham-cockpit-0.1.04-raspi.img.xz`** (Ubuntu Server 24.04 LTS + Ham Cockpit).
+Arquivo: **`ham-cockpit-0.1.05-raspi.img.xz`** (Ubuntu Server 24.04 LTS + Ham Cockpit).
 
-Na [Release v0.1.04](https://github.com/fviudes/ham-cockpit/releases/tag/v0.1.04) ou:
+Na [Release v0.1.05](https://github.com/fviudes/ham-cockpit/releases/tag/v0.1.05) ou:
 
 ```bash
 gh release download --repo fviudes/ham-cockpit --pattern "ham-cockpit-*-raspi.img.xz" --dir instaladores
@@ -51,7 +51,7 @@ Scripts de gravação: [`instaladores/flash.ps1`](instaladores/flash.ps1) (Windo
 
 ### 2. Grave no cartão ou SSD
 
-Abra o Raspberry Pi Imager → **Use custom** → escolha `ham-cockpit-0.1.04-raspi.img.xz` → selecione o microSD ou o SSD USB → grave.
+Abra o Raspberry Pi Imager → **Use custom** → escolha `ham-cockpit-0.1.05-raspi.img.xz` → selecione o microSD ou o SSD USB → grave.
 
 Windows (PowerShell **como Administrador**), com o Imager instalado:
 
@@ -152,4 +152,4 @@ Guia: [`docs/versionamento.md`](docs/versionamento.md).
 
 ---
 
-Ham Cockpit v0.1.04.01 (imagem base 0.1.04) · Raspberry Pi 3 / 4 / 5 · Ubuntu Server 24.04 LTS
+Ham Cockpit v0.1.05 · Raspberry Pi 3 / 4 / 5 · Ubuntu Server 24.04 LTS

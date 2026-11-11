@@ -37,7 +37,9 @@ Tempo típico: **35–60 min** no runner ARM (inclui a compilação MMDVM). O `v
 - Dependências: `build-essential`, `libwxgtk3.2-dev`, `libmosquitto-dev`, etc. em `deploy/station/packages.list` e no próprio `build-binaries.sh` (só instala pacotes que existem no apt).
 - A falha de compilação **aborta** o bake (`MMDVM_BUILD_BINARIES=1` no chroot). Em install manual fora do bake, o aviso é soft para o console ainda gravar INI.
 - Após o bake, `MMDVM_PURGE_BUILD=1` remove `/usr/local/src/mmdvm` e os `-dev` (mantém libs runtime de wx/mosquitto).
-- **OTA:** o pacote leva o console +, quando existir, `mmdvm-arm64.tgz` (binários ARM64). O `ota-hooks.sh` instala em `/usr/local/bin` se faltar; senão baixa `update/mmdvm-arm64.tgz` do GitHub. Publicação: workflow **MMDVM ARM64 binaries** ou o bake (`image/out/mmdvm-arm64.tgz`). Fallback manual na Pi: `sudo MMDVM_FORCE=1 bash deploy/mmdvm/build-binaries.sh`.
+- **OTA:** o pacote leva o console +, quando existir, `mmdvm-arm64.tgz` (binários ARM64 + `etc/` groups/users/hosts D-Star). O `ota-hooks.sh` instala em `/usr/local/bin` se faltar; senão baixa `update/mmdvm-arm64.tgz` do GitHub; também reforça runtime wx/mosquitto/`libdlt2` quando o apt estiver disponível. Publicação: workflow **MMDVM ARM64 binaries** ou o bake (`image/out/mmdvm-arm64.tgz`). Fallback manual na Pi: `sudo MMDVM_FORCE=1 bash deploy/mmdvm/build-binaries.sh`.
+- **UART / Dual Hat / primeiro boot:** checklist operacional em [mmdvm-lab-checklist.md](mmdvm-lab-checklist.md) (`enable_uart` + `disable-bt`, getty masked, preset `mmdvmhsdualhatgpio`, Id > 1000, RPT1/RPT2 no rádio, Nextion unit real + patch `fd2`, DPlus `localAddress=0.0.0.0`, sem ciclo systemd Host↔Nextion↔ircDDB).
+- **NextionDriver no bake:** `build-binaries.sh` aplica `deploy/mmdvm/patches/nextiondriver-fd2-modem.patch` (fallback `sed` se o upstream ON7LDS mudar linhas). Sem esse guard, Ubuntu 24 aborta com `FD_SETSIZE` quando `Port=modem`.
 
 ```
 sudo bash image/appliance/build.sh
@@ -45,4 +47,6 @@ sudo bash image/appliance/build.sh
 
 `SKIP_DOCKER_CACHE=1` é o padrão. Para embutir os `.tar` do Wavelog: `SKIP_DOCKER_CACHE=0`.
 
-Artefato: Release `v<versão>` em `fviudes/ham-cockpit`. O `.img.xz` não entra no Git.
+Artefato: Release `v<versão>` em `fviudes/ham-cockpit` (imagem **v0.1.05**: `ham-cockpit-0.1.05-raspi.img.xz`). O `.img.xz` não entra no Git.
+
+O bake instala o stack MMDVM já com os ajustes do lab (NextionDriver 1.26 patched, unit real, INI Dual/Nextion, UART `disable-bt`, `ircddbgateway` sem extensão, mosquitto/libdlt2, hosts REF*). Detalhe operacional: [mmdvm-lab-checklist.md](mmdvm-lab-checklist.md).

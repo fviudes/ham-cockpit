@@ -3,7 +3,8 @@ Description=DMRGateway (WPSD / Pi-Star stack) — Ham Cockpit
 Documentation=https://wpsd.radio
 After=network-online.target mmdvmhost.service
 Wants=network-online.target
-BindsTo=mmdvmhost.service
+# Sem BindsTo: junto com Nextion Before/Wants gerava "Transaction order is cyclic".
+PartOf=mmdvmhost.service
 ConditionPathExists=/usr/local/bin/DMRGateway
 
 [Service]

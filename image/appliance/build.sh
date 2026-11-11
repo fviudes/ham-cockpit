@@ -162,9 +162,12 @@ mkdir -p "$STAGE_MMDVM/bin" "$STAGE_MMDVM/etc"
 for b in MMDVMHost DMRGateway YSFGateway ircddbgatewayd NextionDriver; do
   install -m 0755 "$MNT/usr/local/bin/$b" "$STAGE_MMDVM/bin/$b"
 done
-for f in groups.txt users.csv YSFHosts.txt; do
+for f in groups.txt users.csv YSFHosts.txt \
+  DPlus_Hosts.txt DExtra_Hosts.txt DCS_Hosts.txt CCS_Hosts.txt; do
   if [[ -f "$MNT/usr/local/etc/$f" ]]; then
     install -m 0644 "$MNT/usr/local/etc/$f" "$STAGE_MMDVM/etc/$f"
+  elif [[ -f "$MNT/usr/share/ircddbgateway/$f" ]]; then
+    install -m 0644 "$MNT/usr/share/ircddbgateway/$f" "$STAGE_MMDVM/etc/$f"
   fi
 done
 tar -C "$STAGE_MMDVM" -czf "$MMDVM_TGZ" bin etc

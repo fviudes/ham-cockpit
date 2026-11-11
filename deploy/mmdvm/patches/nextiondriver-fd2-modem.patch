@@ -1,0 +1,18 @@
+--- a/NextionDriver.c
++++ b/NextionDriver.c
+@@ -452,6 +452,7 @@
+ }
+ 
+ void checkSerial(void) {
++ if (fd2 < 0) return; /* Port=modem: sem TTY local; FD_SET(-1) aborta no glibc (Ubuntu 24+) */
+  fd_set fds;
+  FD_ZERO(&fds);
+  FD_SET(fd2, &fds);
+@@ -494,6 +495,7 @@
+ }
+ 
+ void checkListeningSocket(void) {
++ if (display_RXsock < 0) return;
+  int numbytes;
+  struct sockaddr_storage their_addr;
+  char buf[1000];

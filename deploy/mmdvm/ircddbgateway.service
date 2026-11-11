@@ -1,17 +1,21 @@
 [Unit]
 Description=ircDDBGateway D-Star (WPSD / Pi-Star stack) — Ham Cockpit
 Documentation=https://wpsd.radio
-After=network-online.target mmdvmhost.service
-Wants=network-online.target
-BindsTo=mmdvmhost.service
+After=network-online.target mosquitto.service
+Wants=network-online.target mosquitto.service
+# Sem BindsTo/PartOf no Host: evita ciclo systemd Host↔Nextion↔gateways no lab.
+# Se "Transaction order is cyclic" voltar: subir com systemd-run --unit=ircddbgateway-manual
+# (sem PartOf) em vez de amarrar de novo ao mmdvmhost.
 ConditionPathExists=/usr/local/bin/ircddbgatewayd
 
 [Service]
 Type=simple
 User=hamcockpit
 Group=dialout
+WorkingDirectory=/var/log/mmdvm
 ExecStartPre=/bin/mkdir -p /var/log/mmdvm
-ExecStart=/bin/bash -c 'CFG=/opt/ham-cockpit/mmdvm/ircddbgateway.conf; [[ -f /etc/ircddbgateway ]] && CFG=/etc/ircddbgateway; exec /usr/local/bin/ircddbgatewayd -n -c "$CFG"'
+ExecStartPre=/bin/chown hamcockpit:dialout /var/log/mmdvm
+ExecStart=/bin/bash -c 'CONFDIR=/opt/ham-cockpit/mmdvm; [[ -f /etc/ircddbgateway ]] && CONFDIR=/etc; exec /usr/local/bin/ircddbgatewayd -foreground -nolog -logdir:/var/log/mmdvm -confdir:"$CONFDIR"'
 Restart=on-failure
 RestartSec=3
 

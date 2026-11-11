@@ -32,10 +32,14 @@ install_mmdvm_tgz() {
       install -m 0755 "$tmp/bin/$b" "/usr/local/bin/$b"
     fi
   done
-  mkdir -p /usr/local/etc
-  for f in groups.txt users.csv YSFHosts.txt; do
+  mkdir -p /usr/local/etc /usr/share/ircddbgateway
+  for f in groups.txt users.csv YSFHosts.txt \
+    DPlus_Hosts.txt DExtra_Hosts.txt DCS_Hosts.txt CCS_Hosts.txt; do
     if [[ -f "$tmp/etc/$f" ]]; then
       install -m 0644 "$tmp/etc/$f" "/usr/local/etc/$f"
+      case "$f" in
+        *_Hosts.txt) install -m 0644 "$tmp/etc/$f" "/usr/share/ircddbgateway/$f" ;;
+      esac
     fi
   done
   mkdir -p /var/log/mmdvm
@@ -43,16 +47,76 @@ install_mmdvm_tgz() {
   return 0
 }
 
-# 1) Pacote OTA embutido  2) Arquivo já no canal  3) Download raw GitHub
+# Runtime wx/MQTT para ircddbgatewayd em estações antigas (OTA sem bake novo).
+# Sem apt (imagem read-only improvável) só registra aviso.
+ensure_mmdvm_runtime_pkgs() {
+  command -v apt-get >/dev/null 2>&1 || return 0
+  export DEBIAN_FRONTEND=noninteractive
+  local pkgs=(libmosquitto1 mosquitto libdlt2)
+  local p cand ok=()
+  for p in libwxbase3.2-1t64 libwxgtk3.2-1t64 libwxbase3.2-1 libwxgtk3.2-1 "${pkgs[@]}"; do
+    cand="$(apt-cache policy "$p" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
+    if [[ -n "$cand" && "$cand" != "(none)" ]]; then
+      ok+=("$p")
+    fi
+  done
+  if [[ ${#ok[@]} -eq 0 ]]; then
+    echo "ota-hooks: AVISO — sem candidatos apt para runtime MMDVM (wx/mosquitto)" >&2
+    return 0
+  fi
+  apt-get update -qq 2>/dev/null || true
+  apt-get install -y --no-install-recommends "${ok[@]}" 2>/dev/null \
+    || echo "ota-hooks: AVISO — falha ao instalar runtime wx/mosquitto/libdlt2" >&2
+}
+
+# Preferência: pacote OTA embutido → cópia em /opt → download raw GitHub.
+pick_mmdvm_tgz() {
+  if [[ -f "$ROOT/mmdvm-arm64.tgz" ]]; then
+    echo "$ROOT/mmdvm-arm64.tgz"
+    return 0
+  fi
+  if [[ -f /opt/ham-cockpit/mmdvm-arm64.tgz ]]; then
+    echo /opt/ham-cockpit/mmdvm-arm64.tgz
+    return 0
+  fi
+  return 1
+}
+
+# Hosts D-Star + data files mesmo quando os bins já existem (estações antigas).
+refresh_mmdvm_data_from_tgz() {
+  local tgz="$1" tmp f
+  [[ -f "$tgz" ]] || return 1
+  tmp="$(mktemp -d)"
+  if ! tar -xzf "$tgz" -C "$tmp" 2>/dev/null; then
+    rm -rf "$tmp"
+    return 1
+  fi
+  mkdir -p /usr/local/etc /usr/share/ircddbgateway
+  for f in groups.txt users.csv YSFHosts.txt \
+    DPlus_Hosts.txt DExtra_Hosts.txt DCS_Hosts.txt CCS_Hosts.txt; do
+    if [[ -f "$tmp/etc/$f" ]]; then
+      install -m 0644 "$tmp/etc/$f" "/usr/local/etc/$f"
+      case "$f" in
+        *_Hosts.txt) install -m 0644 "$tmp/etc/$f" "/usr/share/ircddbgateway/$f" ;;
+      esac
+    fi
+  done
+  rm -rf "$tmp"
+  return 0
+}
+
 ensure_mmdvm_bins() {
+  local tgz=""
+  tgz="$(pick_mmdvm_tgz || true)"
+  if [[ -n "$tgz" ]]; then
+    refresh_mmdvm_data_from_tgz "$tgz" || true
+  fi
   if ! mmdvm_missing; then
     return 0
   fi
   echo "ota-hooks: binários MMDVM ausentes — tentando instalar…" >&2
-  if [[ -f "$ROOT/mmdvm-arm64.tgz" ]] && install_mmdvm_tgz "$ROOT/mmdvm-arm64.tgz"; then
-    echo "ota-hooks: MMDVM instalado do pacote OTA" >&2
-  elif [[ -f /opt/ham-cockpit/mmdvm-arm64.tgz ]] && install_mmdvm_tgz /opt/ham-cockpit/mmdvm-arm64.tgz; then
-    echo "ota-hooks: MMDVM instalado de /opt/ham-cockpit/mmdvm-arm64.tgz" >&2
+  if [[ -n "$tgz" ]] && install_mmdvm_tgz "$tgz"; then
+    echo "ota-hooks: MMDVM instalado de $tgz" >&2
   else
     local dl
     dl="$(mktemp)"
@@ -90,15 +154,39 @@ ensure_mmdvm_bins() {
 
 if [[ -d "$ROOT/systemd" ]]; then
   shopt -s nullglob
+  # Unmask Nextion antes de reinstalar — stub “lab: disabled” / mask /dev/null não pode ficar no bake/OTA.
+  systemctl unmask nextiondriver.service 2>/dev/null || true
   for unit in "$ROOT"/systemd/*.service "$ROOT"/systemd/*.target; do
-    install -m 0644 "$unit" "/etc/systemd/system/$(basename "$unit")"
+    base="$(basename "$unit")"
+    if [[ "$base" == "nextiondriver.service" ]] && grep -qE 'lab: disabled|/nonexistent|ExecStart=/bin/true' "$unit"; then
+      echo "ota-hooks: AVISO — recusando stub nextiondriver.service do pacote OTA" >&2
+      continue
+    fi
+    install -m 0644 "$unit" "/etc/systemd/system/$base"
   done
+  # Se a unit ativa ainda for stub (lab antigo), remove para o ConditionPathExists do binário valer na próxima cópia boa.
+  if [[ -f /etc/systemd/system/nextiondriver.service ]] \
+    && grep -qE 'lab: disabled|/nonexistent|ExecStart=/bin/true' /etc/systemd/system/nextiondriver.service; then
+    echo "ota-hooks: AVISO — removendo stub nextiondriver.service legado" >&2
+    rm -f /etc/systemd/system/nextiondriver.service
+  fi
   systemctl daemon-reload 2>/dev/null || true
 fi
 
 if [[ -d "$ROOT/bin" ]]; then
   find "$ROOT/bin" -maxdepth 1 -type f -exec chmod 0755 {} +
   chown root:root "$ROOT"/bin/* 2>/dev/null || true
+  # CRLF no shebang quebra sudo/kernel.
+  sed -i 's/\r$//' "$ROOT/bin/mmdvm-ctl" 2>/dev/null || true
+  if [[ -f /opt/ham-cockpit/bin/mmdvm-ctl ]]; then
+    sed -i 's/\r$//' /opt/ham-cockpit/bin/mmdvm-ctl
+  fi
+fi
+
+# Daemon g4klx lê ircddbgateway (sem .conf) no confdir.
+if [[ -f /opt/ham-cockpit/mmdvm/ircddbgateway.conf && ! -e /opt/ham-cockpit/mmdvm/ircddbgateway ]]; then
+  ln -sfn ircddbgateway.conf /opt/ham-cockpit/mmdvm/ircddbgateway
+  chown -h hamcockpit:hamcockpit /opt/ham-cockpit/mmdvm/ircddbgateway 2>/dev/null || true
 fi
 
 # Copia o tarball MMDVM para /opt para reuso e instala se faltar.
@@ -106,6 +194,17 @@ if [[ -f "$ROOT/mmdvm-arm64.tgz" ]]; then
   cp -a "$ROOT/mmdvm-arm64.tgz" /opt/ham-cockpit/mmdvm-arm64.tgz 2>/dev/null || true
 fi
 ensure_mmdvm_bins || true
+ensure_mmdvm_runtime_pkgs || true
+
+# Broker MQTT local (ircddbgatewayd) + units MMDVM no boot após OTA.
+if command -v mosquitto >/dev/null 2>&1 || [[ -x /usr/sbin/mosquitto ]]; then
+  systemctl enable mosquitto.service 2>/dev/null || true
+  systemctl start mosquitto.service 2>/dev/null || true
+fi
+systemctl daemon-reload 2>/dev/null || true
+for u in nextiondriver.service mmdvmhost.service dmrgateway.service ysfgateway.service ircddbgateway.service; do
+  systemctl enable "$u" 2>/dev/null || true
+done
 
 # Sudoers do helper de backup (e demais) — atualiza em aparelhos já instalados.
 if [[ -f "$ROOT/sudoers-hamcockpit" ]]; then

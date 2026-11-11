@@ -247,7 +247,8 @@ check_all() {
   printf ']}\n'
 }
 
-# Recupera dpkg/apt interrompidos antes de update/install.
+# Recupera dpkg/apt interrompidos antes de update/install (Hamlib, OS, rebuild MMDVM).
+# Lab: sem isto, `make`/apt falham com dpkg a meio e exit 127 (build-essential ausente).
 # Idempotente: em estado limpo, dpkg --configure -a e apt-get -f são no-ops rápidos.
 apt_prepare() {
   export DEBIAN_FRONTEND=noninteractive

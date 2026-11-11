@@ -3,18 +3,36 @@ Description=NextionDriver (ON7LDS) — LCD Nextion no HAT MMDVM / WPSD
 Documentation=https://github.com/on7lds/NextionDriver
 DefaultDependencies=no
 After=local-fs.target network-online.target
-Before=mmdvmhost.service
+Wants=network-online.target
+# Antes do Docker: menos bridges/veth no momento do start (log do ABRT listava docker0/br-*/veth*).
+# Sem Before=mmdvmhost: BindsTo/PartOf dos gateways gerava "Transaction order is cyclic".
+# NUNCA substituir por stub “lab: disabled” / ConditionPathExists=/nonexistent / ExecStart=/bin/true.
+Before=docker.service docker.socket
 ConditionPathExists=/usr/local/bin/NextionDriver
 
 [Service]
-Type=forking
+Type=simple
 User=root
+# Cinto de segurança: select()/FD_ISSET do ON7LDS + LimitNOFILE alto do systemd.
+# A causa real do ABRT no lab (Port=modem) é FD_SET(fd2) com fd2=-1 (glibc fortify);
+# o binário bakeado aplica deploy/mmdvm/patches/nextiondriver-fd2-modem.patch.
+LimitNOFILE=1024
 ExecStartPre=/bin/mkdir -p /var/log/mmdvm /usr/local/etc
-ExecStart=/bin/bash -c 'INI=/opt/ham-cockpit/mmdvm/mmdvmhost.ini; [[ -f /etc/mmdvmhost ]] && INI=/etc/mmdvmhost; exec /usr/local/bin/NextionDriver -i -c "$INI"'
-ExecStop=/usr/bin/killall NextionDriver
+ExecStartPre=-/bin/rm -f /dev/ttyNextionDriver
+ExecStart=/bin/bash -c 'INI=/opt/ham-cockpit/mmdvm/mmdvmhost.ini; [[ -f /etc/mmdvmhost ]] && INI=/etc/mmdvmhost; exec /usr/local/bin/NextionDriver -i -c "$INI" -d -v'
+# PTY do openpty() nasce 0620 root:tty. hamcockpit está em tty e dialout, mas tty só tem write —
+# Host precisa ler+escrever. WPSD evita isso rodando o Host como root.
+# Esperar o symlink (users.csv ~4 s) e então dialout+660 (fallback 666).
+ExecStartPost=/bin/bash -c 'for i in $(seq 1 40); do t=$(readlink -f /dev/ttyNextionDriver 2>/dev/null || true); if [[ -c "$t" ]]; then chgrp dialout "$t" 2>/dev/null || true; chmod 660 "$t" 2>/dev/null || chmod 666 "$t"; exit 0; fi; sleep 0.25; done; exit 0'
+ExecStop=/bin/kill -TERM $MAINPID
 Restart=on-failure
-RestartSec=3
+RestartSec=5
+KillMode=process
+TimeoutStopSec=10
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=ham-cockpit.target
-RequiredBy=mmdvmhost.service
+# Só Wants= no mmdvmhost — RequiredBy aqui criava Requires= e ciclo de restart
+# com BindsTo dos gateways (Transaction order is cyclic).

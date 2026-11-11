@@ -146,6 +146,11 @@ function main() {
     }
     cpSync(src, join(stage, "bin", name));
   }
+  const patchSrc = join(ROOT, "deploy", "mmdvm", "patches");
+  if (existsSync(patchSrc)) {
+    mkdirSync(join(stage, "bin", "patches"), { recursive: true });
+    cpSync(patchSrc, join(stage, "bin", "patches"), { recursive: true });
+  }
 
   for (const name of SYSTEMD_UNITS) {
     const src = join(STATION, name);

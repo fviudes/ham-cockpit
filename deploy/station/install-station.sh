@@ -58,6 +58,8 @@ install -o root -g root -m 0755 "$HERE/vfo-display-kiosk" /opt/ham-cockpit/bin/v
 install -o root -g root -m 0755 "$HERE/vfo-display-idle" /opt/ham-cockpit/bin/vfo-display-idle
 install -o root -g root -m 0755 "$HERE/ldg-serial" /opt/ham-cockpit/bin/ldg-serial
 install -o root -g root -m 0755 "$ROOT/deploy/mmdvm/mmdvm-ctl" /opt/ham-cockpit/bin/mmdvm-ctl
+# Shebang CRLF (checkout Windows) → `sudo: unable to execute … mmdvm-ctl`.
+sed -i 's/\r$//' /opt/ham-cockpit/bin/mmdvm-ctl
 install -m 0644 "$HERE/versions.json" /opt/ham-cockpit/versions.json
 install -o root -g root -m 0755 "$ROOT/deploy/lextel/lextel-bt" /opt/ham-cockpit/bin/lextel-bt
 install -m 0644 "$ROOT/deploy/lextel/99-lextel-rfcomm.rules" /etc/udev/rules.d/99-lextel-rfcomm.rules
@@ -139,17 +141,62 @@ fi
 if [[ ! -f /opt/ham-cockpit/mmdvm/ircddbgateway.conf ]]; then
   install -o hamcockpit -g hamcockpit -m 0644 "$ROOT/deploy/mmdvm/ircddbgateway.conf" /opt/ham-cockpit/mmdvm/ircddbgateway.conf
 fi
+# ircddbgatewayd (g4klx) lê <confdir>/ircddbgateway — SEM extensão. Só o .conf não basta.
+if [[ ! -e /opt/ham-cockpit/mmdvm/ircddbgateway ]]; then
+  ln -sfn ircddbgateway.conf /opt/ham-cockpit/mmdvm/ircddbgateway
+  chown -h hamcockpit:hamcockpit /opt/ham-cockpit/mmdvm/ircddbgateway || true
+fi
 install_unit() {
   local name="$1"
-  if [[ ! -f "/etc/systemd/system/$name" && ! -f "/lib/systemd/system/$name" ]]; then
-    install -m 0644 "$ROOT/deploy/mmdvm/$name" "/etc/systemd/system/$name"
-  fi
+  install -m 0644 "$ROOT/deploy/mmdvm/$name" "/etc/systemd/system/$name"
 }
 install_unit mmdvmhost.service
 install_unit dmrgateway.service
 install_unit ysfgateway.service
 install_unit ircddbgateway.service
+# Unit Nextion real — nunca stub “lab: disabled”.
+systemctl unmask nextiondriver.service 2>/dev/null || true
 install_unit nextiondriver.service
+if grep -qE 'lab: disabled|/nonexistent|ExecStart=/bin/true' /etc/systemd/system/nextiondriver.service 2>/dev/null; then
+  echo "ERRO: nextiondriver.service stub recusado — reinstalando unit real" >&2
+  install -m 0644 "$ROOT/deploy/mmdvm/nextiondriver.service" /etc/systemd/system/nextiondriver.service
+fi
+# Fallback de compilação na Pi (OTA / bake incremental): script + patch fd2.
+install -o root -g root -m 0755 "$ROOT/deploy/mmdvm/build-binaries.sh" /opt/ham-cockpit/bin/mmdvm-build-binaries.sh
+sed -i 's/\r$//' /opt/ham-cockpit/bin/mmdvm-build-binaries.sh
+install -d /opt/ham-cockpit/bin/patches
+if [[ -d "$ROOT/deploy/mmdvm/patches" ]]; then
+  cp -a "$ROOT/deploy/mmdvm/patches/." /opt/ham-cockpit/bin/patches/
+fi
+
+# UART GPIO do HAT MMDVM (Pi 3/4): PL011 livre em /dev/ttyAMA0.
+# disable-bt libera o UART principal nos pinos GPIO (Bluetooth off).
+# Sem console serial/getty ocupando a porta (padrão WPSD / Pi-Star).
+configure_mmdvm_uart() {
+  local cfg cmd model
+  model="$(tr -d '\0' </proc/device-tree/model 2>/dev/null || true)"
+  [[ "$model" == *Raspberry* ]] || return 0
+  for cfg in /boot/firmware/config.txt /boot/config.txt; do
+    [[ -f "$cfg" ]] || continue
+    grep -qE '^[[:space:]]*enable_uart=1' "$cfg" || echo 'enable_uart=1' >>"$cfg"
+    # Preferir disable-bt; normaliza overlays antigos (miniuart-bt / pi3-*).
+    if grep -qE '^[[:space:]]*dtoverlay=(miniuart-bt|pi3-miniuart-bt|pi3-disable-bt|disable-bt)' "$cfg"; then
+      sed -i -E 's/^[[:space:]]*dtoverlay=(miniuart-bt|pi3-miniuart-bt|pi3-disable-bt|disable-bt).*/dtoverlay=disable-bt/' "$cfg"
+    else
+      echo 'dtoverlay=disable-bt' >>"$cfg"
+    fi
+    break
+  done
+  for cmd in /boot/firmware/cmdline.txt /boot/cmdline.txt; do
+    [[ -f "$cmd" ]] || continue
+    # Remove console serial; mantém console=tty1 para HDMI/local.
+    sed -i -E 's/[[:space:]]*console=(serial0|ttyAMA0|ttyS0)[^[:space:]]*//g' "$cmd"
+    break
+  done
+  systemctl disable --now serial-getty@ttyS0.service serial-getty@ttyAMA0.service 2>/dev/null || true
+  systemctl mask serial-getty@ttyS0.service serial-getty@ttyAMA0.service 2>/dev/null || true
+}
+configure_mmdvm_uart
 # Binários g4klx + NextionDriver. MMDVM_BUILD_BINARIES=0 para pular.
 # No bake (CHROOT=1 ou MMDVM_BUILD_BINARIES=1) a falha aborta a imagem.
 if [[ "${MMDVM_BUILD_BINARIES:-auto}" != "0" ]]; then
@@ -220,6 +267,8 @@ enable_units ham-cockpit.target ham-cockpit.service ham-cockpit-ap.service first
 enable_units ser2net.service 'rigctld@ic705.service' wavelog.service waveloggate.service
 enable_units nextiondriver.service mmdvmhost.service dmrgateway.service ysfgateway.service ircddbgateway.service
 enable_units seatd.service ham-cockpit-vfo.service ham-cockpit-vfo-idle.service
+# ircddbgatewayd (g4klx recente) exige broker MQTT local; sem mosquitto → Connection refused.
+enable_units mosquitto.service
 # docker.io deve existir após packages.list (bake) / apt (install vivo).
 if ! command -v docker >/dev/null 2>&1; then
   echo "AVISO: binário docker ausente — instale docker.io (nova imagem bake se for appliance)" >&2
@@ -250,6 +299,10 @@ else
 fi
 iw reg set BR 2>/dev/null || true
 if [[ "$CHROOT" != "1" ]]; then
+  # Broker MQTT local para ircddbgatewayd (libmosquitto); libdlt2 vem do packages.list.
+  if command -v mosquitto >/dev/null 2>&1 || [[ -x /usr/sbin/mosquitto ]]; then
+    systemctl enable --now mosquitto.service 2>/dev/null || systemctl start mosquitto.service || true
+  fi
   systemctl enable --now ham-cockpit.target || systemctl start ham-cockpit.target || true
   systemctl restart waveloggate.service || systemctl start waveloggate.service || true
 fi

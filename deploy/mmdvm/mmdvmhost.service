@@ -1,9 +1,11 @@
 [Unit]
 Description=MMDVMHost (WPSD / Pi-Star stack) — Ham Cockpit
 Documentation=https://wpsd.radio
-After=network-online.target nextiondriver.service
+After=network-online.target
 Wants=network-online.target
-Wants=nextiondriver.service
+# Nextion sobe pelo ham-cockpit.target. Não usar After=/Wants=nextiondriver aqui —
+# com PartOf/BindsTo dos gateways isso gerava "Transaction order is cyclic".
+# A ordem fica no ExecStartPre: espera o PTY já chmod pelo nextiondriver.service.
 ConditionPathExists=/usr/local/bin/MMDVMHost
 
 [Service]
@@ -12,6 +14,7 @@ User=hamcockpit
 Group=dialout
 SupplementaryGroups=tty dialout
 ExecStartPre=/bin/mkdir -p /var/log/mmdvm
+ExecStartPre=/bin/bash -c 'for i in $(seq 1 40); do t=$(readlink -f /dev/ttyNextionDriver 2>/dev/null || true); if [[ -c "$t" && -r "$t" && -w "$t" ]]; then exit 0; fi; sleep 0.25; done; exit 0'
 ExecStart=/bin/bash -c 'INI=/opt/ham-cockpit/mmdvm/mmdvmhost.ini; [[ -f /etc/mmdvmhost ]] && INI=/etc/mmdvmhost; exec /usr/local/bin/MMDVMHost "$INI"'
 Restart=on-failure
 RestartSec=3

@@ -64,6 +64,7 @@ type MmdvmApi = {
   latitude: string;
   longitude: string;
   location: string;
+  modemBoard: string;
   modemPort: string;
   uartSpeed: number;
   remotePort: number;
@@ -89,6 +90,26 @@ type MmdvmApi = {
 const CORE_MODES: ModeId[] = ["dmr", "dstar", "ysf"];
 const LATER_MODES: ModeId[] = ["p25", "nxdn", "m17", "pocsag"];
 
+/** Presets WPSD/Pi-Star (Hardware=) — espelha server/mmdvm.ts. */
+const BOARD_PRESETS = [
+  { id: "custom", label: "Personalizado (porta/baud manuais)", port: "", uartSpeed: 0, duplex: null as boolean | null },
+  { id: "mmdvmhshat", label: "MMDVM_HS_Hat (DB9MAT & DF2ET) GPIO", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: false },
+  // WPSD Hardware=mmdvmhsdualhatgpio — Duplex ADF7021 @ 115200 / ttyAMA0 (não confundir com cartão dvmpis/ttyACM0).
+  { id: "mmdvmhsdualhatgpio", label: "MMDVM HS Dual (v1.3 / HAT)", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: true },
+  { id: "mmdvmhsdualbandgpio", label: "MMDVM_HS_Dual_Band GPIO", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: false },
+  { id: "zumspotgpio", label: "ZUMspot HAT simplex GPIO", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: false },
+  { id: "zumspotduplexgpio", label: "ZUMspot HAT duplex GPIO", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: true },
+  { id: "zumspotusb", label: "ZUMspot USB Stick", port: "/dev/ttyACM0", uartSpeed: 115200, duplex: false },
+  { id: "zumspotlibre", label: "ZUMspot Libre (USB)", port: "/dev/ttyACM0", uartSpeed: 115200, duplex: false },
+  { id: "dvmpis", label: "DVMEGA / STM32-DVM Pi (dvmpis)", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: false },
+  { id: "stm32dvm", label: "STM32-DVM / MMDVM_HS HAT GPIO", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: null },
+  { id: "stm32usb", label: "STM32-DVM (USB)", port: "/dev/ttyUSB0", uartSpeed: 115200, duplex: null },
+  { id: "nanodv", label: "NanoDV / NanoPi AIR GPIO", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: false },
+  { id: "rptrbldrv3v4v5", label: "Repeater Builder v3/v4/v5 115200 GPIO", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: false },
+  { id: "rptrbldrv3v4v5hs", label: "Repeater Builder v3/v4/v5 460800 GPIO", port: "/dev/ttyAMA0", uartSpeed: 460800, duplex: false },
+  { id: "opengd77", label: "OpenGD77 hotspot (USB)", port: "/dev/ttyACM0", uartSpeed: 115200, duplex: false },
+] as const;
+
 type SerialsApi = { devices?: { path: string; label: string }[] };
 
 const emptyModes = (): Record<ModeId, boolean> => ({
@@ -113,6 +134,13 @@ const emptyPaused = (): Record<ModeId, boolean> => ({
 
 function mhz(hz: number) {
   return (hz / 1_000_000).toFixed(4);
+}
+
+/** Callsign D-Star em 8 chars: 7 à esquerda + letra do módulo (B/C/G…). */
+function dstarRpt(callsign: string, module: string) {
+  const base = callsign.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 7);
+  const mod = (module || "B").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 1) || "B";
+  return `${base.padEnd(7, " ")}${mod}`;
 }
 
 function fromMhz(v: string, fallback: number) {
@@ -167,13 +195,14 @@ export function MmdvmPage() {
       brightness: j.brightness ?? 50,
       idleBrightness: j.idleBrightness ?? 20,
       nextionDriver: j.nextionDriver ?? true,
-      oledType: j.oledType ?? 3,
-      dstarReflector: j.dstarReflector ?? "",
-      dstarModule: j.dstarModule ?? "B",
-      ysfStartup: j.ysfStartup ?? "",
-    });
-    syncSidebar(j);
-  };
+          oledType: j.oledType ?? 3,
+          dstarReflector: j.dstarReflector ?? "",
+          dstarModule: j.dstarModule ?? "B",
+          ysfStartup: j.ysfStartup ?? "",
+          modemBoard: j.modemBoard ?? "mmdvmhshat",
+        });
+        syncSidebar(j);
+      };
 
   /** Poll: só telemetria — não apaga campos que o usuário está editando. */
   const applyLive = (j: MmdvmApi) => {
@@ -267,6 +296,7 @@ export function MmdvmPage() {
         latitude: st.latitude,
         longitude: st.longitude,
         location: st.location,
+        modemBoard: st.modemBoard,
         modemPort: st.modemPort,
         uartSpeed: st.uartSpeed,
         remotePort: st.remotePort,
@@ -557,8 +587,39 @@ export function MmdvmPage() {
               <option value="1">{tx("mmdvmDuplex")}</option>
             </ConsoleSelect>
           </Field>
+          <Field label={tx("mmdvmBoard")}>
+            <ConsoleSelect
+              value={st?.modemBoard ?? "mmdvmhshat"}
+              onChange={(e) => {
+                const id = e.target.value;
+                const preset = BOARD_PRESETS.find((p) => p.id === id);
+                if (!preset || preset.id === "custom") {
+                  patch({ modemBoard: "custom" });
+                  return;
+                }
+                patch({
+                  modemBoard: preset.id,
+                  modemPort: preset.port,
+                  uartSpeed: preset.uartSpeed,
+                  duplex: preset.duplex === null ? st?.duplex : preset.duplex,
+                  txHz: preset.duplex === false ? st?.rxHz ?? 433_475_000 : st?.txHz ?? st?.rxHz ?? 433_475_000,
+                });
+              }}
+            >
+              {BOARD_PRESETS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
+            </ConsoleSelect>
+          </Field>
+          <p className="md:col-span-2 lg:col-span-3 -mt-2 font-['IBM_Plex_Mono'] text-[11px] text-[#8ea0b3]">{tx("mmdvmBoardHint")}</p>
           <Field label={tx("mmdvmPort")}>
-            <ConsoleSelect value={st?.modemPort ?? "/dev/ttyAMA0"} onChange={(e) => patch({ modemPort: e.target.value })}>
+            <ConsoleSelect
+              value={st?.modemPort ?? "/dev/ttyAMA0"}
+              disabled={(st?.modemBoard ?? "mmdvmhshat") !== "custom"}
+              onChange={(e) => patch({ modemPort: e.target.value, modemBoard: "custom" })}
+            >
               {ports.map((p) => (
                 <option key={p} value={p}>
                   {p}
@@ -567,7 +628,11 @@ export function MmdvmPage() {
             </ConsoleSelect>
           </Field>
           <Field label={tx("mmdvmSpeed")}>
-            <ConsoleSelect value={String(st?.uartSpeed ?? 115200)} onChange={(e) => patch({ uartSpeed: Number(e.target.value) })}>
+            <ConsoleSelect
+              value={String(st?.uartSpeed ?? 115200)}
+              disabled={(st?.modemBoard ?? "mmdvmhshat") !== "custom"}
+              onChange={(e) => patch({ uartSpeed: Number(e.target.value), modemBoard: "custom" })}
+            >
               {[9600, 38400, 57600, 115200, 230400, 460800].map((b) => (
                 <option key={b} value={b}>
                   {b}
@@ -733,6 +798,18 @@ export function MmdvmPage() {
           </GhostBtn>
         </div>
         <p className="mt-2 font-['IBM_Plex_Mono'] text-[11px] text-[#8ea0b3]">
+          {(() => {
+            const call = (st?.callsign || "N0CALL").toUpperCase();
+            const mod = (st?.dstarModule || "B").toUpperCase().slice(0, 1);
+            const ref = (st?.dstarReflector || "REF000").toUpperCase().slice(0, 6);
+            return tx("mmdvmDstarRadio")
+              .replace("{rpt1}", dstarRpt(call, mod))
+              .replace("{rpt2}", dstarRpt(call, "G"))
+              .replace("{ref}", ref.padEnd(6, " "))
+              .replace("{mod}", mod);
+          })()}
+        </p>
+        <p className="mt-1 font-['IBM_Plex_Mono'] text-[11px] text-[#8ea0b3]">
           {st?.dstarIni || "/opt/ham-cockpit/mmdvm/ircddbgateway.conf"}
           {st && !st.dstarBinary ? ` · ${tx(st.appliance ? "mmdvmNoDstar" : "mmdvmNoDstarDev")}` : ""}
         </p>

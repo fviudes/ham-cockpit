@@ -13,6 +13,7 @@ cmdline.txt text eol=lf
 **/ser2net-ctl text eol=lf
 **/ldg-serial text eol=lf
 **/lextel-bt text eol=lf
+# Helpers sem extensão: shebang com CRLF quebra o kernel (`sudo: unable to execute`).
 **/mmdvm-ctl text eol=lf
 **/vfo-display-ctl text eol=lf
 **/vfo-display-kiosk text eol=lf

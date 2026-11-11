@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -11,6 +11,61 @@ const HELPER = "/opt/ham-cockpit/bin/mmdvm-ctl";
 
 export const MMDVM_MODES = ["dstar", "dmr", "ysf", "p25", "nxdn", "m17", "pocsag"] as const;
 export type MmdvmMode = (typeof MMDVM_MODES)[number];
+
+/**
+ * Presets de placa/modem no estilo Pi-Star / WPSD (configure.php → Hardware=).
+ * Gravamos Port/UARTPort/Protocol/UARTSpeed (+ Duplex/Slot1 quando o preset define).
+ * Invert/Offset ficam nos defaults do Host (HS ADF7021 ignora Invert).
+ */
+export type MmdvmBoardId =
+  | "custom"
+  | "mmdvmhshat"
+  | "mmdvmhsdualhatgpio"
+  | "mmdvmhsdualbandgpio"
+  | "zumspotgpio"
+  | "zumspotduplexgpio"
+  | "zumspotusb"
+  | "zumspotlibre"
+  | "dvmpis"
+  | "stm32dvm"
+  | "stm32usb"
+  | "nanodv"
+  | "rptrbldrv3v4v5"
+  | "rptrbldrv3v4v5hs"
+  | "opengd77";
+
+export type MmdvmBoardPreset = {
+  id: MmdvmBoardId;
+  /** Rótulo pt-BR (UI). */
+  label: string;
+  port: string;
+  uartSpeed: number;
+  /** null = não força Duplex ao aplicar o preset. */
+  duplex: boolean | null;
+  /** Simplex hotspot: Slot1=0 no DMR Network (WPSD/Pi-Star). null = não mexe. */
+  slot1: boolean | null;
+};
+
+export const MMDVM_BOARD_PRESETS: readonly MmdvmBoardPreset[] = [
+  { id: "custom", label: "Personalizado (porta/baud manuais)", port: "", uartSpeed: 0, duplex: null, slot1: null },
+  { id: "mmdvmhshat", label: "MMDVM_HS_Hat (DB9MAT & DF2ET) GPIO", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: false, slot1: false },
+  // WPSD Hardware=mmdvmhsdualhatgpio → MMDVM_HS_Dual_Hat (ADF7021 duplex) @ 115200 / ttyAMA0.
+  // Cartão WPSD conhecido (PY2MED) era Hardware=dvmpis + Port=/dev/ttyACM0 + Duplex=0 — outro perfil; não copiar para este preset.
+  { id: "mmdvmhsdualhatgpio", label: "MMDVM HS Dual (v1.3 / HAT)", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: true, slot1: true },
+  { id: "mmdvmhsdualbandgpio", label: "MMDVM_HS_Dual_Band GPIO", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: false, slot1: false },
+  { id: "zumspotgpio", label: "ZUMspot HAT simplex GPIO", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: false, slot1: false },
+  { id: "zumspotduplexgpio", label: "ZUMspot HAT duplex GPIO", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: true, slot1: true },
+  { id: "zumspotusb", label: "ZUMspot USB Stick", port: "/dev/ttyACM0", uartSpeed: 115200, duplex: false, slot1: false },
+  { id: "zumspotlibre", label: "ZUMspot Libre (USB)", port: "/dev/ttyACM0", uartSpeed: 115200, duplex: false, slot1: false },
+  // WPSD/Pi-Star Hardware=dvmpis → DVMEGA/STM32 GPIO simplex (Port padrão ttyAMA0; alguns hats USB usam ttyACM0).
+  { id: "dvmpis", label: "DVMEGA / STM32-DVM Pi (dvmpis)", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: false, slot1: false },
+  { id: "stm32dvm", label: "STM32-DVM / MMDVM_HS HAT GPIO", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: null, slot1: null },
+  { id: "stm32usb", label: "STM32-DVM (USB)", port: "/dev/ttyUSB0", uartSpeed: 115200, duplex: null, slot1: null },
+  { id: "nanodv", label: "NanoDV / NanoPi AIR GPIO", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: false, slot1: false },
+  { id: "rptrbldrv3v4v5", label: "Repeater Builder v3/v4/v5 115200 GPIO", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: false, slot1: false },
+  { id: "rptrbldrv3v4v5hs", label: "Repeater Builder v3/v4/v5 460800 GPIO", port: "/dev/ttyAMA0", uartSpeed: 460800, duplex: false, slot1: false },
+  { id: "opengd77", label: "OpenGD77 hotspot (USB)", port: "/dev/ttyACM0", uartSpeed: 115200, duplex: false, slot1: false },
+] as const;
 
 const MODE_INI: Record<MmdvmMode, { section: string; net: string }> = {
   dstar: { section: "D-Star", net: "D-Star Network" },
@@ -53,6 +108,8 @@ export type MmdvmConfig = {
   latitude: string;
   longitude: string;
   location: string;
+  /** Id do preset WPSD/Pi-Star (Hardware=); custom = porta/baud manuais. */
+  modemBoard: MmdvmBoardId;
   modemPort: string;
   uartSpeed: number;
   remotePort: number;
@@ -172,6 +229,26 @@ export function ysfIniPath(): string {
 }
 
 export function dstarIniPath(): string {
+  if (existsSync("/etc/ircddbgateway")) return "/etc/ircddbgateway";
+  const dir = dataDir();
+  const noext = join(dir, "ircddbgateway");
+  const conf = join(dir, "ircddbgateway.conf");
+  if (!existsSync(noext) && !existsSync(conf) && existsSync(shippedDstarConf())) {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(conf, readFileSync(shippedDstarConf(), "utf8"), "utf8");
+  }
+  if (existsSync(conf) && !existsSync(noext)) {
+    try {
+      copyFileSync(conf, noext);
+    } catch {
+      try {
+        writeFileSync(noext, readFileSync(conf, "utf8"), "utf8");
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  if (existsSync(noext)) return noext;
   return editablePath("/etc/ircddbgateway", "ircddbgateway.conf", shippedDstarConf());
 }
 
@@ -317,6 +394,7 @@ function defaultConfig(): MmdvmConfig {
     latitude: "0.0",
     longitude: "0.0",
     location: "Ham Cockpit",
+    modemBoard: "mmdvmhshat",
     modemPort: "/dev/ttyAMA0",
     uartSpeed: 115200,
     remotePort: 7642,
@@ -325,7 +403,7 @@ function defaultConfig(): MmdvmConfig {
     ysfStartup: "",
     displayType: "Nextion",
     displayPort: "modem",
-    screenLayout: 2,
+    screenLayout: 4,
     brightness: 50,
     idleBrightness: 20,
     nextionDriver: true,
@@ -373,6 +451,7 @@ function configFromFiles(): MmdvmConfig {
     latitude: iniGet(host, "Info", "Latitude", base.latitude),
     longitude: iniGet(host, "Info", "Longitude", base.longitude),
     location: iniGet(host, "Info", "Location", base.location).replace(/^"|"$/g, ""),
+    modemBoard: readModemBoard(),
     modemPort,
     uartSpeed: iniNum(host, "Modem", "UARTSpeed", base.uartSpeed),
     remotePort: iniNum(host, "Remote Control", "Port", base.remotePort),
@@ -419,10 +498,30 @@ function applyConfig(host: Ini, gw: Ini, ysf: Ini, dstar: Conf, cfg: Partial<Mmd
   setKv(host, "DMR", "Id", id);
   setKv(host, "DMR", "ColorCode", String(Math.min(15, Math.max(0, cur.colorCode))));
   setKv(host, "D-Star", "Module", mod);
-  setKv(host, "Modem", "Port", cur.modemPort);
-  setKv(host, "Modem", "UARTPort", cur.modemPort);
+  // Preset de placa (WPSD/Pi-Star Hardware=): aplica Port/Speed/Duplex/Slot1.
+  const board = boardPreset(cur.modemBoard || "custom");
+  writeModemBoard(board.id);
+  let modemPort = cur.modemPort || "/dev/ttyAMA0";
+  let uartSpeed = cur.uartSpeed || 115200;
+  if (board.id !== "custom") {
+    if (board.port) modemPort = board.port;
+    if (board.uartSpeed > 0) uartSpeed = board.uartSpeed;
+    if (board.duplex !== null) {
+      setKv(host, "General", "Duplex", board.duplex ? "1" : "0");
+      if (!board.duplex) setKv(host, "Info", "TXFrequency", String(cur.rxHz));
+    }
+    if (board.slot1 === false) setKv(host, "DMR Network", "Slot1", "0");
+    if (board.slot1 === true) setKv(host, "DMR Network", "Slot1", "1");
+  }
+  setKv(host, "Modem", "Port", modemPort);
+  setKv(host, "Modem", "UARTPort", modemPort);
   setKv(host, "Modem", "Protocol", "uart");
-  setKv(host, "Modem", "UARTSpeed", String(cur.uartSpeed || 115200));
+  setKv(host, "Modem", "UARTSpeed", String(uartSpeed));
+  // Defaults WPSD para HAT/USB HS (Invert sem efeito no ADF7021; Trace off).
+  if (!iniGet(host, "Modem", "TXInvert")) setKv(host, "Modem", "TXInvert", "1");
+  if (!iniGet(host, "Modem", "RXInvert")) setKv(host, "Modem", "RXInvert", "0");
+  if (!iniGet(host, "Modem", "PTTInvert")) setKv(host, "Modem", "PTTInvert", "0");
+  if (!iniGet(host, "Modem", "Trace")) setKv(host, "Modem", "Trace", "0");
   setKv(host, "Remote Control", "Enable", "1");
   setKv(host, "Remote Control", "Port", String(cur.remotePort || 7642));
   setKv(host, "DMR Network", "Type", "Gateway");
@@ -475,6 +574,10 @@ function applyConfig(host: Ini, gw: Ini, ysf: Ini, dstar: Conf, cfg: Partial<Mmd
   setKv(ysf, "Remote Commands", "Port", "6073");
   dstar.gatewayCallsign = call;
   dstar.dplusLogin = call;
+  // DPlus/DExtra: não bindar só em 127.0.0.1 (lab: UDP 20001 em localhost bloqueava REF*).
+  dstar.gatewayAddress = "0.0.0.0";
+  dstar.localAddress = "0.0.0.0";
+  dstar.dplusEnabled = "1";
   dstar.latitude = cur.latitude;
   dstar.longitude = cur.longitude;
   dstar.latitude1 = cur.latitude;
@@ -497,7 +600,7 @@ function applyConfig(host: Ini, gw: Ini, ysf: Ini, dstar: Conf, cfg: Partial<Mmd
   setKv(host, "Nextion", "Port", nextionHostPort);
   setKv(host, "Nextion", "Brightness", String(Math.min(100, Math.max(0, cur.brightness ?? 50))));
   setKv(host, "Nextion", "IdleBrightness", String(Math.min(100, Math.max(0, cur.idleBrightness ?? 20))));
-  setKv(host, "Nextion", "ScreenLayout", String(cur.screenLayout ?? 2));
+  setKv(host, "Nextion", "ScreenLayout", String(cur.screenLayout ?? 4));
   setKv(host, "Nextion", "DisplayClock", "1");
   setKv(host, "Nextion", "UTC", "0");
   setKv(host, "OLED", "Type", String(cur.oledType ?? 3));
@@ -516,7 +619,7 @@ function applyConfig(host: Ini, gw: Ini, ysf: Ini, dstar: Conf, cfg: Partial<Mmd
   setKv(host, "NextionDriver", "LogLevel", "2");
   setKv(host, "NextionDriver", "GroupsFile", "groups.txt");
   setKv(host, "NextionDriver", "DMRidFile", "users.csv");
-  setKv(host, "NextionDriver", "WaitForLan", "1");
+  setKv(host, "NextionDriver", "WaitForLan", "0");
   setKv(host, "TFT Serial", "Port", physPort === "modem" ? "modem" : physPort);
 }
 
@@ -586,6 +689,30 @@ function readLogTail(dir: string, prefix: string, maxBytes = 400_000): string {
 
 function pausedPath(): string {
   return join(dataDir(), "paused-modes.json");
+}
+
+function boardPath(): string {
+  return join(dataDir(), "modem-board.json");
+}
+
+function readModemBoard(): MmdvmBoardId {
+  try {
+    const raw = JSON.parse(readFileSync(boardPath(), "utf8")) as { board?: string };
+    const id = String(raw.board || "");
+    if (MMDVM_BOARD_PRESETS.some((p) => p.id === id)) return id as MmdvmBoardId;
+  } catch {
+    /* missing */
+  }
+  return "mmdvmhshat";
+}
+
+function writeModemBoard(board: MmdvmBoardId) {
+  mkdirSync(dataDir(), { recursive: true });
+  writeFileSync(boardPath(), `${JSON.stringify({ board }, null, 2)}\n`, "utf8");
+}
+
+function boardPreset(id: MmdvmBoardId): MmdvmBoardPreset {
+  return MMDVM_BOARD_PRESETS.find((p) => p.id === id) ?? MMDVM_BOARD_PRESETS[0]!;
 }
 
 function emptyPaused(): Record<MmdvmMode, boolean> {
@@ -710,6 +837,21 @@ async function writeProtected(dest: string, body: string): Promise<void> {
   renameSync(tmp, target);
 }
 
+/** g4klx lê <confdir>/ircddbgateway (sem .conf); o console também grava .conf. */
+async function writeDstarConf(primary: string, body: string): Promise<void> {
+  await writeProtected(primary, body);
+  const noext = primary.endsWith(".conf") ? primary.slice(0, -5) : primary;
+  const withConf = primary.endsWith(".conf") ? primary : `${primary}.conf`;
+  for (const extra of [noext, withConf]) {
+    if (extra === primary) continue;
+    try {
+      writeFileSync(extra, body, "utf8");
+    } catch {
+      /* mirror opcional */
+    }
+  }
+}
+
 /** Junta seções de display do template se o INI local for antigo (sem [Nextion]). */
 function upgradeHostDisplaySections(hostPath: string) {
   if (!existsSync(hostPath) || !existsSync(shippedHostIni())) return;
@@ -749,6 +891,15 @@ function seedIfMissing() {
   for (const [etc, name, shipped] of seeds) {
     if (!existsSync(etc) && !existsSync(join(dir, name)) && existsSync(shipped)) {
       writeFileSync(join(dir, name), readFileSync(shipped, "utf8"), "utf8");
+    }
+  }
+  const dstarConf = join(dir, "ircddbgateway.conf");
+  const dstarNoext = join(dir, "ircddbgateway");
+  if (existsSync(dstarConf) && !existsSync(dstarNoext)) {
+    try {
+      copyFileSync(dstarConf, dstarNoext);
+    } catch {
+      /* ignore */
     }
   }
   const hostPath = hostIniPath();
@@ -845,6 +996,10 @@ function pickConfig(body: Record<string, unknown>): Partial<MmdvmConfig> {
     latitude: str("latitude", cur.latitude),
     longitude: str("longitude", cur.longitude),
     location: str("location", cur.location),
+    modemBoard: (() => {
+      const id = str("modemBoard", cur.modemBoard);
+      return MMDVM_BOARD_PRESETS.some((p) => p.id === id) ? (id as MmdvmBoardId) : cur.modemBoard;
+    })(),
     modemPort: str("modemPort", cur.modemPort),
     uartSpeed: num("uartSpeed", cur.uartSpeed),
     remotePort: num("remotePort", cur.remotePort),
@@ -879,11 +1034,17 @@ export async function mmdvmSave(body: Record<string, unknown>): Promise<MmdvmSta
   const ysf = parseIniFile(existsSync(ysfPath) ? ysfPath : shippedYsfIni());
   const dstar = parseConfFile(existsSync(dstarPath) ? dstarPath : shippedDstarConf());
   const cfg = pickConfig(body);
+  // MMDVMHost rejeita Id 0 / ≤1000 (CCS/DMR); placeholder de fábrica não pode ir para produção.
+  const idNum = Number(String(cfg.dmrId ?? "").replace(/\D/g, "") || "0");
+  if (!Number.isFinite(idNum) || idNum <= 1000) {
+    const st = await mmdvmStatus();
+    return { ...st, error: "Id DMR deve ser maior que 1000 (não use 0 / 0000000)" };
+  }
   applyConfig(host, gw, ysf, dstar, cfg);
   await writeProtected(hostPath, stringifyIni(host));
   await writeProtected(gwPath, stringifyIni(gw));
   await writeProtected(ysfPath, stringifyIni(ysf));
-  await writeProtected(dstarPath, stringifyConf(dstar, "# Ham Cockpit ircDDBGateway"));
+  await writeDstarConf(dstarPath, stringifyConf(dstar, "# Ham Cockpit ircDDBGateway"));
   // Liga/desliga NextionDriver conforme a config salva.
   if (linux()) {
     if (cfg.displayType === "Nextion" && cfg.nextionDriver) await controlUnit("restart", "nextiondriver");
@@ -1031,7 +1192,7 @@ export async function mmdvmLink(body: {
     const host = parseIniFile(existsSync(hostPath) ? hostPath : shippedHostIni());
     setKv(host, "D-Star", "Module", mod);
     await writeProtected(hostPath, stringifyIni(host));
-    await writeProtected(dstarPath, stringifyConf(dstar, "# Ham Cockpit ircDDBGateway"));
+    await writeDstarConf(dstarPath, stringifyConf(dstar, "# Ham Cockpit ircDDBGateway"));
     await controlUnit("restart", "ircddbgateway");
     // Tentativa de link imediato via remote do ircDDBGateway (se ativo).
     if (reflector) {

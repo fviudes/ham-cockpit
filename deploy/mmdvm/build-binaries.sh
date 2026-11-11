@@ -25,11 +25,6 @@ for b in "${BINS[@]}"; do
     break
   fi
 done
-if [[ "$have_all" == "1" && "${MMDVM_FORCE:-0}" != "1" ]]; then
-  echo "binários MMDVM já em $PREFIX/bin (MMDVM_FORCE=1 para recompilar)"
-  exit 0
-fi
-
 export DEBIAN_FRONTEND=noninteractive
 
 # Instala só pacotes com Candidate real (apt-cache show ainda lista
@@ -50,6 +45,22 @@ apt_try_install() {
   fi
   apt-get install -y --no-install-recommends "${ok[@]}"
 }
+
+# Runtime de ircddbgatewayd (/usr/local): apt não liga sozinho após purge -dev.
+# mosquitto + libdlt2: broker MQTT local (daemon recente); libdlt2 evita exit 127 no arm64.
+ensure_ircddb_runtime() {
+  command -v apt-get >/dev/null 2>&1 || return 0
+  apt-get update -qq || true
+  apt_try_install libmosquitto1 mosquitto libdlt2 \
+    libwxbase3.2-1t64 libwxgtk3.2-1t64 \
+    libwxbase3.2-1 libwxgtk3.2-1
+}
+
+if [[ "$have_all" == "1" && "${MMDVM_FORCE:-0}" != "1" ]]; then
+  echo "binários MMDVM já em $PREFIX/bin (MMDVM_FORCE=1 para recompilar)"
+  ensure_ircddb_runtime
+  exit 0
+fi
 
 if command -v apt-get >/dev/null 2>&1; then
   apt-get update -qq
@@ -154,10 +165,53 @@ else
   echo "ircddbgatewayd não foi gerado" >&2
   exit 1
 fi
+# Listas de refletores D-Star (REF*/XRF*/DCS*) — sem isso o gateway sobe mas não liga REF.
+mkdir -p /usr/share/ircddbgateway
+for hf in DPlus_Hosts.txt DExtra_Hosts.txt DCS_Hosts.txt CCS_Hosts.txt; do
+  src=""
+  for cand in "ircDDBGateway/Data/$hf" "ircDDBGateway/ircDDBGateway/Data/$hf"; do
+    [[ -f "$cand" ]] && src="$cand" && break
+  done
+  if [[ -n "$src" ]]; then
+    install -m 0644 "$src" "/usr/share/ircddbgateway/$hf"
+    install -m 0644 "$src" "$PREFIX/etc/$hf" || true
+  fi
+done
 
 echo "compilando NextionDriver (ON7LDS)…"
 # O alvo "all" do Makefile faz "clean" + build; com -j isso apaga o binário.
 need gcc
+# Ubuntu 24.04+ / glibc fortify: com Port=modem, fd2=-1 e FD_SET(-1) → ABRT.
+# WPSD/Pi-Star (glibc antigo) tolerava; no lab o Driver caía após "Starting with network".
+# LimitNOFILE=1024 / Before=docker sozinhos NÃO bastam — o binário precisa do guard.
+# Lab: hunks do .patch podem falhar se ON7LDS mudar linhas → fallback sed obrigatório.
+# Rebuild vivo na Pi: dpkg --configure -a + build-essential (make) antes deste passo.
+_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -d "$_script_dir/patches" ]]; then
+  PATCH_DIR="$_script_dir/patches"
+elif [[ -d "$_script_dir/../mmdvm/patches" ]]; then
+  PATCH_DIR="$_script_dir/../mmdvm/patches"
+else
+  PATCH_DIR="$_script_dir/patches"
+fi
+if ! command -v make >/dev/null 2>&1; then
+  echo "ERRO: make ausente — instale build-essential (e rode dpkg --configure -a se apt estiver preso)" >&2
+  exit 1
+fi
+if [[ -f "$PATCH_DIR/nextiondriver-fd2-modem.patch" ]]; then
+  if ! grep -q 'if (fd2 < 0) return' NextionDriver/NextionDriver.c; then
+    echo "aplicando patch NextionDriver fd2/modem (FD_SET fortify)…"
+    patch -d NextionDriver -p1 < "$PATCH_DIR/nextiondriver-fd2-modem.patch" || {
+      echo "AVISO: patch NextionDriver falhou (hunks) — tentando sed" >&2
+      sed -i '/void checkSerial(void) {/a\ if (fd2 < 0) return; /* Port=modem: FD_SET(-1) fortify */' NextionDriver/NextionDriver.c
+      sed -i '/void checkListeningSocket(void) {/a\ if (display_RXsock < 0) return;' NextionDriver/NextionDriver.c || true
+    }
+  fi
+fi
+if ! grep -q 'if (fd2 < 0) return' NextionDriver/NextionDriver.c; then
+  echo "ERRO: NextionDriver.c sem guard fd2 — abortando bake sem binário vulnerável" >&2
+  exit 1
+fi
 make -C NextionDriver clean || true
 make -C NextionDriver NextionDriver
 if [[ -x NextionDriver/NextionDriver ]]; then
@@ -200,12 +254,12 @@ if [[ "$PURGE" == "1" ]]; then
       nlohmann-json3-dev \
       libwxgtk3.2-dev libwxgtk3.0-gtk3-dev libwxgtk3.0-dev \
       cmake 2>/dev/null || true
-    # Runtime de ircddbgatewayd: apt não sabe que o binário em /usr/local liga neles.
-    apt_try_install libmosquitto1 libwxbase3.2-1t64 libwxgtk3.2-1t64 \
-      libwxbase3.2-1 libwxgtk3.2-1
     apt-get autoremove -y 2>/dev/null || true
     apt-get clean 2>/dev/null || true
   fi
 fi
+
+# Garante runtime mesmo sem PURGE (OTA / build incremental).
+ensure_ircddb_runtime
 
 echo "ok · MMDVMHost · DMRGateway · YSFGateway · ircddbgatewayd · NextionDriver → $PREFIX/bin"

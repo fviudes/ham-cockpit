@@ -51,6 +51,10 @@ libmosquitto-dev
 nlohmann-json3-dev
 libwxgtk3.2-dev
 libmosquitto1
+mosquitto
+# mosquitto (Ubuntu/arm64) liga em libdlt.so.2 — sem isso o broker falha com status 127.
+libdlt2
+# Runtime ircddbgatewayd: build-binaries PURGE remove -dev; estes ficam (e ota-hooks reinsere se faltar).
 libwxbase3.2-1t64
 libwxgtk3.2-1t64
 
