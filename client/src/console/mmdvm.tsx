@@ -34,6 +34,7 @@ type Heard = {
   duration: string;
   loss: string;
   ber: string;
+  rssi?: string;
 };
 
 type MmdvmApi = {

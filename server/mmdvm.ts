@@ -1,9 +1,11 @@
 import { execFile } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { createConnection } from "node:net";
+import { networkInterfaces } from "node:os";
+import { hostStatus } from "./host-status";
 
 const execFileAsync = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -86,6 +88,38 @@ export type MmdvmHeard = {
   duration: string;
   loss: string;
   ber: string;
+  rssi: string;
+};
+
+/** Snapshot da página Nextion ScreenLayout 4 (ON7LDS DIY HS) — idle vs QSO ao vivo. */
+export type MmdvmNextionPage = "idle" | "dmr" | "dstar" | "ysf" | "p25" | "nxdn" | "m17" | "pocsag";
+
+export type MmdvmNextionQso = {
+  mode: string;
+  slot: number | null;
+  src: "RF" | "Net";
+  callsign: string;
+  name: string;
+  target: string;
+  tgName: string;
+  ber: string;
+  rssi: string;
+  loss: string;
+};
+
+export type MmdvmNextion = {
+  page: MmdvmNextionPage;
+  status: string;
+  callsign: string;
+  dmrId: string;
+  ip: string;
+  location: string;
+  rxHz: number;
+  txHz: number;
+  cpuTempC: number | null;
+  diskFreePct: number | null;
+  duplex: boolean;
+  qso: MmdvmNextionQso[];
 };
 
 export type MmdvmNetwork = {
@@ -163,6 +197,8 @@ export type MmdvmStatus = MmdvmConfig & {
   tx: boolean;
   currentMode: string;
   lastHeard: MmdvmHeard[];
+  /** Campos da emulação LCD Nextion (layout 4). */
+  nextion: MmdvmNextion;
   /** Instant Mode Manager — pause runtime (não grava Enable permanente no INI). */
   paused: Record<MmdvmMode, boolean>;
   error: string;
@@ -769,9 +805,11 @@ export function parseLastHeard(logText: string, limit = 40): MmdvmHeard[] {
     let duration = "";
     let loss = "";
     let ber = "";
+    let rssi = "";
     for (const part of extra.slice(1)) {
       if (/seconds/i.test(part)) duration = part.replace(/\s*seconds.*/i, "").trim();
-      else if (/loss/i.test(part) || /%/.test(part)) loss = part.replace(/\s*packet loss.*/i, "").trim();
+      else if (/RSSI/i.test(part)) rssi = part.replace(/^RSSI:\s*/i, "").trim();
+      else if (/loss/i.test(part) || /packet loss/i.test(part)) loss = part.replace(/\s*packet loss.*/i, "").trim();
       else if (/BER/i.test(part)) ber = part.replace(/^BER:\s*/i, "").trim();
     }
     const kind =
@@ -784,7 +822,7 @@ export function parseLastHeard(logText: string, limit = 40): MmdvmHeard[] {
       mode.startsWith("POCSAG");
     if (!kind || !callsign || callsign === "??????") continue;
     const uuid = `${callsign}#${mode}#${src}`;
-    const row: MmdvmHeard = { timeUtc: m[1]!, mode, callsign, target, src, duration, loss, ber };
+    const row: MmdvmHeard = { timeUtc: m[1]!, mode, callsign, target, src, duration, loss, ber, rssi };
     const prev = seen.get(uuid);
     // Preferir fim de QSO (com duração), como getLastHeard do WPSD.
     if (!prev || (!prev.duration && row.duration)) seen.set(uuid, row);
@@ -798,7 +836,170 @@ export function parseLastHeard(logText: string, limit = 40): MmdvmHeard[] {
 }
 
 function currentTx(rows: MmdvmHeard[]): boolean {
-  return rows.some((r) => !r.duration && r.src === "Net");
+  return rows.some((r) => !r.duration);
+}
+
+function lanIpv4(): string {
+  const ifs = networkInterfaces();
+  const preferred = ["eth0", "enp0s3", "enp1s0", "wlan0", "wlp2s0", "Ethernet", "Wi-Fi"];
+  const skip = /^(lo|docker|br-|veth|virbr|tailscale|vmnet|vEthernet)/i;
+  const pick = (name: string) => {
+    for (const a of ifs[name] ?? []) {
+      const family = String(a.family);
+      if ((family === "IPv4" || family === "4") && !a.internal) return a.address;
+    }
+    return "";
+  };
+  for (const name of preferred) {
+    const ip = pick(name);
+    if (ip) return ip;
+  }
+  for (const [name, addrs] of Object.entries(ifs)) {
+    if (skip.test(name)) continue;
+    for (const a of addrs ?? []) {
+      const family = String(a.family);
+      if ((family === "IPv4" || family === "4") && !a.internal) return a.address;
+    }
+  }
+  return "";
+}
+
+type LutFile = { mtime: number; size: number; byId: Map<string, string>; byCall: Map<string, string> };
+const lutCache = new Map<string, LutFile>();
+const LUT_MAX_BYTES = 12 * 1024 * 1024;
+
+function lutPaths(): string[] {
+  const host = existsSync(hostIniPath()) ? parseIniFile(hostIniPath()) : {};
+  const raw = iniGet(host, "NextionDriver", "DataFilesPath", "/usr/local/etc/");
+  const dir = raw.replace(/[/\\]+$/, "") || "/usr/local/etc";
+  return [dir, "/usr/local/etc", join(dataDir()), join(ROOT, "deploy", "mmdvm")];
+}
+
+function findLutFile(name: string): string {
+  for (const dir of lutPaths()) {
+    const p = join(dir, name);
+    if (existsSync(p)) return p;
+  }
+  return "";
+}
+
+function loadLut(path: string, kind: "users" | "groups"): LutFile {
+  const st = statSync(path);
+  const prev = lutCache.get(path);
+  if (prev && prev.mtime === st.mtimeMs && prev.size === st.size) return prev;
+  const byId = new Map<string, string>();
+  const byCall = new Map<string, string>();
+  if (st.size > 0 && st.size <= LUT_MAX_BYTES) {
+    const text = readFileSync(path, "utf8");
+    for (const line of text.split(/\r?\n/)) {
+      if (!line || line.startsWith("#")) continue;
+      const cols = line.split(/[,;\t]/);
+      const id = (cols[0] ?? "").trim();
+      if (!id || !/^\d+$/.test(id)) continue;
+      if (kind === "groups") {
+        const name = (cols[1] ?? "").trim();
+        if (name) byId.set(id, name);
+        continue;
+      }
+      const call = (cols[1] ?? "").trim().toUpperCase();
+      const name = (cols[2] ?? "").trim();
+      if (name) byId.set(id, name);
+      if (call && name) byCall.set(call, name);
+    }
+  }
+  const next = { mtime: st.mtimeMs, size: st.size, byId, byCall };
+  lutCache.set(path, next);
+  return next;
+}
+
+function lookupUser(callOrId: string): string {
+  const path = findLutFile("users.csv");
+  if (!path) return "";
+  try {
+    const lut = loadLut(path, "users");
+    const raw = callOrId.trim();
+    if (/^\d+$/.test(raw)) return lut.byId.get(raw) ?? "";
+    return lut.byCall.get(raw.toUpperCase()) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function lookupGroup(target: string): string {
+  const path = findLutFile("groups.txt");
+  if (!path) return "";
+  const id = (target.match(/\d{2,}/) ?? [])[0] ?? "";
+  if (!id) return "";
+  try {
+    return loadLut(path, "groups").byId.get(id) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function heardPage(mode: string): MmdvmNextionPage {
+  const m = mode.toUpperCase();
+  if (m.startsWith("DMR")) return "dmr";
+  if (m.startsWith("D-STAR") || m.startsWith("DSTAR")) return "dstar";
+  if (m.startsWith("YSF") || m.includes("FUSION")) return "ysf";
+  if (m.startsWith("P25")) return "p25";
+  if (m.startsWith("NXDN")) return "nxdn";
+  if (m.startsWith("M17")) return "m17";
+  if (m.startsWith("POCSAG")) return "pocsag";
+  return "idle";
+}
+
+function heardSlot(mode: string): number | null {
+  const m = mode.match(/slot\s+(\d)/i);
+  return m ? Number(m[1]) : null;
+}
+
+function toQso(row: MmdvmHeard): MmdvmNextionQso {
+  return {
+    mode: row.mode,
+    slot: heardSlot(row.mode),
+    src: row.src,
+    callsign: row.callsign,
+    name: lookupUser(row.callsign),
+    target: row.target,
+    tgName: lookupGroup(row.target),
+    ber: row.ber,
+    rssi: row.rssi,
+    loss: row.loss,
+  };
+}
+
+async function buildNextion(cfg: MmdvmConfig, heard: MmdvmHeard[], hostRunning: boolean): Promise<MmdvmNextion> {
+  const live = heard.filter((r) => !r.duration).slice(0, 2);
+  const page = hostRunning && live[0] ? heardPage(live[0].mode) : "idle";
+  let status = "MMDVM IDLE";
+  if (!hostRunning) status = "MMDVM IDLE";
+  else if (live[0]) status = `${live[0].src === "RF" ? "RF" : "net"} ${live[0].callsign}`;
+  let cpuTempC: number | null = null;
+  let diskFreePct: number | null = null;
+  if (linux()) {
+    try {
+      const hs = await hostStatus();
+      cpuTempC = hs.cpuTempC;
+      if (hs.diskTotalBytes > 0) diskFreePct = Math.round((hs.diskFreeBytes / hs.diskTotalBytes) * 100);
+    } catch {
+      /* t20/t23 só no Pi */
+    }
+  }
+  return {
+    page,
+    status,
+    callsign: cfg.callsign,
+    dmrId: cfg.dmrId,
+    ip: lanIpv4(),
+    location: cfg.location,
+    rxHz: cfg.rxHz,
+    txHz: cfg.txHz,
+    cpuTempC,
+    diskFreePct,
+    duplex: cfg.duplex,
+    qso: live.map(toQso),
+  };
 }
 
 async function writeProtected(dest: string, body: string): Promise<void> {
@@ -928,6 +1129,7 @@ export async function mmdvmStatus(): Promise<MmdvmStatus> {
   const paused = readPaused();
   const onAppliance = linux();
   const installed = Boolean(hostBin) || existsSync(hostIni);
+  const nextion = await buildNextion(cfg, heard, hostRunning);
   return {
     ...cfg,
     ok: hostRunning,
@@ -951,6 +1153,7 @@ export async function mmdvmStatus(): Promise<MmdvmStatus> {
     tx: currentTx(heard),
     currentMode: heard[0]?.mode ?? "",
     lastHeard: heard,
+    nextion,
     paused,
     // Só alerta de binário ausente no Pi; no Windows/dev a console edita INI sem Host local.
     error: hostBin || !onAppliance ? "" : "MMDVMHost não está neste host — instale o binário WPSD/g4klx em /usr/local/bin/MMDVMHost",

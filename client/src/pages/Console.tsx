@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useLocation } from "wouter";
+import { APP_LOGO } from "@shared/brand";
 
 const AUTH_KEY = "hamcockpit.auth";
 const AUTH_USER_KEY = "hamcockpit.user";
@@ -161,14 +162,18 @@ function Login({ onOk }: { onOk: (name: string) => void }) {
   const { tx, kickPrimary } = useConsole();
   const [err, setErr] = useState(false);
   return (
-    <div className="console flex min-h-screen items-center justify-center px-4">
+    <div className="console relative flex min-h-screen items-center justify-center px-4">
+      <div className="absolute top-4 right-4">
+        <LangToggle />
+      </div>
       <div className="w-full max-w-[400px]">
-        <div className="mb-6 flex justify-end">
-          <LangToggle />
-        </div>
         <div className="mb-8 text-center">
-          <p className="font-['IBM_Plex_Mono'] text-[11px] tracking-[0.28em] text-[#ffb300] uppercase">Appliance</p>
-          <h1 className="mt-2 font-['Space_Grotesk'] text-3xl font-semibold text-white">{tx("brand")}</h1>
+          <img
+            src={APP_LOGO}
+            alt={tx("brand")}
+            className="mx-auto mb-5 h-[104px] w-[104px] object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.45)]"
+          />
+          <h1 className="font-['Space_Grotesk'] text-3xl font-semibold text-white">{tx("brand")}</h1>
           <p className="mt-1 text-sm text-[#8ea0b3]">{tx("tagline")}</p>
         </div>
         <form
@@ -273,10 +278,19 @@ function Shell({ onLogout }: { onLogout: () => void }) {
 
   const nav = (
     <nav className="flex h-full flex-col">
-      <div className="border-b border-[rgba(79,195,247,0.12)] px-5 py-5">
-        <p className="font-['IBM_Plex_Mono'] text-[10px] tracking-[0.22em] text-[#ffb300] uppercase">{tx("station")}</p>
-        <p className="font-['Space_Grotesk'] text-lg font-semibold text-white">{tx("brand")}</p>
-        <p className="text-xs text-[#8ea0b3]">{tx("version")} · Ubuntu Server</p>
+      <div className="border-b border-[rgba(79,195,247,0.12)] px-5 py-6">
+        <div className="flex items-center gap-2">
+          <img
+            src={APP_LOGO}
+            alt="Ham Cockpit"
+            className="size-[113px] shrink-0 object-contain"
+          />
+          <div className="min-w-0">
+            <p className="whitespace-nowrap font-['IBM_Plex_Mono'] text-[10px] tracking-[0.22em] text-[#ffb300] uppercase">{tx("station")}</p>
+            <p className="whitespace-nowrap font-['Space_Grotesk'] text-lg font-semibold text-white">{tx("brand")}</p>
+            <p className="whitespace-nowrap text-[11px] text-[#8ea0b3]">{tx("version")} · Ubuntu Server</p>
+          </div>
+        </div>
       </div>
       <div className="console-scroll flex-1 overflow-y-auto px-3 py-4">
         {NAV.map((g) => (
@@ -322,10 +336,10 @@ function Shell({ onLogout }: { onLogout: () => void }) {
 
   return (
     <div className="console flex min-h-screen">
-      {!mobile ? <aside className="sticky top-0 h-screen w-60 shrink-0 border-r border-[rgba(79,195,247,0.12)] bg-[#08131c]">{nav}</aside> : null}
+      {!mobile ? <aside className="sticky top-0 h-screen w-72 shrink-0 border-r border-[rgba(79,195,247,0.12)] bg-[#08131c]">{nav}</aside> : null}
       {mobile && open ? (
         <div className="fixed inset-0 z-50 flex">
-          <div className="h-full w-64 bg-[#08131c]">{nav}</div>
+          <div className="h-full w-72 bg-[#08131c]">{nav}</div>
           <button type="button" className="flex-1 bg-black/50" aria-label={tx("closeMenu")} onClick={() => setOpen(false)} />
         </div>
       ) : null}

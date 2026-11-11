@@ -1,6 +1,6 @@
 import { DEFAULT_USER } from "./i18n";
 
-export const TILE_IDS = ["vfo", "spe", "palstar", "hamplus", "acom", "lextel", "ldg", "lp100a"] as const;
+export const TILE_IDS = ["vfo", "nextion", "spe", "palstar", "hamplus", "acom", "lextel", "ldg", "lp100a"] as const;
 export type TileId = (typeof TILE_IDS)[number];
 export type PanelTile = { id: TileId; x: number; y: number; w: number; h: number };
 
@@ -12,13 +12,14 @@ export const LAYOUT_MIN_H = 5;
 
 export const DEFAULT_TILES: Record<TileId, PanelTile> = {
   vfo: { id: "vfo", x: 0, y: 0, w: 7, h: 12 },
-  spe: { id: "spe", x: 7, y: 0, w: 5, h: 12 },
-  palstar: { id: "palstar", x: 0, y: 12, w: 6, h: 9 },
-  hamplus: { id: "hamplus", x: 6, y: 12, w: 6, h: 9 },
-  lextel: { id: "lextel", x: 0, y: 21, w: 6, h: 9 },
-  acom: { id: "acom", x: 6, y: 21, w: 6, h: 9 },
-  ldg: { id: "ldg", x: 0, y: 30, w: 6, h: 10 },
-  lp100a: { id: "lp100a", x: 6, y: 30, w: 6, h: 10 },
+  nextion: { id: "nextion", x: 7, y: 0, w: 5, h: 12 },
+  spe: { id: "spe", x: 0, y: 12, w: 6, h: 10 },
+  palstar: { id: "palstar", x: 6, y: 12, w: 6, h: 10 },
+  hamplus: { id: "hamplus", x: 0, y: 22, w: 6, h: 9 },
+  lextel: { id: "lextel", x: 6, y: 22, w: 6, h: 9 },
+  acom: { id: "acom", x: 0, y: 31, w: 6, h: 9 },
+  ldg: { id: "ldg", x: 6, y: 31, w: 6, h: 10 },
+  lp100a: { id: "lp100a", x: 0, y: 41, w: 6, h: 10 },
 };
 
 const AUTH_USER_KEY = "hamcockpit.user";

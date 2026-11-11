@@ -54,7 +54,7 @@ export default function Docs() {
   return (
     <div className="flex min-h-screen flex-col bg-[#0d1b2a]">
       <NavBar />
-      <div className="pt-14">
+      <div className="pt-16">
         <header className="border-b border-[rgba(79,195,247,0.1)]">
           <div className="container grid items-center gap-8 py-12 lg:grid-cols-[1.1fr_0.9fr]">
             <div>

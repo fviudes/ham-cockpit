@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useLocation } from "wouter";
 import NavBar from "@/components/NavBar";
-import { APP_IMAGE_VERSION, APP_VERSION } from "@shared/brand";
+import { APP_IMAGE_VERSION, APP_LOGO_LG, APP_NAME, APP_VERSION } from "@shared/brand";
 import {
   FigAcomCable,
   FigBoot,
@@ -58,11 +58,16 @@ export default function Home() {
     <div className="flex min-h-screen flex-col bg-[#0d1b2a]">
       <NavBar />
 
-      <section className="relative overflow-hidden border-b border-[rgba(79,195,247,0.1)] pt-14">
+      <section className="relative overflow-hidden border-b border-[rgba(79,195,247,0.1)] pt-16">
         <img src={PRODUCT.hero} alt="" className="absolute inset-0 h-full w-full object-cover opacity-35" />
         <div className="absolute inset-0 bg-gradient-to-r from-[#0d1b2a] via-[#0d1b2a]/92 to-[#0d1b2a]/55" />
         <div className="container relative grid items-center gap-10 py-16 lg:grid-cols-[1.1fr_0.9fr] lg:py-24">
           <motion.div initial="hidden" animate="visible" variants={fadeUp}>
+            <img
+              src={APP_LOGO_LG}
+              alt={APP_NAME}
+              className="mb-6 h-[120px] w-[120px] object-contain drop-shadow-[0_12px_28px_rgba(0,0,0,0.55)] sm:h-[140px] sm:w-[140px]"
+            />
             <p className="mb-3 font-['IBM_Plex_Mono'] text-xs font-bold tracking-widest text-[#FFB300]">
               {t(HOME.kicker)} · v{APP_VERSION} · UBUNTU 24.04 ARM64
             </p>

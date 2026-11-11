@@ -16,11 +16,13 @@ import {
   type TileId,
 } from "./panel-layout";
 import { formatWatts, useConsole, type Station } from "./state";
+import { NextionViz } from "./nextion-panel";
 import { Drop, VfoPanel } from "./vfo-panel";
 import { Chip, GhostBtn, Lcd, Led, PageHead, PanelTitle, PrimaryBtn } from "./widgets";
 
 const TILE_LABEL: Record<TileId, I18nKey> = {
   vfo: "panelVfo",
+  nextion: "panelNextion",
   spe: "spe",
   palstar: "palstar",
   hamplus: "hamplus",
@@ -44,8 +46,9 @@ export function RadioPage() {
     let live = true;
     void loadLayout(user).then((next) => {
       if (!live) return;
-      setTiles(next);
-      setSaved(next);
+      const withNx = next.some((t) => t.id === "nextion") ? next : addTile(next, "nextion");
+      setTiles(withNx);
+      setSaved(withNx);
     });
     return () => {
       live = false;
@@ -145,14 +148,15 @@ export function RadioPage() {
       className={
         fs
           ? document.fullscreenElement === pageRef.current
-            ? "relative h-full min-h-full overflow-auto bg-[#071018] px-3 py-4 md:px-5"
-            : "fixed inset-0 z-[100] overflow-auto bg-[#071018] px-3 py-4 md:px-5"
+            ? "console-page-fs relative h-full min-h-full overflow-auto bg-[#071018] px-3 py-4 md:px-5"
+            : "console-page-fs fixed inset-0 z-[100] overflow-auto bg-[#071018] px-3 py-4 md:px-5"
           : "relative"
       }
     >
       <PageHead
         kicker={tx("radio")}
         title={tx("radioTitle")}
+        logo
         aside={
           <div className="flex flex-col items-end gap-1">
             <div className="flex flex-wrap items-center justify-end gap-2">
@@ -187,6 +191,7 @@ export function RadioPage() {
         onRemove={(id) => setTiles((cur) => removeTile(cur, id))}
         render={(id) => {
           if (id === "vfo") return <VfoPanel />;
+          if (id === "nextion") return <NextionViz />;
           return accessories.find((a) => a.id === id)?.node ?? null;
         }}
       />

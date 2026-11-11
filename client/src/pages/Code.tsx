@@ -234,7 +234,7 @@ export default function Code() {
   return (
     <div className="min-h-screen bg-[#0d1b2a] flex flex-col">
       <NavBar />
-      <div className="pt-14">
+      <div className="pt-16">
         <div className="container py-12">
           <motion.div initial="hidden" animate="visible" variants={fadeUp} className="mb-12">
             <div className="flex items-center gap-2 mb-3">

@@ -6,8 +6,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { ChevronDown, KeyRound, LogOut, User } from "lucide-react";
-import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
+import { APP_LOGO_LG } from "@shared/brand";
 import type { Lang } from "./i18n";
 import { useConsole } from "./state";
 
@@ -44,22 +45,64 @@ export function PanelTitle({ children }: { children: ReactNode }) {
   );
 }
 
+function isNativeFullscreen() {
+  const d = document as Document & { webkitFullscreenElement?: Element | null };
+  return Boolean(document.fullscreenElement || d.webkitFullscreenElement);
+}
+
+function headingLogoVisible(root: HTMLElement | null) {
+  const overlayFs = Boolean(root?.closest(".console-page-fs"));
+  return overlayFs || isNativeFullscreen();
+}
+
 export function PageHead({
   kicker,
   title,
   aside,
+  logo,
 }: {
   kicker: string;
   title: string;
   aside?: ReactNode;
+  logo?: boolean;
 }) {
+  const headRef = useRef<HTMLDivElement>(null);
+  const [showLogo, setShowLogo] = useState(false);
+
+  useLayoutEffect(() => {
+    if (!logo) {
+      setShowLogo(false);
+      return;
+    }
+    setShowLogo(headingLogoVisible(headRef.current));
+  });
+
+  useLayoutEffect(() => {
+    if (!logo) return;
+    const measure = () => setShowLogo(headingLogoVisible(headRef.current));
+    document.addEventListener("fullscreenchange", measure);
+    document.addEventListener("webkitfullscreenchange", measure);
+    return () => {
+      document.removeEventListener("fullscreenchange", measure);
+      document.removeEventListener("webkitfullscreenchange", measure);
+    };
+  }, [logo]);
+
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <p className="font-['IBM_Plex_Mono'] text-[11px] font-semibold tracking-[0.18em] text-[#4fc3f7]/70 uppercase">
-          {kicker}
-        </p>
-        <h1 className="font-['Space_Grotesk'] text-2xl font-semibold text-white">{title}</h1>
+    <div
+      ref={headRef}
+      className={cn("mb-6 flex flex-wrap justify-between gap-3", logo ? "items-center" : "items-end")}
+    >
+      <div className="flex items-center gap-3">
+        {logo && showLogo ? (
+          <img src={APP_LOGO_LG} alt="" className="size-[113px] shrink-0 object-contain" />
+        ) : null}
+        <div>
+          <p className="font-['IBM_Plex_Mono'] text-[11px] font-semibold tracking-[0.18em] text-[#4fc3f7]/70 uppercase">
+            {kicker}
+          </p>
+          <h1 className="font-['Space_Grotesk'] text-2xl font-semibold text-white">{title}</h1>
+        </div>
       </div>
       {aside}
     </div>
