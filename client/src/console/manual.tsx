@@ -531,13 +531,13 @@ export function ManualPage() {
 
         <Section id="mmdvm" title={t(TOC[18]!.title)}>
           <P
-            pt="A aba Operação → MMDVM controla um hotspot ou repetidora digital no mesmo Pi. A pilha é a do WPSD (e do Pi-Star): MMDVMHost no UART do modem e DMRGateway em loopback. O dashboard PHP não é instalado — o console Ham Cockpit já é o site, com as mesmas cores, fontes e painéis."
-            en="Operate → MMDVM drives a digital hotspot or repeater on the same Pi. The stack is WPSD's (and Pi-Star's): MMDVMHost on the modem UART and DMRGateway on loopback. The PHP dashboard is not installed — the Ham Cockpit console already is the site, with the same colors, fonts, and panels."
+            pt="A aba Operação → MMDVM controla um hotspot ou repetidora digital no mesmo Pi. A pilha é a do WPSD (e do Pi-Star): MMDVM Host no UART do modem e DMR Gateway em loopback. O dashboard PHP não é instalado — o console Ham Cockpit já é o site, com as mesmas cores, fontes e painéis."
+            en="Operate → MMDVM drives a digital hotspot or repeater on the same Pi. The stack is WPSD's (and Pi-Star's): MMDVM Host on the modem UART and DMR Gateway on loopback. The PHP dashboard is not installed — the Ham Cockpit console already is the site, with the same colors, fonts, and panels."
           />
           <FigMmdvm
             caption={t({
-              pt: "Figura — rádio DV → modem 115200 → MMDVMHost → DMRGateway :62031 (BrandMeister / TGIF / XLX).",
-              en: "Figure — DV radio → modem 115200 → MMDVMHost → DMRGateway :62031 (BrandMeister / TGIF / XLX).",
+              pt: "Figura — rádio DV → modem 115200 → MMDVM Host → DMR Gateway :62031 (BrandMeister / TGIF / XLX).",
+              en: "Figure — DV radio → modem 115200 → MMDVM Host → DMR Gateway :62031 (BrandMeister / TGIF / XLX).",
             })}
           />
           <Steps
@@ -547,8 +547,8 @@ export function ManualPage() {
                 en: "Fit the MMDVM HAT on GPIO (3.3 V, /dev/ttyAMA0) or a USB ZUMspot (/dev/ttyACM0). Do not put that TTY on ser2net.",
               },
               {
-                pt: "Instale MMDVMHost e DMRGateway em /usr/local/bin (binários WPSD ou compile g4klx). O INI já vive em /opt/ham-cockpit/mmdvm.",
-                en: "Install MMDVMHost and DMRGateway in /usr/local/bin (WPSD binaries or build g4klx). The INI already lives in /opt/ham-cockpit/mmdvm.",
+                pt: "Instale MMDVM Host e DMR Gateway em /usr/local/bin (binários WPSD ou compile g4klx). O INI já vive em /opt/ham-cockpit/mmdvm.",
+                en: "Install MMDVM Host and DMR Gateway in /usr/local/bin (WPSD binaries or build g4klx). The INI already lives in /opt/ham-cockpit/mmdvm.",
               },
               {
                 pt: "No console: indicativo, ID DMR, frequência, color code, modos, redes BrandMeister/TGIF. Salvar e reiniciar.",
@@ -567,8 +567,8 @@ export function ManualPage() {
 
         <Section id="ser2net" title={t(TOC[19]!.title)}>
           <P
-            pt="O ser2net é o único processo que pode abrir a TTY de CAT e acessório. Rádio Cat-USB, SPE, Hamplus, Palstar, LDG, LP-100A e ACOM falam só em IP (127.0.0.1:porta). Bluetooth do rádio (GATT/SPP) continua direto. A exceção é o modem MMDVM: MMDVMHost é o dono exclusivo dessa UART."
-            en="ser2net is the only process allowed to open the CAT and accessory TTY. Cat-USB radio, SPE, Hamplus, Palstar, LDG, LP-100A and ACOM talk IP only (127.0.0.1:port). Radio Bluetooth (GATT/SPP) stays direct. The exception is the MMDVM modem: MMDVMHost exclusively owns that UART."
+            pt="O ser2net é o único processo que pode abrir a TTY de CAT e acessório. Rádio Cat-USB, SPE, Hamplus, Palstar, LDG, LP-100A e ACOM falam só em IP (127.0.0.1:porta). Bluetooth do rádio (GATT/SPP) continua direto. A exceção é o modem MMDVM: MMDVM Host é o dono exclusivo dessa UART."
+            en="ser2net is the only process allowed to open the CAT and accessory TTY. Cat-USB radio, SPE, Hamplus, Palstar, LDG, LP-100A and ACOM talk IP only (127.0.0.1:port). Radio Bluetooth (GATT/SPP) stays direct. The exception is the MMDVM modem: MMDVM Host exclusively owns that UART."
           />
           <FigSer2net
             caption={t({
@@ -872,7 +872,7 @@ function MenuTable({ lang }: { lang: Lang }) {
       ? [
           ["Panel", "VFO, PTT, mode, bands — operate the primary radio"],
           ["Wavelog", "Logbook :8086 + UDP Gate 2333"],
-          ["MMDVM", "WPSD hotspot: MMDVMHost + DMRGateway, last heard"],
+          ["MMDVM", "WPSD hotspot: MMDVM Host + DMR Gateway, last heard"],
           ["ser2net", "Serial over TCP + Hamlib NET"],
           ["Config Device Wizard", "Serial → IP:port, pick device, autostart"],
           ["Radio", "Register IC-705 / USB / CAT, Primary checkbox"],
@@ -884,7 +884,7 @@ function MenuTable({ lang }: { lang: Lang }) {
       : [
           ["Painel", "VFO, PTT, modo, bandas — opera o rádio principal"],
           ["Wavelog", "Logbook :8086 + Gate UDP 2333"],
-          ["MMDVM", "Hotspot WPSD: MMDVMHost + DMRGateway, últimos ouvidos"],
+          ["MMDVM", "Hotspot WPSD: MMDVM Host + DMR Gateway, últimos ouvidos"],
           ["ser2net", "Serial na rede + Hamlib NET"],
           ["Config Device Wizard", "Serial → IP:porta, dispositivo, início automático"],
           ["Rádio", "Cadastra IC-705 / USB / CAT, checkbox Principal"],

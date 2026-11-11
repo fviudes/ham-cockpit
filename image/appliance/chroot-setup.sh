@@ -123,6 +123,14 @@ for b in MMDVMHost DMRGateway YSFGateway ircddbgatewayd NextionDriver; do
   fi
   ls -lh "/usr/local/bin/$b"
 done
+if ! grep -a -q 'HC_FD2_GUARD' /usr/local/bin/NextionDriver; then
+  echo "ERRO: bake sem marca HC_FD2_GUARD no NextionDriver (patch fd2)" >&2
+  exit 1
+fi
+if [[ ! -f /etc/systemd/system/nextiondriver.service ]]; then
+  echo "ERRO: bake sem /etc/systemd/system/nextiondriver.service" >&2
+  exit 1
+fi
 
 if ls /opt/wavelog-seed-images/*.tar >/dev/null 2>&1; then
   mkdir -p /opt/wavelog/images
@@ -132,7 +140,8 @@ fi
 # enable já feito em install-station.sh (com fallback de symlinks no chroot).
 # Reforça docker + target sem depender do D-Bus.
 systemctl unmask docker.service docker.socket 2>/dev/null || true
-for u in docker.service docker.socket ham-cockpit.target wavelog.service first-boot.service; do
+for u in docker.service docker.socket ham-cockpit.target wavelog.service first-boot.service \
+  nextiondriver.service mosquitto.service; do
   if [[ -f /etc/systemd/system/$u || -f /lib/systemd/system/$u || -f /usr/lib/systemd/system/$u ]]; then
     systemctl enable "$u" 2>/dev/null || true
   fi
@@ -143,7 +152,9 @@ for pair in \
   "docker.socket:sockets.target" \
   "ham-cockpit.target:multi-user.target" \
   "wavelog.service:ham-cockpit.target" \
-  "first-boot.service:ham-cockpit.target"; do
+  "first-boot.service:ham-cockpit.target" \
+  "nextiondriver.service:ham-cockpit.target" \
+  "mosquitto.service:multi-user.target"; do
   u="${pair%%:*}"
   t="${pair##*:}"
   src=""

@@ -584,6 +584,17 @@ type HostSnap = {
   error: string;
 };
 
+type WlDbSnap = {
+  running?: boolean;
+  connected?: boolean;
+  health?: string;
+  version?: string;
+  tables?: number;
+  sizeBytes?: number;
+  image?: string;
+  queryVia?: string;
+};
+
 function formatBytes(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return "—";
   const units = ["B", "KB", "MB", "GB", "TB"];
@@ -603,6 +614,7 @@ export function StatusPage() {
   const ram = 32;
   const net = 11;
   const [host, setHost] = useState<HostSnap | null>(null);
+  const [wlDb, setWlDb] = useState<WlDbSnap | null>(null);
   const hist = useMemo(
     () =>
       Array.from({ length: 40 }, (_, i) => ({
@@ -625,6 +637,12 @@ export function StatusPage() {
         .catch(() => {
           if (alive) setHost(null);
         });
+      void fetch("/api/wavelog/database")
+        .then((r) => r.json())
+        .then((j: WlDbSnap) => {
+          if (alive) setWlDb(j);
+        })
+        .catch(() => undefined);
     };
     load();
     const t = window.setInterval(load, 5000);
@@ -708,6 +726,17 @@ export function StatusPage() {
           />
           <Mini k="CI-V" v={s.ic705.civ ? s.ic705.addr : "—"} />
           <Mini k="Wavelog" v={s.wavelog.running ? `:${s.wavelog.port}` : tx("disconnected")} />
+          <Mini
+            k={tx("wlDbTitle")}
+            v={
+              wlDb == null
+                ? "—"
+                : wlDb.running
+                  ? `${tx("wlDbUp")}${wlDb.health ? ` · ${wlDb.health}` : ""}${wlDb.connected ? ` · ${tx("wlDbConnected")}` : ""}${wlDb.version ? ` · ${wlDb.version}` : ""}`
+                  : tx("wlDbDown")
+            }
+          />
+          <Mini k={tx("wlDbTables")} v={wlDb ? String(wlDb.tables ?? 0) : "—"} />
           <Mini k="WaveLogGate" v={s.wlg.running ? `UDP ${s.wlg.udpPort}` : tx("disconnected")} />
           <Mini k="MMDVM" v={s.mmdvm.running ? s.mmdvm.callsign : tx("disconnected")} />
           <Mini k="ser2net" v={s.ser2net.running ? `${s.ser2net.services.length} svc` : tx("disconnected")} />

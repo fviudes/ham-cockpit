@@ -197,8 +197,8 @@ export default function Home() {
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-[#94a3b8]">
                 {t({
-                  pt: "MMDVMHost, DMRGateway, last heard nos logs, Instant Mode, BrandMeister/TGIF/XLX. O PHP do WPSD não roda na porta 80 — o nginx do Ham Cockpit já é o site.",
-                  en: "MMDVMHost, DMRGateway, last heard from logs, Instant Mode, BrandMeister/TGIF/XLX. WPSD PHP does not run on port 80 — Ham Cockpit nginx already is the site.",
+                  pt: "MMDVM Host, DMR Gateway, last heard nos logs, Instant Mode, BrandMeister/TGIF/XLX. O PHP do WPSD não roda na porta 80 — o nginx do Ham Cockpit já é o site.",
+                  en: "MMDVM Host, DMR Gateway, last heard from logs, Instant Mode, BrandMeister/TGIF/XLX. WPSD PHP does not run on port 80 — Ham Cockpit nginx already is the site.",
                 })}
               </p>
             </div>

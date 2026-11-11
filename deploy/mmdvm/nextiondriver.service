@@ -6,7 +6,7 @@ After=local-fs.target network-online.target
 Wants=network-online.target
 # Antes do Docker: menos bridges/veth no momento do start (log do ABRT listava docker0/br-*/veth*).
 # Sem Before=mmdvmhost: BindsTo/PartOf dos gateways gerava "Transaction order is cyclic".
-# NUNCA substituir por stub “lab: disabled” / ConditionPathExists=/nonexistent / ExecStart=/bin/true.
+# LCD no HAT: unit sempre instalada e habilitada (WantedBy ham-cockpit.target).
 Before=docker.service docker.socket
 ConditionPathExists=/usr/local/bin/NextionDriver
 

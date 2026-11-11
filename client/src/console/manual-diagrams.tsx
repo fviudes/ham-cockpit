@@ -290,9 +290,9 @@ export function FigMmdvm({ caption }: { caption: string }) {
         <Arrow x1={122} y1={80} x2={168} y2={80} label="RF" />
         <Box x={170} y={36} w={120} h={88} title="Modem" sub={"HAT 3,3 V\n/dev/ttyAMA0"} fill="#2a2410" />
         <Arrow x1={290} y1={80} x2={336} y2={80} label="115200" />
-        <Box x={338} y={28} w={160} h={104} title="MMDVMHost" sub={"WPSD INI\nRemote :7642"} fill="#0d2a3a" accent />
+        <Box x={338} y={28} w={160} h={104} title="MMDVM Host" sub={"WPSD INI\nRemote :7642"} fill="#0d2a3a" accent />
         <Arrow x1={498} y1={80} x2={544} y2={80} label="62031" />
-        <Box x={546} y={36} w={162} h={88} title="DMRGateway" sub="BM · TGIF · XLX" fill="#12324a" />
+        <Box x={546} y={36} w={162} h={88} title="DMR Gateway" sub="BM · TGIF · XLX" fill="#12324a" />
       </svg>
     </Figure>
   );

@@ -14,6 +14,10 @@ CHROOT="${HAMCOCKPIT_CHROOT:-0}"
 export DEBIAN_FRONTEND=noninteractive
 
 if [[ "$CHROOT" != "1" ]]; then
+  # Lab: dpkg a meio / Hamlib — sempre concluir configure antes do apt.
+  export DEBIAN_FRONTEND=noninteractive
+  dpkg --configure -a || true
+  apt-get -y -f install || true
   apt-get update -qq
   mapfile -t STATION_PKGS < <(grep -vE '^#|^$' "$HERE/packages.list" | sed 's/^hamlib-utils$/libhamlib-utils/')
   apt-get install -y "${STATION_PKGS[@]}"
@@ -100,6 +104,7 @@ chown -R hamcockpit:hamcockpit /opt/ser2net
 chmod 0775 /opt/ser2net
 cp -a "$ROOT/deploy/wavelog/docker-compose.yml" "$ROOT/deploy/wavelog/wavelog-ctl.sh" "$ROOT/deploy/wavelog/.env.example" /opt/wavelog/
 chmod +x /opt/wavelog/wavelog-ctl.sh
+sed -i 's/\r$//' /opt/wavelog/wavelog-ctl.sh
 chown root:hamcockpit /opt/wavelog/docker-compose.yml /opt/wavelog/wavelog-ctl.sh /opt/wavelog/.env.example 2>/dev/null || true
 if [[ ! -f /opt/wavelog/.env ]]; then
   PW="$(openssl rand -base64 18 | tr -dc 'A-Za-z0-9' | head -c 20)"
@@ -146,20 +151,32 @@ if [[ ! -e /opt/ham-cockpit/mmdvm/ircddbgateway ]]; then
   ln -sfn ircddbgateway.conf /opt/ham-cockpit/mmdvm/ircddbgateway
   chown -h hamcockpit:hamcockpit /opt/ham-cockpit/mmdvm/ircddbgateway || true
 fi
+install -d /opt/ham-cockpit/systemd /opt/ham-cockpit/deploy/mmdvm
+# Templates do console (ROOT/deploy/mmdvm no Pi = /opt/ham-cockpit/deploy/mmdvm).
+if [[ -d "$ROOT/deploy/mmdvm" ]]; then
+  cp -a "$ROOT/deploy/mmdvm/mmdvmhost.ini" "$ROOT/deploy/mmdvm/dmrgateway.ini" \
+    "$ROOT/deploy/mmdvm/ysfgateway.ini" "$ROOT/deploy/mmdvm/ircddbgateway.conf" \
+    /opt/ham-cockpit/deploy/mmdvm/ 2>/dev/null || true
+fi
 install_unit() {
   local name="$1"
   install -m 0644 "$ROOT/deploy/mmdvm/$name" "/etc/systemd/system/$name"
+  install -m 0644 "$ROOT/deploy/mmdvm/$name" "/opt/ham-cockpit/systemd/$name"
 }
 install_unit mmdvmhost.service
 install_unit dmrgateway.service
 install_unit ysfgateway.service
 install_unit ircddbgateway.service
-# Unit Nextion real — nunca stub “lab: disabled”.
+install_unit ham-cockpit-mmdvm-build.service
+# Unit Nextion real — SEMPRE /etc/systemd/system + cópia em /opt/ham-cockpit/systemd.
+# Detector de stub só em diretivas ATIVAS (comentários não contam; 0.1.05.01 apagava a unit).
 systemctl unmask nextiondriver.service 2>/dev/null || true
 install_unit nextiondriver.service
-if grep -qE 'lab: disabled|/nonexistent|ExecStart=/bin/true' /etc/systemd/system/nextiondriver.service 2>/dev/null; then
+if grep -vE '^[[:space:]]*(#|$)' /etc/systemd/system/nextiondriver.service 2>/dev/null \
+  | grep -qE 'lab: disabled|ConditionPathExists=/nonexistent|^ExecStart=/bin/true([[:space:]]|$)'; then
   echo "ERRO: nextiondriver.service stub recusado — reinstalando unit real" >&2
   install -m 0644 "$ROOT/deploy/mmdvm/nextiondriver.service" /etc/systemd/system/nextiondriver.service
+  install -m 0644 "$ROOT/deploy/mmdvm/nextiondriver.service" /opt/ham-cockpit/systemd/nextiondriver.service
 fi
 # Fallback de compilação na Pi (OTA / bake incremental): script + patch fd2.
 install -o root -g root -m 0755 "$ROOT/deploy/mmdvm/build-binaries.sh" /opt/ham-cockpit/bin/mmdvm-build-binaries.sh
@@ -197,10 +214,33 @@ configure_mmdvm_uart() {
   systemctl mask serial-getty@ttyS0.service serial-getty@ttyAMA0.service 2>/dev/null || true
 }
 configure_mmdvm_uart
+
+nextion_needs_patch() {
+  [[ -x /usr/local/bin/NextionDriver ]] || return 0
+  grep -a -q 'HC_FD2_GUARD' /usr/local/bin/NextionDriver && return 1
+  return 0
+}
+# Tarball patched (bake/OTA). Não basta o bin existir — stock Ubuntu 24 aborta sem a marca.
+for tgz in "$ROOT/update/mmdvm-arm64.tgz" "$ROOT/image/out/mmdvm-arm64.tgz" /opt/ham-cockpit/mmdvm-arm64.tgz; do
+  if [[ -f "$tgz" ]]; then
+    cp -a "$tgz" /opt/ham-cockpit/mmdvm-arm64.tgz
+    break
+  fi
+done
+if nextion_needs_patch && [[ -f /opt/ham-cockpit/mmdvm-arm64.tgz ]]; then
+  tmp="$(mktemp -d)"
+  if tar -xzf /opt/ham-cockpit/mmdvm-arm64.tgz -C "$tmp" bin/NextionDriver 2>/dev/null \
+    && [[ -f "$tmp/bin/NextionDriver" ]]; then
+    install -m 0755 "$tmp/bin/NextionDriver" /usr/local/bin/NextionDriver
+    echo "NextionDriver reinstalado de mmdvm-arm64.tgz (HC_FD2_GUARD)" >&2
+  fi
+  rm -rf "$tmp"
+fi
+
 # Binários g4klx + NextionDriver. MMDVM_BUILD_BINARIES=0 para pular.
 # No bake (CHROOT=1 ou MMDVM_BUILD_BINARIES=1) a falha aborta a imagem.
 if [[ "${MMDVM_BUILD_BINARIES:-auto}" != "0" ]]; then
-  if [[ "${MMDVM_BUILD_BINARIES:-}" == "1" || ! -x /usr/local/bin/MMDVMHost || ! -x /usr/local/bin/NextionDriver ]]; then
+  if [[ "${MMDVM_BUILD_BINARIES:-}" == "1" || ! -x /usr/local/bin/MMDVMHost ]] || nextion_needs_patch; then
     chmod +x "$ROOT/deploy/mmdvm/build-binaries.sh"
     if [[ "${MMDVM_BUILD_BINARIES:-}" == "1" || "$CHROOT" == "1" ]]; then
       export MMDVM_PURGE_BUILD="${MMDVM_PURGE_BUILD:-1}"
@@ -211,6 +251,10 @@ if [[ "${MMDVM_BUILD_BINARIES:-auto}" != "0" ]]; then
           exit 1
         fi
       done
+      if ! grep -a -q 'HC_FD2_GUARD' /usr/local/bin/NextionDriver; then
+        echo "ERRO: bake sem marca HC_FD2_GUARD no NextionDriver" >&2
+        exit 1
+      fi
     else
       bash "$ROOT/deploy/mmdvm/build-binaries.sh" || echo "AVISO: build MMDVM falhou — console grava INI mesmo assim" >&2
     fi
@@ -218,6 +262,17 @@ if [[ "${MMDVM_BUILD_BINARIES:-auto}" != "0" ]]; then
 fi
 install -m 0644 "$HERE/ham-cockpit-vfo.service" /etc/systemd/system/ham-cockpit-vfo.service
 install -m 0644 "$HERE/ham-cockpit-vfo-idle.service" /etc/systemd/system/ham-cockpit-vfo-idle.service
+# Cópia das units da estação no tree do console (mesmo layout do pacote OTA).
+install -d /opt/ham-cockpit/systemd
+for u in ham-cockpit.service ham-cockpit-ap.service ham-cockpit.target first-boot.service \
+  ham-cockpit-vfo.service ham-cockpit-vfo-idle.service wavelog.service; do
+  if [[ -f "/etc/systemd/system/$u" ]]; then
+    install -m 0644 "/etc/systemd/system/$u" "/opt/ham-cockpit/systemd/$u"
+  fi
+done
+# Helpers só LF (checkout Windows / pendrive).
+find /opt/ham-cockpit/bin -maxdepth 1 -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
+sed -i 's/\r$//' /opt/wavelog/wavelog-ctl.sh 2>/dev/null || true
 install -d -o hamcockpit -g hamcockpit /var/lib/hamcockpit /var/lib/hamcockpit/chromium
 loginctl enable-linger hamcockpit 2>/dev/null || true
 

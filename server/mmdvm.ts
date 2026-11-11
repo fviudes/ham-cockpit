@@ -1156,7 +1156,7 @@ export async function mmdvmStatus(): Promise<MmdvmStatus> {
     nextion,
     paused,
     // Só alerta de binário ausente no Pi; no Windows/dev a console edita INI sem Host local.
-    error: hostBin || !onAppliance ? "" : "MMDVMHost não está neste host — instale o binário WPSD/g4klx em /usr/local/bin/MMDVMHost",
+    error: hostBin || !onAppliance ? "" : "MMDVM Host não está neste host — instale o binário WPSD/g4klx em /usr/local/bin/MMDVMHost",
   };
 }
 

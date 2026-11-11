@@ -154,6 +154,14 @@ for b in MMDVMHost DMRGateway YSFGateway ircddbgatewayd NextionDriver; do
     exit 1
   fi
 done
+if ! grep -a -q 'HC_FD2_GUARD' "$MNT/usr/local/bin/NextionDriver"; then
+  echo "ERRO: imagem sem marca HC_FD2_GUARD no NextionDriver" >&2
+  exit 1
+fi
+if [[ ! -f "$MNT/etc/systemd/system/nextiondriver.service" ]]; then
+  echo "ERRO: imagem sem nextiondriver.service" >&2
+  exit 1
+fi
 
 # Pacote OTA reutilizável (estações antigas sem bake MMDVM).
 MMDVM_TGZ="$OUT/mmdvm-arm64.tgz"
@@ -175,6 +183,8 @@ rm -rf "$STAGE_MMDVM"
 # Cópia para o canal OTA: o bake roda como root; devolver dono ao SUDO_USER
 # senão o passo "Publish GitHub Release" falha com Permission denied no cp.
 install -m 0644 "$MMDVM_TGZ" "$ROOT/update/mmdvm-arm64.tgz"
+# Dentro da imagem: reinstall Nextion se strings não tiver HC_FD2_GUARD (install/OTA).
+install -m 0644 "$MMDVM_TGZ" "$MNT/opt/ham-cockpit/mmdvm-arm64.tgz"
 if [[ -n ${SUDO_USER:-} && $SUDO_USER != root ]]; then
   chown "$SUDO_USER:" "$ROOT/update/mmdvm-arm64.tgz" || true
 fi

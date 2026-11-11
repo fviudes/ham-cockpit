@@ -24,6 +24,7 @@ fi
 mkdir -p "$DEST"
 cp -a "$HERE/docker-compose.yml" "$HERE/wavelog-ctl.sh" "$HERE/.env.example" "$HERE/install.sh" "$HERE/wavelog.service" "$DEST/"
 chmod +x "$DEST/wavelog-ctl.sh" "$DEST/install.sh"
+sed -i 's/\r$//' "$DEST/wavelog-ctl.sh" "$DEST/install.sh"
 
 if [[ ! -f "$DEST/.env" ]]; then
   PW="$(openssl rand -base64 18 | tr -dc 'A-Za-z0-9' | head -c 20)"
@@ -71,6 +72,9 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 systemctl enable --now wavelog.service
+if [[ -x "$DEST/wavelog-ctl.sh" ]]; then
+  "$DEST/wavelog-ctl.sh" ensure-db || true
+fi
 if systemctl cat waveloggate.service >/dev/null 2>&1; then
   systemctl enable waveloggate.service
   systemctl start waveloggate.service || true

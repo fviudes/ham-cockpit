@@ -1,5 +1,6 @@
 #!/bin/bash
-# Rodado no pós-install do pacote OTA (npm). Idempotente; não toca configs.
+# Rodado no pós-install do pacote OTA (npm). Idempotente.
+# Não reescreve Callsign/Id/[Modem]; faz merge só do caminho LCD Nextion (WPSD/ON7LDS).
 # MMDVM: instala binários ARM64 de mmdvm-arm64.tgz (no pacote OTA ou no canal update/).
 # Docker.io: se o pacote não estiver na imagem, OTA não instala apt — precisa bake.
 set -euo pipefail
@@ -16,6 +17,22 @@ mmdvm_missing() {
     fi
   done
   return 1
+}
+
+# Binário Nextion sem marca do patch fd2 (OTA antigo deixava o stock).
+nextion_needs_patch() {
+  [[ -x /usr/local/bin/NextionDriver ]] || return 0
+  grep -a -q 'HC_FD2_GUARD' /usr/local/bin/NextionDriver && return 1
+  return 0
+}
+
+# Stub de verdade: diretivas ativas. Comentários da unit real NÃO contam
+# (0.1.05.01 apagava a unit porque o texto de aviso batia no grep).
+nextion_unit_is_stub() {
+  local f="$1"
+  [[ -f "$f" ]] || return 1
+  grep -vE '^[[:space:]]*(#|$)' "$f" | grep -qE \
+    'lab: disabled|ConditionPathExists=/nonexistent|^ExecStart=/bin/true([[:space:]]|$)'
 }
 
 install_mmdvm_tgz() {
@@ -111,10 +128,26 @@ ensure_mmdvm_bins() {
   if [[ -n "$tgz" ]]; then
     refresh_mmdvm_data_from_tgz "$tgz" || true
   fi
-  if ! mmdvm_missing; then
+  if ! mmdvm_missing && ! nextion_needs_patch; then
     return 0
   fi
-  echo "ota-hooks: binários MMDVM ausentes — tentando instalar…" >&2
+  if nextion_needs_patch && ! mmdvm_missing; then
+    echo "ota-hooks: NextionDriver sem HC_FD2_GUARD — atualizando só esse binário…" >&2
+    if [[ -n "$tgz" ]]; then
+      tmp="$(mktemp -d)"
+      if tar -xzf "$tgz" -C "$tmp" bin/NextionDriver 2>/dev/null \
+        && [[ -f "$tmp/bin/NextionDriver" ]]; then
+        install -m 0755 "$tmp/bin/NextionDriver" /usr/local/bin/NextionDriver
+        echo "ota-hooks: NextionDriver atualizado de $tgz (HC_FD2_GUARD)" >&2
+      fi
+      rm -rf "$tmp"
+    fi
+    if ! nextion_needs_patch; then
+      return 0
+    fi
+  else
+    echo "ota-hooks: binários MMDVM ausentes — tentando instalar…" >&2
+  fi
   if [[ -n "$tgz" ]] && install_mmdvm_tgz "$tgz"; then
     echo "ota-hooks: MMDVM instalado de $tgz" >&2
   else
@@ -154,23 +187,33 @@ ensure_mmdvm_bins() {
 
 if [[ -d "$ROOT/systemd" ]]; then
   shopt -s nullglob
-  # Unmask Nextion antes de reinstalar — stub “lab: disabled” / mask /dev/null não pode ficar no bake/OTA.
+  # Unmask + sempre instalar a unit Nextion real. NUNCA rm do arquivo
+  # (0.1.05.01 apagava a unit viva porque o grep batia em comentário).
   systemctl unmask nextiondriver.service 2>/dev/null || true
   for unit in "$ROOT"/systemd/*.service "$ROOT"/systemd/*.target; do
     base="$(basename "$unit")"
-    if [[ "$base" == "nextiondriver.service" ]] && grep -qE 'lab: disabled|/nonexistent|ExecStart=/bin/true' "$unit"; then
-      echo "ota-hooks: AVISO — recusando stub nextiondriver.service do pacote OTA" >&2
+    if [[ "$base" == "nextiondriver.service" ]] && nextion_unit_is_stub "$unit"; then
+      echo "ota-hooks: AVISO — pacote trouxe nextiondriver stub; ignorando esse arquivo" >&2
       continue
     fi
     install -m 0644 "$unit" "/etc/systemd/system/$base"
   done
-  # Se a unit ativa ainda for stub (lab antigo), remove para o ConditionPathExists do binário valer na próxima cópia boa.
-  if [[ -f /etc/systemd/system/nextiondriver.service ]] \
-    && grep -qE 'lab: disabled|/nonexistent|ExecStart=/bin/true' /etc/systemd/system/nextiondriver.service; then
-    echo "ota-hooks: AVISO — removendo stub nextiondriver.service legado" >&2
-    rm -f /etc/systemd/system/nextiondriver.service
+  nxt_src=""
+  if [[ -f "$ROOT/systemd/nextiondriver.service" ]] && ! nextion_unit_is_stub "$ROOT/systemd/nextiondriver.service"; then
+    nxt_src="$ROOT/systemd/nextiondriver.service"
+  fi
+  if [[ ! -f /etc/systemd/system/nextiondriver.service ]] || nextion_unit_is_stub /etc/systemd/system/nextiondriver.service; then
+    if [[ -n "$nxt_src" ]]; then
+      echo "ota-hooks: restaurando nextiondriver.service (unit real)" >&2
+      install -m 0644 "$nxt_src" /etc/systemd/system/nextiondriver.service
+    else
+      echo "ota-hooks: AVISO — sem unit Nextion real no pacote" >&2
+    fi
   fi
   systemctl daemon-reload 2>/dev/null || true
+  if [[ -f /etc/systemd/system/nextiondriver.service ]]; then
+    systemctl enable nextiondriver.service 2>/dev/null || true
+  fi
 fi
 
 if [[ -d "$ROOT/bin" ]]; then
@@ -188,6 +231,82 @@ if [[ -f /opt/ham-cockpit/mmdvm/ircddbgateway.conf && ! -e /opt/ham-cockpit/mmdv
   ln -sfn ircddbgateway.conf /opt/ham-cockpit/mmdvm/ircddbgateway
   chown -h hamcockpit:hamcockpit /opt/ham-cockpit/mmdvm/ircddbgateway 2>/dev/null || true
 fi
+# DPlus em loopback impede REF* na LAN — template/console usam 0.0.0.0.
+for f in /opt/ham-cockpit/mmdvm/ircddbgateway.conf /opt/ham-cockpit/mmdvm/ircddbgateway /etc/ircddbgateway; do
+  [[ -e "$f" ]] || continue
+  sed -i -E 's/^(localAddress|gatewayAddress)=127\.0\.0\.1$/\1=0.0.0.0/' "$f" 2>/dev/null || true
+done
+
+# Caminho LCD WPSD/ON7LDS no INI existente — não sobrescreve Callsign/Id nem Modem (Dual=ttyAMA0).
+merge_nextion_ini() {
+  local ini=/opt/ham-cockpit/mmdvm/mmdvmhost.ini
+  [[ -f "$ini" ]] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  python3 - "$ini" <<'PY'
+import sys
+from pathlib import Path
+p = Path(sys.argv[1])
+text = p.read_text(encoding="utf-8", errors="replace")
+lines = text.splitlines(True)
+
+def set_kv(lines, section, key, value):
+    sec = f"[{section}]"
+    i = 0
+    found_sec = None
+    while i < len(lines):
+        if lines[i].strip() == sec:
+            found_sec = i
+            i += 1
+            while i < len(lines) and not lines[i].lstrip().startswith("["):
+                s = lines[i].lstrip()
+                if s.startswith(f"{key}=") or s.startswith(f"{key} ="):
+                    nl = "\n" if lines[i].endswith("\n") else ""
+                    lines[i] = f"{key}={value}{nl}"
+                    return lines
+                i += 1
+            nl = "\n"
+            lines.insert(i, f"{key}={value}{nl}")
+            return lines
+        i += 1
+    if found_sec is None:
+        if lines and not lines[-1].endswith("\n"):
+            lines[-1] += "\n"
+        lines.append(f"\n{sec}\n{key}={value}\n")
+    return lines
+
+# Display=None em estações antigas; Dual Hat do lab não é dvmpis/ttyACM0.
+disp = None
+for ln in lines:
+    if ln.startswith("Display="):
+        disp = ln.split("=", 1)[1].strip()
+        break
+if disp in (None, "", "None"):
+    lines = set_kv(lines, "General", "Display", "Nextion")
+lines = set_kv(lines, "Nextion", "Port", "/dev/ttyNextionDriver")
+layout = None
+in_nx = False
+for ln in lines:
+    if ln.strip() == "[Nextion]":
+        in_nx = True
+        continue
+    if ln.startswith("[") and in_nx:
+        break
+    if in_nx and ln.startswith("ScreenLayout="):
+        layout = ln.split("=", 1)[1].strip()
+if layout in (None, "", "3"):
+    lines = set_kv(lines, "Nextion", "ScreenLayout", "4")
+lines = set_kv(lines, "NextionDriver", "Enable", "1")
+lines = set_kv(lines, "NextionDriver", "Port", "modem")
+lines = set_kv(lines, "NextionDriver", "WaitForLan", "0")
+lines = set_kv(lines, "Transparent Data", "Enable", "1")
+lines = set_kv(lines, "Transparent Data", "SendFrameType", "1")
+new = "".join(lines)
+if new != text:
+    p.write_text(new, encoding="utf-8")
+    print("ota-hooks: INI Nextion mesclado (WPSD path; Modem intacto)", file=sys.stderr)
+PY
+}
+merge_nextion_ini || true
 
 # Copia o tarball MMDVM para /opt para reuso e instala se faltar.
 if [[ -f "$ROOT/mmdvm-arm64.tgz" ]]; then
@@ -205,6 +324,31 @@ systemctl daemon-reload 2>/dev/null || true
 for u in nextiondriver.service mmdvmhost.service dmrgateway.service ysfgateway.service ircddbgateway.service; do
   systemctl enable "$u" 2>/dev/null || true
 done
+# Sobe o driver se a unit/binário existem. Host não reabre o PTY sozinho — no máximo
+# um try-restart depois que o PTY está rw (sem loop Dual/Host).
+if [[ -x /usr/local/bin/NextionDriver && -f /etc/systemd/system/nextiondriver.service ]]; then
+  systemctl reset-failed nextiondriver.service 2>/dev/null || true
+  systemctl start nextiondriver.service 2>/dev/null || true
+  pty_ok=0
+  for i in $(seq 1 40); do
+    t=$(readlink -f /dev/ttyNextionDriver 2>/dev/null || true)
+    if [[ -c "$t" ]]; then
+      chgrp dialout "$t" 2>/dev/null || true
+      chmod 660 "$t" 2>/dev/null || chmod 666 "$t" 2>/dev/null || true
+      if [[ -r "$t" && -w "$t" ]]; then
+        pty_ok=1
+        break
+      fi
+    fi
+    sleep 0.25
+  done
+  if [[ "$pty_ok" -eq 1 ]] && systemctl is-active --quiet mmdvmhost.service; then
+    # NUNCA systemctl restart mmdvmhost (ciclo PartOf). stop + start, uma vez.
+    systemctl stop --job-mode=ignore-dependencies mmdvmhost.service 2>/dev/null || true
+    sleep 2
+    systemctl start --job-mode=ignore-dependencies mmdvmhost.service 2>/dev/null || true
+  fi
+fi
 
 # Sudoers do helper de backup (e demais) — atualiza em aparelhos já instalados.
 if [[ -f "$ROOT/sudoers-hamcockpit" ]]; then
@@ -224,6 +368,16 @@ if [[ -x "$ROOT/bin/station-backup" ]]; then
 elif [[ -f /opt/wavelog/.env ]] && getent passwd hamcockpit >/dev/null 2>&1; then
   chown hamcockpit:hamcockpit /opt/wavelog/.env 2>/dev/null || true
   chmod 640 /opt/wavelog/.env 2>/dev/null || true
+fi
+# Garante usuário/banco wavelog alinhados ao .env (não rotaciona senha).
+mkdir -p /opt/wavelog
+if [[ -f "$ROOT/wavelog/docker-compose.yml" ]]; then
+  install -o root -g hamcockpit -m 0644 "$ROOT/wavelog/docker-compose.yml" /opt/wavelog/docker-compose.yml
+fi
+if [[ -f "$ROOT/bin/wavelog-ctl.sh" ]]; then
+  install -o root -g hamcockpit -m 0755 "$ROOT/bin/wavelog-ctl.sh" /opt/wavelog/wavelog-ctl.sh
+  sed -i 's/\r$//' /opt/wavelog/wavelog-ctl.sh
+  /opt/wavelog/wavelog-ctl.sh ensure-db >/dev/null 2>&1 || true
 fi
 
 # Pastas de dados graváveis pelo serviço (OTA em aparelhos já instalados).

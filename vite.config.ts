@@ -13,7 +13,7 @@ import { hubRigctl } from "./server/hamlib-hub";
 import { loadSer2net, saveSer2net } from "./server/ser2net-store";
 import { attachTerminal } from "./server/term";
 import { createUser, deleteUser, listUsers, sshStatus } from "./server/users";
-import { wavelogDown, wavelogStatus, wavelogUp } from "./server/wavelog-status";
+import { wavelogDatabase, wavelogDbUpdate, wavelogDown, wavelogStatus, wavelogUp } from "./server/wavelog-status";
 import { wlgDown, wlgStatus, wlgUp } from "./server/wlg-status";
 import { netConnect, netForget, netSave, netScan, netSetAp, netSetHostname, netSetIp, netSetLink, netStatus } from "./server/net";
 import { servicesApplyBoot, servicesSetAutostart, servicesStatus } from "./server/services";
@@ -841,7 +841,8 @@ function vitePluginWavelog(): Plugin {
           if (req.method !== method) return next();
           void run()
             .then((body) => {
-              const ok = typeof body === "object" && body !== null && "ok" in body ? Boolean((body as { ok: boolean }).ok) : true;
+              const rec = typeof body === "object" && body !== null ? (body as { ok?: boolean; updated?: boolean }) : null;
+              const ok = rec && "updated" in rec ? Boolean(rec.updated) : rec && "ok" in rec ? Boolean(rec.ok) : true;
               sendJson(res, method === "POST" && !ok ? 503 : 200, body);
             })
             .catch((err: unknown) => sendJson(res, failCode, { ok: false, error: String(err) }));
@@ -850,6 +851,8 @@ function vitePluginWavelog(): Plugin {
       handle("/api/wavelog/status", "GET", () => wavelogStatus());
       handle("/api/wavelog/up", "POST", () => wavelogUp());
       handle("/api/wavelog/down", "POST", () => wavelogDown());
+      handle("/api/wavelog/database", "GET", () => wavelogDatabase());
+      handle("/api/wavelog/db-update", "POST", () => wavelogDbUpdate());
       handle("/api/wlg/status", "GET", () => wlgStatus());
       handle("/api/wlg/up", "POST", () => wlgUp());
       handle("/api/wlg/down", "POST", () => wlgDown());

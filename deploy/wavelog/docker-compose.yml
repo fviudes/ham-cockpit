@@ -9,6 +9,8 @@ services:
   wavelog-db:
     image: mariadb:11.8
     container_name: wavelog-db
+    env_file:
+      - .env
     environment:
       MARIADB_RANDOM_ROOT_PASSWORD: "yes"
       MARIADB_DATABASE: wavelog

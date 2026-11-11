@@ -50,6 +50,7 @@ const BIN_EXTRA = [
   [join(ROOT, "deploy", "lextel", "lextel-bt"), "lextel-bt"],
   [join(ROOT, "deploy", "mmdvm", "mmdvm-ctl"), "mmdvm-ctl"],
   [join(ROOT, "deploy", "mmdvm", "build-binaries.sh"), "mmdvm-build-binaries.sh"],
+  [join(ROOT, "deploy", "wavelog", "wavelog-ctl.sh"), "wavelog-ctl.sh"],
 ];
 
 const SYSTEMD_UNITS = [
@@ -164,6 +165,12 @@ function main() {
       process.exit(1);
     }
     cpSync(src, join(stage, "systemd", name));
+  }
+
+  const wavelogCompose = join(ROOT, "deploy", "wavelog", "docker-compose.yml");
+  if (existsSync(wavelogCompose)) {
+    mkdirSync(join(stage, "wavelog"), { recursive: true });
+    cpSync(wavelogCompose, join(stage, "wavelog", "docker-compose.yml"));
   }
 
   // Binários nativos ARM64 (opcional até o workflow/bake publicar update/mmdvm-arm64.tgz).

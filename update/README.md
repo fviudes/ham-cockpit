@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.05.01** (`version.json`).
+Versão atual neste canal: **0.1.05.02** (`version.json`).
 
 ## Versionamento
 
@@ -20,10 +20,10 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.05.01",
+  "version": "0.1.05.02",
   "channel": "main",
-  "file": "ham-cockpit-0.1.05.01.tgz",
-  "notes": "Ham Cockpit v0.1.05.01 — OTA TOTAL: UI (logo, MMDVM Painel, PageHead F11), correção Admin/Atualização (instalada vs catálogo), stack MMDVM do lab (HC_FD2_GUARD, PTY, ircDDB 0.0.0.0, mmdvm-ctl LF, anti-stub)."
+  "file": "ham-cockpit-0.1.05.02.tgz",
+  "notes": "Ham Cockpit v0.1.05.02 — corrige ota-hooks (stub só em diretivas ativas; NextionDriver com HC_FD2_GUARD), unit Nextion real, Wavelog ensure-db, helpers só LF."
 }
 ```
 

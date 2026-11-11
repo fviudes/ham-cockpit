@@ -8,7 +8,9 @@ Wants=ser2net.service
 Wants=rigctld@ic705.service
 Wants=wavelog.service
 Wants=waveloggate.service
-Wants=mmdvmhost.service dmrgateway.service
+# MMDVM: Wants= apenas (sem Requires/RequiredBy — ciclo PartOf Host↔gateways).
+Wants=nextiondriver.service mmdvmhost.service dmrgateway.service ysfgateway.service ircddbgateway.service
+Wants=mosquitto.service
 Wants=ham-cockpit-vfo.service ham-cockpit-vfo-idle.service
 
 [Install]

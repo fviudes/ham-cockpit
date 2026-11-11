@@ -8,7 +8,7 @@ import { radiosConnect, radiosDisconnect, radiosMarkBle, radiosRemove, radiosRes
 import { loadSer2net, saveSer2net } from "./ser2net-store";
 import { attachTerminal } from "./term";
 import { createUser, deleteUser, listUsers, sshStatus } from "./users";
-import { wavelogDown, wavelogStatus, wavelogUp } from "./wavelog-status";
+import { wavelogDatabase, wavelogDbUpdate, wavelogDown, wavelogStatus, wavelogUp } from "./wavelog-status";
 import { wlgDown, wlgStatus, wlgUp } from "./wlg-status";
 import { netConnect, netForget, netSave, netScan, netSetAp, netSetHostname, netSetIp, netSetLink, netStatus } from "./net";
 import { servicesApplyBoot, servicesSetAutostart, servicesStatus } from "./services";
@@ -473,6 +473,22 @@ async function startServer() {
   app.post("/api/wavelog/down", async (_req, res) => {
     try {
       res.json(await wavelogDown());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.get("/api/wavelog/database", async (_req, res) => {
+    try {
+      res.json(await wavelogDatabase());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/wavelog/db-update", async (_req, res) => {
+    try {
+      res.setTimeout(300_000);
+      const body = await wavelogDbUpdate();
+      res.status(body.updated ? 200 : 503).json(body);
     } catch (err) {
       res.status(500).json({ ok: false, error: String(err) });
     }

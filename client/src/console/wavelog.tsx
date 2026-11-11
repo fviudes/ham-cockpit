@@ -1,3 +1,4 @@
+import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useConsole } from "./state";
@@ -13,9 +14,44 @@ type WlStatus = {
   httpStatus?: number;
 };
 
+type WlDatabase = {
+  ok: boolean;
+  running: boolean;
+  connected: boolean;
+  health: string;
+  deploy: string;
+  compose: string;
+  envFile: string;
+  passwordSource: "env" | "missing";
+  queryVia?: "user" | "root-socket" | "none";
+  host: string;
+  port: number;
+  published: boolean;
+  name: string;
+  user: string;
+  password: string;
+  version: string;
+  charset: string;
+  collation: string;
+  engine: string;
+  tables: number;
+  sizeBytes: number;
+  url: string;
+  network: string;
+  volume: string;
+  image?: string;
+  error?: string;
+  updated?: boolean;
+};
+
 async function callWavelog(path: "/api/wavelog/status" | "/api/wavelog/up" | "/api/wavelog/down", method: "GET" | "POST" = "GET") {
   const res = await fetch(path, { method });
   return (await res.json()) as WlStatus;
+}
+
+async function callWavelogDb(path: "/api/wavelog/database" | "/api/wavelog/db-update", method: "GET" | "POST" = "GET") {
+  const res = await fetch(path, { method });
+  return (await res.json()) as WlDatabase;
 }
 
 type WlgApi = { ok: boolean; udpPort?: number; qsyPort?: number; error?: string };
@@ -25,6 +61,18 @@ async function callWlg(path: "/api/wlg/status" | "/api/wlg/up" | "/api/wlg/down"
   return (await res.json()) as WlgApi;
 }
 
+function fmtBytes(n: number) {
+  if (!Number.isFinite(n) || n <= 0) return "—";
+  const units = ["B", "KiB", "MiB", "GiB"];
+  let v = n;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  return `${v < 10 && i > 0 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
+}
+
 export function WavelogPage() {
   const { s, setS, tx, pushLog } = useConsole();
   const w = s.wavelog;
@@ -32,7 +80,10 @@ export function WavelogPage() {
   const host = typeof window !== "undefined" ? window.location.hostname : "127.0.0.1";
   const book = `http://${host}:${w.port}`;
   const [busy, setBusy] = useState(false);
+  const [dbBusy, setDbBusy] = useState(false);
   const [detail, setDetail] = useState("");
+  const [db, setDb] = useState<WlDatabase | null>(null);
+  const [showPass, setShowPass] = useState(false);
 
   const applyStatus = (st: WlStatus) => {
     setS((p) => ({ ...p, wavelog: { ...p.wavelog, running: st.ok } }));
@@ -52,17 +103,23 @@ export function WavelogPage() {
     void callWlg("/api/wlg/status")
       .then((st) => setS((p) => ({ ...p, wlg: { ...p.wlg, running: st.ok } })))
       .catch(() => undefined);
+    void callWavelogDb("/api/wavelog/database")
+      .then(setDb)
+      .catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- probe once on open
   }, []);
 
   const rows = [
     ["Ham Cockpit", "/opt/ham-cockpit", "80"],
     ["Wavelog", w.folder, String(w.port)],
-    ["MariaDB", "volume wavelog-dbdata", "—"],
+    ["MariaDB", db?.volume || "volume wavelog-dbdata", db?.running ? tx("wlDbUp") : tx("wlDbDown")],
     ["WaveLogGate", g.folder, `UDP ${g.udpPort}`],
     ["ser2net", s.ser2net.folder, s.ser2net.services.map((x) => String(x.tcpPort)).join(",") || "—"],
     ["rigctld IC-705", "hamlib-utils", String(g.hamlibPort)],
   ];
+
+  const dbOn = Boolean(db?.running);
+  const publicUrl = db ? `http://${host}:${w.port}/` : book;
 
   return (
     <div>
@@ -71,10 +128,127 @@ export function WavelogPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Tile label="Wavelog" value={w.running ? tx("connected") : tx("disconnected")} on={w.running} />
+        <Tile label={tx("wlDbTitle")} value={dbOn ? tx("wlDbUp") : tx("wlDbDown")} on={dbOn} />
         <Tile label={tx("wlg")} value={g.running ? tx("connected") : tx("disconnected")} on={g.running} />
         <Tile label={tx("udpListen")} value={`:${g.udpPort}`} on={g.running} />
-        <Tile label="Hamlib" value={`:${g.hamlibPort}`} on={g.running} />
       </div>
+
+      <Panel className="mt-4">
+        <PanelTitle>{tx("wlDbTitle")}</PanelTitle>
+        <p className="mb-4 max-w-2xl text-sm leading-relaxed text-[#8ea0b3]">{tx("wlDbHelp")}</p>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <Field label={tx("wlDbName")}>
+            <ConsoleInput readOnly value={db?.name || "wavelog"} />
+          </Field>
+          <Field label={tx("wlDbUser")}>
+            <ConsoleInput readOnly value={db?.user || "wavelog"} />
+          </Field>
+          <Field label={tx("wlDbPass")}>
+            <div className="flex gap-2">
+              <ConsoleInput
+                readOnly
+                type={showPass ? "text" : "password"}
+                autoComplete="off"
+                value={db?.password || ""}
+                placeholder={db?.passwordSource === "missing" ? tx("wlDbPassMissing") : "••••"}
+              />
+              <GhostBtn
+                disabled={!db?.password}
+                onClick={() => setShowPass((v) => !v)}
+              >
+                {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
+                <span className="ml-1">{showPass ? tx("wlDbHide") : tx("wlDbShow")}</span>
+              </GhostBtn>
+            </div>
+          </Field>
+          <Field label={tx("wlDbHost")}>
+            <ConsoleInput readOnly value={db?.host || "wavelog-db"} />
+          </Field>
+          <Field label={tx("wlDbPort")}>
+            <ConsoleInput readOnly value={String(db?.port || 3306)} />
+          </Field>
+          <Field label={tx("wlDbStatus")}>
+            <ConsoleInput
+              readOnly
+              value={
+                dbOn
+                  ? `${tx("wlDbUp")} · ${tx("wlDbConnected")}${db?.health ? ` · ${db.health}` : ""}`
+                  : `${tx("wlDbDown")}${db?.health ? ` · ${db.health}` : ""}`
+              }
+            />
+          </Field>
+          <Field label={tx("wlDbSize")}>
+            <ConsoleInput readOnly value={db ? fmtBytes(db.sizeBytes) : "—"} />
+          </Field>
+          <Field label={tx("wlDbVersion")}>
+            <ConsoleInput readOnly value={db?.version || "—"} />
+          </Field>
+          <Field label={tx("wlDbCharset")}>
+            <ConsoleInput readOnly value={[db?.charset, db?.collation].filter(Boolean).join(" / ") || "—"} />
+          </Field>
+          <Field label={tx("wlDbEngine")}>
+            <ConsoleInput readOnly value={db?.engine || "—"} />
+          </Field>
+          <Field label={tx("wlDbTables")}>
+            <ConsoleInput readOnly value={db ? String(db.tables) : "—"} />
+          </Field>
+          <Field label={tx("wlDbDeploy")}>
+            <ConsoleInput readOnly value={db && db.deploy !== "docker" ? tx("wlDbNative") : tx("wlDbDocker")} />
+          </Field>
+          <Field label={tx("wavelogUrl")}>
+            <ConsoleInput readOnly value={publicUrl} />
+          </Field>
+          <Field label={tx("wlDbNetwork")}>
+            <ConsoleInput readOnly value={db?.network || "wavelog"} />
+          </Field>
+          <Field label={tx("wlDbVolume")}>
+            <ConsoleInput readOnly value={db?.volume || "wavelog-dbdata"} />
+          </Field>
+          <Field label={tx("wlDbImage")}>
+            <ConsoleInput readOnly value={db?.image || "mariadb:11.8"} />
+          </Field>
+        </div>
+        <p className="mt-3 font-['IBM_Plex_Mono'] text-[11px] text-[#8ea0b3]">
+          {tx("wlDbNotPublished")} · {db?.envFile || "/opt/wavelog/.env"}
+          {db?.queryVia === "root-socket" ? ` · ${tx("wlDbViaRoot")}` : ""}
+        </p>
+        {db?.error ? <p className="mt-2 text-sm text-[#f87171]">{db.error}</p> : null}
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#8ea0b3]">{tx("wlDbUpdateHint")}</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <PrimaryBtn
+            disabled={dbBusy}
+            onClick={async () => {
+              setDbBusy(true);
+              try {
+                const st = await callWavelogDb("/api/wavelog/db-update", "POST");
+                setDb(st);
+                if (st.updated) {
+                  pushLog("WLOG", "atualização oficial Docker do Wavelog (compose pull + up; migrate no boot da imagem)");
+                  toast.success(tx("wlDbUpdated"));
+                } else toast.error(st.error || tx("wlDbUpdateFail"));
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : String(err));
+              } finally {
+                setDbBusy(false);
+              }
+            }}
+          >
+            {dbBusy ? tx("wlDbUpdating") : tx("wlDbUpdate")}
+          </PrimaryBtn>
+          <GhostBtn
+            disabled={dbBusy}
+            onClick={async () => {
+              try {
+                setDb(await callWavelogDb("/api/wavelog/database"));
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : String(err));
+              }
+            }}
+          >
+            {tx("testApi")}
+          </GhostBtn>
+        </div>
+      </Panel>
 
       <Panel className="mt-4">
         <PanelTitle>Wavelog</PanelTitle>
@@ -136,6 +310,7 @@ export function WavelogPage() {
                 if (st.ok) {
                   pushLog("WLOG", `wavelog.service · ${w.folder} :${w.port} (boot)`);
                   toast.success(tx("wavelogRunning"));
+                  setDb(await callWavelogDb("/api/wavelog/database"));
                 } else {
                   const msg =
                     st.reason === "no-docker"
@@ -162,6 +337,7 @@ export function WavelogPage() {
               try {
                 applyStatus(await callWavelog("/api/wavelog/down", "POST"));
                 pushLog("WLOG", "Wavelog parado");
+                setDb(await callWavelogDb("/api/wavelog/database"));
               } finally {
                 setBusy(false);
               }

@@ -140,8 +140,8 @@ export default function Docs() {
                   en="Wavelog :8086, WaveLogGate UDP 2333 + CAT api/radio + QSY :54321, contest 3.0, Hamlib NET :4532."
                 />
                 <Li
-                  pt="MMDVM (WPSD): MMDVMHost no UART do modem, DMRGateway em 127.0.0.1:62031, console React na aba Operação."
-                  en="MMDVM (WPSD): MMDVMHost on the modem UART, DMRGateway on 127.0.0.1:62031, React console on the Operate tab."
+                  pt="MMDVM (WPSD): MMDVM Host no UART do modem, DMR Gateway em 127.0.0.1:62031, console React na aba Operação."
+                  en="MMDVM (WPSD): MMDVM Host on the modem UART, DMR Gateway on 127.0.0.1:62031, React console on the Operate tab."
                 />
               </ul>
             </Sec>
@@ -157,8 +157,8 @@ export default function Docs() {
               />
               <FigStation
                 caption={t({
-                  pt: "Planos: navegador (GATT + HTTP) · Node/nginx · ser2net · Hamlib · Docker Wavelog · SPP Lextel · MMDVMHost.",
-                  en: "Planes: browser (GATT + HTTP) · Node/nginx · ser2net · Hamlib · Docker Wavelog · Lextel SPP · MMDVMHost.",
+                  pt: "Planos: navegador (GATT + HTTP) · Node/nginx · ser2net · Hamlib · Docker Wavelog · SPP Lextel · MMDVM Host.",
+                  en: "Planes: browser (GATT + HTTP) · Node/nginx · ser2net · Hamlib · Docker Wavelog · Lextel SPP · MMDVM Host.",
                 })}
               />
               <h3>{t({ pt: "Quatro regras que não se quebram", en: "Four rules that do not break" })}</h3>
@@ -166,8 +166,8 @@ export default function Docs() {
                 <li>
                   <strong>{t({ pt: "Só o ser2net abre a TTY de CAT/acessório.", en: "Only ser2net opens the CAT/accessory TTY." })}</strong>{" "}
                   {t({
-                    pt: "Rádio Cat-USB e acessórios escolhem uma conexão IP. Dois programas na mesma serial = “COM em uso”. O UART do modem MMDVM é a exceção: MMDVMHost é o dono.",
-                    en: "Cat-USB radio and accessories pick an IP connection. Two programs on the same serial = “COM in use”. The MMDVM modem UART is the exception: MMDVMHost owns it.",
+                    pt: "Rádio Cat-USB e acessórios escolhem uma conexão IP. Dois programas na mesma serial = “COM em uso”. O UART do modem MMDVM é a exceção: MMDVM Host é o dono.",
+                    en: "Cat-USB radio and accessories pick an IP connection. Two programs on the same serial = “COM in use”. The MMDVM modem UART is the exception: MMDVM Host owns it.",
                   })}
                 </li>
                 <li>
@@ -699,8 +699,8 @@ export default function Docs() {
             <Sec id="mmdvm" title={t({ pt: "MMDVM — hotspot e repetidora (WPSD)", en: "MMDVM — hotspot and repeater (WPSD)" })}>
               <FigMmdvm
                 caption={t({
-                  pt: "Rádio DV → modem UART 115200 → MMDVMHost → DMRGateway 127.0.0.1:62031 (BrandMeister, TGIF, DMR+, XLX).",
-                  en: "DV radio → UART modem 115200 → MMDVMHost → DMRGateway 127.0.0.1:62031 (BrandMeister, TGIF, DMR+, XLX).",
+                  pt: "Rádio DV → modem UART 115200 → MMDVM Host → DMR Gateway 127.0.0.1:62031 (BrandMeister, TGIF, DMR+, XLX).",
+                  en: "DV radio → UART modem 115200 → MMDVM Host → DMR Gateway 127.0.0.1:62031 (BrandMeister, TGIF, DMR+, XLX).",
                 })}
               />
               <p>
@@ -720,8 +720,8 @@ export default function Docs() {
                   en="g4klx/MMDVMHost and g4klx/DMRGateway (GPL-2): Host on UART, DMR Type=Gateway, Remote Control TCP 7642."
                 />
                 <Li
-                  pt="manual.wpsd.radio: DMRGateway é o método suportado (não DMR direto no Host). Last heard JSON em /api/?limit=10."
-                  en="manual.wpsd.radio: DMRGateway is the supported method (not direct DMR in Host). Last heard JSON at /api/?limit=10."
+                  pt="manual.wpsd.radio: DMR Gateway é o método suportado (não DMR direto no Host). Last heard JSON em /api/?limit=10."
+                  en="manual.wpsd.radio: DMR Gateway is the supported method (not direct DMR in Host). Last heard JSON at /api/?limit=10."
                 />
               </ul>
               <h3>{t({ pt: "Como liga no Ham Cockpit", en: "How it hooks into Ham Cockpit" })}</h3>
@@ -739,24 +739,24 @@ export default function Docs() {
                   en="An MMDVM HAT on GPIO is 3.3 V — that is the hat design, not amp RS232. USB ZUMspot on /dev/ttyACM0. Never map that TTY in ser2net."
                 />
                 <Li
-                  pt="LCD Nextion no header do modem: Display=Nextion, Port=modem, Transparent Data SendFrameType=1 e NextionDriver (on7lds) com Port=modem — igual WPSD. Baud da tela no modem costuma ser 9600. OLED I2C: Display=OLED Type=3."
-                  en="Nextion LCD on the modem header: Display=Nextion, Port=modem, Transparent Data SendFrameType=1 and NextionDriver (on7lds) with Port=modem — same as WPSD. Modem-side screen baud is usually 9600. I2C OLED: Display=OLED Type=3."
+                  pt="LCD Nextion no header do modem: Display=Nextion, Port=modem, Transparent Data SendFrameType=1 e Nextion Display (on7lds) com Port=modem — igual WPSD. Baud da tela no modem costuma ser 9600. OLED I2C: Display=OLED Type=3."
+                  en="Nextion LCD on the modem header: Display=Nextion, Port=modem, Transparent Data SendFrameType=1 and Nextion Display (on7lds) with Port=modem — same as WPSD. Modem-side screen baud is usually 9600. I2C OLED: Display=OLED Type=3."
                 />
                 <Li
-                  pt="Modos nesta fase: DMR (DMRGateway), D-Star (ircDDBGateway) e YSF (YSFGateway). P25/NXDN/M17/POCSAG ficam para depois. HAT ADF7021 ouve um modo de cada vez."
-                  en="Modes in this phase: DMR (DMRGateway), D-Star (ircDDBGateway), and YSF (YSFGateway). P25/NXDN/M17/POCSAG wait. ADF7021 HATs hear one mode at a time."
+                  pt="Modos nesta fase: DMR (DMR Gateway), D-Star (D-Star Gateway) e YSF (YSF Gateway). P25/NXDN/M17/POCSAG ficam para depois. HAT ADF7021 ouve um modo de cada vez."
+                  en="Modes in this phase: DMR (DMR Gateway), D-Star (D-Star Gateway), and YSF (YSF Gateway). P25/NXDN/M17/POCSAG wait. ADF7021 HATs hear one mode at a time."
                 />
                 <Li
                   pt="Instant Mode Manager: Pause/Resume para DMR, YSF ou D-Star (para o systemd do gateway). Resume All restaura."
                   en="Instant Mode Manager: Pause/Resume for DMR, YSF, or D-Star (stops that gateway unit). Resume All restores."
                 />
                 <Li
-                  pt="YSF Manager: Startup YSF/FCS → Network Startup no ysfgateway.ini e restart só do YSFGateway. D-Star Manager: reflector + módulo → ircddbgateway.conf."
-                  en="YSF Manager: YSF/FCS startup → Network Startup in ysfgateway.ini and restart only YSFGateway. D-Star Manager: reflector + module → ircddbgateway.conf."
+                  pt="YSF Manager: Startup YSF/FCS → Network Startup no ysfgateway.ini e restart só do YSF Gateway. D-Star Manager: reflector + módulo → ircddbgateway.conf."
+                  en="YSF Manager: YSF/FCS startup → Network Startup in ysfgateway.ini and restart only YSF Gateway. D-Star Manager: reflector + module → ircddbgateway.conf."
                 />
                 <Li
-                  pt="DMR Network Manager: o chip da rede (BrandMeister, DMR+, TGIF, XLX) grava Enabled no dmrgateway.ini e reinicia só o DMRGateway."
-                  en="DMR Network Manager: the network chip (BrandMeister, DMR+, TGIF, XLX) writes Enabled in dmrgateway.ini and restarts only DMRGateway."
+                  pt="DMR Network Manager: o chip da rede (BrandMeister, DMR+, TGIF, XLX) grava Enabled no dmrgateway.ini e reinicia só o DMR Gateway."
+                  en="DMR Network Manager: the network chip (BrandMeister, DMR+, TGIF, XLX) writes Enabled in dmrgateway.ini and restarts only DMR Gateway."
                 />
                 <Li
                   pt="Remote Control TCP 7642: Enviar TG manda talkgroup TS TG. Last heard usa o filtro WPSD-WebCode getHeardList."
@@ -843,7 +843,7 @@ CI-V 705       0xA4
 GATT           14cf8001 / 14cf8002 / 14cf8003
 Lextel PIN     1234 ${pin} 0000
 MMDVM UART     /dev/ttyAMA0 115200
-DMRGateway     127.0.0.1:62031 ↔ Host :62032
+DMR Gateway     127.0.0.1:62031 ↔ Host :62032
 Remote         TCP 7642
 ${t({ pt: "Imagem", en: "Image" }).padEnd(14)}image/out/ham-cockpit-${APP_IMAGE_VERSION}-raspi.img.xz
 Release        github.com/fviudes/ham-cockpit/releases/tag/v${APP_IMAGE_VERSION}
@@ -876,8 +876,8 @@ OTA            v${APP_VERSION}`}</pre>
                 <li>
                   <strong>MMDVM:</strong>{" "}
                   {t({
-                    pt: "HAT em /dev/ttyAMA0 115200, Operação → MMDVM, ID DMR, BrandMeister no DMRGateway. Sem PHP na 80.",
-                    en: "HAT on /dev/ttyAMA0 115200, Operate → MMDVM, DMR ID, BrandMeister in DMRGateway. No PHP on 80.",
+                    pt: "HAT em /dev/ttyAMA0 115200, Operação → MMDVM, ID DMR, BrandMeister no DMR Gateway. Sem PHP na 80.",
+                    en: "HAT on /dev/ttyAMA0 115200, Operate → MMDVM, DMR ID, BrandMeister in DMR Gateway. No PHP on 80.",
                   })}
                 </li>
               </ul>
@@ -910,8 +910,8 @@ OTA            v${APP_VERSION}`}</pre>
                   en="Dead amp on the GPIO: it is gone. Switch to USB-RS232."
                 />
                 <Li
-                  pt="MMDVMHost ausente: coloque os binários WPSD em /usr/local/bin. Modem mudo: tire a TTY do ser2net; HAT usa ttyAMA0 a 115200."
-                  en="MMDVMHost missing: put WPSD binaries in /usr/local/bin. Silent modem: take that TTY off ser2net; the HAT uses ttyAMA0 at 115200."
+                  pt="MMDVM Host ausente: coloque os binários WPSD em /usr/local/bin. Modem mudo: tire a TTY do ser2net; HAT usa ttyAMA0 a 115200."
+                  en="MMDVM Host missing: put WPSD binaries in /usr/local/bin. Silent modem: take that TTY off ser2net; the HAT uses ttyAMA0 at 115200."
                 />
               </ul>
               <button
@@ -987,6 +987,6 @@ const PORT_ROWS = [
   { what: "rigctld 705", where: "libhamlib-utils", port: "TCP 4532 (-m 3085)" },
   { what: "ampctld SPE", where: "libhamlib-utils", port: "TCP 4531" },
   { what: "SSH", where: "sshd", port: "TCP 22" },
-  { what: "MMDVMHost", where: "/opt/ham-cockpit/mmdvm", port: "UART · Remote 7642" },
-  { what: "DMRGateway", where: "/opt/ham-cockpit/mmdvm", port: "127.0.0.1:62031/62032" },
+  { what: "MMDVM Host", where: "/opt/ham-cockpit/mmdvm", port: "UART · Remote 7642" },
+  { what: "DMR Gateway", where: "/opt/ham-cockpit/mmdvm", port: "127.0.0.1:62031/62032" },
 ];

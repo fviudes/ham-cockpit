@@ -41,12 +41,12 @@ export const HOME = {
     en: "Station with a Raspberry Pi, QRP radio, and wattmeter on the same desk",
   } satisfies Pair,
     figStation: {
-    pt: "IC-705 GATT · Lextel SPP · ser2net dono das TTY CAT · MMDVMHost dono do UART do modem · Wavelog :8086 · Hamlib :4532.",
-    en: "IC-705 GATT · Lextel SPP · ser2net owns CAT TTYs · MMDVMHost owns the modem UART · Wavelog :8086 · Hamlib :4532.",
+    pt: "IC-705 GATT · Lextel SPP · ser2net dono das TTY CAT · MMDVM Host dono do UART do modem · Wavelog :8086 · Hamlib :4532.",
+    en: "IC-705 GATT · Lextel SPP · ser2net owns CAT TTYs · MMDVM Host owns the modem UART · Wavelog :8086 · Hamlib :4532.",
   } satisfies Pair,
     archP: {
-    pt: "Quatro planos no mesmo Ubuntu: (1) rádio HF — Web Bluetooth ou Cat-USB no ser2net; (2) acessórios — SPE, Hamplus, Palstar, LDG, LP-100A, ACOM falam IP 127.0.0.1:porta; (3) aplicações — Wavelog, WaveLogGate, rigctld, nginx; (4) MMDVM — MMDVMHost no UART do hat/USB, DMRGateway em loopback. O GPIO 3,3 V do Pi nunca leva RS232 de amp; o HAT MMDVM é a exceção (já é 3,3 V).",
-    en: "Four planes on the same Ubuntu: (1) HF radio — Web Bluetooth or Cat-USB on ser2net; (2) accessories — SPE, Hamplus, Palstar, LDG, LP-100A, ACOM talk IP 127.0.0.1:port; (3) apps — Wavelog, WaveLogGate, rigctld, nginx; (4) MMDVM — MMDVMHost on the hat/USB UART, DMRGateway on loopback. The Pi 3.3 V GPIO never carries amp RS232; the MMDVM HAT is the exception (it already is 3.3 V).",
+    pt: "Quatro planos no mesmo Ubuntu: (1) rádio HF — Web Bluetooth ou Cat-USB no ser2net; (2) acessórios — SPE, Hamplus, Palstar, LDG, LP-100A, ACOM falam IP 127.0.0.1:porta; (3) aplicações — Wavelog, WaveLogGate, rigctld, nginx; (4) MMDVM — MMDVM Host no UART do hat/USB, DMR Gateway em loopback. O GPIO 3,3 V do Pi nunca leva RS232 de amp; o HAT MMDVM é a exceção (já é 3,3 V).",
+    en: "Four planes on the same Ubuntu: (1) HF radio — Web Bluetooth or Cat-USB on ser2net; (2) accessories — SPE, Hamplus, Palstar, LDG, LP-100A, ACOM talk IP 127.0.0.1:port; (3) apps — Wavelog, WaveLogGate, rigctld, nginx; (4) MMDVM — MMDVM Host on the hat/USB UART, DMR Gateway on loopback. The Pi 3.3 V GPIO never carries amp RS232; the MMDVM HAT is the exception (it already is 3.3 V).",
   } satisfies Pair,
   thLayer: { pt: "Camada", en: "Layer" } satisfies Pair,
   thRuns: { pt: "O que roda", en: "What runs" } satisfies Pair,
@@ -95,8 +95,8 @@ export const HOME = {
     en: "Config Device Wizard: USB serial → TCP 127.0.0.1:4001+ → device. Cat-USB radio becomes rigctld (-m 3085 on the 705). SPE uses ampctld. ACOM and LP-100A speak the native protocol on the raw port.",
   } satisfies Pair,
   figMmdvm: {
-    pt: "Rádio DV → modem MMDVM (UART 115200) → MMDVMHost → DMRGateway :62031 (BrandMeister / TGIF / DMR+ / XLX). Last heard lê /var/log/mmdvm.",
-    en: "DV radio → MMDVM modem (UART 115200) → MMDVMHost → DMRGateway :62031 (BrandMeister / TGIF / DMR+ / XLX). Last heard reads /var/log/mmdvm.",
+    pt: "Rádio DV → modem MMDVM (UART 115200) → MMDVM Host → DMR Gateway :62031 (BrandMeister / TGIF / DMR+ / XLX). Last heard lê /var/log/mmdvm.",
+    en: "DV radio → MMDVM modem (UART 115200) → MMDVM Host → DMR Gateway :62031 (BrandMeister / TGIF / DMR+ / XLX). Last heard reads /var/log/mmdvm.",
   } satisfies Pair,
   mmdvmP: {
     pt: "Módulo Operação → MMDVM no mesmo layout do portal (Space Grotesk, IBM Plex, navy/ciano/âmbar). Não porta o PHP do WPSD: usa os daemons, INI e last heard. repo.w0chp.net fica atrás de Anubis; o código estudado é o mirror WPSD-M17/WPSD-WebCode + g4klx/MMDVMHost.",
@@ -199,7 +199,7 @@ export const HOME_LAYERS: { layer: Pair; runs: Pair; talks: Pair }[] = [
   },
   {
     layer: { pt: "MMDVM / WPSD", en: "MMDVM / WPSD" },
-    runs: { pt: "MMDVMHost + DMRGateway", en: "MMDVMHost + DMRGateway" },
+    runs: { pt: "MMDVM Host + DMR Gateway", en: "MMDVM Host + DMR Gateway" },
     talks: { pt: "UART modem · 127.0.0.1:62031 · Remote 7642", en: "Modem UART · 127.0.0.1:62031 · Remote 7642" },
   },
 ];
@@ -248,8 +248,8 @@ export const HOME_PORTS: { svc: string; path: string; port: string; note: Pair }
   { svc: "ampctld SPE", path: "libhamlib-utils", port: "TCP 4531", note: { pt: "-r 127.0.0.1:4004", en: "-r 127.0.0.1:4004" } },
   { svc: "SSH", path: "sshd", port: "TCP 22", note: { pt: "hamcockpit / 1234 · root por senha off", en: "hamcockpit / 1234 · root password login off" } },
   { svc: "AP", path: "NetworkManager", port: "192.168.4.1", note: { pt: "SSID Ham-Cockpit-XXXX · senha hamcockpit", en: "SSID Ham-Cockpit-XXXX · password hamcockpit" } },
-  { svc: "MMDVMHost", path: "/opt/ham-cockpit/mmdvm", port: "UART · Remote 7642", note: { pt: "Dono do modem. Não ser2net", en: "Owns the modem. Not ser2net" } },
-  { svc: "DMRGateway", path: "/opt/ham-cockpit/mmdvm", port: "127.0.0.1:62031/62032", note: { pt: "BrandMeister / TGIF / DMR+ / XLX", en: "BrandMeister / TGIF / DMR+ / XLX" } },
+  { svc: "MMDVM Host", path: "/opt/ham-cockpit/mmdvm", port: "UART · Remote 7642", note: { pt: "Dono do modem. Não ser2net", en: "Owns the modem. Not ser2net" } },
+  { svc: "DMR Gateway", path: "/opt/ham-cockpit/mmdvm", port: "127.0.0.1:62031/62032", note: { pt: "BrandMeister / TGIF / DMR+ / XLX", en: "BrandMeister / TGIF / DMR+ / XLX" } },
 ];
 
 export const HOME_FEATURES: { title: Pair; body: Pair }[] = [
@@ -342,7 +342,7 @@ export const HOME_DEVICES: { name: string; link: Pair; serial: Pair; proto: Pair
   { name: "LDG AT-600/1000 ProII", link: { pt: "USB-TTL METER", en: "USB-TTL METER" }, serial: { pt: "38400 8N1", en: "38400 8N1" }, proto: { pt: "TTL 5 V — nunca RS232 de PC", en: "TTL 5 V — never PC RS232" } },
   { name: "TelePost LP-100A", link: { pt: "USB-RS232 reto", en: "Straight USB-RS232" }, serial: { pt: "115200 8N1", en: "115200 8N1" }, proto: { pt: "Poll P · A alarme · F Avg/Peak/Tune", en: "Poll P · A alarm · F Avg/Peak/Tune" } },
   { name: "ACOM 2000A", link: { pt: "USB-RS232 null-modem", en: "USB-RS232 null-modem" }, serial: { pt: "1200 8N1", en: "1200 8N1" }, proto: { pt: "Só 2–3/3–2/5–5 · RPON RTS+DTR 10 s", en: "Pins 2–3/3–2/5–5 only · RPON RTS+DTR 10 s" } },
-  { name: "MMDVM HAT / ZUMspot", link: { pt: "UART GPIO 3,3 V ou USB", en: "GPIO 3.3 V UART or USB" }, serial: { pt: "115200 8N1", en: "115200 8N1" }, proto: { pt: "MMDVMHost exclusivo · não ser2net", en: "MMDVMHost exclusive · not ser2net" } },
+  { name: "MMDVM HAT / ZUMspot", link: { pt: "UART GPIO 3,3 V ou USB", en: "GPIO 3.3 V UART or USB" }, serial: { pt: "115200 8N1", en: "115200 8N1" }, proto: { pt: "MMDVM Host exclusivo · não ser2net", en: "MMDVM Host exclusive · not ser2net" } },
 ];
 
 export const HOME_RECIPES: { kicker: Pair; title: Pair; points: Pair[] }[] = [
@@ -381,9 +381,9 @@ export const HOME_RECIPES: { kicker: Pair; title: Pair; points: Pair[] }[] = [
     title: { pt: "Hotspot MMDVM no mesmo Pi", en: "MMDVM hotspot on the same Pi" },
     points: [
       { pt: "HAT MMDVM no UART /dev/ttyAMA0 115200 (3,3 V) ou ZUMspot USB", en: "MMDVM HAT on UART /dev/ttyAMA0 115200 (3.3 V) or USB ZUMspot" },
-      { pt: "Não coloque o modem no ser2net — MMDVMHost é o dono", en: "Do not put the modem on ser2net — MMDVMHost owns it" },
-      { pt: "Operação → MMDVM: indicativo, ID DMR, DMRGateway BrandMeister", en: "Operate → MMDVM: callsign, DMR ID, DMRGateway BrandMeister" },
-      { pt: "Binários WPSD em /usr/local/bin/MMDVMHost e DMRGateway", en: "WPSD binaries in /usr/local/bin/MMDVMHost and DMRGateway" },
+      { pt: "Não coloque o modem no ser2net — MMDVM Host é o dono", en: "Do not put the modem on ser2net — MMDVM Host owns it" },
+      { pt: "Operação → MMDVM: indicativo, ID DMR, DMR Gateway BrandMeister", en: "Operate → MMDVM: callsign, DMR ID, DMR Gateway BrandMeister" },
+      { pt: "Binários WPSD em /usr/local/bin/MMDVMHost e DMR Gateway", en: "WPSD binaries in /usr/local/bin/MMDVMHost and DMR Gateway" },
     ],
   },
 ];
