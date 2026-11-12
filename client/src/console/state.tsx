@@ -1577,6 +1577,7 @@ export function formatWatts(w: number) {
   return w.toFixed(3);
 }
 
+/** smeter UI: 0..9 = S0..S9; 9..12 = S9..S9+60 (passo 1 = +20 dB). Ver shared/smeter.ts. */
 export function sMeterLabel(s: number) {
   if (s >= 9) {
     const over = Math.round((s - 9) * 20);

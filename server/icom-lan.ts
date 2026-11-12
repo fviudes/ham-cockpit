@@ -7,6 +7,7 @@ import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { createServer, type Server, type Socket } from "node:net";
 import { promisify } from "node:util";
 import { IcomControl, type IcomMode, type IcomModelId } from "icom-wlan-node";
+import { bcdMeterRaw, civRawToUiSMeter } from "../shared/smeter";
 
 const execFileAsync = promisify(execFile);
 
@@ -697,11 +698,16 @@ async function pollLanTelemetry(tick: number): Promise<LanTelemetry> {
       /* */
     }
   } else if (seq === 0 || seq === 2 || seq === 4 || seq === 6) {
-    try {
-      const meter = await control.getLevelMeter(q);
-      if (meter?.sUnits != null && Number.isFinite(meter.sUnits)) out.smeter = meter.sUnits;
-    } catch {
-      /* */
+    // Lê 15 02 com BCD de 2 bytes. icom-wlan-node.getLevelMeter usa só o byte
+    // baixo → escala comprimida (~S5 no lugar de S9+10). Ver shared/smeter.ts.
+    const meterFrame = await askCivReply(
+      (f) => f.length >= 9 && f[4] === 0x15 && f[5] === 0x02,
+      [0x15, 0x02],
+      q.timeout,
+    );
+    if (meterFrame) {
+      const raw = bcdMeterRaw(meterFrame[6]!, meterFrame[7]!);
+      out.smeter = civRawToUiSMeter(raw);
     }
   }
 

@@ -1,4 +1,5 @@
 /** Icom IC-705 CI-V over BLE — GATT 14cf8001 / char 14cf8002, handshake 0x61–0x64. */
+import { civRawToUiSMeter } from "@shared/smeter";
 
 export const IC705_SVC = "14cf8001-1ec2-d408-1b04-2eb270f14203";
 export const IC705_CHAR = "14cf8002-1ec2-d408-1b04-2eb270f14203";
@@ -838,11 +839,9 @@ function bcd2(hi: number, lo: number) {
   return ((hi >> 4) & 0x0f) * 1000 + (hi & 0x0f) * 100 + ((lo >> 4) & 0x0f) * 10 + (lo & 0x0f);
 }
 
-/** IC-705 15 02: 0000=S0, 0120=S9, 0241=S9+60 → UI S-units 0–12. */
+/** IC-705 15 02 BCD → escala UI 0–12 (ver shared/smeter.ts). */
 function sFromLevel(n: number) {
-  if (n <= 0) return 0;
-  if (n <= 120) return (n / 120) * 9;
-  return 9 + ((Math.min(241, n) - 120) / 121) * 3;
+  return civRawToUiSMeter(n);
 }
 
 /** 15 11: 0000=0%, 0143=50%, 0213=100% — IC-705 10 W. */

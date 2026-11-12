@@ -2,6 +2,7 @@
  * Roteia comandos do Painel/VFO para o rádio marcado como Principal:
  * BLE CI-V (navegador), Icom LAN UDP (POST /api/radios/civ) ou Hamlib NET.
  */
+import { hamlibStrengthToUiSMeter } from "@shared/smeter";
 import { ic705Ble } from "./ic705-ble";
 import type { StationRadio } from "./state";
 
@@ -119,8 +120,8 @@ export async function pollPrimaryTelemetry(
         const s = await postHamlibReply("\\get_level STRENGTH", port);
         const raw = Number.parseFloat(s);
         if (Number.isFinite(raw)) {
-          // Hamlib STRENGTH ≈ 0..100 → S0..S9+
-          patch.smeter = Math.max(0, Math.min(9.5, (raw / 100) * 9.5));
+          // Hamlib STRENGTH = dB relativo a S9 (−54…+60), não 0..100%.
+          patch.smeter = hamlibStrengthToUiSMeter(raw);
         }
       } catch {
         /* */
