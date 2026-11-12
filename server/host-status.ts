@@ -1,10 +1,33 @@
 import { execFile } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statfsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import os from "node:os";
 import { promisify } from "node:util";
 import { APP_VERSION } from "../shared/brand";
 import { serialDisplay, serialFromCpuinfo } from "../shared/license";
+import { cleanVersion } from "../shared/version";
 import { readDeviceSerial } from "./license";
+
+const HOST_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+/** Versão efetiva instalada: arquivo VERSION do pacote, não string stale do bundle. */
+function installedAppVersion(): string {
+  for (const p of [
+    join("/opt/ham-cockpit", "VERSION"),
+    join("/opt/cat-bridge", "VERSION"),
+    join(HOST_ROOT, "VERSION"),
+  ]) {
+    try {
+      if (!existsSync(p)) continue;
+      const v = cleanVersion(readFileSync(p, "utf8"));
+      if (v) return v;
+    } catch {
+      /* ignore */
+    }
+  }
+  return cleanVersion(APP_VERSION);
+}
 
 const execFileAsync = promisify(execFile);
 
@@ -569,7 +592,7 @@ function emptyStatus(error: string): HostStatus {
     hardware: "",
     soc: "",
     osPretty: "",
-    appVersion: APP_VERSION,
+    appVersion: installedAppVersion(),
     serial: null,
     serialDisplay: null,
     uptimeSec: Math.floor(os.uptime()),
@@ -616,7 +639,7 @@ export async function hostStatus(): Promise<HostStatus> {
       hardware: id.hardware,
       soc: id.soc,
       osPretty: id.osPretty,
-      appVersion: APP_VERSION,
+      appVersion: installedAppVersion(),
       serial: id.serial,
       serialDisplay: id.serialDisplay,
       uptimeSec: Math.floor(os.uptime()),

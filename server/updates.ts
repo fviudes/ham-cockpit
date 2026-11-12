@@ -99,12 +99,22 @@ function loadShipped(): Shipped {
     wavelog: "1.9.4",
     wlg: "1.0.0",
   };
-  try {
-    const raw = JSON.parse(readFileSync(SHIPPED, "utf8")) as Partial<Shipped>;
-    return { ...fallback, ...raw };
-  } catch {
-    return fallback;
+  const candidates = [
+    join("/opt/ham-cockpit", "versions.json"),
+    join("/opt/cat-bridge", "versions.json"),
+    join(ROOT, "versions.json"),
+    SHIPPED,
+  ];
+  for (const p of candidates) {
+    try {
+      if (!existsSync(p)) continue;
+      const raw = JSON.parse(readFileSync(p, "utf8")) as Partial<Shipped>;
+      return { ...fallback, ...raw };
+    } catch {
+      /* try next */
+    }
   }
+  return fallback;
 }
 
 function wlgShipped(): string {

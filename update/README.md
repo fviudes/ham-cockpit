@@ -23,7 +23,7 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
   "version": "0.1.07.08",
   "channel": "main",
   "file": "ham-cockpit-0.1.07.08.tgz",
-  "notes": "Ham Cockpit v0.1.07.08 — OTA: install idempotente do hc-tune (evita same-file), espelha WaveLogGate em /opt/wavelog-gate e não sobrescreve station-upd em execução."
+  "notes": "Ham Cockpit v0.1.07.08 — corrige OTA: hc-tune idempotente (sem same-file), WaveLogGate em /opt/wavelog-gate, station-upd não sobrescrito em execução, VERSION só após hooks OK, sidebar/host leem versão efetiva."
 }
 ```
 
