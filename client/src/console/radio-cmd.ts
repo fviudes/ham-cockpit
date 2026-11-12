@@ -58,8 +58,78 @@ async function postCiv(cmd: string, body: Record<string, unknown> = {}) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cmd, ...body }),
   });
-  const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+  const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; reply?: unknown };
   if (!r.ok || j.ok === false) throw new Error(j.error || `CI-V LAN HTTP ${r.status}`);
+  return j;
+}
+
+async function postHamlibReply(command: string, port = 4532, host = "127.0.0.1") {
+  const r = await fetch("/api/hamlib/cmd", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ command, port, host }),
+  });
+  const j = (await r.json().catch(() => ({}))) as { ok?: boolean; reply?: string; error?: string };
+  if (!r.ok || j.ok === false) throw new Error(j.error || `Hamlib HTTP ${r.status}`);
+  return String(j.reply || "").trim();
+}
+
+/** Poll telemetria do Principal (LAN CI-V ou Hamlib). BLE tem poll próprio. */
+export async function pollPrimaryTelemetry(
+  items: StationRadio[],
+  opts?: { bleReady?: boolean; hamlibPort?: number; tick?: number },
+): Promise<import("./ic705-ble").CivPatch | null> {
+  const route = resolvePrimaryRoute(items, opts);
+  if (!route.live || route.transport === "ble" || route.transport === "none") return null;
+
+  if (route.transport === "lan") {
+    const j = await postCiv("poll", { tick: opts?.tick ?? 0 });
+    const reply = (j.reply && typeof j.reply === "object" ? j.reply : null) as import("./ic705-ble").CivPatch | null;
+    return reply;
+  }
+
+  if (route.transport === "hamlib") {
+    const port = opts?.hamlibPort ?? 4532;
+    const patch: import("./ic705-ble").CivPatch = {};
+    const tick = opts?.tick ?? 0;
+    try {
+      const f = await postHamlibReply("f", port);
+      const hz = Number.parseFloat(f);
+      if (Number.isFinite(hz) && hz >= 100_000) patch.freq = Math.round(hz);
+    } catch {
+      /* */
+    }
+    if (tick % 3 === 1) {
+      try {
+        const m = await postHamlibReply("m", port);
+        const mode = m.split(/\s+/)[0]?.toUpperCase();
+        if (mode) patch.mode = mode;
+      } catch {
+        /* */
+      }
+    }
+    try {
+      const t = await postHamlibReply("t", port);
+      if (t === "1" || t === "0") patch.ptt = t === "1";
+    } catch {
+      /* */
+    }
+    if (!patch.ptt && tick % 2 === 0) {
+      try {
+        const s = await postHamlibReply("\\get_level STRENGTH", port);
+        const raw = Number.parseFloat(s);
+        if (Number.isFinite(raw)) {
+          // Hamlib STRENGTH ≈ 0..100 → S0..S9+
+          patch.smeter = Math.max(0, Math.min(9.5, (raw / 100) * 9.5));
+        }
+      } catch {
+        /* */
+      }
+    }
+    return Object.keys(patch).length ? patch : null;
+  }
+
+  return null;
 }
 
 async function postHamlib(command: string, port = 4532, host = "127.0.0.1") {

@@ -527,6 +527,12 @@ export async function icomLanCmd(
         const mode = await rig.readOperatingMode();
         return { ok: true, reply: { mode } };
       }
+      case "poll":
+      case "readTelemetry": {
+        const tick = Number(body.tick ?? 0) || 0;
+        const reply = await pollLanTelemetry(tick);
+        return { ok: true, reply };
+      }
       case "civ": {
         const hex = String(body.hex || "").replace(/\s+/g, "");
         if (!/^[0-9a-fA-F]+$/.test(hex) || hex.length < 10) return { ok: false, error: "frame CI-V inválido" };
@@ -539,4 +545,225 @@ export async function icomLanCmd(
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
+}
+
+type LanTelemetry = {
+  freq?: number;
+  freqA?: number;
+  freqB?: number;
+  mode?: string;
+  modeA?: string;
+  modeB?: string;
+  vfo?: "A" | "B";
+  ptt?: boolean;
+  smeter?: number;
+  po?: number;
+  swr?: number;
+  nr?: boolean;
+  nb?: boolean;
+  pre?: "OFF" | "ON1" | "ON2";
+  att?: boolean;
+  agc?: "OFF" | "FAST" | "MID" | "SLOW";
+  split?: boolean;
+};
+
+function mapModeReply(mode: {
+  modeName?: string;
+  dataMode?: boolean;
+  mode?: number;
+} | null): string | undefined {
+  if (!mode) return undefined;
+  const name = String(mode.modeName || "").toUpperCase();
+  if (!name) return undefined;
+  if (mode.dataMode && (name === "USB" || name === "LSB")) return `${name}-D`;
+  return name;
+}
+
+function askCivReply(match: (frame: Buffer) => boolean, body: number[], timeoutMs = 900): Promise<Buffer | null> {
+  const control = rig;
+  if (!control || phase !== "ready") return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (frame: Buffer | null) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      control.events.off("civFrame", onFrame);
+      resolve(frame);
+    };
+    const onFrame = (frame: Buffer) => {
+      try {
+        if (match(frame)) finish(Buffer.from(frame));
+      } catch {
+        /* */
+      }
+    };
+    const timer = setTimeout(() => finish(null), timeoutMs);
+    control.events.on("civFrame", onFrame);
+    try {
+      control.sendCiv(civPayload(...body));
+    } catch {
+      finish(null);
+    }
+  });
+}
+
+function parsePreFrame(frame: Buffer): "OFF" | "ON1" | "ON2" | undefined {
+  // FE FE E0 to 16 02 xx FD
+  if (frame.length < 8 || frame[4] !== 0x16 || frame[5] !== 0x02) return undefined;
+  const v = frame[6];
+  if (v === 0x02) return "ON2";
+  if (v === 0x01) return "ON1";
+  if (v === 0x00) return "OFF";
+  return undefined;
+}
+
+function parseAttFrame(frame: Buffer): boolean | undefined {
+  // FE FE E0 to 11 xx FD
+  if (frame.length < 7 || frame[4] !== 0x11) return undefined;
+  return frame[5] === 0x20;
+}
+
+function parseAgcFrame(frame: Buffer): "OFF" | "FAST" | "MID" | "SLOW" | undefined {
+  if (frame.length < 8 || frame[4] !== 0x16 || frame[5] !== 0x12) return undefined;
+  const v = frame[6];
+  if (v === 0x03) return "SLOW";
+  if (v === 0x02) return "MID";
+  if (v === 0x01) return "FAST";
+  if (v === 0x00) return "OFF";
+  return undefined;
+}
+
+/** Poll rotativo: freq/modo/PTT/S-meter sempre; filtros e VFO B em cadência menor. */
+async function pollLanTelemetry(tick: number): Promise<LanTelemetry> {
+  const control = rig;
+  const out: LanTelemetry = {};
+  if (!control || phase !== "ready") return out;
+
+  const q = { timeout: 1_200 } as const;
+  const seq = ((tick % 8) + 8) % 8;
+
+  try {
+    const vfo = await control.getVfo(q);
+    if (vfo === "A" || vfo === "B") out.vfo = vfo;
+  } catch {
+    /* */
+  }
+
+  try {
+    const hz = await control.readOperatingFrequency(q);
+    if (hz != null && hz >= 100_000) {
+      out.freq = hz;
+      if (out.vfo === "B") out.freqB = hz;
+      else out.freqA = hz;
+    }
+  } catch {
+    /* */
+  }
+
+  if (seq === 1 || seq === 5) {
+    try {
+      const mode = await control.readOperatingMode(q);
+      const mapped = mapModeReply(mode);
+      if (mapped) {
+        out.mode = mapped;
+        if (out.vfo === "B") out.modeB = mapped;
+        else out.modeA = mapped;
+      }
+    } catch {
+      /* */
+    }
+  }
+
+  try {
+    const ptt = await control.readPtt(q);
+    if (ptt != null) out.ptt = ptt;
+  } catch {
+    /* */
+  }
+
+  if (out.ptt) {
+    try {
+      const po = await control.readPowerLevel(q);
+      if (po?.watts != null && Number.isFinite(po.watts)) out.po = po.watts;
+      else if (po?.percent != null) out.po = Math.max(0, Math.min(10, (po.percent / 100) * 10));
+    } catch {
+      /* */
+    }
+    try {
+      const swr = await control.readSWR(q);
+      if (swr?.swr != null && Number.isFinite(swr.swr)) out.swr = swr.swr;
+    } catch {
+      /* */
+    }
+  } else if (seq === 0 || seq === 2 || seq === 4 || seq === 6) {
+    try {
+      const meter = await control.getLevelMeter(q);
+      if (meter?.sUnits != null && Number.isFinite(meter.sUnits)) out.smeter = meter.sUnits;
+    } catch {
+      /* */
+    }
+  }
+
+  if (seq === 3) {
+    try {
+      const nr = await control.getNoiseReductionEnabled(q);
+      if (nr != null) out.nr = nr;
+    } catch {
+      /* */
+    }
+    try {
+      const nb = await control.getNoiseBlankerEnabled(q);
+      if (nb != null) out.nb = nb;
+    } catch {
+      /* */
+    }
+  }
+
+  if (seq === 7) {
+    try {
+      const split = await control.getSplitEnabled(q);
+      if (split != null) out.split = split;
+    } catch {
+      /* */
+    }
+    const preFrame = await askCivReply((f) => f.length >= 8 && f[4] === 0x16 && f[5] === 0x02, [0x16, 0x02]);
+    const pre = preFrame ? parsePreFrame(preFrame) : undefined;
+    if (pre) out.pre = pre;
+    const attFrame = await askCivReply((f) => f.length >= 7 && f[4] === 0x11, [0x11]);
+    const att = attFrame ? parseAttFrame(attFrame) : undefined;
+    if (att != null) out.att = att;
+    const agcFrame = await askCivReply((f) => f.length >= 8 && f[4] === 0x16 && f[5] === 0x12, [0x16, 0x12]);
+    const agc = agcFrame ? parseAgcFrame(agcFrame) : undefined;
+    if (agc) out.agc = agc;
+  }
+
+  // VFO inativo: lê sem deixar o PTT ativo (troca rápida A↔B).
+  if (!out.ptt && (seq === 2 || seq === 6) && (out.vfo === "A" || out.vfo === "B")) {
+    const cur = out.vfo;
+    const other: "A" | "B" = cur === "A" ? "B" : "A";
+    try {
+      await control.setVfo(other);
+      const otherHz = await control.readOperatingFrequency(q);
+      const otherMode = await control.readOperatingMode(q);
+      await control.setVfo(cur);
+      if (otherHz != null && otherHz >= 100_000) {
+        if (other === "B") out.freqB = otherHz;
+        else out.freqA = otherHz;
+      }
+      const mapped = mapModeReply(otherMode);
+      if (mapped) {
+        if (other === "B") out.modeB = mapped;
+        else out.modeA = mapped;
+      }
+    } catch {
+      try {
+        await control.setVfo(cur);
+      } catch {
+        /* */
+      }
+    }
+  }
+
+  return out;
 }

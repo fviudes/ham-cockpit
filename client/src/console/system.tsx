@@ -506,7 +506,8 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
         id,
         current,
         available,
-        updatable: isNewerVersion(available, current),
+        updatable:
+          typeof hit?.updatable === "boolean" ? hit.updatable : isNewerVersion(available, current),
         applying,
         error: String(job?.error || hit?.error || ""),
         note: String(hit?.note || ""),
@@ -575,8 +576,17 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
         toast.error(j.error || tx("updFail"));
         return;
       }
-      toast.success(tx("updOk"));
-      pushLog("SYS", `${tx(UPD_LABEL[id])} → ${j.items?.find((row) => row.id === id)?.current || ""}`);
+      const after = j.items?.find((row) => row.id === id);
+      const stillPending =
+        Boolean(after) &&
+        (after!.updatable === true || isNewerVersion(String(after!.available || ""), String(after!.current || "")));
+      // OS: evita “sucesso” se o contador ainda mostra pacotes pendentes.
+      if (stillPending && id === "os") {
+        toast.message(`${tx("updOk")} · ${after?.available || tx("updReady")}`);
+      } else {
+        toast.success(tx("updOk"));
+      }
+      pushLog("SYS", `${tx(UPD_LABEL[id])} → ${after?.current || ""}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : tx("updFail"));
       setS((p) => ({

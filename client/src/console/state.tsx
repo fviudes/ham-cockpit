@@ -11,10 +11,51 @@ import {
 import { toast } from "sonner";
 import { t, type I18nKey, type Lang } from "./i18n";
 import { applyHtmlLang, LANG_EVENT, readLang, writeLang } from "./lang-store";
-import { bleAvailable, bleErrorMessage, ic705Ble, isBleCancel, looksLikeBleId, type BlePhase } from "./ic705-ble";
+import { bleAvailable, bleErrorMessage, ic705Ble, isBleCancel, looksLikeBleId, type BlePhase, type CivPatch } from "./ic705-ble";
+import { pollPrimaryTelemetry, resolvePrimaryRoute } from "./radio-cmd";
 import { SERVICE_IDS, UPDATE_IDS, asSer2netDevice, type ServiceId, type UpdateId, type Ser2netDevice } from "@shared/const";
 import { licenseGateOf, type LicenseGate } from "@shared/license";
 import { isNewerVersion } from "@shared/version";
+
+function asMode(v: string | undefined): Mode | undefined {
+  if (!v) return undefined;
+  const m = v.toUpperCase();
+  return (MODES as readonly string[]).includes(m) ? (m as Mode) : undefined;
+}
+
+/** Aplica patch CI-V (BLE notify ou poll LAN/Hamlib) ao estado do console. */
+function applyCivPatchToStation(prev: Station, patch: CivPatch): Station {
+  const next = { ...prev };
+  if (patch.freqA != null && patch.freqA >= 100_000) next.freq = patch.freqA;
+  if (patch.freqB != null && patch.freqB >= 100_000) next.freqB = patch.freqB;
+  if (patch.freq != null && patch.freq >= 100_000) {
+    const slot = patch.vfo || prev.vfo;
+    if (slot === "B") next.freqB = patch.freq;
+    else next.freq = patch.freq;
+  }
+  const modeA = asMode(patch.modeA);
+  const modeB = asMode(patch.modeB);
+  const mode = asMode(patch.mode);
+  if (modeA) next.mode = modeA;
+  if (modeB) next.modeB = modeB;
+  if (mode) {
+    const slot = patch.vfo || prev.vfo;
+    if (slot === "B") next.modeB = mode;
+    else next.mode = mode;
+  }
+  if (patch.ptt != null) next.ptt = patch.ptt;
+  if (patch.smeter != null) next.smeter = patch.smeter;
+  if (patch.po != null) next.po = patch.po;
+  if (patch.swr != null && !(prev.lextel.connected && prev.lextel.swr >= 1)) next.swr = patch.swr;
+  if (patch.agc) next.agc = patch.agc;
+  if (patch.pre) next.pre = patch.pre;
+  if (patch.att != null) next.att = patch.att;
+  if (patch.nr != null) next.nr = patch.nr;
+  if (patch.nb != null) next.nb = patch.nb;
+  if (patch.split != null) next.split = patch.split;
+  if (patch.vfo) next.vfo = patch.vfo;
+  return next;
+}
 
 export const BANDS = [
   { id: "160m", hz: 1_810_000 },
@@ -1359,29 +1400,7 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
         );
       },
       onCiv: (patch) => {
-        setS((prev) => {
-          const next = { ...prev };
-          if (patch.freq != null) {
-            if (prev.vfo === "B") next.freqB = Math.max(100_000, patch.freq);
-            else next.freq = Math.max(100_000, patch.freq);
-          }
-          if (patch.mode) {
-            if (prev.vfo === "B") next.modeB = patch.mode as Mode;
-            else next.mode = patch.mode as Mode;
-          }
-          if (patch.ptt != null) next.ptt = patch.ptt;
-          if (patch.smeter != null) next.smeter = patch.smeter;
-          if (patch.po != null) next.po = patch.po;
-          if (patch.swr != null && !(prev.lextel.connected && prev.lextel.swr >= 1)) next.swr = patch.swr;
-          if (patch.agc) next.agc = patch.agc;
-          if (patch.pre) next.pre = patch.pre;
-          if (patch.att != null) next.att = patch.att;
-          if (patch.nr != null) next.nr = patch.nr;
-          if (patch.nb != null) next.nb = patch.nb;
-          if (patch.split != null) next.split = patch.split;
-          if (patch.vfo) next.vfo = patch.vfo;
-          return next;
-        });
+        setS((prev) => applyCivPatchToStation(prev, patch));
       },
       onDisconnect: () => {
         setS((p) => ({
@@ -1395,10 +1414,48 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
     return () => ic705Ble.setListener(null);
   }, [lang, pushLog, setFreq]);
 
+  // Telemetria LAN/Hamlib → estado do painel/LCD (BLE já faz poll no ic705-ble).
+  useEffect(() => {
+    if (!active) return;
+    let stopped = false;
+    let busy = false;
+    let tick = 0;
+    const loop = async () => {
+      if (stopped || busy) return;
+      busy = true;
+      try {
+        const bleReady = Boolean(ic705Ble.connected);
+        const patch = await pollPrimaryTelemetry(radiosRef.current, {
+          bleReady,
+          hamlibPort: 4532,
+          tick: tick++,
+        });
+        if (patch && Object.keys(patch).length) {
+          setS((prev) => applyCivPatchToStation(prev, patch));
+        }
+      } catch {
+        /* transporte offline */
+      } finally {
+        busy = false;
+      }
+    };
+    const id = window.setInterval(() => void loop(), 450);
+    void loop();
+    return () => {
+      stopped = true;
+      window.clearInterval(id);
+    };
+  }, [active]);
+
   useEffect(() => {
     const id = window.setInterval(() => {
       setS((prev) => {
-        if (prev.ic705.phase === "ready") {
+        const bleReady = prev.ic705.phase === "ready" && prev.ic705.ble;
+        const route = resolvePrimaryRoute(prev.radios.items, { bleReady });
+        const liveCat = route.live && route.transport !== "none";
+
+        // Com CAT vivo (BLE/LAN/Hamlib) não inventa S-meter/PO — só anima acessórios.
+        if (liveCat) {
           if (prev.ptt) {
             return {
               ...prev,

@@ -99,37 +99,19 @@ export function VfoPanel() {
 
   return (
     <div className="relative overflow-hidden">
-      <div className="mb-2 space-y-1.5">
-        <h2 className="text-center text-xs font-semibold tracking-[0.2em] text-[#4fc3f7]">
-          {radioTitle}
-        </h2>
-        <div className="flex items-center justify-center gap-1.5">
-          <span className="font-['Space_Grotesk'] text-[11px] font-semibold tracking-wide text-[#ffb300]">VFO</span>
-          <span
-            className={`rounded-md px-2 py-0.5 font-['IBM_Plex_Mono'] text-[11px] font-semibold ${
-              s.ptt ? "text-[#5d7184]" : "bg-[#10b981]/15 text-[#34d399]"
-            }`}
-          >
-            {tx("rx")}
-          </span>
-          <span
-            className={`rounded-md px-2 py-0.5 font-['IBM_Plex_Mono'] text-[11px] font-bold ${
-              s.ptt ? "bg-[#ef4444] text-white" : "text-[#5d7184]"
-            }`}
-          >
-            {tx("tx")}
-          </span>
-          <span
-            className={`rounded-md px-2 py-0.5 font-['IBM_Plex_Mono'] text-[11px] font-semibold ${
-              liveCat ? "bg-[#10b981]/15 text-[#34d399]" : "bg-white/5 text-[#8ea0b3]"
-            }`}
-          >
-            {liveCat ? transportLabel : tx("bleTransport")}
-          </span>
-        </div>
-      </div>
-
       <Lcd className="min-w-0">
+        {/* Mesmo padrão do título "LEXTEL MS-2000" no card Lextel. */}
+        <div className="mb-3 flex items-center justify-between border-b border-[#0c2236] pb-3">
+          <span className="text-xs font-semibold tracking-[0.2em] text-[#4fc3f7]">{radioTitle}</span>
+          <span
+            className={`rounded px-2 py-0.5 text-[11px] font-bold ${
+              s.ptt ? "bg-[#ef4444]/20 text-[#f87171]" : "bg-[#10b981]/20 text-[#34d399]"
+            }`}
+          >
+            {s.ptt ? tx("tx") : tx("rx")}
+          </span>
+          <span className="text-[11px] text-[#8ea0b3]">{liveCat ? transportLabel : tx("bleTransport")}</span>
+        </div>
         <div className="grid grid-cols-2 divide-x divide-[#0c2236]">
           <div className="pr-2.5">
             <VfoFace

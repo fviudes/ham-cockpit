@@ -48,8 +48,18 @@ os_pretty() {
 }
 
 os_upgradable() {
-  # apt list --upgradable no Pi 3 leva dezenas de segundos. Arquivo do motd é instantâneo.
+  # Contagem rápida: motd/notifier. No refresh (UPD_POLICY=1) força apt-check / simulação.
   local n=""
+  if [[ "${UPD_POLICY:-0}" == 1 ]]; then
+    if [[ -x /usr/lib/update-notifier/apt-check ]]; then
+      n="$(timeout 8 /usr/lib/update-notifier/apt-check 2>&1 | awk -F';' '{print $1+0}')" || true
+    fi
+    if [[ -z "${n:-}" || "${n:-0}" -eq 0 ]]; then
+      n="$(timeout 20 apt-get -s -o Debug::NoLocking=1 upgrade 2>/dev/null | grep -c '^Inst ' || true)"
+    fi
+    echo "${n:-0}"
+    return 0
+  fi
   if [[ -f /var/lib/update-notifier/updates-available ]]; then
     n="$(grep -Eo '^[0-9]+' /var/lib/update-notifier/updates-available 2>/dev/null | head -n 1 || true)"
   fi
@@ -57,6 +67,19 @@ os_upgradable() {
     n="$(timeout 2 /usr/lib/update-notifier/apt-check 2>&1 | awk -F';' '{print $1+0}')" || true
   fi
   echo "${n:-0}"
+}
+
+# Regrava o contador do motd para o card OS não ficar "pendente" eterno após o apply.
+refresh_os_notifier() {
+  local n=0
+  if [[ -x /usr/lib/update-notifier/apt-check ]]; then
+    n="$(timeout 8 /usr/lib/update-notifier/apt-check 2>&1 | awk -F';' '{print $1+0}')" || n=0
+  else
+    n="$(timeout 20 apt-get -s -o Debug::NoLocking=1 upgrade 2>/dev/null | grep -c '^Inst ' || true)"
+  fi
+  n="${n:-0}"
+  mkdir -p /var/lib/update-notifier
+  printf '%s updates can be applied immediately.\n' "$n" >/var/lib/update-notifier/updates-available
 }
 
 docker_wavelog_ver() {
@@ -589,13 +612,30 @@ for line in sys.stdin:
 }
 
 apply_os() {
-  apt_prepare os
-  run_with_heartbeat os update 10 20 25 timeout 45 apt-get update -qq || true
+  apt_prepare os || return 1
+  emit_progress os 10 update 1
+  # Antes engolia falha do update com `|| true` → upgrade no-op e toast de sucesso falso.
+  if ! run_with_heartbeat os update 10 20 25 timeout 90 apt-get update -qq; then
+    echo "falha no apt-get update (sem índices novos o upgrade não aplica nada)" >&2
+    return 1
+  fi
   emit_progress os 22 install 1
-  if ! apt_with_progress os upgrade >/dev/null; then
+  local pending
+  pending="$(timeout 25 apt-get -s -o Debug::NoLocking=1 upgrade 2>/dev/null | grep -c '^Inst ' || true)"
+  pending="${pending:-0}"
+  if [[ "$pending" -eq 0 ]]; then
+    echo "nenhum pacote pendente no apt; sincronizando contador do console" >&2
+    refresh_os_notifier
+    emit_progress os 100 done 1
+    return 0
+  fi
+  echo "aplicando $pending pacote(s) via apt-get upgrade --with-new-pkgs" >&2
+  # --with-new-pkgs cobre deps novas sem o risco amplo do full-upgrade.
+  if ! apt_with_progress os upgrade --with-new-pkgs; then
     echo "falha no apt-get upgrade (veja o journal: journalctl -u ham-cockpit)" >&2
     return 1
   fi
+  refresh_os_notifier
   emit_progress os 100 done 1
 }
 

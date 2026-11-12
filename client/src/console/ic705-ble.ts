@@ -17,7 +17,11 @@ export type BlePhase =
 
 export type CivPatch = {
   freq?: number;
+  freqA?: number;
+  freqB?: number;
   mode?: string;
+  modeA?: string;
+  modeB?: string;
   ptt?: boolean;
   smeter?: number;
   po?: number;

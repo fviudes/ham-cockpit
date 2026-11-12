@@ -125,15 +125,25 @@ function jobOf(id: UpdateId): UpdateJob | undefined {
   return jobs.get(id);
 }
 
-function item(id: UpdateId, current: string, available: string, note = "", error = ""): UpdateItem {
+function item(
+  id: UpdateId,
+  current: string,
+  available: string,
+  note = "",
+  error = "",
+  helperUpdatable?: boolean | null,
+): UpdateItem {
   const cur = current || "—";
   const avail = available || cur;
   const job = jobOf(id);
+  // OS usa "N pacotes" (não semver). Honra o flag do station-upd quando vier.
+  const updatable =
+    typeof helperUpdatable === "boolean" ? helperUpdatable : newer(avail, cur);
   return {
     id,
     current: cur,
     available: avail,
-    updatable: newer(avail, cur),
+    updatable,
     applying: job?.status === "running",
     error: job?.error || error,
     note,
@@ -266,10 +276,23 @@ function parseHelperOut(stdout: string): UpdatesSnapshot | null {
     const byId = new Map(parsed.items.map((row) => [row.id as UpdateId, row]));
     const items = UPDATE_IDS.map((id) => {
       const hit = byId.get(id);
+      const helperUp =
+        typeof hit?.updatable === "boolean"
+          ? hit.updatable
+          : id === "os" && /pacotes/i.test(String(hit?.available || ""))
+            ? true
+            : null;
       if (id === "app") {
         const cur = appCurrent() || String(hit?.current || "");
         const avail = String(hit?.available || cur);
-        return item("app", cur, avail, String(hit?.note || `github.com/${UPDATE_REPO}/update`), String(hit?.error || ""));
+        return item(
+          "app",
+          cur,
+          avail,
+          String(hit?.note || `github.com/${UPDATE_REPO}/update`),
+          String(hit?.error || ""),
+          helperUp,
+        );
       }
       return item(
         id,
@@ -277,6 +300,7 @@ function parseHelperOut(stdout: string): UpdatesSnapshot | null {
         String(hit?.available || hit?.current || ""),
         String(hit?.note || ""),
         String(hit?.error || ""),
+        helperUp,
       );
     });
     return snapshot(items, String(parsed.os || ""), parsed.ok !== false, String(parsed.error || ""));
