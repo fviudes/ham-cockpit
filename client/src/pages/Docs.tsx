@@ -22,6 +22,7 @@ import { PRODUCT, Photo } from "./product-media";
 import { useSiteLang, type Pair } from "./site-lang";
 import { DOCS_TOC } from "./site-copy";
 import { EquipmentGuide } from "@/console/equipment-guide";
+import { Screen } from "@/console/manual-screens";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 12 },
@@ -336,6 +337,9 @@ export default function Docs() {
                   en="Firefox has no Web Bluetooth — use Chrome or Edge. Secure origin: HTTPS or the Pi IP on the LAN."
                 />
               </ul>
+              <Screen name="console-login" className="my-4" />
+              <Screen name="console-painel" className="my-4" />
+              <Screen name="console-menu-celular" narrow className="my-4" />
             </Sec>
 
             <Sec id="equipamentos" title={t({ pt: "Rádios suportados", en: "Supported radios" })}>
@@ -416,6 +420,14 @@ export default function Docs() {
                   })}
                 </li>
               </ul>
+              <h3>{t({ pt: "IC-705 pela rede (Icom LAN)", en: "IC-705 over the network (Icom LAN)" })}</h3>
+              <p>
+                {t({
+                  pt: "Com o rádio na mesma rede (Wi‑Fi ou cabo), escolha Icom, modo Rede, informe o IP do rádio, a porta 50001, o Network User e a senha. O Pi autentica (UDP 50001–50003) e abre o CI-V no Painel e no Hamlib (TCP local 45002 → :4532).",
+                  en: "With the radio on the same network (Wi‑Fi or cable) pick Icom, Network mode, the radio IP, port 50001, Network User and password. The Pi authenticates (UDP 50001–50003) and opens CI-V for the Panel and Hamlib (local TCP 45002 → :4532).",
+                })}
+              </p>
+              <Screen name="console-radio-ic705-lan" className="my-4" />
             </Sec>
 
             <Sec id="lextel" title={t({ pt: "Lextel MS-2000 (SPP Classic)", en: "Lextel MS-2000 (Classic SPP)" })}>
@@ -436,6 +448,7 @@ export default function Docs() {
                   en: "on the server reopens SPP if Windows drops the COM during the GATT handshake. On Windows use the outgoing COM, not the incoming one.",
                 })}
               </p>
+              <Screen name="console-lextel" className="my-4" />
             </Sec>
 
             <Sec id="acessorios" title={t({ pt: "Acessórios no wizard (ser2net)", en: "Accessories in the wizard (ser2net)" })}>
@@ -475,6 +488,13 @@ export default function Docs() {
                   en: "AT-100ProII has no METER jack — the LDG panel on that model is button mimicry only. LP-100A firmware < 1.2.0.0 uses 38400; < 1.0.3 uses 19200 (set baud on the ser2net connection).",
                 })}
               </p>
+              <Screen name="console-assistente" className="my-4" />
+              <Screen name="console-spe" className="my-4" />
+              <Screen name="console-hamplus" className="my-4" />
+              <Screen name="console-palstar" className="my-4" />
+              <Screen name="console-ldg" className="my-4" />
+              <Screen name="console-lp100a" className="my-4" />
+              <Screen name="console-acom" className="my-4" />
             </Sec>
 
             <Sec id="wavelog" title={t({ pt: "Wavelog — o logbook da estação", en: "Wavelog — the station logbook" })}>
@@ -554,6 +574,7 @@ export default function Docs() {
                   en: "paste the API key (Admin → API) and the Station ID of the profile. Test API should go green. Open logbook / Open installer.",
                 })}
               </p>
+              <Screen name="console-wavelog" className="my-4" />
             </Sec>
 
             <Sec id="wlg" title={t({ pt: "WaveLogGate — o serviço que recebe os QSOs", en: "WaveLogGate — the station UDP service" })}>
@@ -783,6 +804,9 @@ export default function Docs() {
                   en="Do not install Pi-Star Apache/PHP on port 80. Canonical sources: repo.w0chp.net/WPSD-Dev (WebCode, unit_files, Binaries) and manual.wpsd.radio."
                 />
               </ul>
+              <Screen name="console-mmdvm" className="my-4" />
+              <Screen name="console-mmdvm-redes" className="my-4" />
+              <Screen name="console-mmdvm-ouvidos" className="my-4" />
             </Sec>
 
             <Sec id="rede" title={t({ pt: "Wi‑Fi da casa e Wi‑Fi do Pi no campo", en: "Home Wi‑Fi and the field AP" })}>
@@ -800,6 +824,8 @@ export default function Docs() {
                   en="Status shows the live LAN IP and the AP IP. SSH :22 as hamcockpit / 1234."
                 />
               </ul>
+              <Screen name="console-rede-wifi" className="my-4" />
+              <Screen name="console-bluetooth" className="my-4" />
             </Sec>
 
             <Sec id="portas" title={t({ pt: "Mapa de portas e pastas", en: "Port and folder map" })}>
@@ -823,6 +849,7 @@ export default function Docs() {
                   </tbody>
                 </table>
               </div>
+              <Screen name="console-ser2net" className="my-4" />
             </Sec>
 
             <Sec id="cabos" title={t({ pt: "Cabos e níveis elétricos", en: "Cables and electrical levels" })}>
@@ -847,6 +874,14 @@ export default function Docs() {
                   en: "Services tab: each switch is start-on-boot (radio, bluetooth, lextel, ser2net, wavelog, mmdvm, web…). Turning off Webserver blocks the console after reboot. Updates: app (GitHub fviudes/ham-cockpit), OS, ser2net, hamlib (libhamlib-utils), Wavelog, Gate. Backup saves ser2net, radios, layouts, LDG, LP-100A, net, services, Lextel, MMDVM.",
                 })}
               </p>
+              <Screen name="console-status" className="my-4" />
+              <Screen name="console-servicos" className="my-4" />
+              <Screen name="console-atualizacoes" className="my-4" />
+              <Screen name="console-atualizacoes-progresso" className="my-4" />
+              <Screen name="console-admin" className="my-4" />
+              <Screen name="console-backup" className="my-4" />
+              <Screen name="console-terminal" className="my-4" />
+              <Screen name="console-logs" className="my-4" />
             </Sec>
 
             <Sec id="config" title={t({ pt: "Referência rápida de configuração", en: "Quick config reference" })}>
