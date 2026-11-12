@@ -2,11 +2,11 @@
 
 | Item | Valor |
 | --- | --- |
-| Status | **Proposta para aprovação** (nada disto está implementado) |
+| Status | **Fases 1–3 em implementação** (modo observação no aparelho; bloqueio OFF) |
 | Data | 2026-11-12 |
-| Escopo | Chave de licença por serial do Raspberry Pi, trial de 30 dias, compra pelo portal (PayPal e PicPay), módulo admin, bloqueio do aparelho ao expirar |
-| Código afetado (futuro) | `shared/`, `server/`, `client/src/console/`, `client/src/portal/`, `deploy/station/`, `functions/` (novo), `migrations/` (novo), `scripts/`, `image/` |
-| Este documento | Só planejamento. Nenhum arquivo de produto, `VERSION`, `versions.json` ou `update/*` foi alterado. |
+| Escopo | Chave de licença por serial do Raspberry Pi, trial de 30 dias, compra pelo portal (PayPal e PicPay), módulo admin; enforce fica para fase posterior |
+| Código | `shared/license*`, `functions/`, `migrations/`, `server/license*`, portal `/licenca` `/comprar` `/admin`, aba Licença no console |
+| Este documento | Plano + decisões do proprietário (abaixo). |
 
 Lê-se em ordem: o [resumo executivo](#1-resumo-executivo-e-decisões-recomendadas) basta para decidir;
 o resto é a especificação para implementar.
@@ -1550,31 +1550,20 @@ OTA assinado, revisão LGPD.
 
 ---
 
-## 21. Perguntas em aberto
+## 21. Decisões do proprietário (2026-11-12)
 
-Não é preciso responder para o plano andar; as respostas ajustam o que for implementado.
-
-| # | Pergunta | Recomendação padrão |
+| # | Tema | Decisão |
 | --- | --- | --- |
-| Q1 | O código continua **MIT** e público? Quem copia pode vender fork sem a trava. Troca para licença que proíba remover a trava (fonte disponível/proprietária) é decisão sua | Manter público por enquanto; revisar a licença antes do `enforce` |
-| Q2 | Qual o **preço em USD**, spread (3%?) e arredondamento? | US$ 29, spread 3%, arredondar ao real |
-| Q3 | Política de **reembolso**: 7 dias (CDC) automático? Depois disso, manual? Reembolso revoga a licença? | Sim, 7 dias automático, depois manual; revoga |
-| Q4 | A definitiva é **perpétua** ou terá renovação? Inclui **todas as atualizações** da linha `0.x` para sempre? | Perpétua; cobre a linha `0.x`; major novo é decisão de venda |
-| Q5 | **Troca de placa**: quantas por licença? Quem aprova (automático por e-mail ou admin)? | 2 por ano, confirmação por e-mail |
-| Q6 | O que a licença cobre quando a versão **1.0** sair? | Define-se no lançamento; o campo `line` já suporta |
-| Q7 | Você tem **CNPJ/MEI**? Isso decide o PicPay Empresas e a nota fiscal (NFS-e) | Sem CNPJ: PayPal + Mercado Pago (Pix) |
-| Q8 | Tolerância pós-vencimento (`EXPIRY_GRACE`) e adiar o bloqueio se houver atividade (concurso)? | 0 h; sem adiamento; faixa de aviso 7/3/1 dias |
-| Q9 | **VMs e QEMU** de desenvolvedores (sem serial): liberar com chave `dev` ou bloquear? | Chave `dev` só nas imagens de teste |
-| Q10 | **Provisório offline**: 7 dias é bom? Menos fecha a brecha do reflash; mais ajuda o campo | 7 dias |
-| Q11 | **Domínio próprio** e o nome? Habilita o Access, estabiliza a URL e é útil nos provedores | Registrar agora |
-| Q12 | **Autenticação do admin**: Access (domínio) ou contingência por chave + TOTP até lá? | Contingência na Fase 2, Access na 3 |
-| Q13 | Plano pago do Workers (US$ 5/mês) se a cota Free apertar? Desbloqueia 30 s de CPU, cron e mais | Só se necessário |
-| Q14 | **Aparelhos já em campo**: trial de 30 dias contado da atualização, ou liberar definitiva de cortesia para os primeiros usuários (`source='migration'`)? | Cortesia para a lista que você indicar |
-| Q15 | PicPay: **Carteira E-commerce** (endpoints confirmados) ou **API de Checkout** (tem sandbox)? Precisa de CPF do comprador | E-commerce primeiro |
-| Q16 | Mover o **OTA** para o portal (R2) permite repositório privado. Quer isso? | Fase 6, opcional |
-| Q17 | Idioma: o portal já é pt/en. Há outros idiomas (es) para a compra? | Manter pt/en |
+| Q1 | Licença do código | Continua **MIT** e repositório público |
+| Q2 | Preço / spread | Preço **USD parametrizado no admin**; spread **3%**; USD→BRL pela cotação oficial do dia no pagamento; checkout mostra "preço não configurado" até definir |
+| Q3 | Reembolso | **Sem reembolso** (já houve trial de 30 dias) |
+| Q7 | CNPJ / NF | Tem CNPJ (PicPay PJ viável); **sem NF** nesta fase |
+| Q11 | Domínio | **Sem domínio próprio** por enquanto → auth de contingência do admin (chave + TOTP) |
+| Q12 | Auth admin | Contingência (bootstrap + TOTP); Access quando houver domínio |
+| Q14 | Aparelhos em campo | **Nenhum em campo** → todo aparelho nasce com trial |
+| — | Enforce | Modo **observação** nesta entrega (`HONOR_PORTAL_POLICY = false`; bloqueio OFF) |
 
----
+Perguntas ainda abertas (não bloqueiam Fases 1–3): Q4–Q6, Q8–Q10, Q13, Q15–Q17 — valem as recomendações do plano até nova decisão.
 
 ## 22. Fontes
 
