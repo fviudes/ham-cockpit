@@ -39,6 +39,7 @@ import {
   hubUpsertBinding,
 } from "./hamlib-hub";
 import { icomLanCmd, icomLanStatus } from "./icom-lan";
+import { registerLicenseRoutes } from "./license";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,6 +49,7 @@ async function startServer() {
   const server = createServer(app);
   app.use(express.json({ limit: "32kb" }));
   attachTerminal(server);
+  registerLicenseRoutes(app);
 
   // Serve static files from dist/public in production
   const staticPath =

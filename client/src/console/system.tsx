@@ -9,6 +9,7 @@ import type { I18nKey } from "./i18n";
 import { formatWatts, useConsole, type LogKind } from "./state";
 import { TermPage } from "./term";
 import { BackupPage } from "./backup";
+import { LicensePage } from "./license";
 import { ActionProgress, Chip, ConsoleInput, Field, GhostBtn, PageHead, Panel, PanelTitle, PrimaryBtn, progressHint, stageLabel } from "./widgets";
 
 type LinuxUser = { name: string; sudo: boolean };
@@ -100,7 +101,7 @@ export function AdminPage() {
   const [loc, navigate] = useLocation();
   const path = loc.replace(/^\/console\/?/, "").split(/[?#]/)[0] || "admin";
   const tab =
-    path === "logs" || path === "term" || path === "services" || path === "updates" || path === "password" || path === "backup"
+    path === "logs" || path === "term" || path === "services" || path === "updates" || path === "password" || path === "backup" || path === "license"
       ? path
       : "admin";
   const [nu, setNu] = useState("");
@@ -188,7 +189,9 @@ export function AdminPage() {
                     ? tx("changePass")
                     : tab === "backup"
                       ? tx("backupTitle")
-                      : tx("adminTitle")
+                      : tab === "license"
+                        ? tx("licTab")
+                        : tx("adminTitle")
         }
       />
       <div className="mb-5 flex flex-wrap gap-2">
@@ -207,6 +210,9 @@ export function AdminPage() {
         <Chip active={tab === "backup"} onClick={() => navigate("/console/backup")}>
           {tx("backup")}
         </Chip>
+        <Chip active={tab === "license"} onClick={() => navigate("/console/license")}>
+          {tx("licTab")}
+        </Chip>
         <Chip active={tab === "logs"} onClick={() => navigate("/console/logs")}>
           {tx("logs")}
         </Chip>
@@ -218,6 +224,7 @@ export function AdminPage() {
       {tab === "services" ? <ServicesPage embedded /> : null}
       {tab === "updates" ? <UpdatesPage embedded /> : null}
       {tab === "backup" ? <BackupPage embedded /> : null}
+      {tab === "license" ? <LicensePage embedded /> : null}
       {tab === "logs" ? <LogsPage embedded /> : null}
       {tab === "term" ? <TermPage embedded /> : null}
       {tab !== "admin" ? null : (
