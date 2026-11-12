@@ -70,7 +70,8 @@ async function listLicenses(ctx: Ctx, url: URL): Promise<Response> {
   }
   args.push(lim + 1);
   const rows = await ctx.env.DB.prepare(
-    `SELECT l.id, l.serial, l.type, l.status, l.source, l.issued_at, l.expires_at, l.revoked_reason, l.token, d.last_country, d.last_seen_at, d.is_test, d.last_app_version
+    `SELECT l.id, l.serial, l.type, l.status, l.source, l.issued_at, l.expires_at, l.revoked_reason, l.token,
+            d.last_country, d.last_seen_at, d.is_test, d.last_app_version, d.callsign, d.licensed_at
      FROM licenses l JOIN devices d ON d.serial = l.serial
      ${where.length ? "WHERE " + where.join(" AND ") : ""}
      ORDER BY l.issued_at DESC, l.id DESC LIMIT ?${args.length}`,
@@ -90,26 +91,36 @@ async function listLicenses(ctx: Ctx, url: URL): Promise<Response> {
       last_seen_at: number;
       is_test: number;
       last_app_version: string | null;
+      callsign: string | null;
+      licensed_at: number | null;
     }>();
   const more = rows.results.length > lim;
   const items = rows.results.slice(0, lim);
   const last = items[items.length - 1];
   return json({
-    items: items.map(r => ({
-      id: r.id,
-      serial: maskSerial(r.serial),
-      token: r.token,
-      type: r.type,
-      status: effectiveStatus(ctx, r.status, r.expires_at),
-      source: r.source,
-      issuedAt: r.issued_at,
-      expiresAt: r.expires_at,
-      country: r.last_country,
-      lastSeenAt: r.last_seen_at,
-      appVersion: r.last_app_version,
-      isTest: !!r.is_test,
-      revokedReason: r.revoked_reason,
-    })),
+    items: items.map(r => {
+      const status = effectiveStatus(ctx, r.status, r.expires_at);
+      // Definitiva: preferir licensed_at (virada do pagamento); trial/outros: issued_at.
+      const licensedAt =
+        r.type === "definitive" && r.licensed_at != null ? r.licensed_at : r.issued_at;
+      return {
+        id: r.id,
+        serial: maskSerial(r.serial),
+        token: r.token,
+        type: r.type,
+        status,
+        source: r.source,
+        issuedAt: r.issued_at,
+        licensedAt,
+        callsign: r.callsign || null,
+        expiresAt: r.expires_at,
+        country: r.last_country,
+        lastSeenAt: r.last_seen_at,
+        appVersion: r.last_app_version,
+        isTest: !!r.is_test,
+        revokedReason: r.revoked_reason,
+      };
+    }),
     nextCursor: more && last ? `${last.issued_at}|${last.id}` : null,
   });
 }

@@ -177,7 +177,16 @@ export async function createDefinitive(
     .bind(lid, serial, source, PRODUCT_LINE, now, kid, token, paymentId, actor)
     .run();
   const created = (r.meta.changes ?? 0) > 0;
-  if (created) await licenseEvent(ctx, "definitive_issued", actor, serial, lid, { source, paymentId });
+  if (created) {
+    await licenseEvent(ctx, "definitive_issued", actor, serial, lid, { source, paymentId });
+    // Data/hora da virada trial → definitiva (grid admin e cadastro do aparelho).
+    await ctx.env.DB.prepare("UPDATE devices SET licensed_at = ?2 WHERE serial = ?1").bind(serial, now).run();
+    await ctx.env.DB.prepare(
+      "UPDATE licenses SET status = 'superseded' WHERE serial = ?1 AND type = 'trial' AND status = 'active' AND id <> ?2",
+    )
+      .bind(serial, lid)
+      .run();
+  }
   const row = await ctx.env.DB.prepare("SELECT * FROM licenses WHERE id = ?1").bind(lid).first<LicenseRow>();
   if (row) return { license: row, created };
   const again = await ctx.env.DB.prepare("SELECT * FROM licenses WHERE serial = ?1 AND type = 'definitive' AND status = 'active'").bind(serial).first<LicenseRow>();

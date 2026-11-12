@@ -5,7 +5,29 @@ import { ADM, LIC } from "./license-copy";
 
 type Me = { ok?: boolean; id?: string; csrf?: string; role?: string; username?: string };
 type Summary = { devices?: number; trialsActive?: number; definitive?: number; paid?: number };
-type LicRow = { id: string; serial: string; token?: string; type: string; status: string; issuedAt: number; expiresAt: number | null };
+type LicRow = {
+  id: string;
+  serial: string;
+  token?: string;
+  type: string;
+  status: string;
+  issuedAt: number;
+  licensedAt?: number | null;
+  callsign?: string | null;
+  expiresAt: number | null;
+};
+
+function formatLicensedAt(sec: number | null | undefined): string {
+  if (sec == null || !Number.isFinite(sec) || sec <= 0) return "—";
+  return new Date(sec * 1000).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
 type PayRow = { id: string; provider: string; status: string; currency: string; amount_cents: number; created_at: number };
 type UserRow = {
   id: string;
@@ -439,6 +461,7 @@ export default function AdminPortalPage() {
                         <th className="px-3 py-2">{t(ADM.licenseKey)}</th>
                         <th className="px-3 py-2">Tipo</th>
                         <th className="px-3 py-2">Estado</th>
+                        <th className="px-3 py-2">Licenciamento</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -447,7 +470,16 @@ export default function AdminPortalPage() {
                         const open = expandedToken === l.id;
                         return (
                           <tr key={l.id} className="border-t border-[rgba(79,195,247,0.08)] align-top">
-                            <td className="px-3 py-2 font-mono text-xs">{l.id}</td>
+                            <td className="px-3 py-2 font-mono text-xs">
+                              <span className="inline-flex flex-wrap items-center gap-2">
+                                <span>{l.id}</span>
+                                {l.callsign ? (
+                                  <span className="rounded border border-[#ffb300]/35 bg-[#ffb300]/10 px-1.5 py-0.5 font-semibold tracking-wide text-[#ffb300]">
+                                    {l.callsign}
+                                  </span>
+                                ) : null}
+                              </span>
+                            </td>
                             <td className="px-3 py-2 font-mono text-xs">{l.serial}</td>
                             <td className="px-3 py-2">
                               {token ? (
@@ -474,6 +506,9 @@ export default function AdminPortalPage() {
                             </td>
                             <td className="px-3 py-2">{l.type}</td>
                             <td className="px-3 py-2">{l.status}</td>
+                            <td className="px-3 py-2 whitespace-nowrap text-xs text-[#94a3b8]">
+                              {formatLicensedAt(l.licensedAt ?? l.issuedAt)}
+                            </td>
                           </tr>
                         );
                       })}
