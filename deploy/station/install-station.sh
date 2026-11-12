@@ -335,6 +335,8 @@ enable_units mosquitto.service
 # docker.io deve existir após packages.list (bake) / apt (install vivo).
 if ! command -v docker >/dev/null 2>&1; then
   echo "AVISO: binário docker ausente — instale docker.io (nova imagem bake se for appliance)" >&2
+elif [[ -d /run/systemd/system ]]; then
+  systemctl start docker.socket docker.service 2>/dev/null || true
 fi
 mkdir -p /etc/netplan /etc/NetworkManager/conf.d
 if [[ ! -f /etc/netplan/99-ham-cockpit-nm.yaml ]]; then

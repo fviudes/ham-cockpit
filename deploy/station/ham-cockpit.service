@@ -12,6 +12,8 @@ SupplementaryGroups=docker
 WorkingDirectory=/opt/ham-cockpit
 Environment=NODE_ENV=production
 Environment=PORT=3000
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+NoNewPrivileges=false
 ExecStart=/usr/bin/node /opt/ham-cockpit/index.js
 Restart=on-failure
 RestartSec=3

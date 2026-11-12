@@ -4,10 +4,11 @@ Documentation=https://github.com/on7lds/NextionDriver
 DefaultDependencies=no
 After=local-fs.target network-online.target
 Wants=network-online.target
-# Antes do Docker: menos bridges/veth no momento do start (log do ABRT listava docker0/br-*/veth*).
-# Sem Before=mmdvmhost: BindsTo/PartOf dos gateways gerava "Transaction order is cyclic".
+# Sem Before=docker: ham-cockpit.target After=docker.socket + WantedBy=target
+# gerava "Transaction order is cyclic" e o daemon Docker nunca subia (lab 11/Nov).
+# Sem Before=mmdvmhost: BindsTo/PartOf dos gateways também ciclava.
 # LCD no HAT: unit sempre instalada e habilitada (WantedBy ham-cockpit.target).
-Before=docker.service docker.socket
+# ABRT fd2=-1: patch HC_FD2_GUARD no binário, não ordem vs Docker.
 ConditionPathExists=/usr/local/bin/NextionDriver
 
 [Service]

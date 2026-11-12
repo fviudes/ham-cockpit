@@ -155,7 +155,7 @@ export function Chip({
       type="button"
       onClick={onClick}
       className={cn(
-        "h-8 rounded-md border px-3 text-xs font-semibold transition-colors",
+        "h-8 shrink-0 whitespace-nowrap rounded-md border px-2.5 text-[11px] font-semibold transition-colors sm:px-3 sm:text-xs",
         active
           ? activeCls
           : "border-[rgba(79,195,247,0.22)] bg-transparent text-[#c5d4e0] hover:border-[#4fc3f7] hover:text-[#4fc3f7]"
@@ -386,7 +386,7 @@ export function UpdatesMenu() {
                 <span key={job.id} className="h-0.5 overflow-hidden rounded-full bg-[#071018]/70">
                   <span
                     className={`block h-full rounded-full bg-[#ffb300] ${job.determinate ? "" : "animate-pulse"}`}
-                    style={{ width: job.determinate ? `${Math.max(8, job.pct)}%` : "55%" }}
+                    style={{ width: `${Math.max(8, Math.min(100, job.pct || 8))}%` }}
                   />
                 </span>
               ))}
@@ -407,15 +407,13 @@ export function UpdatesMenu() {
             >
               <span className="flex items-center justify-between gap-2">
                 <span>{tx(UPD_LABEL[job.id] || "updApp")}</span>
-                {job.determinate ? (
-                  <span className="font-['IBM_Plex_Mono'] text-[11px] text-[#4fc3f7]">{Math.round(job.pct)}%</span>
-                ) : null}
+                <span className="font-['IBM_Plex_Mono'] text-[11px] text-[#4fc3f7]">{Math.round(job.pct)}%</span>
               </span>
               <span className="text-[11px] text-[#8ea0b3]">{stageLabel(tx, job.stage) || tx("updApplying")}</span>
               <span className="h-1.5 overflow-hidden rounded-full bg-[#16232e]">
                 <span
                   className={`block h-full rounded-full bg-[#4fc3f7] ${job.determinate ? "" : "animate-pulse"}`}
-                  style={{ width: job.determinate ? `${Math.max(4, job.pct)}%` : "40%" }}
+                  style={{ width: `${Math.max(4, Math.min(100, job.pct || 8))}%` }}
                 />
               </span>
               {job.error ? <span className="text-[11px] text-[#f87171]">{job.error}</span> : null}
@@ -498,7 +496,7 @@ export function ActionProgress({
     >
       <div className="mb-1 flex items-center justify-between gap-2">
         <span className="text-[10px] tracking-wide text-[#8ea0b3] uppercase">{label}</span>
-        {determinate ? <span className="font-['IBM_Plex_Mono'] text-[11px] text-[#4fc3f7]">{pct}%</span> : null}
+        <span className="font-['IBM_Plex_Mono'] text-[11px] text-[#4fc3f7]">{pct}%</span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-[#16232e]">
         {determinate ? (

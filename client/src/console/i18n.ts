@@ -734,7 +734,7 @@ const dict = {
     langMenu: "Idioma",
     servicesTitle: "Início automático",
     servicesHelp:
-      "Cada interruptor decide se o serviço sobe quando o Ham Cockpit inicia. Por padrão todos ligam. Desligar não para o que já está em execução — só impede o próximo boot (e o auto-connect desta sessão no rádio, Lextel e Bluetooth).",
+      "Cada interruptor liga ou desliga o início automático. Ligar sobe o serviço agora e no boot. Desligar para o serviço agora (o Webserver só deixa de subir no próximo reboot, para não fechar este console).",
     svcAutostart: "Início automático",
     svcRunning: "Em execução",
     svcStopped: "Parado",
@@ -1505,7 +1505,7 @@ const dict = {
     langMenu: "Language",
     servicesTitle: "Automatic start",
     servicesHelp:
-      "Each switch decides whether the service starts when Ham Cockpit boots. All are on by default. Turning one off does not stop it now — it only skips the next boot (and auto-connect this session for radio, Lextel and Bluetooth).",
+      "Each switch is autostart. On starts the service now and on boot. Off stops it now (the web server only skips the next reboot, so this console stays open).",
     svcAutostart: "Start on boot",
     svcRunning: "Running",
     svcStopped: "Stopped",

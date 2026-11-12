@@ -409,6 +409,7 @@ export async function wavelogDatabase(httpPort = 8086): Promise<WavelogDatabase>
 export async function wavelogDbUpdate(httpPort = 8086): Promise<WavelogDatabase & { updated?: boolean }> {
   const compose = await composeDir();
   await ensureEnv(compose);
+  await stationSvc("start", "wavelog");
   const ctl = join(compose, "wavelog-ctl.sh");
   try {
     if (await fileExists(ctl)) {

@@ -34,6 +34,10 @@ Leitura SSH (`admin`, sudo para o `.env`). Dual/Host **não** foram reiniciados.
 
 **11/Nov/2026 (ensure-db no Pi):** `wavelog-ctl.sh` sem CRLF; `ensure-db` criou schema/user `wavelog` (SHOW DATABASES lista `wavelog`; user `%` e `localhost`; 0 tabelas de app); containers Up; `reset-failed` no oneshot; Dual/Host intocados.
 
+**11/Nov/2026 (console lab):** IC-705 LAN retenta login e guarda senha no servidor; rádio principal e ser2net sobem com início automático ligado; terminal usa `/usr/bin/sudo`; Status lê `/api/host` em JSON (Hardware/SoC/Uptime + gráficos em linha e tráfego real); atualizações filtram `HC_PROGRESS`/apt stdout, Docker sobe antes do Wavelog, WaveLogGate copia `deploy/wavelog-gate` (não o tag GUI upstream).
+
+**11/Nov/2026 (Docker morto + “Atualizar banco” HTML):** `docker.service`/`docker.socket` **enabled mas inactive**; `ham-cockpit.target` **inactive** (só o console `ham-cockpit.service` ativo). `systemctl start docker` → **Transaction order is cyclic** (`nextiondriver.service` `Before=docker.service docker.socket` + `ham-cockpit.target` `After=docker.socket` + `WantedBy=target`). Sem daemon, `:8086` recusa. `GET /api/wavelog/database` caía no `index.html` (processo Node antigo sem a rota); `POST /api/wavelog/db-update` → `Cannot POST` (HTML) — o toast “Unexpected token '<'”. Correção: tirar `Before=docker*` da Nextion; `first-boot.service` sem `After=ham-cockpit.target`; `station-svc` tenta `--job-mode=ignore-dependencies`; fallback JSON em `/api`; **não** `systemctl restart ham-cockpit.target` / Host.
+
 **Bake / install / OTA — instalação limpa não precisa re-fixar o Wavelog do lab:**
 
 1. `deploy/wavelog/wavelog-ctl.sh` — `ensure_env` (só gera `.env` se faltar) + `ensure-db` após `up`; alvo `ensure-db`; script **só LF** (`.gitattributes` + `sed` no install/first-boot/OTA).

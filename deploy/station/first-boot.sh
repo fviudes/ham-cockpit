@@ -33,6 +33,7 @@ fi
 
 systemctl unmask docker.service docker.socket 2>/dev/null || true
 systemctl enable docker.service docker.socket 2>/dev/null || true
+systemctl start docker.socket 2>/dev/null || true
 systemctl start docker.service 2>/dev/null || true
 systemctl unmask nextiondriver.service 2>/dev/null || true
 systemctl enable mosquitto.service nextiondriver.service 2>/dev/null || true

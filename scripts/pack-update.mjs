@@ -172,6 +172,14 @@ function main() {
     mkdirSync(join(stage, "wavelog"), { recursive: true });
     cpSync(wavelogCompose, join(stage, "wavelog", "docker-compose.yml"));
   }
+  const wlgDir = join(ROOT, "deploy", "wavelog-gate");
+  if (existsSync(join(wlgDir, "wavelog-gate.mjs"))) {
+    mkdirSync(join(stage, "wavelog-gate"), { recursive: true });
+    cpSync(join(wlgDir, "wavelog-gate.mjs"), join(stage, "wavelog-gate", "wavelog-gate.mjs"));
+    if (existsSync(join(wlgDir, "VERSION"))) {
+      cpSync(join(wlgDir, "VERSION"), join(stage, "wavelog-gate", "VERSION"));
+    }
+  }
 
   // Binários nativos ARM64 (opcional até o workflow/bake publicar update/mmdvm-arm64.tgz).
   const mmdvmTgz = join(UPDATE_DIR, "mmdvm-arm64.tgz");

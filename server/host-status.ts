@@ -17,6 +17,8 @@ export type HostSample = {
   ramUsedBytes: number;
   ramTotalBytes: number;
   cpuTempC: number | null;
+  netRxBps: number | null;
+  netTxBps: number | null;
 };
 
 export type HostStatus = {
@@ -36,6 +38,8 @@ export type HostStatus = {
   ramPct: number | null;
   ramUsedBytes: number;
   ramTotalBytes: number;
+  netRxBps: number | null;
+  netTxBps: number | null;
   sampleMs: number;
   windowMs: number;
   samples: HostSample[];
@@ -43,6 +47,7 @@ export type HostStatus = {
 
 const samples: HostSample[] = [];
 let cpuPrev: { idle: number; total: number } | null = null;
+let netPrev: { t: number; rx: number; tx: number } | null = null;
 let sampler: ReturnType<typeof setInterval> | null = null;
 let sampling = false;
 let identity: { hardware: string; soc: string; osPretty: string } | null = null;
@@ -338,11 +343,45 @@ function formatCpuModel(model: string, n: number): string {
   return `${model}${hz}`;
 }
 
+function readNetTotals(): { rx: number; tx: number } {
+  if (process.platform !== "linux" || !existsSync("/proc/net/dev")) return { rx: 0, tx: 0 };
+  try {
+    let rx = 0;
+    let tx = 0;
+    const text = readFileSync("/proc/net/dev", "utf8");
+    for (const line of text.split(/\r?\n/)) {
+      const m = line.match(/^\s*([^:]+):\s*(.+)$/);
+      if (!m) continue;
+      const name = m[1].trim();
+      if (name === "lo" || name.startsWith("veth") || name.startsWith("br-") || name === "docker0") continue;
+      const cols = m[2].trim().split(/\s+/);
+      rx += Number(cols[0]) || 0;
+      tx += Number(cols[8]) || 0;
+    }
+    return { rx, tx };
+  } catch {
+    return { rx: 0, tx: 0 };
+  }
+}
+
+function netBpsFromDelta(): { rx: number | null; tx: number | null } {
+  const now = Date.now();
+  const cur = readNetTotals();
+  const prev = netPrev;
+  netPrev = { t: now, rx: cur.rx, tx: cur.tx };
+  if (!prev || now <= prev.t) return { rx: null, tx: null };
+  const dt = (now - prev.t) / 1000;
+  if (dt <= 0) return { rx: null, tx: null };
+  const rx = Math.max(0, (cur.rx - prev.rx) / dt);
+  const tx = Math.max(0, (cur.tx - prev.tx) / dt);
+  return { rx, tx };
+}
+
 function linuxHardware(): { hardware: string; soc: string } {
   const dt = readDtModel();
   const info = parseCpuinfo();
   const decoded = info.revision ? decodePiRevision(info.revision) : null;
-  const hardware = dt || info.model || decoded?.model || "";
+  const hardware = dt || info.model || decoded?.model || os.hostname() || "Raspberry Pi";
   const socFromRev = decoded?.soc || "";
   const n = os.cpus().length || 1;
   let soc = "";
@@ -351,6 +390,7 @@ function linuxHardware(): { hardware: string; soc: string } {
   else {
     const m = os.cpus()[0]?.model?.trim();
     if (m) soc = formatCpuModel(m, n);
+    else soc = formatCpuModel("ARM", n);
   }
   return { hardware, soc };
 }
@@ -445,6 +485,7 @@ async function sampleOnce(): Promise<HostSample> {
   const ram = readRam();
   const cpuPct = cpuPctFromDelta();
   const cpuTempC = await readCpuTempC();
+  const net = netBpsFromDelta();
   const row: HostSample = {
     t,
     cpuPct,
@@ -452,6 +493,8 @@ async function sampleOnce(): Promise<HostSample> {
     ramUsedBytes: ram.used,
     ramTotalBytes: ram.total,
     cpuTempC,
+    netRxBps: net.rx,
+    netTxBps: net.tx,
   };
   samples.push(row);
   pruneSamples(t);
@@ -497,6 +540,8 @@ function emptyStatus(error: string): HostStatus {
     ramPct: null,
     ramUsedBytes: 0,
     ramTotalBytes: 0,
+    netRxBps: null,
+    netTxBps: null,
     sampleMs: HOST_SAMPLE_MS,
     windowMs: HOST_WINDOW_MS,
     samples: [],
@@ -540,6 +585,8 @@ export async function hostStatus(): Promise<HostStatus> {
       ramPct: ram.pct,
       ramUsedBytes: ram.used,
       ramTotalBytes: ram.total,
+      netRxBps: row?.netRxBps ?? null,
+      netTxBps: row?.netTxBps ?? null,
       sampleMs: HOST_SAMPLE_MS,
       windowMs: HOST_WINDOW_MS,
       samples: samples.slice(),

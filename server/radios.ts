@@ -610,9 +610,11 @@ export async function radiosDisconnect(id: string): Promise<RadiosSnapshot> {
   return radiosSnapshotFast();
 }
 
-/** Reabre sessão LAN se o rádio Icom Rede estava marcado conectado no boot. */
+/** Reabre sessão LAN do principal (ou do que já estava conectado) no boot do console. */
 export async function radiosResumeIcomLan(): Promise<void> {
-  const row = radios.find((r) => r.connected && isIcomLan(r));
+  const row =
+    radios.find((r) => r.primary && isIcomLan(r)) ||
+    radios.find((r) => r.connected && isIcomLan(r));
   if (!row?.host || !row.netUser) return;
   const lan = await icomLanConnect({
     radioId: row.id,

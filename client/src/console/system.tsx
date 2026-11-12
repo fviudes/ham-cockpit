@@ -9,7 +9,7 @@ import type { I18nKey } from "./i18n";
 import { formatWatts, useConsole, type LogKind } from "./state";
 import { TermPage } from "./term";
 import { BackupPage } from "./backup";
-import { ActionProgress, Chip, ConsoleInput, Field, GhostBtn, MeterBar, PageHead, Panel, PanelTitle, PrimaryBtn, stageLabel } from "./widgets";
+import { ActionProgress, Chip, ConsoleInput, Field, GhostBtn, PageHead, Panel, PanelTitle, PrimaryBtn, stageLabel } from "./widgets";
 
 type LinuxUser = { name: string; sudo: boolean };
 
@@ -509,7 +509,12 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
       });
-      const j = (await r.json()) as Parameters<typeof applySnap>[0] & { error?: string };
+      const text = await r.text();
+      const ct = r.headers.get("content-type") || "";
+      if (!ct.includes("json")) {
+        throw new Error(text.slice(0, 120).trim() || `resposta não JSON (${r.status})`);
+      }
+      const j = JSON.parse(text) as Parameters<typeof applySnap>[0] & { error?: string };
       applySnap(j);
       if (!r.ok || j.ok === false) {
         toast.error(j.error || tx("updFail"));
@@ -517,8 +522,8 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
       }
       toast.success(tx("updOk"));
       pushLog("SYS", `${tx(UPD_LABEL[id])} → ${j.items?.find((row) => row.id === id)?.current || ""}`);
-    } catch {
-      toast.error(tx("updFail"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : tx("updFail"));
       setS((p) => ({
         ...p,
         updates: {
@@ -588,7 +593,7 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
                 <ActionProgress
                   active={applying}
                   value={row.progress}
-                  determinate={row.determinate}
+                  determinate={row.determinate || row.progress > 0}
                   label={barLabel}
                 />
               </div>
@@ -607,6 +612,8 @@ type HostSample = {
   ramUsedBytes: number;
   ramTotalBytes: number;
   cpuTempC: number | null;
+  netRxBps?: number | null;
+  netTxBps?: number | null;
 };
 
 type HostSnap = {
@@ -626,6 +633,8 @@ type HostSnap = {
   ramPct?: number | null;
   ramUsedBytes?: number;
   ramTotalBytes?: number;
+  netRxBps?: number | null;
+  netTxBps?: number | null;
   sampleMs?: number;
   windowMs?: number;
   samples?: HostSample[];
@@ -641,6 +650,19 @@ type WlDbSnap = {
   image?: string;
   queryVia?: string;
 };
+
+function formatBps(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return "0 B/s";
+  const units = ["B/s", "KB/s", "MB/s", "GB/s"];
+  let v = n;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  const digits = v >= 100 ? 0 : v >= 10 ? 1 : 2;
+  return `${v.toFixed(digits)} ${units[i]}`;
+}
 
 function formatBytes(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return "—";
@@ -666,7 +688,12 @@ function formatUptime(sec: number | undefined): string {
   return `${m}m`;
 }
 
-function slotSeries(samples: HostSample[] | undefined, windowMs: number, sampleMs: number, key: keyof Pick<HostSample, "cpuPct" | "ramPct" | "cpuTempC">): Array<number | null> {
+function slotSeries(
+  samples: HostSample[] | undefined,
+  windowMs: number,
+  sampleMs: number,
+  key: keyof Pick<HostSample, "cpuPct" | "ramPct" | "cpuTempC" | "netRxBps" | "netTxBps">,
+): Array<number | null> {
   const step = Math.max(1000, sampleMs || 5000);
   const win = Math.max(step, windowMs || 300_000);
   const n = Math.max(1, Math.round(win / step));
@@ -685,7 +712,6 @@ function slotSeries(samples: HostSample[] | undefined, windowMs: number, sampleM
 
 export function StatusPage() {
   const { s, tx } = useConsole();
-  const net = 11;
   const [host, setHost] = useState<HostSnap | null>(null);
   const [wlDb, setWlDb] = useState<WlDbSnap | null>(null);
 
@@ -693,7 +719,11 @@ export function StatusPage() {
     let alive = true;
     const load = () => {
       void fetch("/api/host")
-        .then((r) => r.json())
+        .then(async (r) => {
+          const text = await r.text();
+          if (!(r.headers.get("content-type") || "").includes("json")) throw new Error("host");
+          return JSON.parse(text) as HostSnap;
+        })
         .then((j: HostSnap) => {
           if (alive) setHost(j);
         })
@@ -701,7 +731,11 @@ export function StatusPage() {
           if (alive) setHost(null);
         });
       void fetch("/api/wavelog/database")
-        .then((r) => r.json())
+        .then(async (r) => {
+          const text = await r.text();
+          if (!(r.headers.get("content-type") || "").includes("json")) throw new Error("db");
+          return JSON.parse(text) as WlDbSnap;
+        })
         .then((j: WlDbSnap) => {
           if (alive) setWlDb(j);
         })
@@ -724,8 +758,19 @@ export function StatusPage() {
   const cpuSeries = slotSeries(host?.samples, windowMs, sampleMs, "cpuPct");
   const ramSeries = slotSeries(host?.samples, windowMs, sampleMs, "ramPct");
   const tempSeries = slotSeries(host?.samples, windowMs, sampleMs, "cpuTempC");
+  const netRxSeries = slotSeries(host?.samples, windowMs, sampleMs, "netRxBps");
+  const netTxSeries = slotSeries(host?.samples, windowMs, sampleMs, "netTxBps");
   const cpuPct = host?.cpuPct;
   const ramPct = host?.ramPct;
+  const netRx = host?.netRxBps ?? null;
+  const netTx = host?.netTxBps ?? null;
+  const netMax = Math.max(
+    8 * 1024,
+    ...netRxSeries.filter((v): v is number => v != null),
+    ...netTxSeries.filter((v): v is number => v != null),
+    netRx ?? 0,
+    netTx ?? 0,
+  );
   const ramUsed = host?.ramUsedBytes ?? 0;
   const ramTotal = host?.ramTotalBytes ?? 0;
   const osPretty = host?.osPretty?.trim() || "";
@@ -746,7 +791,7 @@ export function StatusPage() {
           <PanelTitle>CPU</PanelTitle>
           <p className="mb-1 font-['IBM_Plex_Mono'] text-2xl text-[#4fc3f7]">{cpuPct == null ? "—" : `${cpuPct.toFixed(1)}%`}</p>
           <p className="mb-2 text-[10px] tracking-wide text-[#8ea0b3] uppercase">{tx("last5min")}</p>
-          <TimeBars values={cpuSeries} max={100} color="#4fc3f7" tickFmt={(n) => `${n}%`} />
+          <TimeLine values={cpuSeries} max={100} color="#4fc3f7" tickFmt={(n) => `${n}%`} />
         </Panel>
         <Panel>
           <PanelTitle>RAM</PanelTitle>
@@ -754,12 +799,17 @@ export function StatusPage() {
             {ramPct == null ? "—" : `${ramPct.toFixed(1)}% · ${formatBytes(ramUsed)} / ${formatBytes(ramTotal)}`}
           </p>
           <p className="mb-2 text-[10px] tracking-wide text-[#8ea0b3] uppercase">{tx("last5min")}</p>
-          <TimeBars values={ramSeries} max={100} color="#34d399" tickFmt={(n) => `${n}%`} />
+          <TimeLine values={ramSeries} max={100} color="#34d399" tickFmt={(n) => `${n}%`} />
         </Panel>
         <Panel>
           <PanelTitle>{tx("network")}</PanelTitle>
-          <p className="mb-2 font-['IBM_Plex_Mono'] text-2xl text-[#ffb300]">{net}%</p>
-          <MeterBar value={net} max={100} />
+          <p className="mb-1 font-['IBM_Plex_Mono'] text-2xl text-[#ffb300]">
+            {netRx == null && netTx == null
+              ? "—"
+              : `↓ ${formatBps(netRx ?? 0)} · ↑ ${formatBps(netTx ?? 0)}`}
+          </p>
+          <p className="mb-2 text-[10px] tracking-wide text-[#8ea0b3] uppercase">{tx("last5min")}</p>
+          <TimeLine values={netRxSeries} max={netMax} color="#ffb300" tickFmt={(n) => formatBps(n)} overlay={netTxSeries} overlayColor="#60a5fa" />
         </Panel>
       </div>
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -769,7 +819,7 @@ export function StatusPage() {
             {tempC == null ? "—" : `${tempC.toFixed(1)} °C`}
           </p>
           <p className="mb-2 text-[10px] tracking-wide text-[#8ea0b3] uppercase">{tx("last5min")}</p>
-          <TimeBars values={tempSeries} max={85} color="#f87171" tickFmt={(n) => `${n}°`} />
+          <TimeLine values={tempSeries} max={85} color="#f87171" tickFmt={(n) => `${n}°`} />
         </Panel>
         <Panel>
           <PanelTitle>{tx("disk")}</PanelTitle>
@@ -847,33 +897,52 @@ function Mini({ k, v }: { k: string; v: string }) {
   );
 }
 
-function TimeBars({
+function TimeLine({
   values,
   max,
   color,
   tickFmt,
+  overlay,
+  overlayColor,
 }: {
   values: Array<number | null>;
   max: number;
   color: string;
   tickFmt: (n: number) => string;
+  overlay?: Array<number | null>;
+  overlayColor?: string;
 }) {
   const w = 280;
   const h = 96;
   const padL = 2;
-  const padR = 34;
+  const padR = 40;
   const padT = 8;
   const padB = 4;
   const innerW = w - padL - padR;
   const innerH = h - padT - padB;
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(f * max * 10) / 10);
-  const n = Math.max(1, values.length);
-  const bw = innerW / n;
-  const gap = n > 40 ? 0.35 : 0.7;
+  const cap = Math.max(1, max);
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * cap);
+  const pathFor = (series: Array<number | null>) => {
+    const n = Math.max(1, series.length);
+    let d = "";
+    let started = false;
+    for (let i = 0; i < n; i++) {
+      const v = series[i];
+      if (v == null || !Number.isFinite(v)) {
+        started = false;
+        continue;
+      }
+      const x = padL + (n === 1 ? innerW / 2 : (i / (n - 1)) * innerW);
+      const y = padT + innerH - (Math.min(Math.max(v, 0), cap) / cap) * innerH;
+      d += `${started ? "L" : "M"} ${x} ${y} `;
+      started = true;
+    }
+    return d.trim();
+  };
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="h-28 w-full" role="img">
       {ticks.map((t) => {
-        const y = padT + innerH - (t / max) * innerH;
+        const y = padT + innerH - (t / cap) * innerH;
         return (
           <g key={t}>
             <line x1={padL} x2={w - padR} y1={y} y2={y} stroke="rgba(79,195,247,0.18)" strokeWidth="1" />
@@ -883,22 +952,10 @@ function TimeBars({
           </g>
         );
       })}
-      {values.map((v, i) => {
-        if (v == null || !Number.isFinite(v) || v < 0) return null;
-        const bh = Math.max(v > 0 ? 1 : 0, (Math.min(v, max) / max) * innerH);
-        if (bh <= 0) return null;
-        return (
-          <rect
-            key={i}
-            x={padL + i * bw + gap / 2}
-            y={padT + innerH - bh}
-            width={Math.max(0.6, bw - gap)}
-            height={bh}
-            fill={color}
-            opacity={0.88}
-          />
-        );
-      })}
+      <path d={pathFor(values)} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      {overlay ? (
+        <path d={pathFor(overlay)} fill="none" stroke={overlayColor || "#60a5fa"} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      ) : null}
     </svg>
   );
 }

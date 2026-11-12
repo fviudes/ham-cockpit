@@ -137,6 +137,22 @@ function item(id: UpdateId, current: string, available: string, note = "", error
   };
 }
 
+async function githubRawVersion(url: string, ms = 2800): Promise<string> {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), ms);
+    const r = await fetch(url, {
+      signal: ctrl.signal,
+      headers: { "User-Agent": `Ham-Cockpit/${APP_VERSION}` },
+    });
+    clearTimeout(t);
+    if (!r.ok) return "";
+    return cleanVersion(await r.text());
+  } catch {
+    return "";
+  }
+}
+
 async function githubTag(repo: string, ms = 2800): Promise<string> {
   try {
     const ctrl = new AbortController();
@@ -198,10 +214,18 @@ async function githubAppVersion(): Promise<string> {
 
 function execError(err: unknown): string {
   const e = err as { stderr?: string | Buffer; message?: string; killed?: boolean; code?: string };
-  const stderr = String(e.stderr || "").trim();
+  const stderr = String(e.stderr || "")
+    .split(/\r?\n/)
+    .filter((l) => l.trim() && !l.includes("HC_PROGRESS "))
+    .join("\n")
+    .trim();
   if (e.killed) return stderr || "tempo esgotado ao consultar station-upd";
   if (stderr) return stderr.split(/\r?\n/).filter(Boolean).slice(-6).join("\n");
-  return String(e.message || err);
+  const msg = String(e.message || err)
+    .split(/\r?\n/)
+    .filter((l) => l.trim() && !l.includes("HC_PROGRESS "))
+    .join("\n");
+  return msg || String(err);
 }
 
 async function helper(cmd: string, id = ""): Promise<UpdatesSnapshot | null> {
@@ -223,7 +247,7 @@ async function helper(cmd: string, id = ""): Promise<UpdatesSnapshot | null> {
 
 function parseHelperOut(stdout: string): UpdatesSnapshot | null {
   try {
-    const parsed = JSON.parse(stdout || "{}") as {
+    const parsed = JSON.parse(lastJsonObject(stdout || "{}")) as {
       ok?: boolean;
       os?: string;
       items?: Partial<UpdateItem>[];
@@ -300,7 +324,7 @@ async function fetchRemotes(): Promise<Remotes> {
   const [app, wavelog, wlg] = await Promise.all([
     githubAppVersion(),
     githubTag("wavelog/wavelog"),
-    githubTag("wavelog/WaveLogGate"),
+    githubRawVersion(`https://raw.githubusercontent.com/${UPDATE_REPO}/main/deploy/wavelog-gate/VERSION`),
   ]);
   return { app, wavelog, wlg };
 }

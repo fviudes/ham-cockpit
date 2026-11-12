@@ -31,7 +31,9 @@ wait_docker_api() {
 ensure_docker() {
   systemctl unmask docker.service docker.socket 2>/dev/null || true
   systemctl enable docker.service docker.socket 2>/dev/null || true
-  systemctl start docker.service 2>/dev/null || systemctl start docker.socket 2>/dev/null || true
+  systemctl start docker.socket 2>/dev/null || true
+  systemctl start docker.service 2>/dev/null || \
+    systemctl start docker.service --job-mode=ignore-dependencies 2>/dev/null || true
   wait_docker_api
 }
 

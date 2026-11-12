@@ -660,6 +660,8 @@ async function startServer() {
         ramPct: null,
         ramUsedBytes: 0,
         ramTotalBytes: 0,
+        netRxBps: null,
+        netTxBps: null,
         sampleMs: 5000,
         windowMs: 300000,
         samples: [],
@@ -716,6 +718,10 @@ async function startServer() {
   });
 
   app.use(express.static(staticPath));
+
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ ok: false, error: "API não encontrada" });
+  });
 
   // Handle client-side routing - serve index.html for all routes
   app.get("*", (_req, res) => {

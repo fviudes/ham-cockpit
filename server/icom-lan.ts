@@ -305,10 +305,19 @@ export async function icomLanConnect(opts: ConnectOpts): Promise<IcomLanSnapshot
     },
   });
   attachCivListeners(control);
+  let loginHint = "";
+  control.events.on("login", (res) => {
+    if (!res.ok) {
+      loginHint =
+        res.errorCode != null
+          ? `login recusado (código ${res.errorCode}) — confira Network User/senha e se outro cliente já está na LAN`
+          : "login recusado — confira Network User/senha e se outro cliente já está na LAN";
+    }
+  });
   rig = control;
 
   try {
-    await control.connect({ timeout: 18_000 });
+    await control.connect({ timeout: 22_000 });
     if (gen !== connectGen) {
       await control.disconnect().catch(() => undefined);
       return snap();
@@ -327,7 +336,11 @@ export async function icomLanConnect(opts: ConnectOpts): Promise<IcomLanSnapshot
     return snap();
   } catch (err) {
     phase = "error";
-    error = err instanceof Error ? err.message : String(err);
+    const raw = err instanceof Error ? err.message : String(err);
+    error =
+      loginHint ||
+      raw ||
+      "Falha ao autenticar no Icom LAN (UDP 50001). Confira IP, Network User, senha e se o rádio já não tem outra sessão aberta.";
     try {
       await control.disconnect().catch(() => undefined);
     } catch {

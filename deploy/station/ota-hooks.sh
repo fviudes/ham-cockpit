@@ -404,6 +404,13 @@ if [[ -f "$ROOT/bin/wavelog-ctl.sh" ]]; then
   sed -i 's/\r$//' /opt/wavelog/wavelog-ctl.sh
   /opt/wavelog/wavelog-ctl.sh ensure-db >/dev/null 2>&1 || true
 fi
+if [[ -f "$ROOT/wavelog-gate/wavelog-gate.mjs" ]]; then
+  mkdir -p /opt/wavelog-gate
+  install -o hamcockpit -g hamcockpit -m 0755 "$ROOT/wavelog-gate/wavelog-gate.mjs" /opt/wavelog-gate/wavelog-gate.mjs
+  if [[ -f "$ROOT/wavelog-gate/VERSION" ]]; then
+    install -o hamcockpit -g hamcockpit -m 0644 "$ROOT/wavelog-gate/VERSION" /opt/wavelog-gate/VERSION
+  fi
+fi
 
 # Pastas de dados graváveis pelo serviço (OTA em aparelhos já instalados).
 install -d -o hamcockpit -g hamcockpit -m 0775 \
@@ -425,9 +432,12 @@ if command -v docker >/dev/null 2>&1 || [[ -x /usr/bin/docker ]]; then
   systemctl unmask docker.service docker.socket 2>/dev/null || true
   systemctl enable docker.service docker.socket 2>/dev/null || true
   systemctl enable ham-cockpit.target wavelog.service first-boot.service 2>/dev/null || true
-  systemctl start docker.service 2>/dev/null || true
-  # Reinicia o console para herdar SupplementaryGroups=docker.
-  systemctl try-restart ham-cockpit.service 2>/dev/null || true
+  systemctl start docker.socket 2>/dev/null || true
+  systemctl start docker.service 2>/dev/null || \
+    systemctl start docker.service --job-mode=ignore-dependencies 2>/dev/null || true
+  # Reinicia o console para herdar SupplementaryGroups=docker e as rotas novas.
+  systemctl restart ham-cockpit.service 2>/dev/null || \
+    systemctl kill -s TERM ham-cockpit.service 2>/dev/null || true
   if systemctl cat wavelog.service >/dev/null 2>&1; then
     systemctl reset-failed wavelog.service 2>/dev/null || true
     systemctl restart wavelog.service 2>/dev/null || systemctl start wavelog.service 2>/dev/null || true

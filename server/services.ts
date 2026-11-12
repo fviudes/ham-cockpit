@@ -91,9 +91,10 @@ export function isServiceAutostart(id: ServiceId): boolean {
 
 async function helper(cmd: string, id: ServiceId): Promise<string> {
   if (!existsSync(HELPER)) return "";
+  const timeout = cmd === "start" || cmd === "stop" ? (id === "wavelog" ? 180_000 : 25_000) : 8_000;
   try {
     const { stdout } = await execFileAsync("sudo", ["-n", HELPER, cmd, id], {
-      timeout: 8_000,
+      timeout,
       windowsHide: true,
     });
     return String(stdout || "").trim();
@@ -142,10 +143,20 @@ export async function servicesSetAutostart(id: string, autostart: boolean): Prom
   boot[sid] = Boolean(autostart);
   persist();
   if (process.platform === "linux" && UNITS[sid]) {
-    const out = await helper(autostart ? "enable" : "disable", sid);
-    if (!out && existsSync(HELPER) && sid === "web" && !autostart) {
-      /* helper may be missing in dev */
+    await helper(autostart ? "enable" : "disable", sid);
+    if (sid !== "web") {
+      await helper(autostart ? "start" : "stop", sid);
     }
+  }
+  if (sid === "radio" && autostart) {
+    const { radiosResumeIcomLan } = await import("./radios");
+    void radiosResumeIcomLan().catch(() => undefined);
+  }
+  if (sid === "radio" && !autostart) {
+    const { radiosDisconnect, radiosStatus } = await import("./radios");
+    const snap = await radiosStatus();
+    const primary = snap.radios.find((r) => r.primary) || snap.radios[0];
+    if (primary?.connected) void radiosDisconnect(primary.id).catch(() => undefined);
   }
   return servicesStatus();
 }
@@ -154,6 +165,11 @@ export async function servicesApplyBoot(): Promise<void> {
   if (bootTried) return;
   bootTried = true;
   persist();
+  if (boot.ser2net) void helper("start", "ser2net");
+  else void helper("stop", "ser2net");
+  if (boot.wifi) void helper("enable", "wifi");
+  if (boot.bluetooth) void helper("start", "bluetooth");
+  else void helper("stop", "bluetooth");
   if (boot.wavelog) {
     const { wavelogUp } = await import("./wavelog-status");
     void wavelogUp().catch(() => undefined);
@@ -161,13 +177,29 @@ export async function servicesApplyBoot(): Promise<void> {
   if (boot.wlg) {
     const { wlgUp } = await import("./wlg-status");
     void wlgUp().catch(() => undefined);
+  } else {
+    void helper("stop", "wlg");
   }
   if (boot.mmdvm) {
     const { mmdvmControl } = await import("./mmdvm");
     void mmdvmControl("start").catch(() => undefined);
   }
+  if (boot.radio) {
+    const { radiosResumeIcomLan } = await import("./radios");
+    void radiosResumeIcomLan().catch(() => undefined);
+  }
   if (boot.lextel) {
     const { lextelAutoConnect } = await import("./lextel");
     void lextelAutoConnect().catch(() => undefined);
+  }
+  if (boot.ldg) {
+    const { ldgConnect, ldgStatus } = await import("./ldg");
+    const st = ldgStatus();
+    if (st.autoConnect && st.port) void ldgConnect().catch(() => undefined);
+  }
+  if (boot.lp100a) {
+    const { lp100aConnect, lp100aStatus } = await import("./lp100a");
+    const st = lp100aStatus();
+    if (st.autoConnect && st.port) void lp100aConnect().catch(() => undefined);
   }
 }

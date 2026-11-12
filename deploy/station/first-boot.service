@@ -1,6 +1,6 @@
 [Unit]
 Description=Ham Cockpit first boot
-After=docker.service docker.socket network-online.target ham-cockpit.target
+After=docker.service docker.socket network-online.target
 Wants=docker.service docker.socket network-online.target
 ConditionPathExists=!/var/lib/hamcockpit/first-boot-done
 

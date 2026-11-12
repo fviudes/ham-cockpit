@@ -44,14 +44,29 @@ type WlDatabase = {
   updated?: boolean;
 };
 
+async function readJson<T>(res: Response): Promise<T> {
+  const text = await res.text();
+  const ct = res.headers.get("content-type") || "";
+  if (!ct.includes("json")) {
+    throw new Error(
+      res.status === 404 ? "API ausente — reinicie o console Ham Cockpit" : `resposta não JSON (${res.status})`,
+    );
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`resposta não JSON (${res.status})`);
+  }
+}
+
 async function callWavelog(path: "/api/wavelog/status" | "/api/wavelog/up" | "/api/wavelog/down", method: "GET" | "POST" = "GET") {
   const res = await fetch(path, { method });
-  return (await res.json()) as WlStatus;
+  return readJson<WlStatus>(res);
 }
 
 async function callWavelogDb(path: "/api/wavelog/database" | "/api/wavelog/db-update", method: "GET" | "POST" = "GET") {
   const res = await fetch(path, { method });
-  return (await res.json()) as WlDatabase;
+  return readJson<WlDatabase>(res);
 }
 
 type WlgApi = { ok: boolean; udpPort?: number; qsyPort?: number; error?: string };

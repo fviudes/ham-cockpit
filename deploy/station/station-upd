@@ -197,6 +197,10 @@ apply_app() {
     cp -a "$src/bin/." "$APP_HOME/bin/"
     find "$APP_HOME/bin" -maxdepth 1 -type f -exec chmod 0755 {} +
   fi
+  if [[ -d "$src/wavelog-gate" ]]; then
+    mkdir -p "$APP_HOME/wavelog-gate" /opt/wavelog-gate
+    cp -a "$src/wavelog-gate/." "$APP_HOME/wavelog-gate/"
+  fi
   if [[ -d "$src/systemd" ]]; then
     mkdir -p "$APP_HOME/systemd"
     cp -a "$src/systemd/." "$APP_HOME/systemd/"
@@ -380,7 +384,7 @@ apt_with_progress() {
   apt-get -o APT::Status-Fd=3 \
     -o Dpkg::Options::=--force-confdef \
     -o Dpkg::Options::=--force-confold \
-    -y "$@" \
+    -y "$@" >/dev/null \
     3> >(python3 -u -c '
 import json, sys
 uid = sys.argv[1]
@@ -410,9 +414,12 @@ for line in sys.stdin:
 apply_os() {
   apt_prepare os
   emit_progress os 12 update 0
-  timeout 45 apt-get update -qq || true
+  timeout 45 apt-get update -qq >/dev/null || true
   emit_progress os 22 install 1
-  apt_with_progress os upgrade
+  if ! apt_with_progress os upgrade >/dev/null; then
+    echo "falha no apt-get upgrade (veja o journal: journalctl -u ham-cockpit)" >&2
+    return 1
+  fi
   emit_progress os 100 done 1
 }
 
@@ -433,7 +440,7 @@ apply_pkg() {
   fi
   apt_prepare "$id"
   emit_progress "$id" 12 update 0
-  timeout 45 apt-get update -qq || true
+  timeout 45 apt-get update -qq >/dev/null || true
   cur="$(pkg_installed "$@")"
   cand="$(pkg_candidate "$@")"
   if [[ -n "${cur:-}" && -n "${cand:-}" && "$cur" == "$cand" ]]; then
@@ -451,7 +458,23 @@ apply_pkg() {
   emit_progress "$id" 92 install 1
 }
 
+ensure_docker() {
+  systemctl unmask docker.service docker.socket 2>/dev/null || true
+  systemctl start docker.socket 2>/dev/null || true
+  systemctl start docker.service 2>/dev/null || \
+    systemctl start docker.service --job-mode=ignore-dependencies 2>/dev/null || true
+  local i
+  for i in $(seq 1 40); do
+    docker info >/dev/null 2>&1 && return 0
+    sleep 1
+  done
+  echo "Docker daemon não está ativo (unix:///var/run/docker.sock)" >&2
+  return 1
+}
+
 apply_wavelog() {
+  emit_progress wavelog 4 prepare 1
+  ensure_docker
   emit_progress wavelog 8 download 0
   compose_wavelog pull
   emit_progress wavelog 70 install 1
@@ -489,7 +512,7 @@ case "$cmd" in
         emit_progress ser2net 100 done 1
         ;;
       hamlib)
-        apply_pkg hamlib libhamlib-utils hamlib-utils || apply_pkg hamlib libhamlib-utils || apply_pkg hamlib hamlib-utils
+        apply_pkg hamlib libhamlib-utils hamlib-utils >/dev/null || apply_pkg hamlib libhamlib-utils >/dev/null || apply_pkg hamlib hamlib-utils >/dev/null
         if [[ "${APT_CHANGED:-0}" == 1 ]]; then
           emit_progress hamlib 94 restart 1
           systemctl restart 'rigctld@*' 2>/dev/null || true
@@ -502,9 +525,23 @@ case "$cmd" in
         ;;
       wlg)
         emit_progress wlg 20 download 0
-        if [[ -d /opt/wavelog-gate/.git ]]; then
-          git -C /opt/wavelog-gate pull --ff-only
+        mkdir -p /opt/wavelog-gate
+        if [[ -f "$APP_HOME/wavelog-gate/wavelog-gate.mjs" ]]; then
+          install -o hamcockpit -g hamcockpit -m 0755 "$APP_HOME/wavelog-gate/wavelog-gate.mjs" /opt/wavelog-gate/wavelog-gate.mjs
+        else
+          curl -fsSL --max-time 20 -A "Ham-Cockpit" \
+            "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/deploy/wavelog-gate/wavelog-gate.mjs" \
+            -o /opt/wavelog-gate/wavelog-gate.mjs || true
+          chmod 0755 /opt/wavelog-gate/wavelog-gate.mjs 2>/dev/null || true
         fi
+        if [[ -f "$APP_HOME/wavelog-gate/VERSION" ]]; then
+          install -o hamcockpit -g hamcockpit -m 0644 "$APP_HOME/wavelog-gate/VERSION" /opt/wavelog-gate/VERSION
+        else
+          curl -fsSL --max-time 12 -A "Ham-Cockpit" \
+            "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/deploy/wavelog-gate/VERSION" \
+            -o /opt/wavelog-gate/VERSION || true
+        fi
+        chown hamcockpit:hamcockpit /opt/wavelog-gate/wavelog-gate.mjs /opt/wavelog-gate/VERSION 2>/dev/null || true
         emit_progress wlg 80 restart 1
         systemctl restart waveloggate.service 2>/dev/null || true
         emit_progress wlg 100 done 1

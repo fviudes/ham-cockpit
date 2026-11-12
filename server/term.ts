@@ -14,13 +14,14 @@ function spawnShell(): ChildProcessWithoutNullStreams {
   }
   const cwd = existsSync("/root") ? "/root" : process.cwd();
   const rootEnv = { ...env, HOME: "/root", USER: "root", LOGNAME: "root" };
+  const sudoBin = existsSync("/usr/bin/sudo") ? "/usr/bin/sudo" : "sudo";
   if (existsSync(ROOT_LOGIN) && existsSync("/usr/bin/script")) {
-    return spawn("sudo", ["-n", "/usr/bin/script", "-qefc", ROOT_LOGIN, "/dev/null"], { env: rootEnv, cwd });
+    return spawn(sudoBin, ["-n", "/usr/bin/script", "-qefc", ROOT_LOGIN, "/dev/null"], { env: rootEnv, cwd });
   }
   if (existsSync(ROOT_LOGIN)) {
-    return spawn("sudo", ["-n", ROOT_LOGIN], { env: rootEnv, cwd });
+    return spawn(sudoBin, ["-n", ROOT_LOGIN], { env: rootEnv, cwd });
   }
-  return spawn("sudo", ["-n", "/bin/bash", "-l"], { env: rootEnv, cwd });
+  return spawn(sudoBin, ["-n", "/bin/bash", "-l"], { env: rootEnv, cwd });
 }
 
 function bindSocket(ws: WebSocket) {
