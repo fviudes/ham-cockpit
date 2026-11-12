@@ -1,0 +1,99 @@
+name: Publish image from artifact
+
+# Republica ham-cockpit-*-raspi.img.xz na Release a partir do artifact de um bake
+# (útil quando o Publish falhou só pelo limite de 2 GiB, sem re-bake).
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: ID do run Actions que tem o artifact Ham-Cockpit-OS
+        required: true
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download artifact do bake
+        run: |
+          set -euo pipefail
+          mkdir -p image/out
+          gh run download "${{ inputs.run_id }}" \
+            --repo "${{ github.repository }}" \
+            --name Ham-Cockpit-OS \
+            --dir image/out
+          ls -lh image/out/
+      - name: Upload Release (único ou .part*)
+        run: |
+          set -euo pipefail
+          VER="$(tr -d ' \r\n' < VERSION)"
+          TAG="v${VER}"
+          IMG="$(ls image/out/ham-cockpit-*-raspi.img.xz | head -n 1)"
+          SUM="${IMG}.sha256"
+          MMDVM="image/out/mmdvm-arm64.tgz"
+          test -f "$IMG"
+          if [[ ! -f "$SUM" ]]; then
+            sha256sum "$IMG" | tee "$SUM"
+          fi
+          NOTES="Imagem Ubuntu Server 24.04 LTS ARM64 (+raspi) com Ham Cockpit ${TAG} para Raspberry Pi 3 / 4 / 5. Stack completo embutido: Docker, ser2net, Hamlib, console, AP Wi-Fi, MMDVM/Nextion em /usr/local/bin, e imagens Docker Wavelog+MariaDB em /opt/wavelog/images (first-boot faz docker load — sem pull obrigatório). Grave no cartão/SSD com o Raspberry Pi Imager (Use custom). Se a Release tiver .part00/.part01, junte antes de gravar (ver .JOIN.txt). O asset mmdvm-arm64.tgz é só ponte OTA para estações antigas."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes "$NOTES"
+          else
+            gh release create "$TAG" --title "Ham Cockpit ${TAG}" --notes "$NOTES"
+          fi
+          ls -lh "$IMG" "$SUM"
+          BYTES=$(stat -c%s "$IMG")
+          LIMIT=2147483648
+          PART_SIZE=1900M
+          if [[ "$BYTES" -ge "$LIMIT" ]]; then
+            echo "Publicando em partes ($BYTES bytes ≥ 2 GiB)…"
+            BASE_NAME="$(basename "$IMG")"
+            # Remove .img.xz único antigo para o portal não preferir a imagem incompleta.
+            gh release delete-asset "$TAG" "$BASE_NAME" --yes 2>/dev/null || true
+            rm -f "${IMG}.part"*
+            split -b "$PART_SIZE" -d -a 2 "$IMG" "${IMG}.part"
+            ls -lh "${IMG}.part"*
+            for p in "${IMG}.part"*; do
+              gh release upload "$TAG" "$p" --clobber
+            done
+            JOIN="${IMG}.JOIN.txt"
+            {
+              echo "Ham Cockpit ${TAG} — imagem completa acima de 2 GiB (limite por arquivo na Release)."
+              echo "Junte as partes e confira o SHA-256:"
+              echo
+              echo "  Linux/macOS:  cat $(basename "$IMG").part* > $(basename "$IMG")"
+              echo "  Windows CMD:  copy /b $(basename "$IMG").part00+$(basename "$IMG").part01 $(basename "$IMG")"
+              echo
+              echo "SHA-256 esperado:"
+              cat "$SUM"
+            } >"$JOIN"
+            gh release upload "$TAG" "$JOIN" "$SUM" --clobber
+          else
+            for old in $(gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null || true); do
+              if [[ "$old" == *.img.xz.part* || "$old" == *.img.xz.JOIN.txt ]]; then
+                gh release delete-asset "$TAG" "$old" --yes 2>/dev/null || true
+              fi
+            done
+            gh release upload "$TAG" "$IMG" "$SUM" --clobber
+          fi
+          if [[ -f "$MMDVM" ]]; then
+            gh release upload "$TAG" "$MMDVM" --clobber
+          fi
+      - name: Atualizar o portal (Cloudflare Pages)
+        continue-on-error: true
+        env:
+          CF_PAGES_DEPLOY_HOOK: ${{ secrets.CF_PAGES_DEPLOY_HOOK }}
+        run: |
+          if [[ -z "${CF_PAGES_DEPLOY_HOOK:-}" ]]; then
+            echo "CF_PAGES_DEPLOY_HOOK ausente — deploy do portal não disparado." >&2
+            exit 0
+          fi
+          curl -fsS -X POST "$CF_PAGES_DEPLOY_HOOK" >/dev/null
+          echo "Deploy do portal disparado."

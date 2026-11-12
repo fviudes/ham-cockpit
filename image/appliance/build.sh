@@ -219,6 +219,10 @@ ls -lh "$MMDVM_TGZ"
 
 rm -rf "$MNT/opt/ham-cockpit-seed" "$MNT/opt/wavelog-seed-images" "$MNT/tmp/chroot-setup.sh"
 rm -f "$MNT/usr/bin/qemu-aarch64-static"
+# Zera espaço livre: xz comprime zeros; lixo pós-resize2fs infla o .img.xz.
+echo "zerando espaço livre da rootfs (melhor compressão xz)…"
+dd if=/dev/zero of="$MNT/zero.fill" bs=1M status=progress 2>/dev/null || true
+rm -f "$MNT/zero.fill"
 df -h
 sync
 
@@ -228,7 +232,7 @@ LOOP=""
 
 echo "comprimindo $IMG_XZ (xz -9e — Release GitHub limita asset a 2 GiB) ..."
 # Sem -k: libera os ~10G do .img cru durante/após o xz (disco do runner).
-# -9e: melhor razão p/ caber Wavelog/MariaDB embutidos sob 2 GiB.
+# -9e: melhor razão; se ainda passar de 2 GiB, o workflow publica em .part00/.part01.
 xz -T0 -9e -v -f "$IMG_RAW"
 mv -f "${IMG_RAW}.xz" "$IMG_XZ"
 sha256sum "$IMG_XZ" | tee "$IMG_XZ.sha256"

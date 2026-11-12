@@ -23,7 +23,7 @@ GitHub Actions em **`ubuntu-24.04-arm`** (runner ARM nativo, disponível em repo
 5. Pré-carrega Wavelog + MariaDB (`docker pull` + `docker save | gzip`) em `/opt/wavelog/images/*.tar.gz` — first-boot só faz `docker load` + `compose up --pull=never`
 6. Publica `ham-cockpit-<base>-raspi.img.xz` na Release (só 3 partes `x.y.zz`; ver [versionamento.md](versionamento.md))
 
-**Imagem completa (padrão):** MMDVM, apt (Docker, ser2net, Hamlib, mosquitto, nginx…), console e tarballs Docker do Wavelog/DB vão no `.img`. O cartão gravado **não** depende de download externo para subir o core. O runner ARM libera disco agressivamente; os saves vão em `.tar.gz` e o xz usa `-9e` para caber no limite de 2 GiB da Release. `SKIP_DOCKER_CACHE=1` fica só para debug com pouco disco (aí o first-boot volta a poder fazer pull).
+**Imagem completa (padrão):** MMDVM, apt (Docker, ser2net, Hamlib, mosquitto, nginx…), console e tarballs Docker do Wavelog/DB vão no `.img`. O cartão gravado **não** depende de download externo para subir o core. O runner ARM libera disco agressivamente; os saves vão em `.tar.gz`, a rootfs é zerofill antes do xz `-9e`. Se o `.img.xz` ainda passar de **2 GiB** (limite por asset na Release), o workflow publica `.part00`+`.part01` + `.JOIN.txt` (juntar com `cat` / `copy /b`); o artifact Actions `Ham-Cockpit-OS` guarda o arquivo inteiro. `SKIP_DOCKER_CACHE=1` fica só para debug com pouco disco (aí o first-boot volta a poder fazer pull).
 
 Tempo típico: **45–90 min** no runner ARM (MMDVM + pull/save Docker + xz -9e). O `vite build` de produção usa `vite.config.prod.ts` para o Node sair depois de gerar o `dist` (o config de desenvolvimento importa o Lextel e ficava preso no CI).
 

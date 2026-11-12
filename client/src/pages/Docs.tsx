@@ -212,8 +212,8 @@ export default function Docs() {
             <Sec id="imagem" title={t({ pt: "Imagem e primeiro boot", en: "Image and first boot" })}>
               <p>
                 {t({
-                  pt: "A imagem é um arquivo .img.xz que você grava no cartão com o Raspberry Pi Imager (opção Use custom). Ela é montada no GitHub Actions, em uma máquina ARM, e publicada em uma release do GitHub. O arquivo é grande (cerca de 1,7 GB) e por isso não fica dentro do repositório Git.",
-                  en: "The image is a .img.xz file that you write to the card with Raspberry Pi Imager (Use custom option). It is built on GitHub Actions, on an ARM machine, and published as a GitHub release. The file is large (about 1.7 GB), so it does not live inside the Git repository.",
+                  pt: "A imagem é um arquivo .img.xz que você grava no cartão com o Raspberry Pi Imager (opção Use custom). Ela é montada no GitHub Actions, em uma máquina ARM, e publicada em uma release do GitHub. Com Wavelog/MariaDB embutidos fica grande (~2,5 GB); se passar de 2 GiB a Release usa .part00/.part01 (ver .JOIN.txt). Não fica dentro do repositório Git.",
+                  en: "The image is a .img.xz file that you write to the card with Raspberry Pi Imager (Use custom option). It is built on GitHub Actions, on an ARM machine, and published as a GitHub release. With Wavelog/MariaDB embedded it is large (~2.5 GB); over 2 GiB the Release uses .part00/.part01 (see .JOIN.txt). It does not live inside the Git repository.",
                 })}{" "}
                 {IS_PORTAL ? (
                   <>
@@ -247,8 +247,8 @@ export default function Docs() {
                   en="At boot: Docker, nginx (:80), ser2net, Wavelog, Gate and SSH. On the LAN: http://ham-cockpit.local (the Pi IP also works). On the Pi Wi‑Fi: http://192.168.4.1 (DHCP 192.168.4.50–150)."
                 />
                 <Li
-                  pt="O Wavelog baixa as imagens Docker no primeiro boot com rede. Elas não vêm dentro do .img.xz. Por isso, use o cabo de rede no primeiro boot."
-                  en="Wavelog downloads its Docker images on the first boot with a network. They are not inside the .img.xz. So use the network cable on the first boot."
+                  pt="O Wavelog e o MariaDB vêm embutidos no .img.xz (/opt/wavelog/images). No first-boot o Pi só faz docker load — sem pull obrigatório para o stack core."
+                  en="Wavelog and MariaDB ship inside the .img.xz (/opt/wavelog/images). On first boot the Pi only runs docker load — no required pull for the core stack."
                 />
               </ul>
             </Sec>

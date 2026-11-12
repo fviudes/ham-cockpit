@@ -24,15 +24,30 @@ $imager = @(
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 
 if (-not $Image) {
-  $guess = Get-ChildItem -Path $here, (Join-Path $repo "image\out") -Filter "ham-cockpit-*-raspi.img*" -ErrorAction SilentlyContinue |
+  $guess = Get-ChildItem -Path $here, (Join-Path $repo "image\out") -Filter "ham-cockpit-*-raspi.img.xz" -ErrorAction SilentlyContinue |
     Select-Object -First 1
   if ($guess) { $Image = $guess.FullName }
+}
+# Release > 2 GiB: partes .part00+.part01 — junta antes de gravar.
+if (-not $Image -or -not (Test-Path $Image)) {
+  $part0 = Get-ChildItem -Path $here, (Join-Path $repo "image\out") -Filter "ham-cockpit-*-raspi.img.xz.part00" -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+  if ($part0) {
+    $joined = $part0.FullName -replace '\.part00$', ''
+    $parts = Get-ChildItem -Path $part0.DirectoryName -Filter ($part0.Name -replace 'part00$', 'part*') |
+      Sort-Object Name
+    Write-Host "Juntando $($parts.Count) partes -> $joined"
+    cmd /c "copy /b $(($parts | ForEach-Object { `"$($_.FullName)`" }) -join '+') `"$joined`""
+    if (-not (Test-Path $joined)) { throw "falha ao juntar partes da imagem" }
+    $Image = $joined
+  }
 }
 if (-not $Image -or -not (Test-Path $Image)) {
   throw @"
 Imagem Ham Cockpit OS nao encontrada.
 Baixe o .img.xz da Release: https://github.com/fviudes/ham-cockpit/releases
-  gh release download --repo fviudes/ham-cockpit --pattern "ham-cockpit-*-raspi.img.xz" --dir instaladores
+  gh release download --repo fviudes/ham-cockpit --pattern "ham-cockpit-*-raspi.img.xz*" --dir instaladores
+(Se so houver .part00/.part01, o script junta sozinho; ou veja o .JOIN.txt na Release.)
 Ou gere:  wsl sudo bash image/appliance/build.sh
 "@
 }

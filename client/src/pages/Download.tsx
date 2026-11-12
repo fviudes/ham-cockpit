@@ -41,8 +41,8 @@ const STEPS: Pair[] = [
     en: "Write the .img.xz file to the microSD card (or SSD) with Raspberry Pi Imager, using the Use custom option.",
   },
   {
-    pt: "Coloque o cartão no Pi e ligue a fonte. Se puder, conecte o cabo de rede no primeiro boot: o Wavelog baixa as imagens Docker nesse momento.",
-    en: "Put the card in the Pi and power it on. If you can, plug in the network cable on the first boot: Wavelog downloads its Docker images then.",
+    pt: "Coloque o cartão no Pi e ligue a fonte. O Wavelog e o MariaDB já vêm na imagem (docker load no first-boot); rede no primeiro boot é opcional para o stack core.",
+    en: "Put the card in the Pi and power it on. Wavelog and MariaDB are already in the image (docker load on first boot); network on first boot is optional for the core stack.",
   },
   {
     pt: "No celular ou no notebook, entre no Wi‑Fi Ham-Cockpit-XXXX (senha hamcockpit).",

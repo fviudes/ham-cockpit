@@ -105,13 +105,45 @@ jobs:
             gh release create "$TAG" --title "Ham Cockpit ${TAG}" --notes "$NOTES"
           fi
           ls -lh "$IMG" "$SUM"
-          # GitHub Release asset ≤ 2 GiB. Se passar, o artifact Actions ainda fica disponível.
           BYTES=$(stat -c%s "$IMG")
-          if [[ "$BYTES" -ge 2147483648 ]]; then
-            echo "AVISO: $IMG tem $BYTES bytes (≥ 2 GiB) — upload na Release bloqueado; use o artifact Ham-Cockpit-OS." >&2
-            exit 1
+          # GitHub Release asset ≤ 2 GiB. Imagem completa (Wavelog embutido) pode passar —
+          # aí publicamos em partes .part00 + .part01 (juntar com copy /b ou cat).
+          LIMIT=2147483648
+          PART_SIZE=1900M
+          if [[ "$BYTES" -ge "$LIMIT" ]]; then
+            echo "AVISO: $IMG tem $BYTES bytes (≥ 2 GiB) — publicando em partes na Release." >&2
+            # Remove .img.xz único antigo (sem Docker) para o portal não preferir o incompleto.
+            BASE_NAME="$(basename "$IMG")"
+            gh release delete-asset "$TAG" "$BASE_NAME" --yes 2>/dev/null || true
+            rm -f "${IMG}.part"*
+            split -b "$PART_SIZE" -d -a 2 "$IMG" "${IMG}.part"
+            ls -lh "${IMG}.part"*
+            for p in "${IMG}.part"*; do
+              gh release upload "$TAG" "$p" --clobber
+            done
+            JOIN="${IMG}.JOIN.txt"
+            {
+              echo "Ham Cockpit ${TAG} — imagem completa acima de 2 GiB (limite por arquivo na Release)."
+              echo "Junte as partes e confira o SHA-256:"
+              echo
+              echo "  Linux/macOS:  cat $(basename "$IMG").part* > $(basename "$IMG")"
+              echo "  Windows CMD:  copy /b $(basename "$IMG").part00+$(basename "$IMG").part01 $(basename "$IMG")"
+              echo
+              echo "SHA-256 esperado:"
+              cat "$SUM"
+              echo
+              echo "O artifact Actions Ham-Cockpit-OS também tem o .img.xz inteiro (retenção 30 dias)."
+            } >"$JOIN"
+            gh release upload "$TAG" "$JOIN" "$SUM" --clobber
+          else
+            # Remove partes antigas se esta bake couber num único asset.
+            for old in $(gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null || true); do
+              if [[ "$old" == *.img.xz.part* || "$old" == *.img.xz.JOIN.txt ]]; then
+                gh release delete-asset "$TAG" "$old" --yes 2>/dev/null || true
+              fi
+            done
+            gh release upload "$TAG" "$IMG" "$SUM" --clobber
           fi
-          gh release upload "$TAG" "$IMG" "$SUM" --clobber
           # O bake (sudo) deixa update/mmdvm-arm64.tgz root:root — não copiar por cima.
           # Upload do tgz = ponte OTA; a imagem .img.xz já embute os mesmos bins.
           if [[ -f "$MMDVM" ]]; then
