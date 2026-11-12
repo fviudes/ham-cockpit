@@ -5,11 +5,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { ChevronDown, KeyRound, LogOut, User } from "lucide-react";
+import { AlertTriangle, ChevronDown, KeyRound, LogOut, User } from "lucide-react";
+import type { UpdateId } from "@shared/const";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { APP_LOGO_LG } from "@shared/brand";
-import type { Lang } from "./i18n";
+import type { I18nKey, Lang } from "./i18n";
 import { useConsole } from "./state";
 
 export function Panel({
@@ -331,6 +332,108 @@ export function LangToggle() {
   );
 }
 
+const UPD_LABEL: Record<UpdateId, I18nKey> = {
+  app: "updApp",
+  os: "updOs",
+  ser2net: "updSer2net",
+  hamlib: "updHamlib",
+  wavelog: "updWavelog",
+  wlg: "updWlg",
+};
+
+const UPD_STAGE: Record<string, I18nKey> = {
+  prepare: "updStagePrepare",
+  update: "updStageIndexes",
+  download: "updStageDownload",
+  install: "updStageInstall",
+  restart: "updStageRestart",
+  done: "updStageDone",
+  error: "updFail",
+};
+
+export function stageLabel(tx: (k: I18nKey) => string, stage: string): string {
+  const key = UPD_STAGE[stage];
+  return key ? tx(key) : stage;
+}
+
+export function UpdatesMenu() {
+  const { s, tx } = useConsole();
+  const [, navigate] = useLocation();
+  const jobs = s.updates.jobs.filter((row) => row.status === "running");
+  const applying = s.updates.items.filter((row) => row.applying);
+  const live = jobs.length ? jobs : applying.map((row) => ({
+    id: row.id,
+    status: "running" as const,
+    pct: row.progress,
+    determinate: row.determinate,
+    stage: row.stage,
+    error: row.error,
+  }));
+  if (s.updates.pending <= 0 && live.length === 0) return null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="relative grid size-8 shrink-0 place-items-center rounded-md border border-[#ffb300]/50 bg-[#ffb300]/15 text-[#ffb300] outline-none"
+          aria-label={tx("updPending")}
+          title={tx("updPending")}
+        >
+          <AlertTriangle size={16} className={live.length ? "" : "animate-pulse"} />
+          {live.length > 0 ? (
+            <span className="absolute inset-x-1 bottom-0.5 flex flex-col gap-px">
+              {live.slice(0, 3).map((job) => (
+                <span key={job.id} className="h-0.5 overflow-hidden rounded-full bg-[#071018]/70">
+                  <span
+                    className={`block h-full rounded-full bg-[#ffb300] ${job.determinate ? "" : "animate-pulse"}`}
+                    style={{ width: job.determinate ? `${Math.max(8, job.pct)}%` : "55%" }}
+                  />
+                </span>
+              ))}
+            </span>
+          ) : null}
+          <span className="absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-[#ffb300] px-1 font-['IBM_Plex_Mono'] text-[9px] font-bold text-[#071018]">
+            {live.length > 0 ? live.length : s.updates.pending}
+          </span>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className={cn(menuBox, "min-w-[18rem]")}>
+        {live.length > 0 ? (
+          live.map((job) => (
+            <DropdownMenuItem
+              key={job.id}
+              className={cn(menuItem, "cursor-default flex-col items-stretch gap-1 py-2")}
+              onSelect={(e) => e.preventDefault()}
+            >
+              <span className="flex items-center justify-between gap-2">
+                <span>{tx(UPD_LABEL[job.id] || "updApp")}</span>
+                {job.determinate ? (
+                  <span className="font-['IBM_Plex_Mono'] text-[11px] text-[#4fc3f7]">{Math.round(job.pct)}%</span>
+                ) : null}
+              </span>
+              <span className="text-[11px] text-[#8ea0b3]">{stageLabel(tx, job.stage) || tx("updApplying")}</span>
+              <span className="h-1.5 overflow-hidden rounded-full bg-[#16232e]">
+                <span
+                  className={`block h-full rounded-full bg-[#4fc3f7] ${job.determinate ? "" : "animate-pulse"}`}
+                  style={{ width: job.determinate ? `${Math.max(4, job.pct)}%` : "40%" }}
+                />
+              </span>
+              {job.error ? <span className="text-[11px] text-[#f87171]">{job.error}</span> : null}
+            </DropdownMenuItem>
+          ))
+        ) : (
+          <DropdownMenuItem className={menuItem} onSelect={() => navigate("/console/updates")}>
+            {s.updates.pending} {tx("updPendingN")}
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem className={menuItem} onSelect={() => navigate("/console/updates")}>
+          {tx("update")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function UserMenu({ name, onLogout }: { name: string; onLogout: () => void }) {
   const { tx } = useConsole();
   const [, navigate] = useLocation();
@@ -371,17 +474,38 @@ export function MeterBar({ value, max = 9 }: { value: number; max?: number }) {
 }
 
 /** Barra de progresso de ação longa (Atualizações / Backup) — tema escuro, cyan. */
-export function ActionProgress({ active, value, label }: { active: boolean; value: number; label: string }) {
+export function ActionProgress({
+  active,
+  value,
+  label,
+  determinate = true,
+}: {
+  active: boolean;
+  value: number;
+  label: string;
+  determinate?: boolean;
+}) {
   if (!active) return null;
   const pct = Math.max(0, Math.min(100, Math.round(value)));
   return (
-    <div className="min-w-0 flex-1" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={label}>
+    <div
+      className="min-w-0 flex-1"
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={determinate ? pct : undefined}
+      aria-label={label}
+    >
       <div className="mb-1 flex items-center justify-between gap-2">
         <span className="text-[10px] tracking-wide text-[#8ea0b3] uppercase">{label}</span>
-        <span className="font-['IBM_Plex_Mono'] text-[11px] text-[#4fc3f7]">{pct}%</span>
+        {determinate ? <span className="font-['IBM_Plex_Mono'] text-[11px] text-[#4fc3f7]">{pct}%</span> : null}
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-[#16232e]">
-        <div className="h-full rounded-full bg-[#4fc3f7] transition-[width] duration-300 ease-out" style={{ width: `${pct}%` }} />
+        {determinate ? (
+          <div className="h-full rounded-full bg-[#4fc3f7] transition-[width] duration-300 ease-out" style={{ width: `${pct}%` }} />
+        ) : (
+          <div className="h-full w-2/5 animate-pulse rounded-full bg-[#4fc3f7]" />
+        )}
       </div>
     </div>
   );

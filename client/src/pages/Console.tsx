@@ -4,7 +4,7 @@ import { DEFAULT_PASS, DEFAULT_USER, type I18nKey } from "@/console/i18n";
 import { resolvePrimaryRoute, sendPrimaryCmd } from "@/console/radio-cmd";
 import { ConsoleProvider, formatVfo, useConsole } from "@/console/state";
 import { SVC_LABEL, serviceLive } from "@/console/services-ui";
-import { LangToggle, UserMenu } from "@/console/widgets";
+import { LangToggle, UpdatesMenu, UserMenu } from "@/console/widgets";
 import { RadioPage } from "@/console/radio";
 import { ManualPage } from "@/console/manual";
 import { AdminPage, StatusPage } from "@/console/system";
@@ -24,7 +24,6 @@ import {
   Gauge,
   LayoutDashboard,
   LogOut,
-  AlertTriangle,
   Menu,
   Radio,
   Settings,
@@ -394,20 +393,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
             </span>
           </div>
           <LangToggle />
-          {s.updates.pending > 0 ? (
-            <button
-              type="button"
-              onClick={() => navigate("/console/updates")}
-              className="relative grid size-8 shrink-0 place-items-center rounded-md border border-[#ffb300]/50 bg-[#ffb300]/15 text-[#ffb300]"
-              aria-label={tx("updPending")}
-              title={tx("updPending")}
-            >
-              <AlertTriangle size={16} className="animate-pulse" />
-              <span className="absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-[#ffb300] px-1 font-['IBM_Plex_Mono'] text-[9px] font-bold text-[#071018]">
-                {s.updates.pending}
-              </span>
-            </button>
-          ) : null}
+          <UpdatesMenu />
           <UserMenu name={user} onLogout={onLogout} />
         </header>
         <main

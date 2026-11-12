@@ -107,6 +107,7 @@ Ciclo ~4 s no lab: **ABRT `FD_SETSIZE`** (~4 s de CPU ao ler `users.csv` + `
 | NextionDriver ABRT (`FD_SETSIZE`) | **Causa real (lab Ubuntu 24):** com `Port=modem`, `fd2=-1` e `checkSerial()` faz `FD_SET(-1)` → glibc fortify aborta (`bit out of range 0 - FD_SETSIZE`). O log lista eth0/docker0/br-*/veth* logo antes, mas `prlimit`/`LimitNOFILE=1024` **sozinho não evita** o ABRT. Mitigações: patch + `Before=docker` + `WaitForLan=0` (+ LimitNOFILE). | `deploy/mmdvm/patches/nextiondriver-fd2-modem.patch`; `build-binaries.sh` (patch\|\|sed); `nextiondriver.service`; INI `WaitForLan=0` |
 | Unit Nextion stub “lab: disabled” | **Nunca** deixar stub no bake/OTA. Restaurar unit real; `systemctl unmask`; apagar symlink `/dev/null` / `ConditionPathExists=/nonexistent`. **Detectar stub só em diretivas ativas** (grep sem linhas `#`) | `deploy/mmdvm/nextiondriver.service`; OTA `ota-hooks.sh` (`nextion_unit_is_stub`); no Pi: `/etc/systemd/system/nextiondriver.service` |
 | OTA 0.1.05.01 apaga `nextiondriver.service` | Comentário da unit real citava “lab: disabled” / `/nonexistent` / `ExecStart=/bin/true`. `ota-hooks` recusava o arquivo do pacote **e** apagava a unit viva. LCD morta, `FragmentPath=` vazio, sem PTY. Correção: grep só em linhas não-comentário + comentário da unit sem esses literais | `ota-hooks.sh`; `nextiondriver.service`; **precisa OTA ≥ 0.1.05.02** para não repetir |
+| OTA zera indicativo/ID no Nextion (3× lab) | 0.1.05.02 **não** copiou template no INI (`PY2MED`/`7242679` intactos). `stop` Host no hook derruba `PartOf` (DMR failed, ciclo systemd) e a tela apaga call/ID. Merge só LCD se faltar; backup `.ota-bak`; Host já up = não parar; `enable --now` dos filhos se inativos | `ota-hooks.sh`; `station-upd apply app`; `install-station.sh` (template só se ausente) |
 | OTA não troca NextionDriver já presente | `mmdvm_missing` retornava 0 se o bin existia — stock/sed-sem-marca ficava. Lab 0.1.05.01: `/usr/local/bin/NextionDriver` **sem** `HC_FD2_GUARD` (145736 B, 13:12) enquanto `mmdvm-arm64.tgz` **tinha** a marca. Agora atualiza **só** o NextionDriver se faltar `HC_FD2_GUARD` (não troca MMDVMHost/Dual) | `ota-hooks.sh` `nextion_needs_patch` |
 | Rebuild Nextion no Pi: `make: command not found` / dpkg interrompido | `dpkg --configure -a` (+ `apt-get -f install`); `apt-get install -y build-essential`; só então `make`. Patch hunks podem falhar → usar `sed` guards (`fd2 < 0`, `display_RXsock < 0`) | `station-upd` `apt_prepare`; `packages.list` (`build-essential`); `build-binaries.sh` |
 | Hamlib / apt preso (dpkg a meio) | Sempre `apt_prepare` antes de `apply hamlib` / OS / pacotes | `deploy/station/station-upd` (`apt_prepare`) |
@@ -115,10 +116,16 @@ Ciclo ~4 s no lab: **ABRT `FD_SETSIZE`** (~4 s de CPU ao ler `users.csv` + `
 
 ## OTA
 
-- Pacote / canal: `mmdvm-arm64.tgz` (bins + `etc/` com groups/users/hosts).
+- Pacote / canal: `mmdvm-arm64.tgz` (bins + `etc/` com groups/users/hosts). `station-upd apply app` **não** extrai INI vivo; só `index.js`/`public`/`bin`/`systemd`/hooks.
 - `deploy/station/ota-hooks.sh`: instala bins se faltarem **ou** se `NextionDriver` não tiver `HC_FD2_GUARD`; copia hosts para `/usr/share/ircddbgateway`; tenta garantir wx/mosquitto/libdlt2 se `apt-get` existir; habilita `mosquitto` + units MMDVM; reinstala units de `$ROOT/systemd` (unit **real** do Nextion). Stub só se diretivas ativas baterem (`nextion_unit_is_stub`); **não** apagar unit por texto em comentário.
 - Sem tarball: `ham-cockpit-mmdvm-build.service` (oneshot em segundo plano) — exige `build-essential` + dpkg íntegro.
-- OTA **não** reescreve Callsign/Id/`[Modem]` (Dual Hat permanece `ttyAMA0`; **não** copiar WPSD `dvmpis`/`ttyACM0`). Faz **merge** do caminho LCD WPSD/ON7LDS: `Display=Nextion`, `[Nextion] Port=/dev/ttyNextionDriver` + `ScreenLayout=4`, `[NextionDriver] Port=modem` `WaitForLan=0`, Transparent `SendFrameType=1`. DPlus `localAddress=127.0.0.1` ainda precisa salvar de novo no console.
+- **INI do operador — nunca apagar no upgrade:**
+  - Template `deploy/mmdvm/*.ini` só se o arquivo vivo **não existir** (`install-station.sh`). OTA **não** faz `cp` do template em `/opt/ham-cockpit/mmdvm/mmdvmhost.ini`.
+  - Antes de qualquer escrita: backup `mmdvmhost.ini.ota-bak` (`station-upd apply app` + merge no hook).
+  - Merge conservador: só chaves de display/LCD/PTY **se faltarem** (`Display=None` / `ScreenLayout` vazio). **Nunca** resetar `[General] Callsign`, `Id`, `[DMR] Id`, frequências, senhas, redes, `[Modem]` se já houver valor de operador.
+  - Dual Hat = `/dev/ttyAMA0` + `dtoverlay=disable-bt`. **Não** `ttyACM0`. **Não** `systemctl restart mmdvmhost` (ciclo PartOf). Host já ativo: não parar. Host inativo: `start` **uma** vez (`ignore-dependencies`). Depois `start` dos gateways se inativos (filhos `PartOf` não voltam sozinhos).
+- Lab **0.1.05.02 (11/Nov ~20:45):** OTA **não** sobrescreveu o INI (`Callsign=PY2MED` `Id=7242679` mtime 19:09). `stop`+`start` do Host no hook (reabrir PTY) derrubou `dmrgateway` (`PartOf=mmdvmhost`) e o Nextion ficou sem indicativo/ID — terceira vez que o operador viu a config “apagada”. Correção: não parar Host se já estiver up; reabrir Host só se o Nextion **foi iniciado neste OTA**; subir DMR/YSF/ircDDB se inativos. `Restart=on-failure` do DMR após crash também falha com *Transaction order is cyclic* — start com `--job-mode=ignore-dependencies`.
+- DPlus `localAddress=127.0.0.1` ainda precisa salvar de novo no console.
 
 ## Diagnóstico rápido (lab)
 
@@ -151,7 +158,7 @@ strings /usr/local/bin/NextionDriver | grep HC_FD2_GUARD && echo NEXTION_PATCHED
 | `HC_FD2_GUARD` | `build-binaries.sh`; install reinstala do `mmdvm-arm64.tgz` se o bin existir sem a marca; bake aborta sem a marca |
 | PTY 660 dialout + Host espera PTY | `nextiondriver.service` `ExecStartPost`; `mmdvmhost.service` `ExecStartPre` — **sem** `systemctl restart mmdvmhost` |
 | Dual `ttyAMA0` + `disable-bt` | `configure_mmdvm_uart` no install **e** no first-boot; INI de fábrica `Port=/dev/ttyAMA0` (nunca `ttyACM0`/`dvmpis` neste preset) |
-| Display Nextion layout 4 / `Port=modem` / `WaitForLan=0` / `SendFrameType=1` | `deploy/mmdvm/mmdvmhost.ini`; merge OTA `merge_nextion_ini` |
+| Display Nextion layout 4 / `Port=modem` / `WaitForLan=0` / `SendFrameType=1` | `deploy/mmdvm/mmdvmhost.ini` (install limpo); OTA `merge_nextion_ini` **só se a chave faltar** + backup `.ota-bak` |
 | ircDDB sem `.conf` + `localAddress=0.0.0.0` | symlink `ircddbgateway`; template + `applyConfig` + `sed` no OTA se ainda for `127.0.0.1` |
 | `mmdvm-ctl` LF | `.gitattributes` + `sed` no install, first-boot e ota-hooks |
 | Units MMDVM no target sem `RequiredBy` | `WantedBy=ham-cockpit.target`; ircDDB sem `PartOf`; DMR/YSF `PartOf` filho do Host |

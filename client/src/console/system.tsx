@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { APP_VERSION } from "@shared/brand";
@@ -9,7 +9,7 @@ import type { I18nKey } from "./i18n";
 import { formatWatts, useConsole, type LogKind } from "./state";
 import { TermPage } from "./term";
 import { BackupPage } from "./backup";
-import { ActionProgress, Chip, ConsoleInput, Field, GhostBtn, MeterBar, PageHead, Panel, PanelTitle, PrimaryBtn } from "./widgets";
+import { ActionProgress, Chip, ConsoleInput, Field, GhostBtn, MeterBar, PageHead, Panel, PanelTitle, PrimaryBtn, stageLabel } from "./widgets";
 
 type LinuxUser = { name: string; sudo: boolean };
 
@@ -416,27 +416,20 @@ const UPD_HINT: Record<UpdateId, I18nKey> = {
 export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
   const { s, tx, setS, pushLog } = useConsole();
   const [checking, setChecking] = useState(false);
-  const [busy, setBusy] = useState<UpdateId | null>(null);
-  const [progress, setProgress] = useState(0);
-
-  useEffect(() => {
-    if (!busy) return;
-    setProgress(8);
-    const timer = window.setInterval(() => {
-      setProgress((p) => {
-        if (p >= 92) return p;
-        const step = Math.max(0.35, (92 - p) * 0.05);
-        return Math.min(92, p + step);
-      });
-    }, 450);
-    return () => window.clearInterval(timer);
-  }, [busy]);
 
   const applySnap = (j: {
     ok?: boolean;
     os?: string;
     pending?: number;
     error?: string;
+    jobs?: {
+      id: UpdateId;
+      status: "running" | "ok" | "error";
+      pct: number;
+      determinate: boolean;
+      stage: string;
+      error: string;
+    }[];
     items?: {
       id: UpdateId;
       current?: string;
@@ -445,26 +438,40 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
       applying?: boolean;
       error?: string;
       note?: string;
+      progress?: number;
+      stage?: string;
+      determinate?: boolean;
     }[];
   }) => {
     if (!Array.isArray(j.items)) return;
+    const jobs = Array.isArray(j.jobs) ? j.jobs : [];
     const items = UPDATE_IDS.map((id) => {
       const hit = j.items!.find((row) => row.id === id);
+      const job = jobs.find((row) => row.id === id);
       const current = String(hit?.current || "—");
       const available = String(hit?.available || hit?.current || "—");
+      const applying = Boolean(hit?.applying) || job?.status === "running";
       return {
         id,
         current,
         available,
         updatable: isNewerVersion(available, current),
-        applying: Boolean(hit?.applying),
-        error: String(hit?.error || ""),
+        applying,
+        error: String(job?.error || hit?.error || ""),
         note: String(hit?.note || ""),
+        progress: Number(hit?.progress ?? job?.pct ?? 0) || 0,
+        stage: String(hit?.stage || job?.stage || ""),
+        determinate: Boolean(hit?.determinate ?? job?.determinate),
       };
     });
     setS((p) => ({
       ...p,
-      updates: { pending: items.filter((row) => row.updatable).length, os: String(j.os || p.updates.os), items },
+      updates: {
+        pending: items.filter((row) => row.updatable).length,
+        os: String(j.os || p.updates.os),
+        items,
+        jobs,
+      },
     }));
   };
 
@@ -483,13 +490,17 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
   };
 
   const applyOne = async (id: UpdateId) => {
-    setBusy(id);
-    setProgress(8);
     setS((p) => ({
       ...p,
       updates: {
         ...p.updates,
-        items: p.updates.items.map((row) => (row.id === id ? { ...row, applying: true } : row)),
+        jobs: [
+          ...p.updates.jobs.filter((row) => row.id !== id),
+          { id, status: "running", pct: 2, determinate: false, stage: "prepare", error: "" },
+        ],
+        items: p.updates.items.map((row) =>
+          row.id === id ? { ...row, applying: true, progress: 2, stage: "prepare", determinate: false } : row,
+        ),
       },
     }));
     try {
@@ -504,25 +515,34 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
         toast.error(j.error || tx("updFail"));
         return;
       }
-      setProgress(100);
       toast.success(tx("updOk"));
       pushLog("SYS", `${tx(UPD_LABEL[id])} → ${j.items?.find((row) => row.id === id)?.current || ""}`);
-      await new Promise((resolve) => window.setTimeout(resolve, 400));
     } catch {
       toast.error(tx("updFail"));
-    } finally {
-      setBusy(null);
-      setProgress(0);
+      setS((p) => ({
+        ...p,
+        updates: {
+          ...p.updates,
+          items: p.updates.items.map((row) => (row.id === id ? { ...row, applying: false } : row)),
+          jobs: p.updates.jobs.filter((row) => row.id !== id),
+        },
+      }));
     }
   };
 
+  const ready = s.updates.items.filter(
+    (row) => row.updatable && isNewerVersion(row.available, row.current) && !row.applying,
+  );
   return (
     <div>
       {embedded ? null : <PageHead kicker={tx("admin")} title={tx("update")} />}
       <p className="mb-4 max-w-3xl text-sm leading-relaxed text-[#8ea0b3]">{tx("updateHelp")}</p>
       <div className="mb-4 flex flex-wrap items-center gap-2">
+        <PrimaryBtn disabled={ready.length === 0} onClick={() => ready.forEach((row) => void applyOne(row.id))}>
+          {tx("updApplyAll")}
+        </PrimaryBtn>
         <GhostBtn disabled={checking} onClick={() => void checkNow()}>
-          {checking ? tx("updApplying") : tx("updCheck")}
+          {checking ? tx("updChecking") : tx("updCheck")}
         </GhostBtn>
         {s.updates.pending > 0 ? (
           <span className="font-['IBM_Plex_Mono'] text-[11px] text-[#ffb300]">
@@ -532,9 +552,10 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         {s.updates.items.map((row) => {
-          const applying = busy === row.id || row.applying;
+          const applying = row.applying;
+          const barLabel = applying ? stageLabel(tx, row.stage) || tx("updApplying") : tx("updProgress");
           return (
-            <Panel key={row.id} className={row.updatable ? "border-[#ffb300]/40" : undefined}>
+            <Panel key={row.id} className={row.updatable || applying ? "border-[#ffb300]/40" : undefined}>
               <div className="mb-3 flex items-start justify-between gap-3">
                 <div>
                   <PanelTitle>{tx(UPD_LABEL[row.id])}</PanelTitle>
@@ -559,12 +580,17 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
               {row.error ? <p className="mb-3 text-xs text-[#f87171]">{row.error}</p> : null}
               <div className="flex items-center gap-3">
                 <PrimaryBtn
-                  disabled={!row.updatable || !isNewerVersion(row.available, row.current) || applying || busy !== null}
+                  disabled={!row.updatable || !isNewerVersion(row.available, row.current) || applying}
                   onClick={() => void applyOne(row.id)}
                 >
                   {applying ? tx("updApplying") : tx("updApply")}
                 </PrimaryBtn>
-                <ActionProgress active={applying} value={busy === row.id ? progress : applying ? 12 : 0} label={tx("updProgress")} />
+                <ActionProgress
+                  active={applying}
+                  value={row.progress}
+                  determinate={row.determinate}
+                  label={barLabel}
+                />
               </div>
             </Panel>
           );
@@ -574,6 +600,15 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
   );
 }
 
+type HostSample = {
+  t: number;
+  cpuPct: number | null;
+  ramPct: number | null;
+  ramUsedBytes: number;
+  ramTotalBytes: number;
+  cpuTempC: number | null;
+};
+
 type HostSnap = {
   ok: boolean;
   cpuTempC: number | null;
@@ -582,6 +617,18 @@ type HostSnap = {
   diskUsedBytes: number;
   diskPath: string;
   error: string;
+  hardware?: string;
+  soc?: string;
+  osPretty?: string;
+  appVersion?: string;
+  uptimeSec?: number;
+  cpuPct?: number | null;
+  ramPct?: number | null;
+  ramUsedBytes?: number;
+  ramTotalBytes?: number;
+  sampleMs?: number;
+  windowMs?: number;
+  samples?: HostSample[];
 };
 
 type WlDbSnap = {
@@ -608,23 +655,39 @@ function formatBytes(n: number): string {
   return `${v.toFixed(digits)} ${units[i]}`;
 }
 
+function formatUptime(sec: number | undefined): string {
+  if (sec == null || !Number.isFinite(sec) || sec < 0) return "—";
+  const s = Math.floor(sec);
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (d) return `${d}d ${h}h ${m}m`;
+  if (h) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function slotSeries(samples: HostSample[] | undefined, windowMs: number, sampleMs: number, key: keyof Pick<HostSample, "cpuPct" | "ramPct" | "cpuTempC">): Array<number | null> {
+  const step = Math.max(1000, sampleMs || 5000);
+  const win = Math.max(step, windowMs || 300_000);
+  const n = Math.max(1, Math.round(win / step));
+  const out: Array<number | null> = Array.from({ length: n }, () => null);
+  if (!samples?.length) return out;
+  const now = samples[samples.length - 1]?.t ?? Date.now();
+  const start = now - win;
+  for (const row of samples) {
+    const i = Math.floor((row.t - start) / step);
+    if (i < 0 || i >= n) continue;
+    const v = row[key];
+    out[i] = v == null || !Number.isFinite(v) ? null : v;
+  }
+  return out;
+}
+
 export function StatusPage() {
   const { s, tx } = useConsole();
-  const cpu = 18;
-  const ram = 32;
   const net = 11;
   const [host, setHost] = useState<HostSnap | null>(null);
   const [wlDb, setWlDb] = useState<WlDbSnap | null>(null);
-  const hist = useMemo(
-    () =>
-      Array.from({ length: 40 }, (_, i) => ({
-        x: i,
-        cpu: 12 + Math.round(Math.sin(i / 4) * 8 + (i % 5)),
-        ram: 28 + Math.round(Math.cos(i / 6) * 6),
-        net: 8 + (i % 7),
-      })),
-    []
-  );
 
   useEffect(() => {
     let alive = true;
@@ -656,26 +719,42 @@ export function StatusPage() {
   const diskTotal = host?.diskTotalBytes ?? 0;
   const diskFree = host?.diskFreeBytes ?? 0;
   const diskUsed = host?.diskUsedBytes ?? Math.max(0, diskTotal - diskFree);
+  const sampleMs = host?.sampleMs ?? 5000;
+  const windowMs = host?.windowMs ?? 300_000;
+  const cpuSeries = slotSeries(host?.samples, windowMs, sampleMs, "cpuPct");
+  const ramSeries = slotSeries(host?.samples, windowMs, sampleMs, "ramPct");
+  const tempSeries = slotSeries(host?.samples, windowMs, sampleMs, "cpuTempC");
+  const cpuPct = host?.cpuPct;
+  const ramPct = host?.ramPct;
+  const ramUsed = host?.ramUsedBytes ?? 0;
+  const ramTotal = host?.ramTotalBytes ?? 0;
+  const osPretty = host?.osPretty?.trim() || "";
+  const appVer = host?.appVersion || APP_VERSION;
+  const software = osPretty ? `${osPretty} · Ham Cockpit ${appVer}` : `Ham Cockpit ${appVer}`;
 
   return (
     <div>
       <PageHead kicker={tx("status")} title={tx("statusTitle")} />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Mini k={tx("hardware")} v="Ubuntu Server" />
-        <Mini k="SoC" v="BCM2711 · 4×1.8 GHz" />
-        <Mini k="Uptime" v="14h 22m" />
-        <Mini k="Firmware" v={`Ham Cockpit ${APP_VERSION}`} />
+        <Mini k={tx("hardware")} v={host?.hardware?.trim() || "—"} />
+        <Mini k={tx("software")} v={software} />
+        <Mini k="SoC" v={host?.soc?.trim() || "—"} />
+        <Mini k="Uptime" v={formatUptime(host?.uptimeSec)} />
       </div>
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <Panel>
           <PanelTitle>CPU</PanelTitle>
-          <p className="mb-2 font-['IBM_Plex_Mono'] text-2xl text-[#4fc3f7]">{cpu}%</p>
-          <MeterBar value={cpu} max={100} />
+          <p className="mb-1 font-['IBM_Plex_Mono'] text-2xl text-[#4fc3f7]">{cpuPct == null ? "—" : `${cpuPct.toFixed(1)}%`}</p>
+          <p className="mb-2 text-[10px] tracking-wide text-[#8ea0b3] uppercase">{tx("last5min")}</p>
+          <TimeBars values={cpuSeries} max={100} color="#4fc3f7" tickFmt={(n) => `${n}%`} />
         </Panel>
         <Panel>
           <PanelTitle>RAM</PanelTitle>
-          <p className="mb-2 font-['IBM_Plex_Mono'] text-2xl text-[#34d399]">{ram}% · 2.5 / 8 GB</p>
-          <MeterBar value={ram} max={100} />
+          <p className="mb-1 font-['IBM_Plex_Mono'] text-2xl text-[#34d399]">
+            {ramPct == null ? "—" : `${ramPct.toFixed(1)}% · ${formatBytes(ramUsed)} / ${formatBytes(ramTotal)}`}
+          </p>
+          <p className="mb-2 text-[10px] tracking-wide text-[#8ea0b3] uppercase">{tx("last5min")}</p>
+          <TimeBars values={ramSeries} max={100} color="#34d399" tickFmt={(n) => `${n}%`} />
         </Panel>
         <Panel>
           <PanelTitle>{tx("network")}</PanelTitle>
@@ -686,10 +765,11 @@ export function StatusPage() {
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Panel>
           <PanelTitle>{tx("cpuTemp")}</PanelTitle>
-          <p className="mb-2 font-['IBM_Plex_Mono'] text-2xl text-[#f87171]">
+          <p className="mb-1 font-['IBM_Plex_Mono'] text-2xl text-[#f87171]">
             {tempC == null ? "—" : `${tempC.toFixed(1)} °C`}
           </p>
-          <MeterBar value={tempC ?? 0} max={85} />
+          <p className="mb-2 text-[10px] tracking-wide text-[#8ea0b3] uppercase">{tx("last5min")}</p>
+          <TimeBars values={tempSeries} max={85} color="#f87171" tickFmt={(n) => `${n}°`} />
         </Panel>
         <Panel>
           <PanelTitle>{tx("disk")}</PanelTitle>
@@ -705,7 +785,15 @@ export function StatusPage() {
       </div>
       <Panel className="mt-4">
         <PanelTitle>{tx("healthHist")}</PanelTitle>
-        <Spark rows={hist} />
+        <p className="-mt-2 mb-3 text-xs text-[#8ea0b3]">{tx("healthHistHint")}</p>
+        <Spark
+          cpu={cpuSeries}
+          ram={ramSeries}
+          temp={tempSeries}
+          cpuLabel={tx("healthHistCpu")}
+          ramLabel={tx("healthHistRam")}
+          tempLabel={tx("healthHistTemp")}
+        />
       </Panel>
       <Panel className="mt-4">
         <PanelTitle>{tx("network")}</PanelTitle>
@@ -754,26 +842,139 @@ function Mini({ k, v }: { k: string; v: string }) {
   return (
     <div className="rounded-lg bg-[#101c28] px-3 py-2">
       <p className="text-[10px] tracking-wide text-[#8ea0b3] uppercase">{k}</p>
-      <p className="font-['IBM_Plex_Mono'] text-sm text-[#4fc3f7]">{v}</p>
+      <p className="break-words font-['IBM_Plex_Mono'] text-sm text-[#4fc3f7]">{v}</p>
     </div>
   );
 }
 
-function Spark({
-  rows,
+function TimeBars({
+  values,
+  max,
+  color,
+  tickFmt,
 }: {
-  rows: { x: number; cpu: number; ram: number; net: number }[];
+  values: Array<number | null>;
+  max: number;
+  color: string;
+  tickFmt: (n: number) => string;
+}) {
+  const w = 280;
+  const h = 96;
+  const padL = 2;
+  const padR = 34;
+  const padT = 8;
+  const padB = 4;
+  const innerW = w - padL - padR;
+  const innerH = h - padT - padB;
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(f * max * 10) / 10);
+  const n = Math.max(1, values.length);
+  const bw = innerW / n;
+  const gap = n > 40 ? 0.35 : 0.7;
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="h-28 w-full" role="img">
+      {ticks.map((t) => {
+        const y = padT + innerH - (t / max) * innerH;
+        return (
+          <g key={t}>
+            <line x1={padL} x2={w - padR} y1={y} y2={y} stroke="rgba(79,195,247,0.18)" strokeWidth="1" />
+            <text x={w - padR + 3} y={y + 3} fill="#8ea0b3" fontSize="7" fontFamily="IBM Plex Mono, ui-monospace, monospace">
+              {tickFmt(t)}
+            </text>
+          </g>
+        );
+      })}
+      {values.map((v, i) => {
+        if (v == null || !Number.isFinite(v) || v < 0) return null;
+        const bh = Math.max(v > 0 ? 1 : 0, (Math.min(v, max) / max) * innerH);
+        if (bh <= 0) return null;
+        return (
+          <rect
+            key={i}
+            x={padL + i * bw + gap / 2}
+            y={padT + innerH - bh}
+            width={Math.max(0.6, bw - gap)}
+            height={bh}
+            fill={color}
+            opacity={0.88}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+function seriesPath(values: Array<number | null>, max: number, w: number, h: number, pad: number): string {
+  const n = values.length;
+  if (n < 2) return "";
+  const innerH = h - pad * 2;
+  let d = "";
+  let started = false;
+  for (let i = 0; i < n; i++) {
+    const v = values[i];
+    if (v == null || !Number.isFinite(v)) {
+      started = false;
+      continue;
+    }
+    const x = (i / (n - 1)) * w;
+    const y = pad + innerH - (Math.min(Math.max(v, 0), max) / max) * innerH;
+    d += `${started ? "L" : "M"} ${x} ${y} `;
+    started = true;
+  }
+  return d.trim();
+}
+
+function Spark({
+  cpu,
+  ram,
+  temp,
+  cpuLabel,
+  ramLabel,
+  tempLabel,
+}: {
+  cpu: Array<number | null>;
+  ram: Array<number | null>;
+  temp: Array<number | null>;
+  cpuLabel: string;
+  ramLabel: string;
+  tempLabel: string;
 }) {
   const w = 640;
-  const h = 120;
-  const path = (key: "cpu" | "ram" | "net", max: number) =>
-    rows.map((r, i) => `${i === 0 ? "M" : "L"} ${(i / (rows.length - 1)) * w} ${h - (r[key] / max) * (h - 8)}`).join(" ");
+  const h = 140;
+  const pad = 10;
+  const ticks = [0, 25, 50, 75, 100];
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="h-32 w-full" role="img" aria-label="CPU RAM rede">
-      <path d={path("cpu", 40)} fill="none" stroke="#4fc3f7" strokeWidth="2" />
-      <path d={path("ram", 50)} fill="none" stroke="#34d399" strokeWidth="2" />
-      <path d={path("net", 20)} fill="none" stroke="#ffb300" strokeWidth="2" />
-    </svg>
+    <div>
+      <svg viewBox={`0 0 ${w} ${h}`} className="h-36 w-full" role="img" aria-label={`${cpuLabel} ${ramLabel} ${tempLabel}`}>
+        {ticks.map((t) => {
+          const y = pad + ((100 - t) / 100) * (h - pad * 2);
+          return (
+            <g key={t}>
+              <line x1="0" x2={w - 36} y1={y} y2={y} stroke="rgba(79,195,247,0.16)" strokeWidth="1" />
+              <text x={w - 34} y={y + 3} fill="#8ea0b3" fontSize="9" fontFamily="IBM Plex Mono, ui-monospace, monospace">
+                {t}
+              </text>
+            </g>
+          );
+        })}
+        <path d={seriesPath(cpu, 100, w - 36, h, pad)} fill="none" stroke="#4fc3f7" strokeWidth="2" />
+        <path d={seriesPath(ram, 100, w - 36, h, pad)} fill="none" stroke="#34d399" strokeWidth="2" />
+        <path d={seriesPath(temp, 100, w - 36, h, pad)} fill="none" stroke="#f87171" strokeWidth="2" />
+      </svg>
+      <div className="mt-2 flex flex-wrap gap-4 text-[11px] text-[#8ea0b3]">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-0.5 w-4 bg-[#4fc3f7]" />
+          {cpuLabel} (%)
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-0.5 w-4 bg-[#34d399]" />
+          {ramLabel} (%)
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="inline-block h-0.5 w-4 bg-[#f87171]" />
+          {tempLabel} (°C)
+        </span>
+      </div>
+    </div>
   );
 }
 

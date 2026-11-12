@@ -134,6 +134,8 @@ install -m 0644 "$ROOT/deploy/hamlib/ampctld@spe.service" /etc/systemd/system/am
 install -m 0644 "$ROOT/deploy/wavelog/wavelog.service" /etc/systemd/system/wavelog.service
 install -m 0644 "$ROOT/deploy/wavelog-gate/waveloggate.service" /etc/systemd/system/waveloggate.service
 install -d -o hamcockpit -g hamcockpit /opt/ham-cockpit/mmdvm /var/log/mmdvm
+# Templates só em instalação LIMPA (arquivo ausente). OTA/upgrade NUNCA entra aqui
+# com cp por cima — senão Callsign/Id do operador viram N0CALL/0000000 (lab 3×).
 if [[ ! -f /opt/ham-cockpit/mmdvm/mmdvmhost.ini ]]; then
   install -o hamcockpit -g hamcockpit -m 0644 "$ROOT/deploy/mmdvm/mmdvmhost.ini" /opt/ham-cockpit/mmdvm/mmdvmhost.ini
 fi
@@ -152,7 +154,7 @@ if [[ ! -e /opt/ham-cockpit/mmdvm/ircddbgateway ]]; then
   chown -h hamcockpit:hamcockpit /opt/ham-cockpit/mmdvm/ircddbgateway || true
 fi
 install -d /opt/ham-cockpit/systemd /opt/ham-cockpit/deploy/mmdvm
-# Templates do console (ROOT/deploy/mmdvm no Pi = /opt/ham-cockpit/deploy/mmdvm).
+# Cópia do TEMPLATE em deploy/ — NÃO é o INI vivo em /opt/ham-cockpit/mmdvm/.
 if [[ -d "$ROOT/deploy/mmdvm" ]]; then
   cp -a "$ROOT/deploy/mmdvm/mmdvmhost.ini" "$ROOT/deploy/mmdvm/dmrgateway.ini" \
     "$ROOT/deploy/mmdvm/ysfgateway.ini" "$ROOT/deploy/mmdvm/ircddbgateway.conf" \

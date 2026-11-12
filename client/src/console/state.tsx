@@ -332,6 +332,14 @@ export type Station = {
   updates: {
     pending: number;
     os: string;
+    jobs: {
+      id: UpdateId;
+      status: "running" | "ok" | "error";
+      pct: number;
+      determinate: boolean;
+      stage: string;
+      error: string;
+    }[];
     items: {
       id: UpdateId;
       current: string;
@@ -340,6 +348,9 @@ export type Station = {
       applying: boolean;
       error: string;
       note: string;
+      progress: number;
+      stage: string;
+      determinate: boolean;
     }[];
   };
 };
@@ -568,6 +579,7 @@ function initial(): Station {
     updates: {
       pending: 0,
       os: "Ubuntu Server 24.04 LTS",
+      jobs: [],
       items: UPDATE_IDS.map((id) => ({
         id,
         current: "—",
@@ -576,6 +588,9 @@ function initial(): Station {
         applying: false,
         error: "",
         note: "",
+        progress: 0,
+        stage: "",
+        determinate: false,
       })),
     },
   };
@@ -1083,9 +1098,11 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
   }, []);
 
   useEffect(() => {
+    const busyRef = { current: false };
     const apply = (j: {
       pending?: number;
       os?: string;
+      jobs?: Station["updates"]["jobs"];
       items?: {
         id: UpdateId;
         current?: string;
@@ -1094,25 +1111,35 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
         applying?: boolean;
         error?: string;
         note?: string;
+        progress?: number;
+        stage?: string;
+        determinate?: boolean;
       }[];
     }) => {
       if (!j || !Array.isArray(j.items)) return;
+      const jobs = Array.isArray(j.jobs) ? j.jobs : [];
       const items = UPDATE_IDS.map((id) => {
         const hit = j.items!.find((row) => row.id === id);
+        const job = jobs.find((row) => row.id === id);
         const current = String(hit?.current || "—");
         const available = String(hit?.available || hit?.current || "—");
+        const applying = Boolean(hit?.applying) || job?.status === "running";
         return {
           id,
           current,
           available,
           updatable: isNewerVersion(available, current),
-          applying: Boolean(hit?.applying),
-          error: String(hit?.error || ""),
+          applying,
+          error: String(job?.error || hit?.error || ""),
           note: String(hit?.note || ""),
+          progress: Number(hit?.progress ?? job?.pct ?? 0) || 0,
+          stage: String(hit?.stage || job?.stage || ""),
+          determinate: Boolean(hit?.determinate ?? job?.determinate),
         };
       });
       const pending = items.filter((row) => row.updatable).length;
-      setS((p) => ({ ...p, updates: { pending, os: String(j.os || p.updates.os), items } }));
+      busyRef.current = items.some((row) => row.applying) || jobs.some((row) => row.status === "running");
+      setS((p) => ({ ...p, updates: { pending, os: String(j.os || p.updates.os), items, jobs } }));
       if (pending > 0 && sessionStorage.getItem("hamcockpit.updToast") !== "1") {
         sessionStorage.setItem("hamcockpit.updToast", "1");
         toast.warning(`${t(lang, "updPending")} · ${pending} ${t(lang, "updPendingN")}`);
@@ -1125,8 +1152,14 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
         .catch(() => undefined);
     };
     pull();
-    const id = window.setInterval(pull, 60_000);
-    return () => window.clearInterval(id);
+    const slow = window.setInterval(pull, 60_000);
+    const fast = window.setInterval(() => {
+      if (busyRef.current) pull();
+    }, 700);
+    return () => {
+      window.clearInterval(slow);
+      window.clearInterval(fast);
+    };
   }, [lang]);
 
   const pushLog = useCallback((kind: LogKind, msg: string) => {

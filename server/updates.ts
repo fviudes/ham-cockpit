@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40,6 +40,15 @@ function appCurrent(): string {
   return cleanVersion(APP_VERSION);
 }
 
+export type UpdateJob = {
+  id: UpdateId;
+  status: "running" | "ok" | "error";
+  pct: number;
+  determinate: boolean;
+  stage: string;
+  error: string;
+};
+
 export type UpdateItem = {
   id: UpdateId;
   current: string;
@@ -48,6 +57,9 @@ export type UpdateItem = {
   applying: boolean;
   error: string;
   note: string;
+  progress: number;
+  stage: string;
+  determinate: boolean;
 };
 
 export type UpdatesSnapshot = {
@@ -55,6 +67,7 @@ export type UpdatesSnapshot = {
   os: string;
   pending: number;
   items: UpdateItem[];
+  jobs: UpdateJob[];
   error: string;
 };
 
@@ -68,7 +81,7 @@ type Shipped = {
   wlg: string;
 };
 
-const applying = new Set<UpdateId>();
+const jobs = new Map<UpdateId, UpdateJob>();
 
 function loadShipped(): Shipped {
   const fallback: Shipped = {
@@ -99,29 +112,35 @@ function wlgShipped(): string {
 }
 
 function newer(available: string, current: string): boolean {
-  // App Ham Cockpit: 0.1.04 < 0.1.04.01 < 0.1.05 (shared/version.ts).
-  // Demais componentes (apt/Docker/tags) também caem no comparador numérico por partes.
   return isNewerVersion(available, current);
+}
+
+function jobOf(id: UpdateId): UpdateJob | undefined {
+  return jobs.get(id);
 }
 
 function item(id: UpdateId, current: string, available: string, note = "", error = ""): UpdateItem {
   const cur = current || "—";
   const avail = available || cur;
+  const job = jobOf(id);
   return {
     id,
     current: cur,
     available: avail,
     updatable: newer(avail, cur),
-    applying: applying.has(id),
-    error,
+    applying: job?.status === "running",
+    error: job?.error || error,
     note,
+    progress: job?.pct ?? 0,
+    stage: job?.stage ?? "",
+    determinate: job?.determinate ?? false,
   };
 }
 
-async function githubTag(repo: string): Promise<string> {
+async function githubTag(repo: string, ms = 2800): Promise<string> {
   try {
     const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 4500);
+    const t = setTimeout(() => ctrl.abort(), ms);
     const r = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
       signal: ctrl.signal,
       headers: { Accept: "application/vnd.github+json", "User-Agent": `Ham-Cockpit/${APP_VERSION}` },
@@ -139,7 +158,7 @@ async function githubAppVersion(): Promise<string> {
   const headers = { Accept: "application/vnd.github+json", "User-Agent": `Ham-Cockpit/${APP_VERSION}` };
   try {
     const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 6000);
+    const t = setTimeout(() => ctrl.abort(), 3500);
     const r = await fetch(`https://raw.githubusercontent.com/${UPDATE_REPO}/main/update/version.json`, {
       signal: ctrl.signal,
       headers,
@@ -153,7 +172,13 @@ async function githubAppVersion(): Promise<string> {
     /* ignore */
   }
   try {
-    const r = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/contents/update?ref=main`, { headers });
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 3000);
+    const r = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/contents/update?ref=main`, {
+      headers,
+      signal: ctrl.signal,
+    });
+    clearTimeout(t);
     if (!r.ok) return "";
     const list = (await r.json()) as { name?: string }[];
     const vers = list
@@ -171,17 +196,34 @@ async function githubAppVersion(): Promise<string> {
   }
 }
 
+function execError(err: unknown): string {
+  const e = err as { stderr?: string | Buffer; message?: string; killed?: boolean; code?: string };
+  const stderr = String(e.stderr || "").trim();
+  if (e.killed) return stderr || "tempo esgotado ao consultar station-upd";
+  if (stderr) return stderr.split(/\r?\n/).filter(Boolean).slice(-6).join("\n");
+  return String(e.message || err);
+}
+
 async function helper(cmd: string, id = ""): Promise<UpdatesSnapshot | null> {
   const bin = helperPath();
   if (process.platform !== "linux" || !existsSync(bin)) return null;
   try {
     const args = id ? [cmd, id] : [cmd];
+    const timeout = cmd === "apply" ? 300_000 : cmd === "refresh" ? 50_000 : 18_000;
     const { stdout } = await execFileAsync("sudo", ["-n", bin, ...args], {
-      timeout: cmd === "apply" || cmd === "refresh" ? 180_000 : 20_000,
+      timeout,
       windowsHide: true,
       maxBuffer: 2_000_000,
     });
-    const parsed = JSON.parse(String(stdout || "").trim() || "{}") as {
+    return parseHelperOut(String(stdout || "").trim());
+  } catch (err) {
+    return snapshot(baseline().items, loadShipped().os, false, execError(err));
+  }
+}
+
+function parseHelperOut(stdout: string): UpdatesSnapshot | null {
+  try {
+    const parsed = JSON.parse(stdout || "{}") as {
       ok?: boolean;
       os?: string;
       items?: Partial<UpdateItem>[];
@@ -205,17 +247,30 @@ async function helper(cmd: string, id = ""): Promise<UpdatesSnapshot | null> {
       );
     });
     return snapshot(items, String(parsed.os || ""), parsed.ok !== false, String(parsed.error || ""));
-  } catch (err) {
-    return snapshot(baseline().items, loadShipped().os, false, String(err));
+  } catch {
+    return null;
   }
 }
 
 function snapshot(items: UpdateItem[], os: string, ok = true, error = ""): UpdatesSnapshot {
+  const decorated = items.map((row) => {
+    const job = jobOf(row.id);
+    if (!job) return { ...row, applying: false };
+    return {
+      ...row,
+      applying: job.status === "running",
+      error: job.error || row.error,
+      progress: job.pct,
+      stage: job.stage,
+      determinate: job.determinate,
+    };
+  });
   return {
     ok,
     os,
-    pending: items.filter((row) => row.updatable).length,
-    items: items.map((row) => ({ ...row, applying: applying.has(row.id) })),
+    pending: decorated.filter((row) => row.updatable).length,
+    items: decorated,
+    jobs: Array.from(jobs.values()),
     error,
   };
 }
@@ -235,24 +290,35 @@ function baseline(): UpdatesSnapshot {
   return snapshot(items, s.os);
 }
 
-async function overlayRemote(base: UpdatesSnapshot): Promise<UpdatesSnapshot> {
-  const [app, ser2net, hamlib, wavelog, wlg] = await Promise.all([
+function looksVersion(v: string): boolean {
+  return /\d/.test(v) && v !== "—";
+}
+
+type Remotes = { app: string; wavelog: string; wlg: string };
+
+async function fetchRemotes(): Promise<Remotes> {
+  const [app, wavelog, wlg] = await Promise.all([
     githubAppVersion(),
-    githubTag("cminyard/ser2net"),
-    githubTag("Hamlib/Hamlib"),
     githubTag("wavelog/wavelog"),
     githubTag("wavelog/WaveLogGate"),
   ]);
+  return { app, wavelog, wlg };
+}
+
+function applyRemotes(base: UpdatesSnapshot, rem: Remotes): UpdatesSnapshot {
   const next = base.items.map((row) => {
     if (row.id === "app") {
       const installed = appCurrent() || row.current;
-      const remote = app || row.available || installed;
+      const remote = rem.app || row.available || installed;
       return item("app", installed, remote, row.note, row.error);
     }
-    if (row.id === "ser2net" && ser2net) return item(row.id, row.current, ser2net, row.note, row.error);
-    if (row.id === "hamlib" && hamlib) return item(row.id, row.current, hamlib, row.note, row.error);
-    if (row.id === "wavelog" && wavelog) return item(row.id, row.current, wavelog, row.note, row.error);
-    if (row.id === "wlg" && wlg) return item(row.id, row.current, wlg, row.note, row.error);
+    // ser2net/hamlib: só apt (candidato vs instalado). Tag GitHub ≠ versão Debian.
+    if (row.id === "wavelog" && rem.wavelog && looksVersion(row.current)) {
+      return item(row.id, row.current, rem.wavelog, row.note, row.error);
+    }
+    if (row.id === "wlg" && rem.wlg && looksVersion(row.current)) {
+      return item(row.id, row.current, rem.wlg, row.note, row.error);
+    }
     return row;
   });
   return snapshot(next, base.os, base.ok, base.error);
@@ -260,23 +326,123 @@ async function overlayRemote(base: UpdatesSnapshot): Promise<UpdatesSnapshot> {
 
 let cache: { at: number; snap: UpdatesSnapshot } | null = null;
 
+function ingestProgress(id: UpdateId, text: string) {
+  const job = jobs.get(id);
+  if (!job) return;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line.startsWith("HC_PROGRESS ")) continue;
+    try {
+      const j = JSON.parse(line.slice("HC_PROGRESS ".length)) as {
+        pct?: number;
+        stage?: string;
+        determinate?: boolean;
+        error?: string;
+      };
+      if (typeof j.pct === "number" && Number.isFinite(j.pct)) job.pct = Math.max(0, Math.min(100, Math.round(j.pct)));
+      if (typeof j.stage === "string" && j.stage) job.stage = j.stage;
+      if (typeof j.determinate === "boolean") job.determinate = j.determinate;
+      if (typeof j.error === "string" && j.error) job.error = j.error;
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 export async function updatesStatus(force = false): Promise<UpdatesSnapshot> {
+  const running = Array.from(jobs.values()).some((j) => j.status === "running");
+  if (running) {
+    const base = cache?.snap ?? baseline();
+    return snapshot(base.items, base.os, true, "");
+  }
   if (!force && cache && Date.now() - cache.at < 60_000) {
     return snapshot(cache.snap.items, cache.snap.os, cache.snap.ok, cache.snap.error);
   }
-  const live = await helper("check");
-  const base = live ?? baseline();
-  const snap = await overlayRemote(base);
+  const [live, rem] = await Promise.all([helper("check"), fetchRemotes()]);
+  const snap = applyRemotes(live ?? baseline(), rem);
   cache = { at: Date.now(), snap };
   return snap;
 }
 
 export async function updatesRefresh(): Promise<UpdatesSnapshot> {
   cache = null;
-  const live = await helper("refresh");
-  const snap = await overlayRemote(live ?? baseline());
+  const [live, rem] = await Promise.all([helper("refresh"), fetchRemotes()]);
+  const snap = applyRemotes(live ?? baseline(), rem);
   cache = { at: Date.now(), snap };
   return snap;
+}
+
+function lastJsonObject(text: string): string {
+  const start = text.lastIndexOf('{"ok"');
+  if (start >= 0) return text.slice(start);
+  const alt = text.lastIndexOf("{");
+  return alt >= 0 ? text.slice(alt) : text;
+}
+
+function spawnApply(sid: UpdateId): Promise<UpdatesSnapshot> {
+  const bin = helperPath();
+  const job: UpdateJob = { id: sid, status: "running", pct: 2, determinate: false, stage: "prepare", error: "" };
+  jobs.set(sid, job);
+  return new Promise((resolve) => {
+    const child = spawn("sudo", ["-n", bin, "apply", sid], {
+      windowsHide: true,
+    });
+    let stdout = "";
+    let stderr = "";
+    const killer = setTimeout(() => child.kill("SIGTERM"), 300_000);
+    child.stdout?.on("data", (buf: Buffer) => {
+      stdout += String(buf);
+    });
+    child.stderr?.on("data", (buf: Buffer) => {
+      const chunk = String(buf);
+      stderr += chunk;
+      ingestProgress(sid, chunk);
+    });
+    const finish = async (code: number | null, errMsg = "") => {
+      clearTimeout(killer);
+      const parsed = parseHelperOut(lastJsonObject(stdout.trim()));
+      const errText =
+        errMsg ||
+        stderr
+          .split(/\r?\n/)
+          .filter((l) => l.trim() && !l.includes("HC_PROGRESS "))
+          .slice(-8)
+          .join("\n");
+      if (code === 0 && parsed) {
+        job.status = "ok";
+        job.pct = 100;
+        job.determinate = true;
+        job.stage = "done";
+        const over = applyRemotes(parsed, await fetchRemotes());
+        cache = { at: Date.now(), snap: over };
+        jobs.delete(sid);
+        resolve(over);
+        return;
+      }
+      job.status = "error";
+      job.determinate = true;
+      job.stage = "error";
+      job.error = errText || `falha ao aplicar ${sid} (código ${code ?? "?"})`;
+      const cur = cache?.snap ?? (await updatesStatus(true));
+      const failed = snapshot(
+        cur.items.map((row) => (row.id === sid ? { ...row, error: job.error } : row)),
+        cur.os,
+        false,
+        job.error,
+      );
+      cache = { at: Date.now(), snap: failed };
+      setTimeout(() => {
+        if (jobs.get(sid)?.status === "error") jobs.delete(sid);
+      }, 20_000);
+      resolve(failed);
+    };
+    child.on("error", (err) => {
+      void finish(1, String(err.message || err));
+    });
+    child.on("close", (code) => {
+      void finish(code);
+    });
+  });
 }
 
 export async function updatesApply(id: string): Promise<UpdatesSnapshot> {
@@ -285,6 +451,11 @@ export async function updatesApply(id: string): Promise<UpdatesSnapshot> {
     return { ...cur, ok: false, error: "componente desconhecido" };
   }
   const sid = id as UpdateId;
+  const existing = jobs.get(sid);
+  if (existing?.status === "running") {
+    const cur = cache?.snap ?? (await updatesStatus());
+    return snapshot(cur.items, cur.os, true, "");
+  }
   if (process.platform !== "linux" || !existsSync(helperPath())) {
     const cur = await updatesStatus();
     return {
@@ -293,17 +464,10 @@ export async function updatesApply(id: string): Promise<UpdatesSnapshot> {
       error: "O aplicativo roda no Ubuntu Server da estação. Neste host só a verificação está disponível.",
     };
   }
-  applying.add(sid);
   try {
-    cache = null;
-    const live = await helper("apply", sid);
-    const snap = await overlayRemote(live ?? (await updatesStatus(true)));
-    cache = { at: Date.now(), snap };
-    return snap;
+    return await spawnApply(sid);
   } catch (err) {
     const cur = await updatesStatus(true);
     return { ...cur, ok: false, error: String(err) };
-  } finally {
-    applying.delete(sid);
   }
 }

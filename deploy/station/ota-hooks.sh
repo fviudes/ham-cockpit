@@ -1,6 +1,16 @@
 #!/bin/bash
 # Rodado no pós-install do pacote OTA (npm). Idempotente.
-# Não reescreve Callsign/Id/[Modem]; faz merge só do caminho LCD Nextion (WPSD/ON7LDS).
+#
+# INI do operador (lab 3× zerado na tela após OTA):
+# - NUNCA copiar template deploy/mmdvm/*.ini por cima de mmdvmhost.ini existente.
+#   Template só em instalação limpa (arquivo ausente) — ver install-station.sh.
+# - Backup mmdvmhost.ini.ota-bak ANTES de qualquer escrita.
+# - Merge conservador: só chaves de display/LCD/PTY se faltarem.
+#   NUNCA resetar [General] Callsign/Id, [DMR] Id, frequências, senhas, redes, [Modem].
+# - Dual Hat = ttyAMA0 / disable-bt. NÃO ttyACM0. NÃO systemctl restart mmdvmhost
+#   (ciclo PartOf DMR/YSF). Host inativo: start UMA vez. Host já up: não parar.
+#   stop+start do Host derruba filhos PartOf e apaga indicativo/ID no Nextion.
+#
 # MMDVM: instala binários ARM64 de mmdvm-arm64.tgz (no pacote OTA ou no canal update/).
 # Docker.io: se o pacote não estiver na imagem, OTA não instala apt — precisa bake.
 set -euo pipefail
@@ -237,25 +247,41 @@ for f in /opt/ham-cockpit/mmdvm/ircddbgateway.conf /opt/ham-cockpit/mmdvm/ircddb
   sed -i -E 's/^(localAddress|gatewayAddress)=127\.0\.0\.1$/\1=0.0.0.0/' "$f" 2>/dev/null || true
 done
 
-# Caminho LCD WPSD/ON7LDS no INI existente — não sobrescreve Callsign/Id nem Modem (Dual=ttyAMA0).
+# Caminho LCD WPSD/ON7LDS no INI existente — NUNCA Callsign/Id/Modem/freq/senhas/redes.
+# Só preenche chave ausente (ou Display=None / ScreenLayout vazio). Template NÃO entra aqui.
 merge_nextion_ini() {
   local ini=/opt/ham-cockpit/mmdvm/mmdvmhost.ini
   [[ -f "$ini" ]] || return 0
   command -v python3 >/dev/null 2>&1 || return 0
   python3 - "$ini" <<'PY'
+import shutil
 import sys
 from pathlib import Path
 p = Path(sys.argv[1])
 text = p.read_text(encoding="utf-8", errors="replace")
 lines = text.splitlines(True)
 
-def set_kv(lines, section, key, value):
+def get_kv(lines, section, key):
+    in_s = False
+    for ln in lines:
+        if ln.strip() == f"[{section}]":
+            in_s = True
+            continue
+        if ln.lstrip().startswith("[") and in_s:
+            break
+        s = ln.lstrip()
+        if in_s and (s.startswith(f"{key}=") or s.startswith(f"{key} =")):
+            return s.split("=", 1)[1].strip()
+    return None
+
+def set_if_missing(lines, section, key, value, placeholders=()):
+    cur = get_kv(lines, section, key)
+    if cur not in (None, "", *placeholders):
+        return lines
     sec = f"[{section}]"
     i = 0
-    found_sec = None
     while i < len(lines):
         if lines[i].strip() == sec:
-            found_sec = i
             i += 1
             while i < len(lines) and not lines[i].lstrip().startswith("["):
                 s = lines[i].lstrip()
@@ -264,46 +290,29 @@ def set_kv(lines, section, key, value):
                     lines[i] = f"{key}={value}{nl}"
                     return lines
                 i += 1
-            nl = "\n"
-            lines.insert(i, f"{key}={value}{nl}")
+            lines.insert(i, f"{key}={value}\n")
             return lines
         i += 1
-    if found_sec is None:
-        if lines and not lines[-1].endswith("\n"):
-            lines[-1] += "\n"
-        lines.append(f"\n{sec}\n{key}={value}\n")
+    if lines and not lines[-1].endswith("\n"):
+        lines[-1] += "\n"
+    lines.append(f"\n{sec}\n{key}={value}\n")
     return lines
 
-# Display=None em estações antigas; Dual Hat do lab não é dvmpis/ttyACM0.
-disp = None
-for ln in lines:
-    if ln.startswith("Display="):
-        disp = ln.split("=", 1)[1].strip()
-        break
-if disp in (None, "", "None"):
-    lines = set_kv(lines, "General", "Display", "Nextion")
-lines = set_kv(lines, "Nextion", "Port", "/dev/ttyNextionDriver")
-layout = None
-in_nx = False
-for ln in lines:
-    if ln.strip() == "[Nextion]":
-        in_nx = True
-        continue
-    if ln.startswith("[") and in_nx:
-        break
-    if in_nx and ln.startswith("ScreenLayout="):
-        layout = ln.split("=", 1)[1].strip()
-if layout in (None, "", "3"):
-    lines = set_kv(lines, "Nextion", "ScreenLayout", "4")
-lines = set_kv(lines, "NextionDriver", "Enable", "1")
-lines = set_kv(lines, "NextionDriver", "Port", "modem")
-lines = set_kv(lines, "NextionDriver", "WaitForLan", "0")
-lines = set_kv(lines, "Transparent Data", "Enable", "1")
-lines = set_kv(lines, "Transparent Data", "SendFrameType", "1")
+# Dual Hat do lab não é dvmpis/ttyACM0. Não toca [Modem]/Callsign/Id.
+lines = set_if_missing(lines, "General", "Display", "Nextion", ("None",))
+lines = set_if_missing(lines, "Nextion", "Port", "/dev/ttyNextionDriver")
+lines = set_if_missing(lines, "Nextion", "ScreenLayout", "4", ("3",))
+lines = set_if_missing(lines, "NextionDriver", "Enable", "1")
+lines = set_if_missing(lines, "NextionDriver", "Port", "modem")
+lines = set_if_missing(lines, "NextionDriver", "WaitForLan", "0")
+lines = set_if_missing(lines, "Transparent Data", "Enable", "1")
+lines = set_if_missing(lines, "Transparent Data", "SendFrameType", "1")
 new = "".join(lines)
 if new != text:
+    bak = p.with_name(p.name + ".ota-bak")
+    shutil.copy2(p, bak)
     p.write_text(new, encoding="utf-8")
-    print("ota-hooks: INI Nextion mesclado (WPSD path; Modem intacto)", file=sys.stderr)
+    print("ota-hooks: INI Nextion mesclado (só chaves LCD ausentes; backup .ota-bak)", file=sys.stderr)
 PY
 }
 merge_nextion_ini || true
@@ -324,11 +333,16 @@ systemctl daemon-reload 2>/dev/null || true
 for u in nextiondriver.service mmdvmhost.service dmrgateway.service ysfgateway.service ircddbgateway.service; do
   systemctl enable "$u" 2>/dev/null || true
 done
-# Sobe o driver se a unit/binário existem. Host não reabre o PTY sozinho — no máximo
-# um try-restart depois que o PTY está rw (sem loop Dual/Host).
+# Ordem: Nextion → PTY → Host (só se inativo) → gateways. NUNCA restart mmdvmhost.
+# Lab 0.1.05.02: stop+start do Host (ignore-dependencies) derrubou filhos PartOf
+# (DMRGateway failed) e apagou indicativo/ID no Nextion — INI do operador intacto.
+started_nextion=0
 if [[ -x /usr/local/bin/NextionDriver && -f /etc/systemd/system/nextiondriver.service ]]; then
-  systemctl reset-failed nextiondriver.service 2>/dev/null || true
-  systemctl start nextiondriver.service 2>/dev/null || true
+  if ! systemctl is-active --quiet nextiondriver.service; then
+    systemctl reset-failed nextiondriver.service 2>/dev/null || true
+    systemctl start nextiondriver.service 2>/dev/null || true
+    started_nextion=1
+  fi
   pty_ok=0
   for i in $(seq 1 40); do
     t=$(readlink -f /dev/ttyNextionDriver 2>/dev/null || true)
@@ -342,13 +356,24 @@ if [[ -x /usr/local/bin/NextionDriver && -f /etc/systemd/system/nextiondriver.se
     fi
     sleep 0.25
   done
-  if [[ "$pty_ok" -eq 1 ]] && systemctl is-active --quiet mmdvmhost.service; then
-    # NUNCA systemctl restart mmdvmhost (ciclo PartOf). stop + start, uma vez.
-    systemctl stop --job-mode=ignore-dependencies mmdvmhost.service 2>/dev/null || true
-    sleep 2
-    systemctl start --job-mode=ignore-dependencies mmdvmhost.service 2>/dev/null || true
+  if [[ "$pty_ok" -eq 1 ]]; then
+    if ! systemctl is-active --quiet mmdvmhost.service; then
+      systemctl start --job-mode=ignore-dependencies mmdvmhost.service 2>/dev/null || true
+    elif [[ "$started_nextion" -eq 1 ]]; then
+      # PTY novo: reabrir Host UMA vez. Não usar systemctl restart (ciclo PartOf).
+      systemctl stop --job-mode=ignore-dependencies mmdvmhost.service 2>/dev/null || true
+      sleep 2
+      systemctl start --job-mode=ignore-dependencies mmdvmhost.service 2>/dev/null || true
+    fi
   fi
 fi
+# Filhos PartOf não voltam no start ignore-dependencies do Host — sobe se inativos.
+for u in dmrgateway.service ysfgateway.service ircddbgateway.service; do
+  systemctl reset-failed "$u" 2>/dev/null || true
+  if ! systemctl is-active --quiet "$u"; then
+    systemctl start --job-mode=ignore-dependencies "$u" 2>/dev/null || true
+  fi
+done
 
 # Sudoers do helper de backup (e demais) — atualiza em aparelhos já instalados.
 if [[ -f "$ROOT/sudoers-hamcockpit" ]]; then

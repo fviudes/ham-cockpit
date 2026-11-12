@@ -651,6 +651,18 @@ async function startServer() {
         diskUsedBytes: 0,
         diskPath: "/",
         error: String(err),
+        hardware: "",
+        soc: "",
+        osPretty: "",
+        appVersion: "",
+        uptimeSec: 0,
+        cpuPct: null,
+        ramPct: null,
+        ramUsedBytes: 0,
+        ramTotalBytes: 0,
+        sampleMs: 5000,
+        windowMs: 300000,
+        samples: [],
       });
     }
   });

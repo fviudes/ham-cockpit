@@ -6,6 +6,14 @@ json_escape() {
   python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"
 }
 
+# stderr: HC_PROGRESS {"id","pct","stage","determinate"}
+emit_progress() {
+  local id="$1" pct="$2" stage="$3" det="${4:-1}"
+  python3 -c 'import json,sys
+print("HC_PROGRESS "+json.dumps({"id":sys.argv[1],"pct":int(float(sys.argv[2])),"stage":sys.argv[3],"determinate":sys.argv[4]=="1"}), flush=True)' \
+    "$id" "$pct" "$stage" "$det" >&2
+}
+
 pkg_installed() {
   local n
   for n in "$@"; do
@@ -20,7 +28,7 @@ pkg_installed() {
 pkg_candidate() {
   local n cand
   for n in "$@"; do
-    cand="$(apt-cache policy "$n" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
+    cand="$(timeout 4 apt-cache policy "$n" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')" || true
     if [[ -n "${cand:-}" && "$cand" != "(none)" ]]; then
       echo "$cand"
       return 0
@@ -40,15 +48,22 @@ os_pretty() {
 }
 
 os_upgradable() {
-  apt list --upgradable 2>/dev/null | awk 'NR>1 && $0 ~ /upgradable/ {c++} END {print c+0}'
+  # apt list --upgradable no Pi 3 leva dezenas de segundos. Arquivo do motd é instantâneo.
+  local n=""
+  if [[ -f /var/lib/update-notifier/updates-available ]]; then
+    n="$(grep -Eo '^[0-9]+' /var/lib/update-notifier/updates-available 2>/dev/null | head -n 1 || true)"
+  fi
+  if [[ -z "${n:-}" && -x /usr/lib/update-notifier/apt-check ]]; then
+    n="$(timeout 2 /usr/lib/update-notifier/apt-check 2>&1 | awk -F';' '{print $1+0}')" || true
+  fi
+  echo "${n:-0}"
 }
 
 docker_wavelog_ver() {
   local v
-  v="$(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' wavelog-main 2>/dev/null || true)"
-  if [[ -z "${v:-}" || "$v" == "<no value>" ]]; then
-    v="$(docker inspect --format '{{.Config.Image}}' wavelog-main 2>/dev/null || true)"
-  fi
+  v="$(timeout 2 docker inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}} {{.Config.Image}}' wavelog-main 2>/dev/null || true)"
+  v="$(awk '{print ($1!="" && $1!="<no" && $1!="<no value>") ? $1 : $2}' <<<"$v")"
+  [[ "$v" == "<no" || "$v" == "<no value>" ]] && v=""
   echo "${v:-}"
 }
 
@@ -74,7 +89,7 @@ app_ver() {
 }
 
 github_app_meta() {
-  curl -fsSL -A "Ham-Cockpit/0.1.04.01" "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/version.json" || true
+  curl -fsSL --max-time 8 -A "Ham-Cockpit/0.1.04.01" "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/version.json" || true
 }
 
 # 0.1.05 < 0.1.05.01 < 0.1.06 (partes ausentes = 0).
@@ -89,24 +104,45 @@ sys.exit(0 if parts(sys.argv[1]) > parts(sys.argv[2]) else 1)
 ' "$1" "$2"
 }
 
+# Check local rápido: o Node sobrepõe a versão publicada do app (GitHub).
 check_app() {
-  local cur avail ver upd="false"
+  local cur
   cur="$(app_ver)"
-  avail="$cur"
-  ver="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("version",""))' <<<"$(github_app_meta)" 2>/dev/null || true)"
-  if [[ -n "${ver:-}" ]]; then
-    avail="$ver"
-    if app_newer "$avail" "$cur"; then
-      upd="true"
-    fi
-  fi
-  emit_item app "$cur" "$avail" "$upd" "github.com/fviudes/ham-cockpit/update"
+  emit_item app "$cur" "$cur" "false" "github.com/fviudes/ham-cockpit/update"
+}
+
+download_with_progress() {
+  local id="$1" url="$2" dest="$3"
+  python3 - "$id" "$url" "$dest" <<'PY'
+import json, sys, urllib.request
+uid, url, dest = sys.argv[1], sys.argv[2], sys.argv[3]
+def hook(block, size, total):
+    got = block * size
+    if total and total > 0:
+        pct = max(8, min(55, int(got * 50 / total) + 8))
+        print("HC_PROGRESS " + json.dumps({"id": uid, "pct": pct, "stage": "download", "determinate": True}), file=sys.stderr, flush=True)
+    else:
+        print("HC_PROGRESS " + json.dumps({"id": uid, "pct": 15, "stage": "download", "determinate": False}), file=sys.stderr, flush=True)
+req = urllib.request.Request(url, headers={"User-Agent": "Ham-Cockpit/0.1.05"})
+with urllib.request.urlopen(req, timeout=90) as r, open(dest, "wb") as out:
+    total = int(r.headers.get("Content-Length") or 0)
+    n = 0
+    bs = 64 * 1024
+    while True:
+        chunk = r.read(bs)
+        if not chunk:
+            break
+        out.write(chunk)
+        n += len(chunk)
+        hook(n, 1, total)
+PY
 }
 
 # Copia o console (dist) + bin/ sem apagar configs da estação
 # (layouts, net, services, equipment, radios, ldg, lp100a, mmdvm…).
 apply_app() {
   local meta ver file tmp src unit
+  emit_progress app 5 prepare 1
   meta="$(github_app_meta)"
   if [[ -z "${meta:-}" ]]; then
     echo "update/version.json ausente em github.com/fviudes/ham-cockpit" >&2
@@ -118,7 +154,9 @@ apply_app() {
   # shellcheck disable=SC2064
   trap "rm -rf '$tmp'" RETURN
   if [[ -n "$file" ]]; then
-    curl -fsSL -A "Ham-Cockpit/0.1.03" "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/${file}" -o "$tmp/pkg.tgz"
+    emit_progress app 8 download 1
+    download_with_progress app "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/${file}" "$tmp/pkg.tgz"
+    emit_progress app 58 install 1
     tar -xzf "$tmp/pkg.tgz" -C "$tmp"
   else
     echo "canal de update sem arquivo .tgz (version.json.file vazio)" >&2
@@ -133,6 +171,7 @@ apply_app() {
     echo "pacote de update sem dist/ (index.js + public/)" >&2
     return 1
   fi
+  emit_progress app 70 install 1
   mkdir -p "$APP_HOME" "$APP_HOME/bin"
   # Só sobrescreve artefatos do pacote; pastas de config existentes permanecem.
   cp -a "$src/index.js" "$APP_HOME/index.js"
@@ -172,9 +211,21 @@ apply_app() {
   elif [[ -f "$src/VERSION" ]]; then
     cp -a "$src/VERSION" "$APP_HOME/VERSION"
   fi
+  emit_progress app 82 install 1
   if [[ -f "$APP_HOME/package.json" ]]; then
     (cd "$APP_HOME" && npm install --omit=dev) || true
   fi
+  # Backup do INI do operador ANTES dos hooks. Nunca copiar template por cima.
+  # (3× no lab: OTA apagou indicativo/ID na tela; stop Host derruba PartOf.)
+  mkdir -p "$APP_HOME/mmdvm"
+  if [[ -f "$APP_HOME/mmdvm/mmdvmhost.ini" ]]; then
+    cp -a "$APP_HOME/mmdvm/mmdvmhost.ini" "$APP_HOME/mmdvm/mmdvmhost.ini.ota-bak" || true
+  fi
+  for _ini in dmrgateway.ini ysfgateway.ini ircddbgateway.conf ircddbgateway; do
+    if [[ -f "$APP_HOME/mmdvm/$_ini" ]]; then
+      cp -a "$APP_HOME/mmdvm/$_ini" "$APP_HOME/mmdvm/${_ini}.ota-bak" || true
+    fi
+  done
   # Garante units/bin mesmo se o postinstall do npm não rodou.
   if [[ -x "$APP_HOME/ota-hooks.sh" ]]; then
     bash "$APP_HOME/ota-hooks.sh" || true
@@ -185,8 +236,10 @@ apply_app() {
     chown root:root "$APP_HOME"/bin/* 2>/dev/null || true
     chmod 0755 "$APP_HOME"/bin/* 2>/dev/null || true
   fi
+  emit_progress app 92 restart 1
   systemctl restart ham-cockpit.service 2>/dev/null || systemctl restart cat-bridge.service 2>/dev/null || true
   systemctl try-restart ham-cockpit-ap.service 2>/dev/null || true
+  emit_progress app 100 done 1
 }
 
 compose_wavelog() {
@@ -230,7 +283,11 @@ check_pkg() {
   shift
   local cur cand upd="false"
   cur="$(pkg_installed "$@")"
-  cand="$(pkg_candidate "$@")"
+  if [[ "${UPD_POLICY:-0}" == 1 ]]; then
+    cand="$(pkg_candidate "$@")"
+  else
+    cand=""
+  fi
   [[ -z "$cur" ]] && cur="—"
   [[ -z "$cand" ]] && cand="$cur"
   if [[ "$cand" != "$cur" && "$cand" != "—" && "$cur" != "—" ]]; then
@@ -252,40 +309,55 @@ check_wlg() {
 }
 
 check_all() {
-  printf '{"ok":true,"os":%s,"items":[' "$(json_escape "$(os_pretty)")"
-  check_app
-  printf ','
-  check_os
-  printf ','
-  check_pkg ser2net ser2net
-  printf ','
-  check_pkg hamlib libhamlib-utils hamlib-utils
-  printf ','
-  check_wavelog
-  printf ','
-  check_wlg
-  printf ']}\n'
+  local tmp
+  tmp="$(mktemp -d)"
+  check_app >"$tmp/app" &
+  check_os >"$tmp/os" &
+  check_pkg ser2net ser2net >"$tmp/ser2net" &
+  check_pkg hamlib libhamlib-utils hamlib-utils >"$tmp/hamlib" &
+  check_wavelog >"$tmp/wavelog" &
+  check_wlg >"$tmp/wlg" &
+  wait || true
+  printf '{"ok":true,"os":%s,"items":[%s,%s,%s,%s,%s,%s]}\n' \
+    "$(json_escape "$(os_pretty)")" \
+    "$(cat "$tmp/app")" \
+    "$(cat "$tmp/os")" \
+    "$(cat "$tmp/ser2net")" \
+    "$(cat "$tmp/hamlib")" \
+    "$(cat "$tmp/wavelog")" \
+    "$(cat "$tmp/wlg")"
+  rm -rf "$tmp"
 }
 
 # Recupera dpkg/apt interrompidos antes de update/install (Hamlib, OS, rebuild MMDVM).
 # Lab: sem isto, `make`/apt falham com dpkg a meio e exit 127 (build-essential ausente).
 # Idempotente: em estado limpo, dpkg --configure -a e apt-get -f são no-ops rápidos.
 apt_prepare() {
+  local id="${1:-os}"
+  emit_progress "$id" 4 prepare 1
   export DEBIAN_FRONTEND=noninteractive
   export APT_LISTCHANGES_FRONTEND=none
   # Lab: flash-kernel/dpkg lock deixava apt preso e `make` com exit 127.
   local i
-  for i in $(seq 1 90); do
+  for i in $(seq 1 25); do
     if command -v fuser >/dev/null 2>&1; then
       if fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 \
         || fuser /var/lib/dpkg/lock >/dev/null 2>&1 \
         || fuser /var/lib/apt/lists/lock >/dev/null 2>&1; then
-        sleep 2
+        emit_progress "$id" 6 prepare 0
+        sleep 1
         continue
       fi
     fi
     break
   done
+  if command -v fuser >/dev/null 2>&1; then
+    if fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 \
+      || fuser /var/lib/dpkg/lock >/dev/null 2>&1; then
+      echo "apt/dpkg ocupado (lock). Tente de novo em instantes." >&2
+      return 1
+    fi
+  fi
   # Evita prompts de conffile que deixariam o dpkg a meio de novo.
   local apt_opts=(
     -o Dpkg::Options::=--force-confdef
@@ -301,16 +373,95 @@ apt_prepare() {
   fi
 }
 
-apply_os() {
-  apt_prepare
-  apt-get update -qq
-  apt-get -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold upgrade -y
+apt_with_progress() {
+  local id="$1"
+  shift
+  set +e
+  apt-get -o APT::Status-Fd=3 \
+    -o Dpkg::Options::=--force-confdef \
+    -o Dpkg::Options::=--force-confold \
+    -y "$@" \
+    3> >(python3 -u -c '
+import json, sys
+uid = sys.argv[1]
+for line in sys.stdin:
+    parts = line.strip().split(":", 3)
+    if len(parts) < 3:
+        continue
+    kind, frac = parts[0], parts[2]
+    try:
+        raw = float(frac)
+    except ValueError:
+        continue
+    if raw <= 1.0:
+        raw *= 100.0
+    pct = int(max(0, min(99, raw)))
+    if kind.startswith("dl"):
+        stage, mapped = "download", 12 + int(pct * 0.38)
+    else:
+        stage, mapped = "install", 50 + int(pct * 0.40)
+    print("HC_PROGRESS " + json.dumps({"id": uid, "pct": mapped, "stage": stage, "determinate": True}), file=sys.stderr, flush=True)
+' "$id")
+  local st=$?
+  set -e
+  return "$st"
 }
 
+apply_os() {
+  apt_prepare os
+  emit_progress os 12 update 0
+  timeout 45 apt-get update -qq || true
+  emit_progress os 22 install 1
+  apt_with_progress os upgrade
+  emit_progress os 100 done 1
+}
+
+APT_CHANGED=0
+
 apply_pkg() {
-  apt_prepare
-  apt-get update -qq
-  apt-get -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold install -y "$@"
+  local id="$1"
+  shift
+  APT_CHANGED=0
+  local cur cand
+  emit_progress "$id" 5 prepare 1
+  cur="$(pkg_installed "$@")"
+  cand="$(pkg_candidate "$@")"
+  if [[ -n "${cur:-}" && -n "${cand:-}" && "$cur" == "$cand" ]]; then
+    echo "pacote já na versão do repositório ($cur); não há o que instalar via apt" >&2
+    emit_progress "$id" 100 done 1
+    return 0
+  fi
+  apt_prepare "$id"
+  emit_progress "$id" 12 update 0
+  timeout 45 apt-get update -qq || true
+  cur="$(pkg_installed "$@")"
+  cand="$(pkg_candidate "$@")"
+  if [[ -n "${cur:-}" && -n "${cand:-}" && "$cur" == "$cand" ]]; then
+    echo "pacote já na versão do repositório ($cur); não há o que instalar via apt" >&2
+    emit_progress "$id" 100 done 1
+    return 0
+  fi
+  emit_progress "$id" 22 install 1
+  local before="$cur"
+  apt_with_progress "$id" install "$@"
+  cur="$(pkg_installed "$@")"
+  if [[ -n "$before" && -n "$cur" && "$cur" != "$before" ]]; then
+    APT_CHANGED=1
+  fi
+  emit_progress "$id" 92 install 1
+}
+
+apply_wavelog() {
+  emit_progress wavelog 8 download 0
+  compose_wavelog pull
+  emit_progress wavelog 70 install 1
+  compose_wavelog up -d --remove-orphans
+  if [[ -x /opt/wavelog/wavelog-ctl.sh ]]; then
+    emit_progress wavelog 88 restart 1
+    sed -i 's/\r$//' /opt/wavelog/wavelog-ctl.sh
+    /opt/wavelog/wavelog-ctl.sh ensure-db || true
+  fi
+  emit_progress wavelog 100 done 1
 }
 
 cmd="${1:-}"
@@ -321,36 +472,42 @@ case "$cmd" in
     check_all
     ;;
   refresh)
-    apt_prepare
-    apt-get update -qq
-    check_all
+    # Sem apt_prepare (espera de lock). Índices com teto curto; policy só no refresh.
+    timeout 25 apt-get update -qq || true
+    UPD_POLICY=1 check_all
     ;;
   apply)
     case "$id" in
       app) apply_app ;;
       os) apply_os ;;
       ser2net)
-        apply_pkg ser2net
-        systemctl restart ser2net.service 2>/dev/null || true
+        apply_pkg ser2net ser2net
+        if [[ "${APT_CHANGED:-0}" == 1 ]]; then
+          emit_progress ser2net 94 restart 1
+          systemctl restart ser2net.service 2>/dev/null || true
+        fi
+        emit_progress ser2net 100 done 1
         ;;
       hamlib)
-        apply_pkg libhamlib-utils hamlib-utils || apply_pkg libhamlib-utils || apply_pkg hamlib-utils
-        systemctl restart 'rigctld@*' 2>/dev/null || true
-        systemctl restart 'ampctld@*' 2>/dev/null || true
+        apply_pkg hamlib libhamlib-utils hamlib-utils || apply_pkg hamlib libhamlib-utils || apply_pkg hamlib hamlib-utils
+        if [[ "${APT_CHANGED:-0}" == 1 ]]; then
+          emit_progress hamlib 94 restart 1
+          systemctl restart 'rigctld@*' 2>/dev/null || true
+          systemctl restart 'ampctld@*' 2>/dev/null || true
+        fi
+        emit_progress hamlib 100 done 1
         ;;
       wavelog)
-        compose_wavelog pull
-        compose_wavelog up -d --remove-orphans
-        if [[ -x /opt/wavelog/wavelog-ctl.sh ]]; then
-          sed -i 's/\r$//' /opt/wavelog/wavelog-ctl.sh
-          /opt/wavelog/wavelog-ctl.sh ensure-db || true
-        fi
+        apply_wavelog
         ;;
       wlg)
+        emit_progress wlg 20 download 0
         if [[ -d /opt/wavelog-gate/.git ]]; then
           git -C /opt/wavelog-gate pull --ff-only
         fi
+        emit_progress wlg 80 restart 1
         systemctl restart waveloggate.service 2>/dev/null || true
+        emit_progress wlg 100 done 1
         ;;
       *)
         echo '{"ok":false,"error":"componente desconhecido"}' >&2
