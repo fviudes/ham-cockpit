@@ -139,8 +139,8 @@ export function ManualPage() {
           />
           <Callout tone="info">
             <S
-              pt="Endereços úteis: console em http://IP-do-Pi/console (ou http://192.168.4.1/console no Wi‑Fi do próprio Pi). Logbook Wavelog em http://IP-do-Pi:8086. Nome do Pi na rede: ham-cockpit.local."
-              en="Useful addresses: console http://PI-IP/console (or http://192.168.4.1/console on the Pi's own Wi‑Fi). Wavelog logbook: http://PI-IP:8086. Network name: ham-cockpit.local."
+              pt="Acesso: na LAN, http://ham-cockpit.local/console (o IP do Pi também funciona). No Wi‑Fi próprio do Pi, http://192.168.4.1/console. Logbook Wavelog: http://ham-cockpit.local:8086 ou pelo IP do Pi na porta 8086."
+              en="Access: on the LAN, http://ham-cockpit.local/console (the Pi IP also works). On the Pi's own Wi‑Fi, http://192.168.4.1/console. Wavelog logbook: http://ham-cockpit.local:8086 or the Pi IP on port 8086."
             />
           </Callout>
         </Section>
@@ -193,8 +193,8 @@ export function ManualPage() {
                 en: "Browser: http://192.168.4.1/console — user admin, password 1234. Change it later under Admin.",
               },
               {
-                pt: "Para o Pi usar o Wi‑Fi da sua casa, abra WiFi, informe o nome (SSID) e a senha da sua rede e clique em Salvar. O Pi passa a ter dois endereços: 192.168.4.1 (Wi‑Fi próprio) e o que o roteador der (veja em Status).",
-                en: "When you want house internet, open WiFi, fill in your SSID and password, Save. The Pi then has two IPs: AP 192.168.4.1 and whatever the router assigns (see Status).",
+                pt: "Para o Pi usar o Wi‑Fi da sua casa, abra WiFi, informe o nome (SSID) e a senha da sua rede e clique em Salvar. Depois, na rede da casa, abra http://ham-cockpit.local/console (ou o IP em Status). O Wi‑Fi próprio http://192.168.4.1 continua no campo.",
+                en: "When you want house internet, open WiFi, fill in your SSID and password, Save. Then on the house network open http://ham-cockpit.local/console (or the IP in Status). The Pi Wi‑Fi http://192.168.4.1 stays available in the field.",
               },
             ]}
           />

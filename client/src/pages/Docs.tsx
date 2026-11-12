@@ -233,8 +233,8 @@ export default function Docs() {
               </p>
               <FigBoot
                 caption={t({
-                  pt: "Grave o cartão → ligue o Pi → Wi‑Fi Ham-Cockpit-XXXX (senha hamcockpit) → http://192.168.4.1 → admin / 1234.",
-                  en: "Write the card → power on the Pi → Wi‑Fi Ham-Cockpit-XXXX (password hamcockpit) → http://192.168.4.1 → admin / 1234.",
+                  pt: "Grave o cartão → ligue o Pi → Wi‑Fi Ham-Cockpit-XXXX (senha hamcockpit) → http://192.168.4.1/console. Na LAN: http://ham-cockpit.local/console · admin / 1234.",
+                  en: "Write the card → power on the Pi → Wi‑Fi Ham-Cockpit-XXXX (password hamcockpit) → http://192.168.4.1/console. On the LAN: http://ham-cockpit.local/console · admin / 1234.",
                 })}
               />
               <ul>
@@ -242,13 +242,10 @@ export default function Docs() {
                   pt="Grave com o Raspberry Pi Imager, na opção Use custom. A imagem serve para Raspberry Pi 3, 4 ou 5."
                   en="Write it with Raspberry Pi Imager, using the Use custom option. The image works on Raspberry Pi 3, 4 or 5."
                 />
-                <li>
-                  {t({ pt: "No boot, o", en: "At boot," })} <code>ham-cockpit.target</code>{" "}
-                  {t({
-                    pt: "sobe Docker, nginx (:80), ser2net, Wavelog, Gate e SSH. Sem cabo de rede, o NetworkManager cria o Wi‑Fi próprio 192.168.4.1 (DHCP de 192.168.4.50 a 192.168.4.150).",
-                    en: "starts Docker, nginx (:80), ser2net, Wavelog, Gate and SSH. With no network cable, NetworkManager creates the Pi's own Wi‑Fi at 192.168.4.1 (DHCP 192.168.4.50–150).",
-                  })}
-                </li>
+                <Li
+                  pt="No boot sobem Docker, nginx (:80), ser2net, Wavelog, Gate e SSH. Na LAN: http://ham-cockpit.local (também pelo IP do Pi). No Wi‑Fi próprio: http://192.168.4.1 (DHCP de 192.168.4.50 a 192.168.4.150)."
+                  en="At boot: Docker, nginx (:80), ser2net, Wavelog, Gate and SSH. On the LAN: http://ham-cockpit.local (the Pi IP also works). On the Pi Wi‑Fi: http://192.168.4.1 (DHCP 192.168.4.50–150)."
+                />
                 <Li
                   pt="O Wavelog baixa as imagens Docker no primeiro boot com rede. Elas não vêm dentro do .img.xz. Por isso, use o cabo de rede no primeiro boot."
                   en="Wavelog downloads its Docker images on the first boot with a network. They are not inside the .img.xz. So use the network cable on the first boot."
@@ -317,8 +314,8 @@ export default function Docs() {
               />
               <ul>
                 <Li
-                  pt="Endereço: http://IP-do-Pi/console, http://ham-cockpit.local/console ou http://192.168.4.1/console."
-                  en="URL: http://Pi-IP/console or http://ham-cockpit.local/console or http://192.168.4.1/console."
+                  pt="Endereço: http://ham-cockpit.local/console na LAN (o IP do Pi também funciona) ou http://192.168.4.1/console no Wi‑Fi próprio."
+                  en="URL: http://ham-cockpit.local/console on the LAN (the Pi IP also works) or http://192.168.4.1/console on the Pi's own Wi‑Fi."
                 />
                 <Li
                   pt="Usuário padrão: admin, senha 1234. Contas extras são criadas em Admin (grupo sudo, SSH na porta 22)."

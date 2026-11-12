@@ -49,8 +49,8 @@ const STEPS: Pair[] = [
     en: "On your phone or laptop, join the Ham-Cockpit-XXXX Wi‑Fi (password hamcockpit).",
   },
   {
-    pt: "Abra http://192.168.4.1/console no Chrome ou no Edge e entre com admin / 1234. Troque a senha depois, em Admin.",
-    en: "Open http://192.168.4.1/console in Chrome or Edge and sign in with admin / 1234. Change the password later, under Admin.",
+    pt: "Abra http://192.168.4.1/console no Chrome ou no Edge e entre com admin / 1234. Com o Pi na LAN (cabo ou Wi‑Fi da casa), use http://ham-cockpit.local/console — o IP do Pi também funciona. Troque a senha depois, em Admin.",
+    en: "Open http://192.168.4.1/console in Chrome or Edge and sign in with admin / 1234. With the Pi on the LAN (cable or house Wi‑Fi), use http://ham-cockpit.local/console — the Pi IP also works. Change the password later, under Admin.",
   },
 ];
 

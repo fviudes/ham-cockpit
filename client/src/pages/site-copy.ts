@@ -26,8 +26,8 @@ export const HOME = {
   osImage: { pt: "Baixar a imagem", en: "Get the image" } satisfies Pair,
   imageLabel: { pt: "Imagem mais recente", en: "Latest image" } satisfies Pair,
   creds: {
-    pt: "Use Chrome ou Edge · Usuário admin, senha 1234 · Wi‑Fi Ham-Cockpit-XXXX (senha hamcockpit) · http://192.168.4.1/console · ham-cockpit.local",
-    en: "Use Chrome or Edge · User admin, password 1234 · Wi‑Fi Ham-Cockpit-XXXX (password hamcockpit) · http://192.168.4.1/console · ham-cockpit.local",
+    pt: "Use Chrome ou Edge · Usuário admin, senha 1234 · Wi‑Fi Ham-Cockpit-XXXX (senha hamcockpit) · AP http://192.168.4.1/console · LAN http://ham-cockpit.local/console",
+    en: "Use Chrome or Edge · User admin, password 1234 · Wi‑Fi Ham-Cockpit-XXXX (password hamcockpit) · AP http://192.168.4.1/console · LAN http://ham-cockpit.local/console",
   } satisfies Pair,
   photoConsole: {
     pt: "Você opera pelo Chrome. O Pi fica no shack, com rádio, wattímetro, logbook e Hamlib no mesmo aparelho.",
@@ -227,8 +227,8 @@ export const HOME_FLOW: { n: string; title: Pair; body: Pair }[] = [
     n: "01",
     title: { pt: "Boot do cartão", en: "Card boot" },
     body: {
-      pt: "O Ubuntu 24.04 ARM64 sobe com o ham-cockpit.target: Docker, nginx (:80), ser2net, Wavelog (:8086) e Gate (UDP 2333). O Wi‑Fi próprio do Pi (192.168.4.1) sobe com ou sem cabo de rede.",
-      en: "Ubuntu 24.04 ARM64 starts ham-cockpit.target: Docker, nginx (:80), ser2net, Wavelog (:8086) and Gate (UDP 2333). The Pi's own Wi‑Fi (192.168.4.1) comes up with or without a network cable.",
+      pt: "O Ubuntu 24.04 ARM64 sobe com Docker, nginx (:80), ser2net, Wavelog (:8086) e Gate (UDP 2333). Na LAN abra http://ham-cockpit.local (ou o IP do Pi). No Wi‑Fi próprio do Pi, use http://192.168.4.1 — com ou sem cabo de rede.",
+      en: "Ubuntu 24.04 ARM64 starts Docker, nginx (:80), ser2net, Wavelog (:8086) and Gate (UDP 2333). On the LAN open http://ham-cockpit.local (or the Pi IP). On the Pi's own Wi‑Fi use http://192.168.4.1 — with or without a network cable.",
     },
   },
   {
