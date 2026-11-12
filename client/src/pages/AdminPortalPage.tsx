@@ -3,10 +3,20 @@ import NavBar from "@/components/NavBar";
 import { useSiteLang } from "./site-lang";
 import { ADM, LIC } from "./license-copy";
 
-type Me = { ok?: boolean; csrf?: string; role?: string };
+type Me = { ok?: boolean; id?: string; csrf?: string; role?: string; username?: string };
 type Summary = { devices?: number; trialsActive?: number; definitive?: number; paid?: number };
-type LicRow = { id: string; serial: string; type: string; status: string; issuedAt: number; expiresAt: number | null };
+type LicRow = { id: string; serial: string; token?: string; type: string; status: string; issuedAt: number; expiresAt: number | null };
 type PayRow = { id: string; provider: string; status: string; currency: string; amount_cents: number; created_at: number };
+type UserRow = {
+  id: string;
+  username: string | null;
+  email: string;
+  name: string | null;
+  role: "owner" | "admin" | "viewer" | string;
+  status: "active" | "disabled" | string;
+  createdAt: number;
+  lastLoginAt: number | null;
+};
 type Provider = {
   id: string;
   label: string;
@@ -19,6 +29,26 @@ type Provider = {
   status: string;
 };
 
+type Tab = "lic" | "price" | "prov" | "pay" | "users";
+
+function parseDecimal(raw: string): number {
+  return Number.parseFloat(String(raw ?? "").trim().replace(",", "."));
+}
+
+function formatUsdFromCents(cents: number): string {
+  return (cents / 100).toFixed(2);
+}
+
+function formatSpreadPct(bps: number): string {
+  const pct = bps / 100;
+  return Number.isInteger(pct) ? String(pct) : String(pct);
+}
+
+function truncateKey(token: string, head = 18, tail = 10): string {
+  if (token.length <= head + tail + 1) return token;
+  return `${token.slice(0, head)}…${token.slice(-tail)}`;
+}
+
 async function api<T>(path: string, init?: RequestInit & { csrf?: string }): Promise<{ ok: boolean; status: number; body: T }> {
   const headers = new Headers(init?.headers);
   if (init?.csrf) headers.set("x-hc-csrf", init.csrf);
@@ -30,47 +60,94 @@ async function api<T>(path: string, init?: RequestInit & { csrf?: string }): Pro
 
 export default function AdminPortalPage() {
   const { t } = useSiteLang();
-  const [tab, setTab] = useState<"lic" | "price" | "prov" | "pay">("lic");
+  const [tab, setTab] = useState<Tab>("lic");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [csrf, setCsrf] = useState("");
+  const [meId, setMeId] = useState("");
+  const [meRole, setMeRole] = useState("");
   const [err, setErr] = useState("");
   const [adminReady, setAdminReady] = useState<boolean | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [licenses, setLicenses] = useState<LicRow[]>([]);
   const [payments, setPayments] = useState<PayRow[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
+  const [users, setUsers] = useState<UserRow[]>([]);
   const [usd, setUsd] = useState("29.00");
   const [spread, setSpread] = useState("3");
   const [priceInfo, setPriceInfo] = useState("");
   const [grantSerial, setGrantSerial] = useState("");
   const [secretDraft, setSecretDraft] = useState<Record<string, string>>({});
+  const [expandedToken, setExpandedToken] = useState<string | null>(null);
+  const [userForm, setUserForm] = useState<"create" | "edit" | "password" | null>(null);
+  const [editingUser, setEditingUser] = useState<UserRow | null>(null);
+  const [formUsername, setFormUsername] = useState("");
+  const [formName, setFormName] = useState("");
+  const [formRole, setFormRole] = useState<"owner" | "admin" | "viewer">("admin");
+  const [formStatus, setFormStatus] = useState<"active" | "disabled">("active");
+  const [formPassword, setFormPassword] = useState("");
 
   const authed = !!csrf;
+  const canManageUsers = meRole === "owner";
+
+  const applyPricing = (pricing: {
+    configured?: boolean;
+    price?: { usdCents?: number; usd_cents?: number; fxSpreadBps?: number; fx_spread_bps?: number } | null;
+    preview?: { brlCents?: number | null };
+  }) => {
+    const pr = pricing.price;
+    if (!pr) return;
+    const usdCents = Number(pr.usdCents ?? pr.usd_cents);
+    const spreadBps = Number(pr.fxSpreadBps ?? pr.fx_spread_bps ?? 300);
+    if (Number.isFinite(usdCents)) setUsd(formatUsdFromCents(usdCents));
+    if (Number.isFinite(spreadBps)) setSpread(formatSpreadPct(spreadBps));
+    else setSpread("3");
+    const brl = pricing.preview?.brlCents;
+    setPriceInfo(brl != null && Number.isFinite(brl) ? `≈ R$ ${(brl / 100).toFixed(2)}` : "");
+  };
 
   const refresh = useCallback(async () => {
     const me = await api<Me>("/api/admin/me");
     if (!me.ok || !me.body.csrf) {
       setCsrf("");
+      setMeId("");
+      setMeRole("");
       return;
     }
     setCsrf(me.body.csrf);
-    const [s, l, p, pr, pricing] = await Promise.all([
-      api<Summary>("/api/admin/summary"),
-      api<{ items: LicRow[] }>("/api/admin/licenses"),
-      api<{ items: PayRow[] }>("/api/admin/payments"),
-      api<{ providers: Provider[] }>("/api/admin/providers"),
-      api<{ configured?: boolean; price?: { usdCents: number; fxSpreadBps: number }; preview?: { brlCents?: number } }>("/api/admin/pricing"),
-    ]);
-    if (s.ok) setSummary(s.body);
-    if (l.ok) setLicenses(l.body.items || []);
-    if (p.ok) setPayments(p.body.items || []);
-    if (pr.ok) setProviders(pr.body.providers || []);
-    if (pricing.ok && pricing.body.price) {
-      setUsd((pricing.body.price.usdCents / 100).toFixed(2));
-      setSpread(String(pricing.body.price.fxSpreadBps / 100));
-      setPriceInfo(pricing.body.preview?.brlCents != null ? `≈ R$ ${(pricing.body.preview.brlCents / 100).toFixed(2)}` : "");
+    setMeId(me.body.id || "");
+    setMeRole(me.body.role || "");
+    const tasks: Promise<unknown>[] = [
+      api<Summary>("/api/admin/summary").then(s => {
+        if (s.ok) setSummary(s.body);
+      }),
+      api<{ items: LicRow[] }>("/api/admin/licenses").then(l => {
+        if (l.ok) setLicenses(l.body.items || []);
+      }),
+      api<{ items: PayRow[] }>("/api/admin/payments").then(p => {
+        if (p.ok) setPayments(p.body.items || []);
+      }),
+      api<{ providers: Provider[] }>("/api/admin/providers").then(pr => {
+        if (pr.ok) setProviders(pr.body.providers || []);
+      }),
+      api<{
+        configured?: boolean;
+        price?: { usdCents?: number; usd_cents?: number; fxSpreadBps?: number; fx_spread_bps?: number } | null;
+        preview?: { brlCents?: number | null };
+      }>("/api/admin/pricing").then(pricing => {
+        if (pricing.ok) applyPricing(pricing.body);
+      }),
+    ];
+    if (me.body.role === "owner") {
+      tasks.push(
+        api<{ users: UserRow[] }>("/api/admin/users").then(u => {
+          if (u.ok) setUsers(u.body.users || []);
+        }),
+      );
+    } else {
+      setUsers([]);
     }
+    await Promise.all(tasks);
   }, []);
 
   useEffect(() => {
@@ -91,6 +168,7 @@ export default function AdminPortalPage() {
       return;
     }
     setCsrf(r.body.csrf);
+    setMeRole(r.body.role || "");
     setUsername("");
     setPassword("");
     setAdminReady(true);
@@ -100,14 +178,30 @@ export default function AdminPortalPage() {
   const logout = async () => {
     await api("/api/admin/logout", { method: "POST", csrf });
     setCsrf("");
+    setMeId("");
+    setMeRole("");
   };
 
   const savePrice = async () => {
-    const r = await api<{ message?: string }>("/api/admin/pricing", {
-      method: "PUT",
-      csrf,
-      body: JSON.stringify({ usd, spreadBps: Math.round(Number(spread) * 100) }),
-    });
+    setErr("");
+    const usdNum = parseDecimal(usd);
+    const spreadPct = parseDecimal(spread);
+    if (!Number.isFinite(usdNum) || usdNum <= 0) {
+      setErr("Informe um preço USD válido.");
+      return;
+    }
+    if (!Number.isFinite(spreadPct) || spreadPct < 0) {
+      setErr("Informe um spread válido (padrão 3).");
+      return;
+    }
+    const r = await api<{ message?: string; price?: { usdCents?: number; fxSpreadBps?: number } }>(
+      "/api/admin/pricing",
+      {
+        method: "PUT",
+        csrf,
+        body: JSON.stringify({ usd: usdNum.toFixed(2), spreadBps: Math.round(spreadPct * 100) }),
+      },
+    );
     if (!r.ok) setErr(r.body.message || "erro");
     else await refresh();
   };
@@ -125,7 +219,108 @@ export default function AdminPortalPage() {
     }
   };
 
-  const chip = (id: typeof tab, label: string) => (
+  const openCreateUser = () => {
+    setEditingUser(null);
+    setFormUsername("");
+    setFormName("");
+    setFormRole("admin");
+    setFormStatus("active");
+    setFormPassword("");
+    setUserForm("create");
+    setErr("");
+  };
+
+  const openEditUser = (u: UserRow) => {
+    setEditingUser(u);
+    setFormUsername(u.username || "");
+    setFormName(u.name || "");
+    setFormRole((u.role as "owner" | "admin" | "viewer") || "admin");
+    setFormStatus(u.status === "disabled" ? "disabled" : "active");
+    setFormPassword("");
+    setUserForm("edit");
+    setErr("");
+  };
+
+  const openPasswordUser = (u: UserRow) => {
+    setEditingUser(u);
+    setFormPassword("");
+    setUserForm("password");
+    setErr("");
+  };
+
+  const submitUserForm = async () => {
+    setErr("");
+    if (userForm === "create") {
+      const r = await api<{ message?: string }>("/api/admin/users", {
+        method: "POST",
+        csrf,
+        body: JSON.stringify({
+          username: formUsername,
+          password: formPassword,
+          role: formRole,
+          name: formName || undefined,
+        }),
+      });
+      if (!r.ok) {
+        setErr(r.body.message || "Não foi possível criar o usuário.");
+        return;
+      }
+    } else if (userForm === "edit" && editingUser) {
+      const r = await api<{ message?: string }>(`/api/admin/users/${editingUser.id}`, {
+        method: "PATCH",
+        csrf,
+        body: JSON.stringify({
+          username: formUsername,
+          name: formName,
+          role: formRole,
+          status: formStatus,
+        }),
+      });
+      if (!r.ok) {
+        setErr(r.body.message || "Não foi possível alterar o usuário.");
+        return;
+      }
+    } else if (userForm === "password" && editingUser) {
+      const r = await api<{ message?: string }>(`/api/admin/users/${editingUser.id}/password`, {
+        method: "POST",
+        csrf,
+        body: JSON.stringify({ password: formPassword }),
+      });
+      if (!r.ok) {
+        setErr(r.body.message || "Não foi possível alterar a senha.");
+        return;
+      }
+    }
+    setUserForm(null);
+    setEditingUser(null);
+    await refresh();
+  };
+
+  const deleteUser = async (u: UserRow) => {
+    if (!window.confirm(t(ADM.confirmDelete))) return;
+    setErr("");
+    const r = await api<{ message?: string }>(`/api/admin/users/${u.id}`, { method: "DELETE", csrf });
+    if (!r.ok) {
+      setErr(r.body.message || "Não foi possível excluir.");
+      return;
+    }
+    if (u.id === meId) {
+      setCsrf("");
+      setMeId("");
+      return;
+    }
+    await refresh();
+  };
+
+  const copyToken = async (token: string) => {
+    try {
+      await navigator.clipboard.writeText(token);
+    } catch {
+      setErr("Não foi possível copiar a chave.");
+    }
+  };
+
+  const chip = (id: Tab, label: string) => (
     <button
       key={id}
       type="button"
@@ -135,6 +330,10 @@ export default function AdminPortalPage() {
       {label}
     </button>
   );
+
+  const inputCls = "w-full rounded-md border border-[rgba(79,195,247,0.25)] bg-[#0d1b2a] px-3 py-2 text-sm text-white";
+  const btnPrimary = "rounded-md bg-[#4fc3f7] px-3 py-1.5 text-sm font-semibold text-[#0d1b2a]";
+  const btnGhost = "rounded-md border border-[rgba(79,195,247,0.35)] px-2 py-1 text-xs text-[#4fc3f7]";
 
   return (
     <div className="flex min-h-screen flex-col bg-[#0d1b2a]">
@@ -193,6 +392,7 @@ export default function AdminPortalPage() {
               {chip("price", t(ADM.tabPrice))}
               {chip("prov", t(ADM.tabProv))}
               {chip("pay", t(ADM.tabPay))}
+              {canManageUsers ? chip("users", t(ADM.tabUsers)) : null}
               <button type="button" onClick={() => void refresh()} className="text-sm text-[#94a3b8]">
                 {t(ADM.refresh)}
               </button>
@@ -217,19 +417,47 @@ export default function AdminPortalPage() {
                       <tr>
                         <th className="px-3 py-2">ID</th>
                         <th className="px-3 py-2">Serial</th>
+                        <th className="px-3 py-2">{t(ADM.licenseKey)}</th>
                         <th className="px-3 py-2">Tipo</th>
                         <th className="px-3 py-2">Estado</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {licenses.map((l) => (
-                        <tr key={l.id} className="border-t border-[rgba(79,195,247,0.08)]">
-                          <td className="px-3 py-2 font-mono text-xs">{l.id}</td>
-                          <td className="px-3 py-2 font-mono text-xs">{l.serial}</td>
-                          <td className="px-3 py-2">{l.type}</td>
-                          <td className="px-3 py-2">{l.status}</td>
-                        </tr>
-                      ))}
+                      {licenses.map((l) => {
+                        const token = l.token || "";
+                        const open = expandedToken === l.id;
+                        return (
+                          <tr key={l.id} className="border-t border-[rgba(79,195,247,0.08)] align-top">
+                            <td className="px-3 py-2 font-mono text-xs">{l.id}</td>
+                            <td className="px-3 py-2 font-mono text-xs">{l.serial}</td>
+                            <td className="px-3 py-2">
+                              {token ? (
+                                <div className="max-w-[16rem] space-y-1">
+                                  <p className={`font-mono text-xs text-[#94a3b8] ${open ? "break-all" : "truncate"}`}>
+                                    {open ? token : truncateKey(token)}
+                                  </p>
+                                  <div className="flex flex-wrap gap-1">
+                                    <button type="button" className={btnGhost} onClick={() => void copyToken(token)}>
+                                      {t(ADM.copy)}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={btnGhost}
+                                      onClick={() => setExpandedToken(open ? null : l.id)}
+                                    >
+                                      {open ? t(ADM.hideFull) : t(ADM.showFull)}
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-[#64748b]">—</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2">{l.type}</td>
+                            <td className="px-3 py-2">{l.status}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -239,9 +467,9 @@ export default function AdminPortalPage() {
             {tab === "price" ? (
               <div className="max-w-md space-y-3 rounded-md border border-[rgba(79,195,247,0.2)] bg-[#132033] p-4">
                 <label className="block text-sm text-[#94a3b8]">{t(ADM.usd)}</label>
-                <input className="w-full rounded-md bg-[#0d1b2a] px-3 py-2 text-white" value={usd} onChange={(e) => setUsd(e.target.value)} />
+                <input className="w-full rounded-md bg-[#0d1b2a] px-3 py-2 text-white" value={usd} onChange={(e) => setUsd(e.target.value)} inputMode="decimal" />
                 <label className="block text-sm text-[#94a3b8]">{t(ADM.spread)}</label>
-                <input className="w-full rounded-md bg-[#0d1b2a] px-3 py-2 text-white" value={spread} onChange={(e) => setSpread(e.target.value)} />
+                <input className="w-full rounded-md bg-[#0d1b2a] px-3 py-2 text-white" value={spread} onChange={(e) => setSpread(e.target.value)} inputMode="decimal" />
                 {priceInfo ? <p className="text-sm text-[#4fc3f7]">{priceInfo}</p> : null}
                 <button type="button" onClick={() => void savePrice()} className="rounded-md bg-[#4fc3f7] px-4 py-2 text-sm font-semibold text-[#0d1b2a]">
                   {t(ADM.save)}
@@ -348,6 +576,117 @@ export default function AdminPortalPage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            ) : null}
+
+            {tab === "users" && canManageUsers ? (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm text-[#94a3b8]">Contas com acesso ao portal admin.</p>
+                  <button type="button" className={btnPrimary} onClick={openCreateUser}>
+                    {t(ADM.addUser)}
+                  </button>
+                </div>
+
+                {userForm ? (
+                  <div className="max-w-md space-y-3 rounded-md border border-[rgba(79,195,247,0.2)] bg-[#132033] p-4">
+                    <h2 className="font-semibold text-white">
+                      {userForm === "create" ? t(ADM.addUser) : userForm === "password" ? t(ADM.changePassword) : t(ADM.editUser)}
+                      {editingUser?.username ? ` · ${editingUser.username}` : ""}
+                    </h2>
+                    {userForm !== "password" ? (
+                      <>
+                        <label className="block text-sm text-[#94a3b8]">{t(ADM.username)}</label>
+                        <input className={inputCls} value={formUsername} onChange={(e) => setFormUsername(e.target.value)} autoComplete="off" />
+                        <label className="block text-sm text-[#94a3b8]">{t(ADM.name)}</label>
+                        <input className={inputCls} value={formName} onChange={(e) => setFormName(e.target.value)} />
+                        <label className="block text-sm text-[#94a3b8]">{t(ADM.role)}</label>
+                        <select className={inputCls} value={formRole} onChange={(e) => setFormRole(e.target.value as "owner" | "admin" | "viewer")}>
+                          <option value="owner">owner</option>
+                          <option value="admin">admin</option>
+                          <option value="viewer">viewer</option>
+                        </select>
+                      </>
+                    ) : null}
+                    {userForm === "edit" ? (
+                      <>
+                        <label className="block text-sm text-[#94a3b8]">{t(ADM.status)}</label>
+                        <select className={inputCls} value={formStatus} onChange={(e) => setFormStatus(e.target.value as "active" | "disabled")}>
+                          <option value="active">{t(ADM.active)}</option>
+                          <option value="disabled">{t(ADM.disabled)}</option>
+                        </select>
+                      </>
+                    ) : null}
+                    {userForm === "create" || userForm === "password" ? (
+                      <>
+                        <label className="block text-sm text-[#94a3b8]">{t(ADM.password)}</label>
+                        <input
+                          className={inputCls}
+                          type="password"
+                          value={formPassword}
+                          onChange={(e) => setFormPassword(e.target.value)}
+                          autoComplete="new-password"
+                          placeholder="mín. 12 caracteres"
+                        />
+                      </>
+                    ) : null}
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" className={btnPrimary} onClick={() => void submitUserForm()}>
+                        {t(ADM.save)}
+                      </button>
+                      <button
+                        type="button"
+                        className={btnGhost}
+                        onClick={() => {
+                          setUserForm(null);
+                          setEditingUser(null);
+                        }}
+                      >
+                        {t(ADM.cancel)}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="overflow-x-auto rounded-md border border-[rgba(79,195,247,0.15)]">
+                  <table className="min-w-full text-left text-sm text-[#e2e8f0]">
+                    <thead className="bg-[#132033] text-[#94a3b8]">
+                      <tr>
+                        <th className="px-3 py-2">{t(ADM.username)}</th>
+                        <th className="px-3 py-2">{t(ADM.name)}</th>
+                        <th className="px-3 py-2">{t(ADM.role)}</th>
+                        <th className="px-3 py-2">{t(ADM.status)}</th>
+                        <th className="px-3 py-2">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map((u) => (
+                        <tr key={u.id} className="border-t border-[rgba(79,195,247,0.08)]">
+                          <td className="px-3 py-2 font-mono text-xs">
+                            {u.username || "—"}
+                            {u.id === meId ? <span className="ml-1 text-[#64748b]">(você)</span> : null}
+                          </td>
+                          <td className="px-3 py-2">{u.name || "—"}</td>
+                          <td className="px-3 py-2">{u.role}</td>
+                          <td className="px-3 py-2">{u.status === "active" ? t(ADM.active) : t(ADM.disabled)}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex flex-wrap gap-1">
+                              <button type="button" className={btnGhost} onClick={() => openPasswordUser(u)}>
+                                {t(ADM.changePassword)}
+                              </button>
+                              <button type="button" className={btnGhost} onClick={() => openEditUser(u)}>
+                                {t(ADM.editUser)}
+                              </button>
+                              <button type="button" className={btnGhost} onClick={() => void deleteUser(u)}>
+                                {t(ADM.deleteUser)}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             ) : null}
           </>

@@ -154,7 +154,9 @@ describe("admin: licenças", () => {
     const list = await p.admin(s, "GET", "/api/admin/licenses?type=trial");
     expect(list.body.items).toHaveLength(1);
     expect(list.body.items[0].serial).toBe("1000••••••••C3D4");
-    expect(JSON.stringify(list.body)).not.toContain(SERIAL);
+    expect(list.body.items[0].token).toMatch(/^HCL1\./);
+    // campo serial permanece mascarado; o token HCL1 embute o serial de propósito
+    expect(list.body.items.map((x: { serial: string }) => x.serial).join("")).not.toContain(SERIAL);
     expect((await p.admin(s, "GET", "/api/admin/licenses?type=definitive")).body.items).toHaveLength(0);
     expect((await p.admin(s, "GET", "/api/admin/licenses?q=c3d4")).body.items).toHaveLength(1);
 

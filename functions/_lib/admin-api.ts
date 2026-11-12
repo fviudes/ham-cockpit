@@ -1,5 +1,5 @@
 import { normalizeSerial, serialDisplay } from "../../shared/license";
-import { createAdminUser, hashPassword, requireAdmin } from "./admin-auth";
+import { createAdminUser, hashPassword, normalizeUsername, requireAdmin } from "./admin-auth";
 import { settlePayment, loadPayment } from "./checkout";
 import { audit, getSettings, setSetting } from "./db";
 import type { Ctx } from "./env";
@@ -19,6 +19,15 @@ function pageSize(url: URL): number {
 
 function effectiveStatus(ctx: Ctx, status: string, exp: number | null): string {
   return status === "active" && exp !== null && exp <= ctx.now() ? "expired" : status;
+}
+
+async function otherActiveOwners(ctx: Ctx, excludeId: string): Promise<number> {
+  const owners = await ctx.env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM admin_users WHERE role = 'owner' AND status = 'active' AND id <> ?1",
+  )
+    .bind(excludeId)
+    .first<{ n: number }>();
+  return owners?.n ?? 0;
 }
 
 async function listLicenses(ctx: Ctx, url: URL): Promise<Response> {
@@ -61,7 +70,7 @@ async function listLicenses(ctx: Ctx, url: URL): Promise<Response> {
   }
   args.push(lim + 1);
   const rows = await ctx.env.DB.prepare(
-    `SELECT l.id, l.serial, l.type, l.status, l.source, l.issued_at, l.expires_at, l.revoked_reason, d.last_country, d.last_seen_at, d.is_test, d.last_app_version
+    `SELECT l.id, l.serial, l.type, l.status, l.source, l.issued_at, l.expires_at, l.revoked_reason, l.token, d.last_country, d.last_seen_at, d.is_test, d.last_app_version
      FROM licenses l JOIN devices d ON d.serial = l.serial
      ${where.length ? "WHERE " + where.join(" AND ") : ""}
      ORDER BY l.issued_at DESC, l.id DESC LIMIT ?${args.length}`,
@@ -76,6 +85,7 @@ async function listLicenses(ctx: Ctx, url: URL): Promise<Response> {
       issued_at: number;
       expires_at: number | null;
       revoked_reason: string | null;
+      token: string;
       last_country: string | null;
       last_seen_at: number;
       is_test: number;
@@ -88,6 +98,7 @@ async function listLicenses(ctx: Ctx, url: URL): Promise<Response> {
     items: items.map(r => ({
       id: r.id,
       serial: maskSerial(r.serial),
+      token: r.token,
       type: r.type,
       status: effectiveStatus(ctx, r.status, r.expires_at),
       source: r.source,
@@ -113,6 +124,7 @@ async function licenseDetail(ctx: Ctx, id: string): Promise<Response> {
       id: l.id,
       serial: maskSerial(l.serial),
       serialDisplay: (await serialDisplay(l.serial)).replace(/^(.{4}).{9}/, "$1-••••-••••"),
+      token: l.token,
       type: l.type,
       status: effectiveStatus(ctx, l.status, l.expires_at),
       source: l.source,
@@ -140,7 +152,13 @@ async function pricingGet(ctx: Ctx, url: URL): Promise<Response> {
   const s = await getSettings(ctx);
   return json({
     configured: !!price,
-    price,
+    price: price
+      ? {
+          ...price,
+          usdCents: price.usd_cents,
+          fxSpreadBps: price.fx_spread_bps,
+        }
+      : null,
     history: history.results,
     preview,
     fx: fx ? { source: fx.source, rateMicro: fx.rateMicro, rateDate: fx.rateDate, stale: fx.stale } : null,
@@ -150,11 +168,12 @@ async function pricingGet(ctx: Ctx, url: URL): Promise<Response> {
 }
 
 async function pricingPut(ctx: Ctx, request: Request, adminId: string): Promise<Response> {
-  const b = await readJson<{ usd?: string | number; usdCents?: number; spreadBps?: number; rounding?: string; quoteTtl?: number }>(request);
+  const b = await readJson<{ usd?: string | number; usdCents?: number; spreadBps?: number | string; rounding?: string; quoteTtl?: number }>(request);
   const cents = b.usdCents !== undefined ? Number(b.usdCents) : decimalToCents(String(b.usd ?? "").replace(",", "."));
   if (cents === null || !Number.isInteger(cents) || cents < 100 || cents > 1_000_000) throw new HttpError(400, "invalid_price", "Preço entre US$ 1,00 e US$ 10.000,00");
-  const spread = b.spreadBps === undefined ? 300 : Number(b.spreadBps);
-  if (!Number.isInteger(spread) || spread < 0 || spread > 2000) throw new HttpError(400, "invalid_spread", "Spread entre 0 e 20% (em pontos-base)");
+  const spreadRaw = b.spreadBps === undefined ? 300 : Number(String(b.spreadBps).replace(",", "."));
+  const spread = Number.isInteger(spreadRaw) ? spreadRaw : Math.round(spreadRaw);
+  if (!Number.isInteger(spread) || !Number.isFinite(spread) || spread < 0 || spread > 2000) throw new HttpError(400, "invalid_spread", "Spread entre 0 e 20% (em pontos-base)");
   const rounding = b.rounding ?? "real";
   if (!["cent", "ten_cents", "real"].includes(rounding)) throw new HttpError(400, "invalid_rounding");
   const ttl = b.quoteTtl === undefined ? 900 : Number(b.quoteTtl);
@@ -335,7 +354,7 @@ export async function adminRoute(ctx: Ctx, request: Request, path: string): Prom
 
   if (path === "/me" && method === "GET") {
     const a = await need();
-    return json({ ok: true, csrf: a.csrf, role: a.role, username: a.username, email: a.email });
+    return json({ ok: true, id: a.id, csrf: a.csrf, role: a.role, username: a.username, email: a.email });
   }
   if (path === "/users" && method === "GET") {
     await need("owner");
@@ -377,21 +396,31 @@ export async function adminRoute(ctx: Ctx, request: Request, path: string): Prom
     });
     return json({ ok: true, id: created.id, username: created.username, role: created.role });
   }
+  if ((m = path.match(/^\/users\/(adm_[0-9a-z]{16})\/password$/)) && method === "POST") {
+    const a = await need("owner");
+    const b = await readJson<{ password?: string }>(request);
+    const target = await ctx.env.DB.prepare("SELECT id FROM admin_users WHERE id = ?1")
+      .bind(m[1])
+      .first<{ id: string }>();
+    if (!target) throw new HttpError(404, "user_not_found", "Usuário não encontrado.");
+    const password = String(b.password ?? "");
+    if (password.length < 12) throw new HttpError(400, "weak_password", "Senha com pelo menos 12 caracteres.");
+    const password_hash = await hashPassword(password);
+    await ctx.env.DB.prepare("UPDATE admin_users SET password_hash = ?2 WHERE id = ?1").bind(target.id, password_hash).run();
+    await ctx.env.DB.prepare("DELETE FROM admin_sessions WHERE admin_id = ?1").bind(target.id).run();
+    await audit(ctx, a.id, "admin_user_password", target.id, undefined, { rotated: true });
+    return json({ ok: true });
+  }
   if ((m = path.match(/^\/users\/(adm_[0-9a-z]{16})$/)) && method === "PATCH") {
     const a = await need("owner");
-    const b = await readJson<{ status?: string; role?: string; password?: string }>(request);
-    const target = await ctx.env.DB.prepare("SELECT id, username, role, status FROM admin_users WHERE id = ?1")
+    const b = await readJson<{ status?: string; role?: string; password?: string; username?: string; name?: string | null }>(request);
+    const target = await ctx.env.DB.prepare("SELECT id, username, name, role, status FROM admin_users WHERE id = ?1")
       .bind(m[1])
-      .first<{ id: string; username: string | null; role: string; status: string }>();
-    if (!target) throw new HttpError(404, "user_not_found");
+      .first<{ id: string; username: string | null; name: string | null; role: string; status: string }>();
+    if (!target) throw new HttpError(404, "user_not_found", "Usuário não encontrado.");
     if (b.status === "disabled" && target.id === a.id) throw new HttpError(400, "cannot_disable_self", "Não desative a si mesmo.");
     if (b.status === "disabled") {
-      const owners = await ctx.env.DB.prepare(
-        "SELECT COUNT(*) AS n FROM admin_users WHERE role = 'owner' AND status = 'active' AND id <> ?1",
-      )
-        .bind(target.id)
-        .first<{ n: number }>();
-      if (target.role === "owner" && (owners?.n ?? 0) < 1) {
+      if (target.role === "owner" && (await otherActiveOwners(ctx, target.id)) < 1) {
         throw new HttpError(400, "last_owner", "Precisa ficar pelo menos um owner ativo.");
       }
       await ctx.env.DB.prepare("UPDATE admin_users SET status = 'disabled' WHERE id = ?1").bind(target.id).run();
@@ -403,8 +432,30 @@ export async function adminRoute(ctx: Ctx, request: Request, path: string): Prom
       await audit(ctx, a.id, "admin_user_enable", target.id, { status: target.status }, { status: "active" });
     }
     if (b.role === "owner" || b.role === "admin" || b.role === "viewer") {
+      if (target.role === "owner" && b.role !== "owner" && (await otherActiveOwners(ctx, target.id)) < 1) {
+        throw new HttpError(400, "last_owner", "Precisa ficar pelo menos um owner ativo.");
+      }
       await ctx.env.DB.prepare("UPDATE admin_users SET role = ?2 WHERE id = ?1").bind(target.id, b.role).run();
       await audit(ctx, a.id, "admin_user_role", target.id, { role: target.role }, { role: b.role });
+    }
+    if (typeof b.username === "string") {
+      const username = normalizeUsername(b.username);
+      if (!username) throw new HttpError(400, "invalid_username", "Usuário inválido (3–32 chars: a-z, 0-9, _).");
+      if (username !== target.username) {
+        try {
+          await ctx.env.DB.prepare("UPDATE admin_users SET username = ?2, email = ?3 WHERE id = ?1")
+            .bind(target.id, username, `${username}@local`)
+            .run();
+        } catch {
+          throw new HttpError(409, "username_taken", "Este nome de usuário já existe.");
+        }
+        await audit(ctx, a.id, "admin_user_username", target.id, { username: target.username }, { username });
+      }
+    }
+    if (b.name !== undefined) {
+      const name = b.name == null || String(b.name).trim() === "" ? null : clip(String(b.name), 80);
+      await ctx.env.DB.prepare("UPDATE admin_users SET name = ?2 WHERE id = ?1").bind(target.id, name).run();
+      await audit(ctx, a.id, "admin_user_name", target.id, { name: target.name }, { name });
     }
     if (typeof b.password === "string" && b.password.length > 0) {
       if (b.password.length < 12) throw new HttpError(400, "weak_password", "Senha com pelo menos 12 caracteres.");
@@ -413,6 +464,23 @@ export async function adminRoute(ctx: Ctx, request: Request, path: string): Prom
       await ctx.env.DB.prepare("DELETE FROM admin_sessions WHERE admin_id = ?1").bind(target.id).run();
       await audit(ctx, a.id, "admin_user_password", target.id, undefined, { rotated: true });
     }
+    return json({ ok: true });
+  }
+  if ((m = path.match(/^\/users\/(adm_[0-9a-z]{16})$/)) && method === "DELETE") {
+    const a = await need("owner");
+    const target = await ctx.env.DB.prepare("SELECT id, username, role, status FROM admin_users WHERE id = ?1")
+      .bind(m[1])
+      .first<{ id: string; username: string | null; role: string; status: string }>();
+    if (!target) throw new HttpError(404, "user_not_found", "Usuário não encontrado.");
+    if (target.id === a.id && (await otherActiveOwners(ctx, target.id)) < 1) {
+      throw new HttpError(400, "cannot_delete_self", "Não exclua a si mesmo sem outro owner ativo.");
+    }
+    if (target.role === "owner" && (await otherActiveOwners(ctx, target.id)) < 1) {
+      throw new HttpError(400, "last_owner", "Não é possível excluir o último owner.");
+    }
+    await ctx.env.DB.prepare("DELETE FROM admin_sessions WHERE admin_id = ?1").bind(target.id).run();
+    await ctx.env.DB.prepare("DELETE FROM admin_users WHERE id = ?1").bind(target.id).run();
+    await audit(ctx, a.id, "admin_user_delete", target.id, { username: target.username, role: target.role, status: target.status }, undefined);
     return json({ ok: true });
   }
   if (path === "/summary" && method === "GET") {

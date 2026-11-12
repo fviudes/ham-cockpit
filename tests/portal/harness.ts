@@ -40,7 +40,7 @@ function hashPassword(password: string): string {
 }
 
 function seedAdmin(db: ReturnType<typeof createTestDb>, username: string, password: string): void {
-  const id = "adm_testowner0001";
+  const id = "adm_testowner0000001";
   const now = T0;
   const password_hash = hashPassword(password);
   db.raw

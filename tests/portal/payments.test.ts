@@ -601,10 +601,15 @@ describe("câmbio: fontes, fallback, cache e divergência", () => {
     await p.setPrice(s, "29.00");
     const r = await p.admin(s, "GET", "/api/admin/pricing");
     expect(r.body.preview).toMatchObject({ usdCents: 2900, brlCents: 16300, rateSource: "ptax", spreadBps: 300 });
-    expect(r.body.price).toMatchObject({ fx_spread_bps: 300, rounding: "real" });
+    expect(r.body.price).toMatchObject({ fx_spread_bps: 300, fxSpreadBps: 300, usdCents: 2900, rounding: "real" });
     // validações
     expect((await p.admin(s, "PUT", "/api/admin/pricing", { usd: "0.50" })).body.error).toBe("invalid_price");
     expect((await p.admin(s, "PUT", "/api/admin/pricing", { usd: "29", spreadBps: 5000 })).body.error).toBe("invalid_spread");
+    // spread com vírgula decimal e re-leitura camelCase (evita NaN no admin)
+    expect((await p.admin(s, "PUT", "/api/admin/pricing", { usd: "31,50", spreadBps: 350 })).status).toBe(200);
+    const again = await p.admin(s, "GET", "/api/admin/pricing");
+    expect(again.body.price.usdCents).toBe(3150);
+    expect(again.body.price.fxSpreadBps).toBe(350);
     void T0;
   });
 });
