@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useLocation } from "wouter";
-import { APP_LOGO } from "@shared/brand";
+import { APP_LOGO, APP_VERSION } from "@shared/brand";
 import { licenseGateOf, licenseMenusOpen, type LicenseGate } from "@shared/license";
 
 const AUTH_KEY = "hamcockpit.auth";
@@ -328,7 +328,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
               ) : null}
             </p>
             <p className="whitespace-nowrap font-['Space_Grotesk'] text-lg font-semibold text-white">{tx("brand")}</p>
-            <p className="whitespace-nowrap text-[11px] text-[#8ea0b3]">{tx("version")} · Ubuntu Server</p>
+            <p className="whitespace-nowrap text-[11px] text-[#8ea0b3]">v{APP_VERSION} · Ubuntu Server</p>
             <p
               className={`mt-2 inline-flex max-w-full truncate rounded-md border px-2 py-0.5 text-[10px] font-semibold tracking-wide ${licBadgeClass}`}
               title={licBadgeText}

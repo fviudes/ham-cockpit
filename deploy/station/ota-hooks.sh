@@ -19,6 +19,20 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 [[ "$(id -u)" -eq 0 ]] || exit 0
 
+# install idempotente: no OTA o pacote já está em /opt/ham-cockpit — src e dst
+# podem ser o mesmo inode; GNU install aborta com "are the same file" e o set -e
+# cortava o restante dos hooks (ex.: /opt/wavelog-gate).
+safe_install() {
+  local dest="${!#}"
+  local src="${@: -2:1}"
+  local -a opts=( "${@:1:$#-2}" )
+  [[ -f "$src" ]] || return 0
+  if [[ -e "$dest" && "$src" -ef "$dest" ]]; then
+    return 0
+  fi
+  install "${opts[@]}" "$src" "$dest"
+}
+
 MMDVM_BINS=(MMDVMHost DMRGateway YSFGateway ircddbgatewayd NextionDriver)
 
 mmdvm_missing() {
@@ -262,9 +276,10 @@ if [[ -d "$ROOT/bin" ]]; then
 fi
 
 # Estabilidade (swap, journald, mask de serviços pesados, CRLF, ser2net vazio).
+# ROOT costuma ser /opt/ham-cockpit — não reinstalar hc-tune sobre si mesmo.
 if [[ -f "$ROOT/bin/hc-tune.sh" ]]; then
   sed -i 's/\r$//' "$ROOT/bin/hc-tune.sh" 2>/dev/null || true
-  install -m 0755 "$ROOT/bin/hc-tune.sh" /opt/ham-cockpit/bin/hc-tune.sh
+  safe_install -m 0755 "$ROOT/bin/hc-tune.sh" /opt/ham-cockpit/bin/hc-tune.sh
 fi
 if [[ -x /opt/ham-cockpit/bin/hc-tune.sh ]]; then
   /opt/ham-cockpit/bin/hc-tune.sh || true
@@ -435,19 +450,21 @@ if [[ -f "$ROOT/wavelog/docker-compose.yml" ]]; then
   if ! cmp -s "$ROOT/wavelog/docker-compose.yml" /opt/wavelog/docker-compose.yml 2>/dev/null; then
     COMPOSE_CHANGED=1
   fi
-  install -o root -g hamcockpit -m 0644 "$ROOT/wavelog/docker-compose.yml" /opt/wavelog/docker-compose.yml
+  safe_install -o root -g hamcockpit -m 0644 "$ROOT/wavelog/docker-compose.yml" /opt/wavelog/docker-compose.yml
 fi
 if [[ -f "$ROOT/bin/wavelog-ctl.sh" ]]; then
-  install -o root -g hamcockpit -m 0755 "$ROOT/bin/wavelog-ctl.sh" /opt/wavelog/wavelog-ctl.sh
+  safe_install -o root -g hamcockpit -m 0755 "$ROOT/bin/wavelog-ctl.sh" /opt/wavelog/wavelog-ctl.sh
   sed -i 's/\r$//' /opt/wavelog/wavelog-ctl.sh
   /opt/wavelog/wavelog-ctl.sh ensure-db >/dev/null 2>&1 || true
 fi
+# Destino absoluto /opt/wavelog-gate (nunca relativo "opt/wavelog-gate").
 if [[ -f "$ROOT/wavelog-gate/wavelog-gate.mjs" ]]; then
   mkdir -p /opt/wavelog-gate
-  install -o hamcockpit -g hamcockpit -m 0755 "$ROOT/wavelog-gate/wavelog-gate.mjs" /opt/wavelog-gate/wavelog-gate.mjs
+  safe_install -o hamcockpit -g hamcockpit -m 0755 "$ROOT/wavelog-gate/wavelog-gate.mjs" /opt/wavelog-gate/wavelog-gate.mjs
   if [[ -f "$ROOT/wavelog-gate/VERSION" ]]; then
-    install -o hamcockpit -g hamcockpit -m 0644 "$ROOT/wavelog-gate/VERSION" /opt/wavelog-gate/VERSION
+    safe_install -o hamcockpit -g hamcockpit -m 0644 "$ROOT/wavelog-gate/VERSION" /opt/wavelog-gate/VERSION
   fi
+  chown -R hamcockpit:hamcockpit /opt/wavelog-gate 2>/dev/null || true
 fi
 
 # Pastas de dados graváveis pelo serviço (OTA em aparelhos já instalados).

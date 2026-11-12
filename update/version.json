@@ -1,6 +1,6 @@
 {
-  "version": "0.1.07.07",
+  "version": "0.1.07.08",
   "channel": "main",
-  "file": "ham-cockpit-0.1.07.07.tgz",
-  "notes": "Ham Cockpit v0.1.07.07 — apply OS com upgrade --with-new-pkgs (corrige held-back/falso sucesso), telemetria CI-V, LCD âmbar, nome Lextel, Copiar Serial."
+  "file": "ham-cockpit-0.1.07.08.tgz",
+  "notes": "Ham Cockpit v0.1.07.08 — OTA: install idempotente do hc-tune (evita same-file), espelha WaveLogGate em /opt/wavelog-gate e não sobrescreve station-upd em execução."
 }

@@ -201,14 +201,17 @@ function main() {
     mkdirSync(join(stage, "wavelog"), { recursive: true });
     cpSync(wavelogCompose, join(stage, "wavelog", "docker-compose.yml"));
   }
+  // WaveLogGate é obrigatório no tgz — o apply/hooks esperam em /opt/wavelog-gate.
   const wlgDir = join(ROOT, "deploy", "wavelog-gate");
-  if (existsSync(join(wlgDir, "wavelog-gate.mjs"))) {
-    mkdirSync(join(stage, "wavelog-gate"), { recursive: true });
-    cpSync(join(wlgDir, "wavelog-gate.mjs"), join(stage, "wavelog-gate", "wavelog-gate.mjs"));
-    if (existsSync(join(wlgDir, "VERSION"))) {
-      cpSync(join(wlgDir, "VERSION"), join(stage, "wavelog-gate", "VERSION"));
-    }
+  const wlgMjs = join(wlgDir, "wavelog-gate.mjs");
+  const wlgVer = join(wlgDir, "VERSION");
+  if (!existsSync(wlgMjs) || !existsSync(wlgVer)) {
+    console.error("deploy/wavelog-gate/{wavelog-gate.mjs,VERSION} obrigatório no pacote OTA");
+    process.exit(1);
   }
+  mkdirSync(join(stage, "wavelog-gate"), { recursive: true });
+  cpSync(wlgMjs, join(stage, "wavelog-gate", "wavelog-gate.mjs"));
+  cpSync(wlgVer, join(stage, "wavelog-gate", "VERSION"));
 
   // Ponte OTA (estações antigas / reparo Nextion). Imagem bake já tem os bins
   // em /usr/local/bin — este tgz não é requisito de install limpo.

@@ -50,7 +50,14 @@ add_station_user admin 1234
 install -d -o hamcockpit -g hamcockpit /opt/ham-cockpit /opt/ham-cockpit/bin /opt/ham-cockpit/radios /opt/ham-cockpit/equipment /opt/ser2net /opt/wavelog /opt/wavelog-gate /opt/lextel /backup
 install -m 0755 "$HERE/ham-cockpit-ap.sh" /opt/ham-cockpit/bin/ham-cockpit-ap.sh
 install -m 0755 "$HERE/first-boot.sh" /opt/ham-cockpit/bin/first-boot.sh
-install -m 0755 "$HERE/hc-tune.sh" /opt/ham-cockpit/bin/hc-tune.sh
+# Idempotente: skip se src e dst forem o mesmo arquivo (inode).
+if [[ -f "$HERE/hc-tune.sh" ]]; then
+  if [[ -e /opt/ham-cockpit/bin/hc-tune.sh && "$HERE/hc-tune.sh" -ef /opt/ham-cockpit/bin/hc-tune.sh ]]; then
+    chmod 0755 /opt/ham-cockpit/bin/hc-tune.sh
+  else
+    install -m 0755 "$HERE/hc-tune.sh" /opt/ham-cockpit/bin/hc-tune.sh
+  fi
+fi
 install -o root -g root -m 0755 "$HERE/root-login" /opt/ham-cockpit/bin/root-login
 install -o root -g root -m 0755 "$HERE/station-user" /opt/ham-cockpit/bin/station-user
 install -o root -g root -m 0755 "$HERE/ser2net-ctl" /opt/ham-cockpit/bin/ser2net-ctl

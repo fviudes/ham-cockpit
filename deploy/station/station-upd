@@ -398,19 +398,40 @@ apply_app() {
   if [[ -f "$src/sudoers-hamcockpit" ]]; then
     cp -a "$src/sudoers-hamcockpit" "$APP_HOME/sudoers-hamcockpit"
   fi
-  if [[ -f "$src/versions.json" ]]; then
-    cp -a "$src/versions.json" "$APP_HOME/versions.json"
-  fi
+  # versions.json / VERSION só após hooks OK — senão o canal marca sucesso cedo.
   if [[ -f "$src/mmdvm-arm64.tgz" ]]; then
     cp -a "$src/mmdvm-arm64.tgz" "$APP_HOME/mmdvm-arm64.tgz"
   fi
   if [[ -d "$src/bin" ]]; then
-    cp -a "$src/bin/." "$APP_HOME/bin/"
+    # Não sobrescreve o station-upd em execução: bash relê o arquivo e pode
+    # executar fragmentos (ex. "opt/wavelog-gate") como comando.
+    local _f _base _self _dest
+    _self="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
+    for _f in "$src"/bin/*; do
+      [[ -e "$_f" ]] || continue
+      _base="$(basename "$_f")"
+      if [[ -d "$_f" ]]; then
+        mkdir -p "$APP_HOME/bin/$_base"
+        cp -a "$_f/." "$APP_HOME/bin/$_base/"
+        continue
+      fi
+      if [[ "$_base" == "station-upd" ]]; then
+        _dest="$(readlink -f "$APP_HOME/bin/station-upd" 2>/dev/null || echo "$APP_HOME/bin/station-upd")"
+        if [[ "$_self" == "$_dest" ]]; then
+          cp -a "$_f" "$APP_HOME/bin/station-upd.ota-next"
+          continue
+        fi
+      fi
+      cp -a "$_f" "$APP_HOME/bin/$_base"
+    done
     find "$APP_HOME/bin" -maxdepth 1 -type f -exec chmod 0755 {} +
   fi
   if [[ -d "$src/wavelog-gate" ]]; then
     mkdir -p "$APP_HOME/wavelog-gate" /opt/wavelog-gate
     cp -a "$src/wavelog-gate/." "$APP_HOME/wavelog-gate/"
+    # Espelha também em /opt/wavelog-gate (ota-hooks pode ter abortado antes).
+    cp -a "$src/wavelog-gate/." /opt/wavelog-gate/
+    chown -R hamcockpit:hamcockpit /opt/wavelog-gate 2>/dev/null || true
   fi
   if [[ -d "$src/wavelog" ]]; then
     mkdir -p "$APP_HOME/wavelog"
@@ -425,13 +446,9 @@ apply_app() {
     done
     systemctl daemon-reload 2>/dev/null || true
   fi
-  if [[ -n "${ver:-}" ]]; then
-    printf '%s\n' "$ver" >"$APP_HOME/VERSION"
-  elif [[ -f "$src/VERSION" ]]; then
-    cp -a "$src/VERSION" "$APP_HOME/VERSION"
-  fi
   emit_progress app 78 install 1
   if [[ -f "$APP_HOME/package.json" ]]; then
+    # postinstall chama ota-hooks (|| true no package.json); falha real valida-se abaixo.
     run_with_heartbeat app install 78 86 20 bash -c "cd \"$APP_HOME\" && npm install --omit=dev" || true
   fi
   # Backup do INI do operador ANTES dos hooks. Nunca copiar template por cima.
@@ -445,15 +462,33 @@ apply_app() {
       cp -a "$APP_HOME/mmdvm/$_ini" "$APP_HOME/mmdvm/${_ini}.ota-bak" || true
     fi
   done
-  # Garante units/bin mesmo se o postinstall do npm não rodou.
+  # Hooks obrigatórios: falha → não bump de VERSION (estação ainda vê OTA no canal).
   if [[ -x "$APP_HOME/ota-hooks.sh" ]]; then
-    run_with_heartbeat app install 86 94 25 bash "$APP_HOME/ota-hooks.sh" || true
+    if ! run_with_heartbeat app install 86 94 25 bash "$APP_HOME/ota-hooks.sh"; then
+      echo "ota-hooks.sh falhou — VERSION não avançada (reaplicável)" >&2
+      return 1
+    fi
+  fi
+  # Commit atômico da versão só após apply bem-sucedido.
+  if [[ -f "$src/versions.json" ]]; then
+    cp -a "$src/versions.json" "$APP_HOME/versions.json"
+  fi
+  if [[ -n "${ver:-}" ]]; then
+    printf '%s\n' "$ver" >"$APP_HOME/VERSION"
+  elif [[ -f "$src/VERSION" ]]; then
+    cp -a "$src/VERSION" "$APP_HOME/VERSION"
   fi
   chown -R hamcockpit:hamcockpit "$APP_HOME" 2>/dev/null || chown -R catbridge:catbridge "$APP_HOME" 2>/dev/null || true
   # Helpers root ficam root:root (sudoers -n).
   if [[ -d "$APP_HOME/bin" ]]; then
     chown root:root "$APP_HOME"/bin/* 2>/dev/null || true
     chmod 0755 "$APP_HOME"/bin/* 2>/dev/null || true
+  fi
+  # Troca atômica do station-upd só no fim (após hooks).
+  if [[ -f "$APP_HOME/bin/station-upd.ota-next" ]]; then
+    mv -f "$APP_HOME/bin/station-upd.ota-next" "$APP_HOME/bin/station-upd"
+    chown root:root "$APP_HOME/bin/station-upd" 2>/dev/null || true
+    chmod 0755 "$APP_HOME/bin/station-upd"
   fi
   emit_progress app 96 restart 1
   NEED_CONSOLE_RESTART=1

@@ -1,6 +1,7 @@
 import { FitTile } from "@/console/panel-board";
 import { ConsoleProvider, useConsole } from "@/console/state";
 import { VfoPanel } from "@/console/vfo-panel";
+import { APP_VERSION } from "@shared/brand";
 import { useEffect } from "react";
 
 export default function VfoDisplay() {
@@ -36,7 +37,7 @@ function VfoDisplayInner() {
       </div>
       <footer className="flex shrink-0 items-center justify-between gap-4 border-t border-[rgba(79,195,247,0.12)] px-5 py-3 font-['IBM_Plex_Mono'] text-sm text-[#8ea0b3]">
         <span>
-          {tx("brand")} · {tx("version")}
+          {tx("brand")} · v{APP_VERSION}
         </span>
         <span className="text-[#4fc3f7]">{tx("vfoHdmiExit")}</span>
       </footer>
