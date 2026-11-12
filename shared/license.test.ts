@@ -9,7 +9,9 @@ import {
   effectiveNow,
   evaluateLicense,
   importPrivateKey,
+  isValidCallsign,
   isValidSerial,
+  normalizeCallsign,
   normalizeSerial,
   parseSerialInput,
   serialCheck,
@@ -65,6 +67,20 @@ describe("serial", () => {
     expect(serialFromCpuinfo(cpu)).toBe(SERIAL);
     expect(serialFromCpuinfo("Serial\t: 0000000000000000\n", "10000000a1b2c3d4\0")).toBe(SERIAL);
     expect(serialFromCpuinfo("processor : 0\n", null)).toBeNull();
+  });
+});
+
+describe("callsign / prefixo", () => {
+  it("normaliza e valida indicativos típicos", () => {
+    expect(normalizeCallsign(" py2abc/qrp ")).toBe("PY2ABC");
+    expect(isValidCallsign("PY2ABC")).toBe(true);
+    expect(isValidCallsign("PU2XYZ")).toBe(true);
+    expect(isValidCallsign("W1AW")).toBe(true);
+    expect(isValidCallsign("9A1ABC")).toBe(true);
+    expect(isValidCallsign("")).toBe(false);
+    expect(isValidCallsign("N0CALL")).toBe(false);
+    expect(isValidCallsign("ABC")).toBe(false);
+    expect(isValidCallsign("123")).toBe(false);
   });
 });
 

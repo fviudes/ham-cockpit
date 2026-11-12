@@ -648,12 +648,25 @@ export function mergeLp100a(cur: Station["lp100a"], j: Record<string, unknown>):
   };
 }
 
+/** Resumo de licença para sidebar / Admin → Licença. */
+export type LicenseSnap = {
+  serial: string | null;
+  serialDisplay: string | null;
+  callsign: string | null;
+  state: string | null;
+  type: string | null;
+  daysLeft: number | null;
+  provisionalEndsAt: number | null;
+};
+
 type Ctx = {
   lang: Lang;
   setLang: (l: Lang) => void;
   tx: (key: I18nKey) => string;
   s: Station;
   setS: React.Dispatch<React.SetStateAction<Station>>;
+  license: LicenseSnap | null;
+  refreshLicense: () => Promise<void>;
   pushLog: (kind: LogKind, msg: string) => void;
   setFreq: (hz: number) => void;
   kickPrimary: (opts?: { picker?: boolean; gesture?: boolean }) => Promise<void>;
@@ -664,6 +677,7 @@ const ConsoleCtx = createContext<Ctx | null>(null);
 export function ConsoleProvider({ children, active = true }: { children: ReactNode; active?: boolean }) {
   const [lang, setLangState] = useState<Lang>(readLang);
   const [s, setS] = useState<Station>(initial);
+  const [license, setLicense] = useState<LicenseSnap | null>(null);
   const radiosRef = useRef<StationRadio[]>([]);
   const servicesRef = useRef(s.services);
   const applyingRef = useRef(false);
@@ -686,6 +700,31 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
     window.addEventListener(LANG_EVENT, onChange);
     return () => window.removeEventListener(LANG_EVENT, onChange);
   }, [lang]);
+
+  const refreshLicense = useCallback(async () => {
+    try {
+      const r = await fetch("/api/license");
+      const j = (await r.json()) as Record<string, unknown>;
+      setLicense({
+        serial: typeof j.serial === "string" ? j.serial : null,
+        serialDisplay: typeof j.serialDisplay === "string" ? j.serialDisplay : null,
+        callsign: typeof j.callsign === "string" && j.callsign ? j.callsign : null,
+        state: typeof j.state === "string" ? j.state : null,
+        type: typeof j.type === "string" ? j.type : null,
+        daysLeft: typeof j.daysLeft === "number" ? j.daysLeft : null,
+        provisionalEndsAt: typeof j.provisionalEndsAt === "number" ? j.provisionalEndsAt : null,
+      });
+    } catch {
+      /* sidebar tolera falha pontual */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!active) return;
+    void refreshLicense();
+    const id = window.setInterval(() => void refreshLicense(), 60_000);
+    return () => window.clearInterval(id);
+  }, [active, refreshLicense]);
 
   useEffect(() => {
     void fetch("/api/radios")
@@ -1396,8 +1435,8 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
   }, []);
 
   const value = useMemo(
-    () => ({ lang, setLang, tx, s, pushLog, setFreq, setS, kickPrimary }),
-    [lang, setLang, tx, s, pushLog, setFreq, kickPrimary]
+    () => ({ lang, setLang, tx, s, license, refreshLicense, pushLog, setFreq, setS, kickPrimary }),
+    [lang, setLang, tx, s, license, refreshLicense, pushLog, setFreq, kickPrimary]
   );
   return <ConsoleCtx.Provider value={value}>{children}</ConsoleCtx.Provider>;
 }

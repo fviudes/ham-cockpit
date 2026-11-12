@@ -167,6 +167,30 @@ export function serialFromCpuinfo(cpuinfo: string | null, deviceTree?: string | 
   return null;
 }
 
+/* ------------------------------ callsign / prefixo ------------------------------ */
+
+/** Normaliza indicativo: maiúsculas, só A–Z / 0–9; descarta sufixo após `/`. */
+export function normalizeCallsign(raw: string): string {
+  const base = String(raw ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9/]/g, "")
+    .split("/")[0];
+  return base || "";
+}
+
+/**
+ * Validação simples de indicativo amador (ITU-ish).
+ * Aceita PY2ABC, PU2XYZ, W1AW, 9A1ABC; rejeita vazio, N0CALL e só letras/só números.
+ */
+export function isValidCallsign(raw: string): boolean {
+  const c = normalizeCallsign(raw);
+  if (c.length < 3 || c.length > 10) return false;
+  if (c === "N0CALL" || c === "NOCALL") return false;
+  if (!/[A-Z]/.test(c) || !/[0-9]/.test(c)) return false;
+  return /^[A-Z0-9]{1,3}[0-9][A-Z0-9]{0,3}[A-Z]$/.test(c);
+}
+
 /* ------------------------------ criptografia --------------------------- */
 
 const pubCache = new Map<string, CryptoKey>();

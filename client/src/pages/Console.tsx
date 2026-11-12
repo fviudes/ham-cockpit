@@ -213,7 +213,7 @@ function Login({ onOk }: { onOk: (name: string) => void }) {
 }
 
 function Shell({ onLogout }: { onLogout: () => void }) {
-  const { tx, s, setFreq, setS } = useConsole();
+  const { tx, s, setFreq, setS, license } = useConsole();
   const headerFreqRef = useRef<HTMLParagraphElement>(null);
   const [loc, navigate] = useLocation();
   const mobile = useIsMobile();
@@ -277,6 +277,25 @@ function Shell({ onLogout }: { onLogout: () => void }) {
     return () => el.removeEventListener("wheel", onWheel);
   }, [s.vfo, s.freq, s.freqB, s.radios.items, s.ic705.ble, s.ic705.phase, s.wlg.hamlibPort, setFreq, setS]);
 
+  const licState = license?.state || "";
+  const licLicensed = licState === "ativa" || licState === "trial";
+  const licCall = licLicensed && license?.callsign ? license.callsign : null;
+  let licBadgeText = tx("licBadgeNone");
+  let licBadgeClass = "border-amber-500/40 bg-amber-500/15 text-amber-200";
+  if (licState === "ativa") {
+    licBadgeText = tx("licBadgeLicensed");
+    licBadgeClass = "border-emerald-500/40 bg-emerald-500/15 text-emerald-300";
+  } else if (licState === "trial") {
+    const days =
+      typeof license?.daysLeft === "number"
+        ? license.daysLeft
+        : license?.provisionalEndsAt
+          ? Math.max(0, Math.ceil((license.provisionalEndsAt - Date.now() / 1000) / 86400))
+          : null;
+    licBadgeText = days != null ? tx("licBadgeTrialDays").replace("{n}", String(days)) : tx("licBadgeTrial");
+    licBadgeClass = "border-[#4fc3f7]/40 bg-[#4fc3f7]/15 text-[#7ee0ff]";
+  }
+
   const nav = (
     <nav className="flex h-full flex-col">
       <div className="border-b border-[rgba(79,195,247,0.12)] px-5 py-6">
@@ -287,9 +306,22 @@ function Shell({ onLogout }: { onLogout: () => void }) {
             className="size-[113px] shrink-0 object-contain"
           />
           <div className="min-w-0">
-            <p className="whitespace-nowrap font-['IBM_Plex_Mono'] text-[10px] tracking-[0.22em] text-[#ffb300] uppercase">{tx("station")}</p>
+            <p className="flex items-center gap-2 whitespace-nowrap font-['IBM_Plex_Mono'] text-[10px] tracking-[0.22em] text-[#ffb300] uppercase">
+              <span>{tx("station")}</span>
+              {licCall ? (
+                <span className="rounded border border-[#ffb300]/35 bg-[#ffb300]/10 px-1.5 py-0.5 font-semibold tracking-normal text-[#ffb300] normal-case">
+                  {licCall}
+                </span>
+              ) : null}
+            </p>
             <p className="whitespace-nowrap font-['Space_Grotesk'] text-lg font-semibold text-white">{tx("brand")}</p>
             <p className="whitespace-nowrap text-[11px] text-[#8ea0b3]">{tx("version")} · Ubuntu Server</p>
+            <p
+              className={`mt-2 inline-flex max-w-full truncate rounded-md border px-2 py-0.5 text-[10px] font-semibold tracking-wide ${licBadgeClass}`}
+              title={licBadgeText}
+            >
+              {licBadgeText}
+            </p>
           </div>
         </div>
       </div>

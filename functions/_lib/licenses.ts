@@ -3,6 +3,8 @@ import {
   RECEIPT_PREFIX,
   TOKEN_PREFIX,
   importPrivateKey,
+  isValidCallsign,
+  normalizeCallsign,
   parseSerialInput,
   serialDisplay,
   signBlob,
@@ -91,21 +93,22 @@ export async function buildCrl(ctx: Ctx): Promise<{ crl: string; version: number
 export async function upsertDevice(
   ctx: Ctx,
   serial: string,
-  meta: { appVersion?: string; image?: string; model?: string },
+  meta: { appVersion?: string; image?: string; model?: string; callsign?: string | null },
 ): Promise<{ blocked: boolean; reason: string | null; created: boolean }> {
   const now = ctx.now();
   const ih = await ipHash(ctx);
+  const callsign = meta.callsign ? clip(meta.callsign, 16) : null;
   const ins = await ctx.env.DB.prepare(
-    "INSERT INTO devices (serial, first_seen_at, last_seen_at, last_app_version, last_image_version, model, last_country, last_ip_hash) VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT (serial) DO NOTHING",
+    "INSERT INTO devices (serial, first_seen_at, last_seen_at, last_app_version, last_image_version, model, last_country, last_ip_hash, callsign) VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ON CONFLICT (serial) DO NOTHING",
   )
-    .bind(serial, now, clip(meta.appVersion, 32) || null, clip(meta.image, 32) || null, clip(meta.model, 64) || null, ctx.country || null, ih)
+    .bind(serial, now, clip(meta.appVersion, 32) || null, clip(meta.image, 32) || null, clip(meta.model, 64) || null, ctx.country || null, ih, callsign)
     .run();
   const created = (ins.meta.changes ?? 0) > 0;
   if (!created) {
     await ctx.env.DB.prepare(
-      "UPDATE devices SET last_seen_at = ?2, last_app_version = COALESCE(?3, last_app_version), last_image_version = COALESCE(?4, last_image_version), model = COALESCE(?5, model), last_country = COALESCE(?6, last_country), last_ip_hash = ?7 WHERE serial = ?1",
+      "UPDATE devices SET last_seen_at = ?2, last_app_version = COALESCE(?3, last_app_version), last_image_version = COALESCE(?4, last_image_version), model = COALESCE(?5, model), last_country = COALESCE(?6, last_country), last_ip_hash = ?7, callsign = COALESCE(?8, callsign) WHERE serial = ?1",
     )
-      .bind(serial, now, clip(meta.appVersion, 32) || null, clip(meta.image, 32) || null, clip(meta.model, 64) || null, ctx.country || null, ih)
+      .bind(serial, now, clip(meta.appVersion, 32) || null, clip(meta.image, 32) || null, clip(meta.model, 64) || null, ctx.country || null, ih, callsign)
       .run();
   }
   const row = await ctx.env.DB.prepare("SELECT blocked, blocked_reason FROM devices WHERE serial = ?1")
@@ -219,6 +222,9 @@ export interface ActivateBody {
   model?: string;
   lid?: string;
   nonce?: string;
+  /** Prefixo/indicativo do operador (metadado; serial continua a chave). */
+  callsign?: string;
+  prefix?: string;
 }
 
 export type LicStatus = "trial" | "definitive" | "expired" | "revoked";
@@ -249,7 +255,15 @@ export async function activate(ctx: Ctx, body: ActivateBody, mode: "activate" | 
     await enforceRate(ctx, "lic-sync-serial", serial, 30, 3600);
   }
 
-  const dev = await upsertDevice(ctx, serial, { appVersion: body.appVersion, image: body.image, model: body.model });
+  const rawCall = typeof body.callsign === "string" ? body.callsign : typeof body.prefix === "string" ? body.prefix : "";
+  const callsign = normalizeCallsign(rawCall);
+  const callMeta = callsign && isValidCallsign(callsign) ? callsign : null;
+  const dev = await upsertDevice(ctx, serial, {
+    appVersion: body.appVersion,
+    image: body.image,
+    model: body.model,
+    callsign: callMeta,
+  });
   if (dev.blocked) throw new HttpError(403, "device_blocked", "Este serial está bloqueado. Fale com o suporte.");
 
   let row = await currentLicense(ctx, serial);

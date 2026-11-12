@@ -134,12 +134,38 @@ refresh_mmdvm_data_from_tgz() {
   return 0
 }
 
+enable_mmdvm_units() {
+  systemctl daemon-reload 2>/dev/null || true
+  local u
+  for u in nextiondriver.service mmdvmhost.service dmrgateway.service ysfgateway.service ircddbgateway.service; do
+    systemctl enable "$u" 2>/dev/null || true
+  done
+}
+
 ensure_mmdvm_bins() {
-  local tgz=""
-  tgz="$(pick_mmdvm_tgz || true)"
+  local tgz="" from_pkg=0
+  # Pacote OTA embutiu o tarball → sempre instalar/atualizar bins (não toca INI do operador).
+  if [[ -f "$ROOT/mmdvm-arm64.tgz" ]]; then
+    tgz="$ROOT/mmdvm-arm64.tgz"
+    from_pkg=1
+  else
+    tgz="$(pick_mmdvm_tgz || true)"
+  fi
   if [[ -n "$tgz" ]]; then
     refresh_mmdvm_data_from_tgz "$tgz" || true
   fi
+
+  if [[ "$from_pkg" -eq 1 ]]; then
+    echo "ota-hooks: instalando MMDVM do pacote OTA ($tgz)…" >&2
+    if install_mmdvm_tgz "$tgz"; then
+      echo "ota-hooks: MMDVM instalado/atualizado de $tgz" >&2
+      enable_mmdvm_units
+      return 0
+    fi
+    echo "ota-hooks: AVISO — falha ao instalar mmdvm-arm64.tgz do pacote; tentando fallback" >&2
+  fi
+
+  # Sem tarball no pacote (ou falha): só repara se faltar bin ou Nextion sem marca.
   if ! mmdvm_missing && ! nextion_needs_patch; then
     return 0
   fi
@@ -177,10 +203,7 @@ ensure_mmdvm_bins() {
     rm -f "$dl"
   fi
   if ! mmdvm_missing; then
-    systemctl daemon-reload 2>/dev/null || true
-    for u in nextiondriver.service mmdvmhost.service dmrgateway.service ysfgateway.service ircddbgateway.service; do
-      systemctl enable "$u" 2>/dev/null || true
-    done
+    enable_mmdvm_units
     return 0
   fi
 
@@ -436,6 +459,9 @@ install -d -o hamcockpit -g hamcockpit -m 0775 \
   /opt/ham-cockpit/services \
   /opt/ham-cockpit/ldg \
   /opt/ham-cockpit/lp100a \
+  /var/lib/hamcockpit \
+  /var/lib/hamcockpit/chromium \
+  /var/lib/hamcockpit/license \
   2>/dev/null || true
 
 # Docker + Wavelog no boot (units/perms). Sem docker.io no apt → só bake resolve.

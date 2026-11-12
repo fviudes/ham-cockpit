@@ -15,6 +15,8 @@ import {
   effectiveNow,
   EMPTY_CLOCK_STATE,
   evaluateLicense,
+  isValidCallsign,
+  normalizeCallsign,
   serialDisplay,
   serialFromCpuinfo,
   verifyBlob,
@@ -45,11 +47,40 @@ interface LicenseStore {
   enforceLocal: boolean;
   crlVersion: number;
   revoked: string[];
+  /** Prefixo/indicativo do operador (obrigatório para Licenciar). */
+  callsign: string | null;
 }
 
-function ensureDirs() {
+function emptyStore(now = Math.floor(Date.now() / 1000)): LicenseStore {
+  return {
+    firstSeen: now,
+    token: null,
+    receipt: null,
+    lastSync: null,
+    clock: { ...EMPTY_CLOCK_STATE },
+    enforceLocal: false,
+    crlVersion: 0,
+    revoked: [],
+    callsign: null,
+  };
+}
+
+/** Estado persistente em /var/lib (gravável pelo User=hamcockpit). */
+function ensureDataDir() {
   mkdirSync(DATA_DIR, { recursive: true });
-  mkdirSync(RUN_DIR, { recursive: true });
+}
+
+/**
+ * Veredito em /run/ham-cockpit (tmpfs). O unit declara RuntimeDirectory=ham-cockpit;
+ * sem isso o mkdir falha (EACCES) — nunca derrubar a API por causa do run dir.
+ */
+function tryEnsureRunDir(): boolean {
+  try {
+    mkdirSync(RUN_DIR, { recursive: true });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function storePath() {
@@ -57,42 +88,29 @@ function storePath() {
 }
 
 function readStore(): LicenseStore {
-  ensureDirs();
+  ensureDataDir();
   const p = storePath();
   if (!existsSync(p)) {
-    const now = Math.floor(Date.now() / 1000);
-    const s: LicenseStore = {
-      firstSeen: now,
-      token: null,
-      receipt: null,
-      lastSync: null,
-      clock: { ...EMPTY_CLOCK_STATE },
-      enforceLocal: false,
-      crlVersion: 0,
-      revoked: [],
-    };
+    const s = emptyStore();
     writeFileSync(p, JSON.stringify(s, null, 2) + "\n");
     return s;
   }
   try {
-    return JSON.parse(readFileSync(p, "utf8")) as LicenseStore;
-  } catch {
-    const now = Math.floor(Date.now() / 1000);
+    const raw = JSON.parse(readFileSync(p, "utf8")) as Partial<LicenseStore>;
     return {
-      firstSeen: now,
-      token: null,
-      receipt: null,
-      lastSync: null,
-      clock: { ...EMPTY_CLOCK_STATE },
-      enforceLocal: false,
-      crlVersion: 0,
-      revoked: [],
+      ...emptyStore(typeof raw.firstSeen === "number" ? raw.firstSeen : undefined),
+      ...raw,
+      callsign: typeof raw.callsign === "string" && raw.callsign ? normalizeCallsign(raw.callsign) || null : null,
+      clock: raw.clock ? { ...EMPTY_CLOCK_STATE, ...raw.clock } : { ...EMPTY_CLOCK_STATE },
+      revoked: Array.isArray(raw.revoked) ? raw.revoked.map(String) : [],
     };
+  } catch {
+    return emptyStore();
   }
 }
 
 function writeStore(s: LicenseStore) {
-  ensureDirs();
+  ensureDataDir();
   writeFileSync(storePath(), JSON.stringify(s, null, 2) + "\n");
 }
 
@@ -132,6 +150,7 @@ function ntpSynced(): boolean {
 export interface LicenseApiBody {
   serial: string | null;
   serialDisplay: string | null;
+  callsign: string | null;
   state: Verdict["state"];
   type: Verdict["type"];
   licenseId: string | null;
@@ -196,6 +215,7 @@ async function toApi(store: LicenseStore, online: boolean | null = null): Promis
   const body: LicenseApiBody = {
     serial,
     serialDisplay: display,
+    callsign: store.callsign,
     state: verdict.state,
     type: verdict.type,
     licenseId: verdict.licenseId,
@@ -213,10 +233,11 @@ async function toApi(store: LicenseStore, online: boolean | null = null): Promis
     portalUrl: PORTAL_ORIGIN,
   };
   try {
-    ensureDirs();
-    writeFileSync(path.join(RUN_DIR, "license.json"), JSON.stringify({ ...body, at: Math.floor(Date.now() / 1000) }, null, 2) + "\n");
+    if (tryEnsureRunDir()) {
+      writeFileSync(path.join(RUN_DIR, "license.json"), JSON.stringify({ ...body, at: Math.floor(Date.now() / 1000) }, null, 2) + "\n");
+    }
   } catch {
-    /* /run pode ser só leitura em dev */
+    /* /run pode ser só leitura em dev — estado já está em DATA_DIR */
   }
   return body;
 }
@@ -242,15 +263,29 @@ async function applyPortalResponse(
   writeStore(store);
 }
 
-export async function activateWithPortal(): Promise<{ ok: boolean; body: LicenseApiBody; error?: string }> {
+export async function activateWithPortal(
+  opts: { callsign?: string } = {},
+): Promise<{ ok: boolean; body: LicenseApiBody; error?: string }> {
   const store = readStore();
   const serial = readDeviceSerial();
   if (!serial) return { ok: false, body: await toApi(store, false), error: "serial_unavailable" };
+  const callsign = normalizeCallsign(opts.callsign ?? store.callsign ?? "");
+  if (!isValidCallsign(callsign)) {
+    return { ok: false, body: await toApi(store, null), error: "callsign_required" };
+  }
+  store.callsign = callsign;
+  writeStore(store);
   try {
     const r = await fetch(`${PORTAL_ORIGIN}/api/lic/activate`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ serial, appVersion: APP_VERSION, nonce: crypto.randomUUID() }),
+      body: JSON.stringify({
+        serial,
+        appVersion: APP_VERSION,
+        nonce: crypto.randomUUID(),
+        callsign,
+        prefix: callsign,
+      }),
       signal: AbortSignal.timeout(15000),
     });
     const j = (await r.json()) as {
@@ -298,14 +333,36 @@ export function registerLicenseRoutes(app: Express) {
     try {
       res.json(await toApi(readStore(), null));
     } catch (err) {
-      res.status(500).json({ ok: false, error: String(err) });
+      // Mesmo com falha de persistência, o serial do Pi deve aparecer na UI.
+      const serial = readDeviceSerial();
+      let serialDisp: string | null = null;
+      try {
+        serialDisp = serial ? await serialDisplay(serial) : null;
+      } catch {
+        serialDisp = serial;
+      }
+      res.status(500).json({
+        ok: false,
+        error: String(err),
+        serial,
+        serialDisplay: serialDisp,
+        callsign: null,
+        state: serial ? "sem_licenca" : "sem_serial",
+      });
     }
   });
 
-  app.post("/api/license/activate", async (_req, res) => {
+  app.post("/api/license/activate", async (req: Request, res: Response) => {
     try {
-      const r = await activateWithPortal();
-      res.status(r.ok ? 200 : r.error === "portal_unreachable" ? 502 : 400).json(r);
+      const callsign =
+        typeof req.body?.callsign === "string"
+          ? req.body.callsign
+          : typeof req.body?.prefix === "string"
+            ? req.body.prefix
+            : undefined;
+      const r = await activateWithPortal({ callsign });
+      const status = r.ok ? 200 : r.error === "portal_unreachable" ? 502 : 400;
+      res.status(status).json(r);
     } catch (err) {
       res.status(500).json({ ok: false, error: String(err) });
     }
@@ -339,10 +396,12 @@ export function registerLicenseRoutes(app: Express) {
       }
       const display = await serialDisplay(serial);
       const chk = display.slice(-2);
+      const store = readStore();
       res.json({
         serial,
         display,
         chk,
+        callsign: store.callsign,
         appVersion: APP_VERSION,
         portalUrl: PORTAL_ORIGIN,
         buyUrl: `${PORTAL_ORIGIN}/comprar?serial=${encodeURIComponent(serial)}&chk=${chk}`,

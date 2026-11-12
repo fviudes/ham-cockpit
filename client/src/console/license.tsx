@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { isValidCallsign, normalizeCallsign } from "@shared/license";
 import { useConsole } from "./state";
-import { GhostBtn, PageHead, Panel, PanelTitle, PrimaryBtn } from "./widgets";
+import { ConsoleInput, GhostBtn, PageHead, Panel, PanelTitle, PrimaryBtn } from "./widgets";
 
 type LicenseBody = {
   serial?: string | null;
   serialDisplay?: string | null;
+  callsign?: string | null;
   state?: string;
   type?: string | null;
   licenseId?: string | null;
@@ -34,8 +36,9 @@ const STATE_KEY: Record<string, string> = {
 };
 
 export function LicensePage({ embedded = false }: { embedded?: boolean }) {
-  const { tx, pushLog } = useConsole();
+  const { tx, pushLog, refreshLicense } = useConsole();
   const [info, setInfo] = useState<LicenseBody | null>(null);
+  const [prefix, setPrefix] = useState("");
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -44,28 +47,55 @@ export function LicensePage({ embedded = false }: { embedded?: boolean }) {
       const r = await fetch("/api/license");
       const j = (await r.json()) as LicenseBody;
       setInfo(j);
+      if (typeof j.callsign === "string" && j.callsign) setPrefix(j.callsign);
+      void refreshLicense();
     } catch {
       toast.error(tx("licErrPortal"));
     }
-  }, [tx]);
+  }, [tx, refreshLicense]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  const prefixOk = isValidCallsign(prefix);
+  const serialShown = info?.serialDisplay || info?.serial || "";
+
   const activate = async () => {
+    const callsign = normalizeCallsign(prefix);
+    if (!isValidCallsign(callsign)) {
+      toast.error(tx("licErrPrefix"));
+      return;
+    }
+    if (!info?.serial && !info?.serialDisplay) {
+      toast.error(tx("licStNoSerial"));
+      return;
+    }
     setBusy(true);
     try {
-      const r = await fetch("/api/license/activate", { method: "POST" });
+      const r = await fetch("/api/license/activate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ callsign, prefix: callsign }),
+      });
       const j = (await r.json()) as { ok?: boolean; body?: LicenseBody; error?: string };
       if (!r.ok || !j.ok) {
-        toast.error(j.error === "portal_unreachable" ? tx("licErrPortal") : j.error || tx("licErrPortal"));
+        const map: Record<string, string> = {
+          portal_unreachable: "licErrPortal",
+          callsign_required: "licErrPrefix",
+          serial_unavailable: "licStNoSerial",
+        };
+        toast.error(tx((map[j.error || ""] || "licErrPortal") as "licErrPortal"));
         if (j.body) setInfo(j.body);
         return;
       }
-      if (j.body) setInfo(j.body);
+      if (j.body) {
+        setInfo(j.body);
+        if (j.body.callsign) setPrefix(j.body.callsign);
+      }
       toast.success(tx("licOk"));
       pushLog("SYS", "licença ativada/sincronizada");
+      void refreshLicense();
     } catch {
       toast.error(tx("licErrPortal"));
     } finally {
@@ -98,6 +128,7 @@ export function LicensePage({ embedded = false }: { embedded?: boolean }) {
       setToken("");
       toast.success(tx("licOk"));
       pushLog("SYS", "chave de licença importada");
+      void refreshLicense();
     } catch {
       toast.error(tx("licErrPortal"));
     } finally {
@@ -129,16 +160,32 @@ export function LicensePage({ embedded = false }: { embedded?: boolean }) {
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel>
           <PanelTitle>{tx("licSerial")}</PanelTitle>
-          <p className="mb-3 font-mono text-lg text-white">{info?.serialDisplay || "—"}</p>
+          {serialShown ? (
+            <p className="mb-3 break-all font-mono text-lg font-semibold tracking-wide text-[#7ee0ff]">{serialShown}</p>
+          ) : (
+            <p className="mb-3 text-sm text-amber-200">{tx("licSerialMissing")}</p>
+          )}
           <div className="mb-4 flex flex-wrap gap-2">
             <GhostBtn
+              disabled={!serialShown}
               onClick={() => {
-                if (info?.serialDisplay) void navigator.clipboard.writeText(info.serialDisplay);
+                if (serialShown) void navigator.clipboard.writeText(serialShown);
               }}
             >
               {tx("licCopy")}
             </GhostBtn>
           </div>
+
+          <label className="mb-1 block text-sm text-[#8ea0b3]">{tx("licPrefix")}</label>
+          <ConsoleInput
+            className="mb-1 font-mono uppercase"
+            value={prefix}
+            placeholder={tx("licPrefixPh")}
+            maxLength={12}
+            onChange={(e) => setPrefix(e.target.value.toUpperCase())}
+          />
+          <p className="mb-4 text-xs text-[#64748b]">{tx("licPrefixHint")}</p>
+
           <p className="mb-1 text-sm text-[#8ea0b3]">{tx("licState")}</p>
           <p className="mb-2 text-base text-white">{stateLabel()}</p>
           {info?.daysLeft != null ? (
@@ -155,13 +202,16 @@ export function LicensePage({ embedded = false }: { embedded?: boolean }) {
             {info?.online === false ? tx("licOffline") : tx("licOnline")}
           </p>
           <div className="flex flex-wrap gap-2">
-            <PrimaryBtn disabled={busy} onClick={() => void activate()}>
+            <PrimaryBtn disabled={busy || !prefixOk || !serialShown} onClick={() => void activate()}>
               {tx("licActivate")}
             </PrimaryBtn>
             {info?.buyUrl ? (
               <GhostBtn onClick={() => window.open(info.buyUrl!, "_blank", "noopener")}>{tx("licBuy")}</GhostBtn>
             ) : null}
           </div>
+          {!prefixOk && prefix.trim() ? (
+            <p className="mt-2 text-xs text-amber-200">{tx("licErrPrefix")}</p>
+          ) : null}
         </Panel>
 
         <Panel>

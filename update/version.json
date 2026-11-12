@@ -1,6 +1,6 @@
 {
-  "version": "0.1.07.01",
+  "version": "0.1.07.02",
   "channel": "main",
-  "file": "ham-cockpit-0.1.07.01.tgz",
-  "notes": "Ham Cockpit v0.1.07.01 — corrige a aba Admin → Licença (rota /console/license abria o painel)."
+  "file": "ham-cockpit-0.1.07.02.tgz",
+  "notes": "Ham Cockpit v0.1.07.02 — licença: corrige EACCES /run, serial na UI, prefixo obrigatório e badge no menu; instala mmdvm-arm64 no apply OTA."
 }

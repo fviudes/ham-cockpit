@@ -282,7 +282,7 @@ done
 # Helpers só LF (checkout Windows / pendrive).
 find /opt/ham-cockpit/bin -maxdepth 1 -type f -exec sed -i 's/\r$//' {} + 2>/dev/null || true
 sed -i 's/\r$//' /opt/wavelog/wavelog-ctl.sh 2>/dev/null || true
-install -d -o hamcockpit -g hamcockpit /var/lib/hamcockpit /var/lib/hamcockpit/chromium
+install -d -o hamcockpit -g hamcockpit /var/lib/hamcockpit /var/lib/hamcockpit/chromium /var/lib/hamcockpit/license
 loginctl enable-linger hamcockpit 2>/dev/null || true
 
 install -m 0644 "$HERE/nginx-ham-cockpit.conf" /etc/nginx/sites-available/ham-cockpit
