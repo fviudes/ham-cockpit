@@ -1,6 +1,6 @@
 {
-  "version": "0.1.07.03",
+  "version": "0.1.07.04",
   "channel": "main",
-  "file": "ham-cockpit-0.1.07.03.tgz",
-  "notes": "Ham Cockpit v0.1.07.03 — gate de licença, e-mail, Terminal, backup; MMDVM callsign/RX/TX; IC-705 LAN (Network User em maiúsculas); portal /comprar serial alinhado ao card."
+  "file": "ham-cockpit-0.1.07.04.tgz",
+  "notes": "Ham Cockpit v0.1.07.04 — campo Nome ao adicionar rádio (primeiro input) e nome centralizado no topo do card VFO no Painel; fallback IC-705/Rádio."
 }

@@ -94,6 +94,55 @@ export type StationRadio = {
   /** Senha gravada no Pi (valor nunca volta na API). */
   hasNetPassword?: boolean;
 };
+
+/** Modelos CI-V conhecidos — fallback de nome quando o usuário não preenche. */
+export const CIV_MODEL_NAMES: Record<string, string> = {
+  "0xA4": "IC-705",
+  "0x94": "IC-7300",
+  "0x18": "IC-7100",
+  "0x76": "IC-7610",
+  "0x98": "IC-705",
+  "0x88": "IC-9700",
+  "0x70": "IC-7000",
+  "0x48": "IC-706",
+};
+
+const MAKER_BRAND: Record<RadioMaker, string> = {
+  icom: "Icom",
+  kenwood: "Kenwood",
+  yaesu: "Yaesu",
+  flex: "Flex",
+  tentec: "Ten-Tec",
+  xiegu: "Xiegu",
+  hermes: "Hermes Lite",
+  anan: "Anan",
+};
+
+function normCivAddr(addr: string) {
+  const t = addr.trim();
+  if (!t) return "0xA4";
+  return /^0x[0-9A-Fa-f]{2}$/i.test(t) ? `0x${t.slice(2).toUpperCase()}` : "0xA4";
+}
+
+/** Nome sugerido no formulário (obrigatório com default sensato). */
+export function suggestRadioName(maker: RadioMaker, civAddr = "0xA4", proto: RadioProto = "civ"): string {
+  if ((maker === "icom" || maker === "xiegu") && proto === "civ") {
+    const model = CIV_MODEL_NAMES[normCivAddr(civAddr)];
+    if (model) return model;
+  }
+  return MAKER_BRAND[maker] || "IC-705";
+}
+
+/** Título do card no Painel — nome gravado ou fallback de modelo/marca. */
+export function radioCardTitle(
+  row: Pick<StationRadio, "name" | "maker" | "proto" | "civAddr"> | undefined,
+  fallback = "Rádio",
+): string {
+  const n = row?.name?.trim();
+  if (n) return n;
+  if (row) return suggestRadioName(row.maker, row.civAddr, row.proto) || fallback;
+  return fallback;
+}
 export type RadioPick = { id: string; label: string; kind: RadioLink; path: string };
 export type LextelPhase = "idle" | "scanning" | "pairing" | "connecting" | "streaming" | "error";
 export type LextelDev = { addr: string; name: string; paired: boolean; kind: "bt" | "serial"; likely: boolean };

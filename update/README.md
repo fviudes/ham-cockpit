@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.07.03** (`version.json`).
+Versão atual neste canal: **0.1.07.04** (`version.json`).
 
 ## Versionamento
 
@@ -20,10 +20,10 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.07.03",
+  "version": "0.1.07.04",
   "channel": "main",
-  "file": "ham-cockpit-0.1.07.03.tgz",
-  "notes": "Ham Cockpit v0.1.07.03 — gate de licença, e-mail, Terminal sudo, backup com stages, remove aba senha; MMDVM: indicativo persistente, RX/TX editáveis."
+  "file": "ham-cockpit-0.1.07.04.tgz",
+  "notes": "Ham Cockpit v0.1.07.04 — campo Nome ao adicionar rádio (primeiro input) e nome centralizado no topo do card VFO no Painel; fallback IC-705/Rádio."
 }
 ```
 

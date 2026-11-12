@@ -15,6 +15,7 @@ import {
   formatWatts,
   holdPrimaryRadio,
   mergeLp100a,
+  suggestRadioName,
   useConsole,
   type LdgModel,
   type RadioLink,
@@ -114,6 +115,7 @@ export function Ic705Page() {
   const { s, setS, pushLog, tx, lang } = useConsole();
   const [, navigate] = useLocation();
   const webBt = bleAvailable();
+  const [name, setName] = useState(() => suggestRadioName("icom", "0xA4", "civ"));
   const [maker, setMaker] = useState<RadioMaker>("icom");
   const [link, setLink] = useState<RadioLink>("usb");
   const [device, setDevice] = useState("");
@@ -260,6 +262,7 @@ export function Ic705Page() {
 
   const fillFrom = (row: StationRadio) => {
     setEditingId(row.id);
+    setName(row.name?.trim() || suggestRadioName(row.maker, row.civAddr, row.proto));
     setMaker(row.maker);
     setLink(preferLink(row.maker, row.link));
     setDevice(row.device);
@@ -275,6 +278,7 @@ export function Ic705Page() {
 
   const resetForm = () => {
     setEditingId(null);
+    setName(suggestRadioName(maker, civAddr, maker === "icom" || maker === "xiegu" ? proto : "cat"));
     setDevice("");
     setPort("");
     setHost("");
@@ -286,7 +290,11 @@ export function Ic705Page() {
     else setNetProfile("");
   };
 
+  const resolvedName = () =>
+    name.trim() || suggestRadioName(maker, civAddr, icom || xiegu ? proto : "cat");
+
   const payload = (): Partial<StationRadio> => {
+    const radioName = resolvedName();
     if (useNet) {
       const endpoint = host && port ? `${host}:${port}` : host || port;
       return {
@@ -303,7 +311,7 @@ export function Ic705Page() {
         netProfile: activeNet?.id || netProfile,
         netUser: needNetAuth ? netUser : undefined,
         netPassword: needNetAuth ? netPassword : undefined,
-        name: `${tx(MAKER_KEY[maker])} · Rede · ${endpoint || "—"}`,
+        name: radioName,
       };
     }
     if (catUsb && s2nRow) {
@@ -318,7 +326,7 @@ export function Ic705Page() {
         port: endpoint,
         baud: s2nRow.baud,
         civAddr,
-        name: `${tx(MAKER_KEY[maker])} · ${s2nRow.name} · ${endpoint}`,
+        name: radioName,
       };
     }
     return {
@@ -331,7 +339,7 @@ export function Ic705Page() {
       port: port || device,
       baud,
       civAddr,
-      name: `${tx(MAKER_KEY[maker])}${port || device ? ` · ${port || device}` : ""}`,
+      name: radioName,
     };
   };
 
@@ -354,7 +362,9 @@ export function Ic705Page() {
           hsUuid: ic705Ble.hsUuid || body.hsUuid,
           device: looksLikeBleId(ic705Ble.deviceId) ? ic705Ble.deviceId : looksLikeBleId(body.device || "") ? body.device : "",
           deviceName: ic705Ble.deviceName || body.deviceName,
-          name: ic705Ble.deviceName ? `Icom · ${ic705Ble.deviceName}` : body.name,
+          name:
+            String(body.name || "").trim() ||
+            (ic705Ble.deviceName ? `Icom · ${ic705Ble.deviceName}` : suggestRadioName("icom", body.civAddr || civAddr, "civ")),
           port: "GATT",
           baud: 0,
           error: "",
@@ -643,20 +653,34 @@ export function Ic705Page() {
         <PanelTitle>{tx("radioAdd")}</PanelTitle>
         <p className="mb-4 max-w-2xl text-sm leading-relaxed text-[#8ea0b3]">{tx("ic705Help")}</p>
         <div className="grid gap-4 md:grid-cols-2">
+          <Field label={tx("name")}>
+            <ConsoleInput
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={tx("radioNamePlaceholder")}
+              autoComplete="off"
+              maxLength={48}
+            />
+          </Field>
           <Field label={tx("radioMaker")}>
             <ConsoleSelect
               value={maker}
               onChange={(e) => {
                 const next = e.target.value as RadioMaker;
                 const nextLink = preferLink(next, link);
+                const nextProto = next === "icom" || next === "xiegu" ? "civ" : "cat";
+                const prevSuggest = suggestRadioName(maker, civAddr, icom || xiegu ? proto : "cat");
                 setMaker(next);
                 setLink(nextLink);
-                setProto(next === "icom" || next === "xiegu" ? "civ" : "cat");
+                setProto(nextProto);
                 setBaud(defaultBaud(next, nextLink));
                 setDevice("");
                 setHost("");
                 setNetUser("");
                 setNetPassword("");
+                if (!editingId && (!name.trim() || name.trim() === prevSuggest)) {
+                  setName(suggestRadioName(next, civAddr, nextProto));
+                }
                 if (nextLink === "network") {
                   applyNetProfile(defaultNetworkProfile(next), setPort, setNetProfile);
                 } else {
@@ -844,9 +868,13 @@ export function Ic705Page() {
                 value={civAddr}
                 onChange={(e) => {
                   const addr = e.target.value;
+                  const prevSuggest = suggestRadioName(maker, civAddr, proto);
                   setCivAddr(addr);
                   ic705Ble.setCivAddr(addr);
                   setS((p) => ({ ...p, ic705: { ...p.ic705, addr } }));
+                  if (!editingId && (!name.trim() || name.trim() === prevSuggest)) {
+                    setName(suggestRadioName(maker, addr, proto));
+                  }
                 }}
               >
                 <option value="0xA4">IC-705 (0xA4)</option>

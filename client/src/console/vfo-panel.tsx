@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 import { resolvePrimaryRoute, sendPrimaryCmd } from "./radio-cmd";
-import { BANDS, formatVfo, MODES, sMeterLabel, useConsole } from "./state";
+import { BANDS, formatVfo, MODES, radioCardTitle, sMeterLabel, useConsole } from "./state";
 import { Chip, ConsoleSelect, Lcd } from "./widgets";
 
 const AGC = ["OFF", "FAST", "MID", "SLOW"] as const;
@@ -16,6 +16,9 @@ export function VfoPanel() {
   const bleReady = s.ic705.phase === "ready" && s.ic705.ble;
   const route = resolvePrimaryRoute(s.radios.items, { bleReady });
   const liveCat = route.live;
+  const primaryRadio = s.radios.items.find((r) => r.primary);
+  const panelRadio = route.radio || s.radios.items.find((r) => r.connected) || primaryRadio;
+  const radioTitle = radioCardTitle(panelRadio, tx("radioFallback"));
   const filterVal = s.nr && s.nb ? "nrnb" : s.nr ? "nr" : s.nb ? "nb" : "off";
   const transportLabel =
     route.transport === "ble"
@@ -96,9 +99,12 @@ export function VfoPanel() {
 
   return (
     <div className="relative overflow-hidden">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h2 className="font-['Space_Grotesk'] text-sm font-semibold tracking-wide text-[#ffb300]">VFO</h2>
-        <div className="flex items-center gap-1.5">
+      <div className="mb-2 space-y-1.5">
+        <h2 className="font-['Space_Grotesk'] text-center text-lg font-semibold tracking-wide text-white">
+          {radioTitle}
+        </h2>
+        <div className="flex items-center justify-center gap-1.5">
+          <span className="font-['Space_Grotesk'] text-[11px] font-semibold tracking-wide text-[#ffb300]">VFO</span>
           <span
             className={`rounded-md px-2 py-0.5 font-['IBM_Plex_Mono'] text-[11px] font-semibold ${
               s.ptt ? "text-[#5d7184]" : "bg-[#10b981]/15 text-[#34d399]"

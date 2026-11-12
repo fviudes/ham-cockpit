@@ -172,7 +172,18 @@ function defaultBaud(maker: RadioMaker, link: RadioLink) {
   return 115200;
 }
 
-function defaultName(maker: RadioMaker, deviceName: string) {
+const CIV_MODEL_NAMES: Record<string, string> = {
+  "0xA4": "IC-705",
+  "0x94": "IC-7300",
+  "0x18": "IC-7100",
+  "0x76": "IC-7610",
+  "0x98": "IC-705",
+  "0x88": "IC-9700",
+  "0x70": "IC-7000",
+  "0x48": "IC-706",
+};
+
+function defaultName(maker: RadioMaker, deviceName: string, civAddr?: string, proto?: RadioProto) {
   const brand: Record<RadioMaker, string> = {
     icom: "Icom",
     kenwood: "Kenwood",
@@ -183,7 +194,15 @@ function defaultName(maker: RadioMaker, deviceName: string) {
     hermes: "Hermes Lite",
     anan: "Anan",
   };
-  return deviceName.trim() || brand[maker];
+  const trimmed = deviceName.trim();
+  if (trimmed) return trimmed;
+  if ((maker === "icom" || maker === "xiegu") && proto !== "cat") {
+    const addr = String(civAddr || "0xA4").trim();
+    const key = /^0x[0-9A-Fa-f]{2}$/i.test(addr) ? `0x${addr.slice(2).toUpperCase()}` : "0xA4";
+    const model = CIV_MODEL_NAMES[key];
+    if (model) return model;
+  }
+  return brand[maker] || "Rádio";
 }
 
 function sanitize(raw: Partial<StationRadio>, fallback?: StationRadio): StationRadio {
@@ -215,7 +234,7 @@ function sanitize(raw: Partial<StationRadio>, fallback?: StationRadio): StationR
   const endpoint = link === "network" && host ? `${host}${port ? `:${port}` : ""}` : "";
   const name =
     String(raw.name ?? fallback?.name ?? "").trim() ||
-    defaultName(maker, deviceName || endpoint || port || device);
+    defaultName(maker, deviceName || endpoint || port || device, civAddr, proto);
   const hsUuid = String(raw.hsUuid ?? fallback?.hsUuid ?? "").trim().toUpperCase();
   const equipmentId = String(raw.equipmentId ?? fallback?.equipmentId ?? "").trim();
   return {
