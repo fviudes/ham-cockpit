@@ -48,6 +48,6 @@ sudo bash image/appliance/build.sh
 
 `SKIP_DOCKER_CACHE=1` é o padrão. Para embutir os `.tar` do Wavelog: `SKIP_DOCKER_CACHE=0`.
 
-Artefato: Release `v<versão>` em `fviudes/ham-cockpit` (imagem **v0.1.05**: `ham-cockpit-0.1.05-raspi.img.xz`). O `.img.xz` não entra no Git.
+Artefato: Release `v<versão>` em `fviudes/ham-cockpit` (imagem **v0.1.06**: `ham-cockpit-0.1.06-raspi.img.xz`). O `.img.xz` não entra no Git.
 
 O bake instala o stack MMDVM já com os ajustes do lab (NextionDriver 1.26 patched, unit real, INI Dual/Nextion, UART `disable-bt`, `ircddbgateway` sem extensão, mosquitto/libdlt2, hosts REF*, `mmdvm-arm64.tgz` em `/opt/ham-cockpit`). **Não é necessário repetir os fixes do Pi de lab** num cartão gravado desta imagem. Detalhe operacional: [mmdvm-lab-checklist.md](mmdvm-lab-checklist.md).

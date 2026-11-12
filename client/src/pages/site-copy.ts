@@ -57,8 +57,8 @@ export const HOME = {
     en: "From the SD card to a QSO, in the order the station wakes up",
   } satisfies Pair,
   figBoot: {
-    pt: "Grave ham-cockpit-0.1.05-raspi.img.xz → ligue o Pi → Wi‑Fi Ham-Cockpit-XXXX (senha hamcockpit) → 192.168.4.1 → admin / 1234.",
-    en: "Flash ham-cockpit-0.1.05-raspi.img.xz → power the Pi → Wi‑Fi Ham-Cockpit-XXXX (password hamcockpit) → 192.168.4.1 → admin / 1234.",
+    pt: "Grave ham-cockpit-0.1.06-raspi.img.xz → ligue o Pi → Wi‑Fi Ham-Cockpit-XXXX (senha hamcockpit) → 192.168.4.1 → admin / 1234.",
+    en: "Flash ham-cockpit-0.1.06-raspi.img.xz → power the Pi → Wi‑Fi Ham-Cockpit-XXXX (password hamcockpit) → 192.168.4.1 → admin / 1234.",
   } satisfies Pair,
   figIc705: {
     pt: "IC-705: Pairing Reception no rádio, Conectar no console, aceite Ham-Cockpit-Web01. Marque Principal — o login reconecta o GATT.",

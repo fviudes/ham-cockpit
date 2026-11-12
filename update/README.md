@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.05.04** (`version.json`).
+Versão atual neste canal: **0.1.06** (`version.json`).
 
 ## Versionamento
 
@@ -20,10 +20,10 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.05.04",
+  "version": "0.1.06",
   "channel": "main",
-  "file": "ham-cockpit-0.1.05.04.tgz",
-  "notes": "Ham Cockpit v0.1.05.04 — IC-705 LAN, autostart real, terminal sudo, Status linha/trafego, Docker no update Wavelog, JSON das atualizacoes, WaveLogGate do canal, barras com %."
+  "file": "ham-cockpit-0.1.06.tgz",
+  "notes": "Ham Cockpit v0.1.06 — imagem de cartão com as correções 0.1.05.04 (IC-705 LAN, autostart, terminal, Status, Docker/Wavelog, JSON, WaveLogGate, barras com %)."
 }
 ```
 
