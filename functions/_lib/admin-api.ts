@@ -1,5 +1,5 @@
 import { normalizeSerial, serialDisplay } from "../../shared/license";
-import { requireAdmin } from "./admin-auth";
+import { createAdminUser, hashPassword, requireAdmin } from "./admin-auth";
 import { settlePayment, loadPayment } from "./checkout";
 import { audit, getSettings, setSetting } from "./db";
 import type { Ctx } from "./env";
@@ -335,7 +335,85 @@ export async function adminRoute(ctx: Ctx, request: Request, path: string): Prom
 
   if (path === "/me" && method === "GET") {
     const a = await need();
-    return json({ ok: true, csrf: a.csrf, role: a.role, email: a.email });
+    return json({ ok: true, csrf: a.csrf, role: a.role, username: a.username, email: a.email });
+  }
+  if (path === "/users" && method === "GET") {
+    await need("owner");
+    const rows = await ctx.env.DB.prepare(
+      "SELECT id, username, email, name, role, status, created_at, last_login_at FROM admin_users ORDER BY created_at ASC",
+    ).all<{
+      id: string;
+      username: string | null;
+      email: string;
+      name: string | null;
+      role: string;
+      status: string;
+      created_at: number;
+      last_login_at: number | null;
+    }>();
+    return json({
+      users: rows.results.map(u => ({
+        id: u.id,
+        username: u.username,
+        email: u.email,
+        name: u.name,
+        role: u.role,
+        status: u.status,
+        createdAt: u.created_at,
+        lastLoginAt: u.last_login_at,
+      })),
+    });
+  }
+  if (path === "/users" && method === "POST") {
+    const a = await need("owner");
+    const b = await readJson<{ username?: string; password?: string; role?: string; name?: string }>(request);
+    const role = b.role === "owner" || b.role === "viewer" || b.role === "admin" ? b.role : "admin";
+    const created = await createAdminUser(ctx, {
+      username: String(b.username ?? ""),
+      password: String(b.password ?? ""),
+      role,
+      name: b.name ? clip(b.name, 80) : undefined,
+      actorId: a.id,
+    });
+    return json({ ok: true, id: created.id, username: created.username, role: created.role });
+  }
+  if ((m = path.match(/^\/users\/(adm_[0-9a-z]{16})$/)) && method === "PATCH") {
+    const a = await need("owner");
+    const b = await readJson<{ status?: string; role?: string; password?: string }>(request);
+    const target = await ctx.env.DB.prepare("SELECT id, username, role, status FROM admin_users WHERE id = ?1")
+      .bind(m[1])
+      .first<{ id: string; username: string | null; role: string; status: string }>();
+    if (!target) throw new HttpError(404, "user_not_found");
+    if (b.status === "disabled" && target.id === a.id) throw new HttpError(400, "cannot_disable_self", "Não desative a si mesmo.");
+    if (b.status === "disabled") {
+      const owners = await ctx.env.DB.prepare(
+        "SELECT COUNT(*) AS n FROM admin_users WHERE role = 'owner' AND status = 'active' AND id <> ?1",
+      )
+        .bind(target.id)
+        .first<{ n: number }>();
+      if (target.role === "owner" && (owners?.n ?? 0) < 1) {
+        throw new HttpError(400, "last_owner", "Precisa ficar pelo menos um owner ativo.");
+      }
+      await ctx.env.DB.prepare("UPDATE admin_users SET status = 'disabled' WHERE id = ?1").bind(target.id).run();
+      await ctx.env.DB.prepare("DELETE FROM admin_sessions WHERE admin_id = ?1").bind(target.id).run();
+      await audit(ctx, a.id, "admin_user_disable", target.id, { status: target.status }, { status: "disabled" });
+    }
+    if (b.status === "active") {
+      await ctx.env.DB.prepare("UPDATE admin_users SET status = 'active' WHERE id = ?1").bind(target.id).run();
+      await audit(ctx, a.id, "admin_user_enable", target.id, { status: target.status }, { status: "active" });
+    }
+    if (b.role === "owner" || b.role === "admin" || b.role === "viewer") {
+      await ctx.env.DB.prepare("UPDATE admin_users SET role = ?2 WHERE id = ?1").bind(target.id, b.role).run();
+      await audit(ctx, a.id, "admin_user_role", target.id, { role: target.role }, { role: b.role });
+    }
+    if (typeof b.password === "string" && b.password.length > 0) {
+      if (b.password.length < 12) throw new HttpError(400, "weak_password", "Senha com pelo menos 12 caracteres.");
+      const password_hash = await hashPassword(b.password);
+      await ctx.env.DB.prepare("UPDATE admin_users SET password_hash = ?2 WHERE id = ?1").bind(target.id, password_hash).run();
+      await ctx.env.DB.prepare("DELETE FROM admin_sessions WHERE admin_id = ?1").bind(target.id).run();
+      await audit(ctx, a.id, "admin_user_password", target.id, undefined, { rotated: true });
+    }
+    return json({ ok: true });
   }
   if (path === "/summary" && method === "GET") {
     await need();

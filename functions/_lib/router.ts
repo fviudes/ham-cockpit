@@ -46,7 +46,7 @@ async function route(ctx: Ctx, request: Request): Promise<Response> {
   if (p === "/health" && method === "GET") {
     const price = await getPrice(ctx);
     const s = await getSettings(ctx);
-    return json({ ok: true, service: "ham-cockpit-portal", priceConfigured: !!price, enforce: s.enforce, adminConfigured: adminConfigured(ctx), time: ctx.now() });
+    return json({ ok: true, service: "ham-cockpit-portal", priceConfigured: !!price, enforce: s.enforce, adminConfigured: await adminConfigured(ctx), time: ctx.now() });
   }
 
   // --- Aparelho ---

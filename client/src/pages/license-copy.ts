@@ -76,8 +76,9 @@ export const ADM = {
   title: { pt: "Painel de licenças", en: "License admin" } satisfies Pair,
   login: { pt: "Entrar", en: "Sign in" } satisfies Pair,
   logout: { pt: "Sair", en: "Sign out" } satisfies Pair,
-  token: { pt: "Chave de admin", en: "Admin key" } satisfies Pair,
-  totp: { pt: "Código TOTP (6 dígitos)", en: "TOTP code (6 digits)" } satisfies Pair,
+  username: { pt: "Usuário", en: "Username" } satisfies Pair,
+  password: { pt: "Senha", en: "Password" } satisfies Pair,
+  totp: { pt: "Código TOTP (6 dígitos, se habilitado)", en: "TOTP code (6 digits, if enabled)" } satisfies Pair,
   tabLic: { pt: "Licenças", en: "Licenses" } satisfies Pair,
   tabPrice: { pt: "Preço", en: "Pricing" } satisfies Pair,
   tabProv: { pt: "Provedores", en: "Providers" } satisfies Pair,
@@ -95,7 +96,7 @@ export const ADM = {
   test: { pt: "Testar conexão", en: "Test connection" } satisfies Pair,
   webhook: { pt: "URL do webhook", en: "Webhook URL" } satisfies Pair,
   notConfigured: {
-    pt: "Admin ainda não configurado neste ambiente (secrets do Pages).",
-    en: "Admin is not configured in this environment (Pages secrets).",
+    pt: "Admin ainda não configurado neste ambiente (nenhum usuário no banco).",
+    en: "Admin is not configured in this environment (no users in the database).",
   } satisfies Pair,
 };

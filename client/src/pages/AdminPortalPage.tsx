@@ -31,10 +31,11 @@ async function api<T>(path: string, init?: RequestInit & { csrf?: string }): Pro
 export default function AdminPortalPage() {
   const { t } = useSiteLang();
   const [tab, setTab] = useState<"lic" | "price" | "prov" | "pay">("lic");
-  const [token, setToken] = useState("");
-  const [code, setCode] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [csrf, setCsrf] = useState("");
   const [err, setErr] = useState("");
+  const [adminReady, setAdminReady] = useState<boolean | null>(null);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [licenses, setLicenses] = useState<LicRow[]>([]);
   const [payments, setPayments] = useState<PayRow[]>([]);
@@ -74,21 +75,25 @@ export default function AdminPortalPage() {
 
   useEffect(() => {
     void refresh();
+    void api<{ adminConfigured?: boolean }>("/api/health").then(h => {
+      if (h.ok) setAdminReady(!!h.body.adminConfigured);
+    });
   }, [refresh]);
 
   const login = async () => {
     setErr("");
     const r = await api<Me & { message?: string }>("/api/admin/login", {
       method: "POST",
-      body: JSON.stringify({ token, code }),
+      body: JSON.stringify({ username, password }),
     });
     if (!r.ok || !r.body.csrf) {
       setErr((r.body as { message?: string }).message || "Falha no login");
       return;
     }
     setCsrf(r.body.csrf);
-    setToken("");
-    setCode("");
+    setUsername("");
+    setPassword("");
+    setAdminReady(true);
     await refresh();
   };
 
@@ -149,25 +154,31 @@ export default function AdminPortalPage() {
 
         {!authed ? (
           <div className="max-w-md rounded-md border border-[rgba(79,195,247,0.2)] bg-[#132033] p-4">
-            <label className="mb-1 block text-sm text-[#94a3b8]">{t(ADM.token)}</label>
+            <label className="mb-1 block text-sm text-[#94a3b8]">{t(ADM.username)}</label>
             <input
-              className="mb-3 w-full rounded-md border border-[rgba(79,195,247,0.25)] bg-[#0d1b2a] px-3 py-2 font-mono text-sm text-white"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-              type="password"
-              autoComplete="off"
+              className="mb-3 w-full rounded-md border border-[rgba(79,195,247,0.25)] bg-[#0d1b2a] px-3 py-2 text-sm text-white"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              type="text"
+              autoComplete="username"
+              name="username"
             />
-            <label className="mb-1 block text-sm text-[#94a3b8]">{t(ADM.totp)}</label>
+            <label className="mb-1 block text-sm text-[#94a3b8]">{t(ADM.password)}</label>
             <input
-              className="mb-4 w-full rounded-md border border-[rgba(79,195,247,0.25)] bg-[#0d1b2a] px-3 py-2 font-mono text-sm text-white"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-              inputMode="numeric"
+              className="mb-4 w-full rounded-md border border-[rgba(79,195,247,0.25)] bg-[#0d1b2a] px-3 py-2 text-sm text-white"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              type="password"
+              autoComplete="current-password"
+              name="password"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void login();
+              }}
             />
             <button type="button" onClick={() => void login()} className="rounded-md bg-[#4fc3f7] px-4 py-2 text-sm font-semibold text-[#0d1b2a]">
               {t(ADM.login)}
             </button>
-            <p className="mt-3 text-xs text-[#64748b]">{t(ADM.notConfigured)}</p>
+            {adminReady === false ? <p className="mt-3 text-xs text-[#64748b]">{t(ADM.notConfigured)}</p> : null}
           </div>
         ) : (
           <>

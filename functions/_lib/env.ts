@@ -34,6 +34,7 @@ export interface Env {
   LICENSE_SIGNING_KEY_K1?: string;
   LICENSE_SIGNING_KEY_K2?: string;
   SECRETS_MASTER_KEY?: string;
+  /** Legado — login do admin passou a ser conta no D1 (username/senha). */
   ADMIN_BOOTSTRAP_TOKEN?: string;
   ADMIN_TOTP_SECRET?: string;
   IP_HASH_KEY?: string;

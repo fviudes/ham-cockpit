@@ -57,21 +57,36 @@ Sem o secret, nada quebra: o bake segue e o portal ainda se atualiza sozinho no 
 ## Licenciamento (Functions + D1)
 
 Configuração versionada: `wrangler.jsonc` (binding `DB`, `PORTAL_ORIGIN`, `LICENSE_ACTIVE_KID`).
-Chave pública Ed25519: `shared/license-keys.ts` (no repositório). Chave privada e auth do admin:
-**só** como secrets do Pages (nunca no Git).
+Chave pública Ed25519: `shared/license-keys.ts` (no repositório). Chave privada de assinatura e
+chave mestra AES: **só** secrets do Pages (nunca no Git). Login do admin = **conta no D1**.
 
-| Secret | Uso |
+| Secret / infra | Uso |
 | --- | --- |
 | `LICENSE_SIGNING_KEY_K1` / `K2` | PKCS8 Ed25519 em base64 (assinatura HCL1) |
 | `SECRETS_MASTER_KEY` | AES-GCM para credenciais PayPal/PicPay no D1 |
-| `ADMIN_BOOTSTRAP_TOKEN` | Auth de contingência do `/admin` (sem domínio próprio) |
-| `ADMIN_TOTP_SECRET` | TOTP (base32) do admin |
 | `IP_HASH_KEY` | Hash de IP / CSRF |
 | `MOCK_WEBHOOK_SECRET` | Opcional; provedor simulado |
 | `ENABLE_MOCK_PROVIDER` | Variável `1` liga o checkout simulado (útil até haver PayPal/PicPay) |
 
-Credenciais iniciais do admin ficam **fora do Git**, no arquivo local do proprietário
-(`hamcockpit-secrets/admin-portal.env` na máquina dele). Entrada: `/admin` com a chave + TOTP.
+### Admin (usuário no D1)
+
+- Tabela `admin_users` (migration `0002_admin_credentials.sql`): `username`, `password_hash` (PBKDF2-SHA256,
+  10 mil iterações — tradeoff do Workers Free; rate limit forte no login), `role`, `status`.
+- `GET /api/health` → `adminConfigured: true` só se existir pelo menos um usuário **ativo** com senha.
+- Login: `POST /api/admin/login` com `{ username, password }` → cookie `__Host-hc_admin` + CSRF.
+- Criar/listar/desativar: `GET|POST /api/admin/users`, `PATCH /api/admin/users/:id` (papel `owner`).
+- Seed do primeiro usuário (production e preview):
+
+```powershell
+pnpm exec wrangler d1 migrations apply ham-cockpit-licenses --remote
+pnpm exec wrangler d1 migrations apply ham-cockpit-licenses --preview
+node scripts/seed-admin.mjs --env remote --username admin
+node scripts/seed-admin.mjs --env preview --username admin
+```
+
+Credenciais iniciais ficam **fora do Git**, em `hamcockpit-secrets/admin-portal.env` na máquina do
+proprietário (`ADMIN_USERNAME` / `ADMIN_PASSWORD`). Produção **não** lê esse arquivo — só o D1.
+Entrada: <https://ham-cockpit.pages.dev/admin> com usuário e senha.
 
 PayPal (Orders v2) e PicPay: configure as credenciais na aba **Provedores** do admin
 (cifradas no D1). Sem credenciais, o checkout usa o provedor simulado se `ENABLE_MOCK_PROVIDER=1`.

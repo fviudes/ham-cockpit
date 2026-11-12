@@ -63,7 +63,7 @@ pagamento e o portal passa a emitir a licença definitiva do serial.
 | D7 | Licença definitiva | **Perpétua para o serial** (`exp = null`), cobre a linha `0.x` (campo `line`). Revogação por lista assinada (CRL) quando online | Definitiva com renovação anual online (inviável offline) |
 | D8 | Bloqueio | `license-guard` (root, timer de 5 min) + condições systemd em drop-ins + middleware no Node + trava no `station-svc` | Só checar no Node (um `if` removido derruba tudo) |
 | D9 | Hospedagem do back-end | **Pages Functions + D1** no projeto `ham-cockpit` atual (mesmo deploy por `git push`) | Migrar o portal para Worker + assets agora (muda a URL `pages.dev`); Worker satélite só quando precisar de cron/rate-limit nativo (Fase 6) |
-| D10 | Auth do admin | **Cloudflare Access** em domínio próprio (`/admin*` e `/api/admin/*`) + Functions validando o JWT do Access. Enquanto não houver domínio: modo "chave de admin + TOTP" | Login com senha (PBKDF2 custa 54 ms a 310 ms de CPU; o plano Free permite 10 ms) |
+| D10 | Auth do admin | Conta no **D1** (`admin_users`: usuário + senha PBKDF2 10k iterações + rate limit). Alvo com domínio próprio: **Cloudflare Access** + JWT nas Functions | Só secret `ADMIN_BOOTSTRAP_TOKEN` + TOTP global; PBKDF2 “forte” (100k+) no Workers Free |
 | D11 | Preço | Admin define em **USD (centavos)**; BRL calculado na hora do checkout com PTAX do Banco Central + spread configurável, cotação congelada por 15 min | Preço fixo em BRL; só USD |
 | D12 | Provedores | **PayPal** (Orders v2) na Fase 3; **PicPay** na Fase 4 (exige conta PJ). Mercado Pago (Pix) como plano B se não houver CNPJ | Só PayPal |
 | D13 | Credenciais | Secrets do Pages + chave mestra AES-GCM; credenciais editáveis no admin ficam **cifradas no D1**; nunca no front | Credenciais em variável de texto puro; no repositório |
@@ -227,10 +227,12 @@ Secrets (nunca no repositório):
 | --- | --- |
 | `LICENSE_SIGNING_KEY_K1` | Chave privada Ed25519 em PKCS8 base64 |
 | `SECRETS_MASTER_KEY` | 32 bytes aleatórios em base64 (AES-GCM das credenciais no D1) |
-| `ADMIN_BOOTSTRAP_TOKEN` | Token longo do modo de contingência do admin (remover depois do Access) |
 | `ACCESS_AUD` e `ACCESS_TEAM_DOMAIN` | Valores do app no Cloudflare Access (não são segredos, mas ficam fora do código) |
-| `IP_HASH_KEY` | Chave do HMAC que anonimiza IPs |
+| `IP_HASH_KEY` | Chave do HMAC que anonimiza IPs / CSRF |
 | `TURNSTILE_SECRET` | Segredo do Turnstile |
+
+Login do admin **não** usa secret do Pages: usuários ficam em `admin_users` no D1
+(seed com `node scripts/seed-admin.mjs`). Ver `docs/portal.md`.
 
 ### 4.3 Estimativa de carga
 
@@ -819,7 +821,7 @@ CREATE TABLE transfer_requests (
   done_at     INTEGER
 );
 
--- Administradores do módulo (identidade vem do Cloudflare Access; fallback: chave + TOTP)
+-- Administradores do módulo (login = username + senha no D1; Access no futuro)
 CREATE TABLE admin_users (
   id            TEXT PRIMARY KEY,
   email         TEXT NOT NULL UNIQUE,
@@ -827,8 +829,9 @@ CREATE TABLE admin_users (
   role          TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('owner','admin','viewer')),
   status        TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','disabled')),
   access_sub    TEXT,
-  key_hash      TEXT,
-  totp_secret_enc TEXT,
+  username      TEXT,              -- migration 0002
+  password_hash TEXT,              -- pbkdf2$sha256$iters$salt$hash
+  totp_secret   TEXT,              -- opcional (2FA por usuário)
   created_at    INTEGER NOT NULL,
   last_login_at INTEGER
 );
@@ -952,14 +955,13 @@ Regras do `activate`:
 
 Autenticação do admin ([D10](#1-resumo-executivo-e-decisões-recomendadas)):
 
-- **Alvo**: Cloudflare Access (política por e-mail + MFA do provedor de identidade) em `/admin*` e `/api/admin/*`
-  de um domínio próprio. As Functions **também** validam o JWT de `Cf-Access-Jwt-Assertion` (assinatura contra
-  as chaves do time, `aud`, `exp`, e-mail em `admin_users`). Mesmo com o Access mal configurado, a API continua fechada.
-- **Contingência (hoje, em `pages.dev`)**: `Authorization: Bearer ADMIN_BOOTSTRAP_TOKEN` + TOTP (RFC 6238) numa
-  sessão `__Host-hc_admin` (`HttpOnly`, `Secure`, `SameSite=Strict`), com CSRF por cabeçalho `X-HC-CSRF`.
-  O Access em `pages.dev` não cobre a produção (a política exige hostname em zona própria; **conferir** antes de implementar).
-- **Por que não senha**: PBKDF2 mediu **54 ms (100 mil iterações)** e **310 ms (600 mil)** neste PC; o plano Free
-  dá 10 ms de CPU por requisição. Credenciais de alta entropia + TOTP evitam hash lento.
+- **Hoje (`pages.dev`)**: usuários em `admin_users` no D1. Login `POST /api/admin/login` com
+  `{ username, password }` → cookie `__Host-hc_admin` (`HttpOnly`, `Secure`, `SameSite=Strict`) +
+  CSRF (`X-HC-CSRF`). Hash PBKDF2-SHA256 com **10 mil iterações** (cabe no Workers Free);
+  mitigações: senha longa no seed, rate limit (6/15 min por IP, 30/h global). TOTP opcional por usuário
+  (`totp_secret`). Seed: `node scripts/seed-admin.mjs`. `adminConfigured` = existe admin ativo com senha.
+- **Alvo**: Cloudflare Access em domínio próprio (`/admin*` e `/api/admin/*`) + validação do JWT
+  `Cf-Access-Jwt-Assertion` nas Functions. O Access em `pages.dev` não cobre a produção.
 
 ---
 
@@ -1538,7 +1540,7 @@ OTA assinado, revisão LGPD.
 | Vazamento da chave privada de licença | Baixa | **Alto** | Secret do Pages, backup frio, rotação por `kid`, OTA assinado |
 | Perda da chave privada | Baixa | Alto | Duas cópias offline; chave `standby` já embutida |
 | Webhook falso ou perdido | Média | Médio | Assinatura + consulta à API + conciliação ativa |
-| CPU do plano Free (10 ms) estourando | Média | Médio | Sem PBKDF2; cripto só Ed25519/HMAC (sub-ms); consultas por índice; plano pago como saída ($5/mês) |
+| CPU do plano Free (10 ms) estourando | Média | Médio | PBKDF2 só no login admin com 10k iterações; resto Ed25519/HMAC; consultas por índice; plano pago como saída ($5/mês) |
 | Taxas e spread corroem a margem | Alta | Baixo | Spread configurável; preço em USD revisável |
 | PicPay exige CNPJ e demora | Média | Médio | Mercado Pago (Pix) como plano B; PayPal sozinho já vende |
 | Repositório do OTA é público | Certa | Médio | Pública não é segredo; migrar OTA para o portal/R2 dá a opção de repositório privado |
@@ -1558,8 +1560,8 @@ OTA assinado, revisão LGPD.
 | Q2 | Preço / spread | Preço **USD parametrizado no admin**; spread **3%**; USD→BRL pela cotação oficial do dia no pagamento; checkout mostra "preço não configurado" até definir |
 | Q3 | Reembolso | **Sem reembolso** (já houve trial de 30 dias) |
 | Q7 | CNPJ / NF | Tem CNPJ (PicPay PJ viável); **sem NF** nesta fase |
-| Q11 | Domínio | **Sem domínio próprio** por enquanto → auth de contingência do admin (chave + TOTP) |
-| Q12 | Auth admin | Contingência (bootstrap + TOTP); Access quando houver domínio |
+| Q11 | Domínio | **Sem domínio próprio** por enquanto → login admin por conta no D1 |
+| Q12 | Auth admin | Usuário + senha no D1 (PBKDF2 10k); Access quando houver domínio |
 | Q14 | Aparelhos em campo | **Nenhum em campo** → todo aparelho nasce com trial |
 | — | Enforce | Modo **observação** nesta entrega (`HONOR_PORTAL_POLICY = false`; bloqueio OFF) |
 

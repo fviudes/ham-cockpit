@@ -1,5 +1,4 @@
-import { generateKeyPairSync, randomBytes } from "node:crypto";
-import { totpCode } from "../../functions/_lib/admin-auth";
+import { generateKeyPairSync, pbkdf2Sync, randomBytes } from "node:crypto";
 import type { Env } from "../../functions/_lib/env";
 import { clearPaypalTokenCache } from "../../functions/_lib/providers/paypal";
 import { clearPicpayTokenCache } from "../../functions/_lib/providers/picpay";
@@ -11,22 +10,7 @@ import { createTestDb } from "./d1-sqlite";
 export const ORIGIN = "https://portal.test";
 export const SERIAL = "10000000a1b2c3d4";
 export const T0 = 1_794_499_132; // 2026-11-12 (referência)
-const B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-
-export function b32(bytes: Buffer): string {
-  let bits = 0;
-  let acc = 0;
-  let out = "";
-  for (const b of bytes) {
-    acc = (acc << 8) | b;
-    bits += 8;
-    while (bits >= 5) {
-      out += B32[(acc >> (bits - 5)) & 31];
-      bits -= 5;
-    }
-  }
-  return out;
-}
+const PBKDF2_ITERS = 10_000;
 
 export type FetchHandler = (url: string, init: RequestInit) => Response | Promise<Response> | undefined;
 
@@ -37,8 +21,8 @@ export interface Portal {
   clock: { t: number };
   fetchLog: string[];
   fetchHandlers: FetchHandler[];
-  adminToken: string;
-  totpSecret: string;
+  adminUsername: string;
+  adminPassword: string;
   call(method: string, path: string, opts?: { json?: unknown; body?: string; headers?: Record<string, string>; ip?: string; country?: string }): Promise<Response>;
   json<T = Record<string, any>>(method: string, path: string, opts?: Parameters<Portal["call"]>[2]): Promise<{ status: number; body: T; res: Response }>;
   login(): Promise<{ cookie: string; csrf: string }>;
@@ -48,10 +32,26 @@ export interface Portal {
 }
 
 let ipCounter = 0;
-let totpBump = 0;
 
-export async function makePortal(over: Partial<Env> = {}): Promise<Portal> {
-  totpBump = 0;
+function hashPassword(password: string): string {
+  const salt = randomBytes(16);
+  const hash = pbkdf2Sync(password, salt, PBKDF2_ITERS, 32, "sha256");
+  return `pbkdf2$sha256$${PBKDF2_ITERS}$${salt.toString("hex")}$${hash.toString("hex")}`;
+}
+
+function seedAdmin(db: ReturnType<typeof createTestDb>, username: string, password: string): void {
+  const id = "adm_testowner0001";
+  const now = T0;
+  const password_hash = hashPassword(password);
+  db.raw
+    .prepare(
+      `INSERT INTO admin_users (id, email, name, role, status, username, password_hash, created_at)
+       VALUES (?, ?, ?, 'owner', 'active', ?, ?, ?)`,
+    )
+    .run(id, `${username}@local`, username, username, password_hash, now);
+}
+
+export async function makePortal(over: Partial<Env> & { seedAdmin?: boolean } = {}): Promise<Portal> {
   clearPaypalTokenCache();
   clearPicpayTokenCache();
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
@@ -60,20 +60,20 @@ export async function makePortal(over: Partial<Env> = {}): Promise<Portal> {
   const kid = pub.slice(0, 8);
   const keyring: KeyringEntry[] = [{ kid, label: "k1", env: "dev", pub, status: "active" }];
   void importPrivateKey;
-  const adminToken = randomBytes(32).toString("hex");
-  const totpSecret = b32(randomBytes(20));
+  const adminUsername = "admin";
+  const adminPassword = "test-admin-pass-ok";
+  const { seedAdmin: doSeed = true, ...envOver } = over;
   const db = createTestDb();
+  if (doSeed) seedAdmin(db, adminUsername, adminPassword);
   const env: Env = {
     DB: db,
     PORTAL_ORIGIN: ORIGIN,
     LICENSE_ACTIVE_KID: kid,
     LICENSE_SIGNING_KEY_K1: pkcs8,
     SECRETS_MASTER_KEY: randomBytes(32).toString("base64"),
-    ADMIN_BOOTSTRAP_TOKEN: adminToken,
-    ADMIN_TOTP_SECRET: totpSecret,
     IP_HASH_KEY: randomBytes(16).toString("hex"),
     ENABLE_MOCK_PROVIDER: "1",
-    ...over,
+    ...envOver,
   };
   const clock = { t: T0 };
   const fetchLog: string[] = [];
@@ -95,8 +95,8 @@ export async function makePortal(over: Partial<Env> = {}): Promise<Portal> {
     clock,
     fetchLog,
     fetchHandlers,
-    adminToken,
-    totpSecret,
+    adminUsername,
+    adminPassword,
     async call(method, path, opts = {}) {
       const headers: Record<string, string> = { "cf-connecting-ip": opts.ip ?? `198.51.100.${(ipCounter++ % 250) + 1}`, ...(opts.headers ?? {}) };
       if (opts.country) headers["cf-ipcountry"] = opts.country;
@@ -120,9 +120,10 @@ export async function makePortal(over: Partial<Env> = {}): Promise<Portal> {
       return { status: res.status, body, res };
     },
     async login() {
-      // Cada login do teste usa um passo TOTP diferente (anti-replay): -1, 0, +1 em torno do atual.
-      const code = await totpCode(totpSecret, Math.floor(clock.t / 30) - 1 + totpBump++);
-      const r = await p.call("POST", "/api/admin/login", { json: { token: adminToken, code }, ip: "203.0.113.9" });
+      const r = await p.call("POST", "/api/admin/login", {
+        json: { username: adminUsername, password: adminPassword },
+        ip: "203.0.113.9",
+      });
       if (r.status !== 200) throw new Error(`login falhou: ${r.status} ${await r.text()}`);
       const setCookie = r.headers.get("set-cookie") ?? "";
       const cookie = setCookie.split(";")[0];

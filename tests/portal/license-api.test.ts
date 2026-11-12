@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { serialCheck, verifyBlob, type CrlPayload, type ReceiptPayload } from "../../shared/license";
-import { totpCode } from "../../functions/_lib/admin-auth";
 import { SERIAL, T0, fxHandler, makePortal, payloadOf } from "./harness";
 
 const DAY = 86400;
@@ -92,18 +91,17 @@ describe("API do aparelho: registro e trial", () => {
 });
 
 describe("admin: login, sessão e proteção", () => {
-  it("exige chave + TOTP, bloqueia força bruta e protege rotas", async () => {
+  it("exige usuário + senha, bloqueia força bruta e protege rotas", async () => {
     const p = await makePortal();
     // sem sessão
     expect((await p.json("GET", "/api/admin/licenses")).status).toBe(401);
     // credenciais ruins
-    const code = await totpCode(p.totpSecret, Math.floor(p.clock.t / 30));
-    expect((await p.json("POST", "/api/admin/login", { json: { token: "x".repeat(64), code }, ip: "203.0.113.1" })).status).toBe(401);
-    expect((await p.json("POST", "/api/admin/login", { json: { token: p.adminToken, code: "000000" }, ip: "203.0.113.1" })).status).toBe(401);
-    expect((await p.json("POST", "/api/admin/login", { json: { token: p.adminToken }, ip: "203.0.113.1" })).status).toBe(401);
+    expect((await p.json("POST", "/api/admin/login", { json: { username: "admin", password: "errada-errada" }, ip: "203.0.113.1" })).status).toBe(401);
+    expect((await p.json("POST", "/api/admin/login", { json: { username: "nobody", password: p.adminPassword }, ip: "203.0.113.1" })).status).toBe(401);
+    expect((await p.json("POST", "/api/admin/login", { json: { username: "admin" }, ip: "203.0.113.1" })).status).toBe(401);
     // força bruta: após 6 tentativas do mesmo IP, 429 até para as credenciais certas
-    for (let i = 0; i < 3; i++) await p.json("POST", "/api/admin/login", { json: { token: "y", code: "123456" }, ip: "203.0.113.1" });
-    const blocked = await p.json("POST", "/api/admin/login", { json: { token: p.adminToken, code }, ip: "203.0.113.1" });
+    for (let i = 0; i < 3; i++) await p.json("POST", "/api/admin/login", { json: { username: "admin", password: "x".repeat(12) }, ip: "203.0.113.1" });
+    const blocked = await p.json("POST", "/api/admin/login", { json: { username: p.adminUsername, password: p.adminPassword }, ip: "203.0.113.1" });
     expect(blocked.status).toBe(429);
 
     // IP limpo + credenciais certas
@@ -111,6 +109,7 @@ describe("admin: login, sessão e proteção", () => {
     expect(s.cookie).toMatch(/hc_admin|__Host-hc_admin/);
     const me = await p.admin(s, "GET", "/api/admin/me");
     expect(me.status).toBe(200);
+    expect(me.body.username).toBe("admin");
     // mutação sem CSRF = 403
     const noCsrf = await p.json("PUT", "/api/admin/pricing", { json: { usd: "29" }, headers: { cookie: s.cookie }, ip: "203.0.113.9" });
     expect(noCsrf.status).toBe(403);
@@ -123,8 +122,10 @@ describe("admin: login, sessão e proteção", () => {
 
   it("o cookie de sessão é HttpOnly, Secure e SameSite=Strict (https)", async () => {
     const p = await makePortal();
-    const code = await totpCode(p.totpSecret, Math.floor(p.clock.t / 30));
-    const r = await p.call("POST", "/api/admin/login", { json: { token: p.adminToken, code }, ip: "203.0.113.5" });
+    const r = await p.call("POST", "/api/admin/login", {
+      json: { username: p.adminUsername, password: p.adminPassword },
+      ip: "203.0.113.5",
+    });
     const c = r.headers.get("set-cookie") ?? "";
     expect(c).toContain("__Host-hc_admin=");
     expect(c).toContain("HttpOnly");
@@ -133,16 +134,13 @@ describe("admin: login, sessão e proteção", () => {
     expect(c).toContain("Path=/");
   });
 
-  it("o código TOTP não pode ser reutilizado (replay)", async () => {
-    const p = await makePortal();
-    const code = await totpCode(p.totpSecret, Math.floor(p.clock.t / 30));
-    expect((await p.json("POST", "/api/admin/login", { json: { token: p.adminToken, code }, ip: "203.0.113.6" })).status).toBe(200);
-    expect((await p.json("POST", "/api/admin/login", { json: { token: p.adminToken, code }, ip: "203.0.113.7" })).status).toBe(401);
-  });
+  it("health.adminConfigured reflete usuários no D1", async () => {
+    const empty = await makePortal({ seedAdmin: false });
+    expect((await empty.json("GET", "/api/health")).body.adminConfigured).toBe(false);
+    expect((await empty.json("POST", "/api/admin/login", { json: { username: "admin", password: "x".repeat(12) } })).status).toBe(503);
 
-  it("sem segredos configurados o admin fica fechado (503)", async () => {
-    const p = await makePortal({ ADMIN_BOOTSTRAP_TOKEN: undefined, ADMIN_TOTP_SECRET: undefined });
-    expect((await p.json("POST", "/api/admin/login", { json: { token: "a", code: "123456" } })).status).toBe(503);
+    const p = await makePortal();
+    expect((await p.json("GET", "/api/health")).body.adminConfigured).toBe(true);
   });
 });
 
