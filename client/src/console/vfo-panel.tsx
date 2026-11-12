@@ -100,7 +100,7 @@ export function VfoPanel() {
   return (
     <div className="relative overflow-hidden">
       <div className="mb-2 space-y-1.5">
-        <h2 className="font-['Space_Grotesk'] text-center text-lg font-semibold tracking-wide text-white">
+        <h2 className="text-center text-xs font-semibold tracking-[0.2em] text-[#4fc3f7]">
           {radioTitle}
         </h2>
         <div className="flex items-center justify-center gap-1.5">

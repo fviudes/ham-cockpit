@@ -5,6 +5,7 @@ import { APP_VERSION } from "@shared/brand";
 import { UPDATE_IDS, type UpdateId } from "@shared/const";
 import { licenseGateOf, licenseMenusOpen } from "@shared/license";
 import { isNewerVersion } from "@shared/version";
+import { copyText as copyTextToClipboard } from "./clipboard";
 import { SERVICE_IDS, SVC_HINT, SVC_LABEL, SVC_POWER, serviceLive, type ServiceId } from "./services-ui";
 import type { I18nKey } from "./i18n";
 import { formatWatts, useConsole, type LogKind } from "./state";
@@ -845,7 +846,8 @@ export function StatusPage() {
         <Mini
           k={tx("deviceSerial")}
           v={host?.serialDisplay?.trim() || host?.serial?.trim() || "—"}
-          copyable={Boolean(host?.serialDisplay || host?.serial)}
+          copyText={host?.serialDisplay?.trim() || host?.serial?.trim() || ""}
+          copyable={Boolean(host?.serialDisplay?.trim() || host?.serial?.trim())}
         />
       </div>
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
@@ -953,17 +955,34 @@ export function StatusPage() {
   );
 }
 
-function Mini({ k, v, copyable = false }: { k: string; v: string; copyable?: boolean }) {
+function Mini({
+  k,
+  v,
+  copyable = false,
+  copyText,
+}: {
+  k: string;
+  v: string;
+  copyable?: boolean;
+  /** Texto real a copiar (padrão = valor exibido). */
+  copyText?: string;
+}) {
   const { tx } = useConsole();
+  const payload = (copyText ?? v).trim();
   return (
     <div className="rounded-lg bg-[#101c28] px-3 py-2">
       <div className="mb-0.5 flex items-center justify-between gap-2">
         <p className="text-[10px] tracking-wide text-[#8ea0b3] uppercase">{k}</p>
-        {copyable && v && v !== "—" ? (
+        {copyable && payload && v !== "—" ? (
           <button
             type="button"
             className="shrink-0 text-[10px] font-semibold tracking-wide text-[#4fc3f7] uppercase hover:text-[#7ee0ff]"
-            onClick={() => void navigator.clipboard.writeText(v)}
+            onClick={() => {
+              void copyTextToClipboard(payload).then((ok) => {
+                if (ok) toast.success(tx("copied"));
+                else toast.error(tx("copyFail"));
+              });
+            }}
           >
             {tx("licCopy")}
           </button>

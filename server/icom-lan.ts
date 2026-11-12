@@ -290,10 +290,30 @@ export function icomLanLive(): boolean {
   return phase === "ready" && Boolean(rig);
 }
 
+function formatLanConnectError(
+  raw: string,
+  loginHint: string,
+  targetHost: string,
+  targetPort: number,
+): string {
+  if (loginHint) return `${loginHint} (${targetHost}:${targetPort})`;
+  const timeoutStage = raw.match(/timeout at ([^\s]+)/i)?.[1];
+  if (timeoutStage) {
+    return `Timeout Icom LAN na etapa ${timeoutStage} (${targetHost}:${targetPort}). Confira IP/rota, Network Control ON e se outro cliente (wfview/RS-BA1) não está na sessão`;
+  }
+  if (/login rejected/i.test(raw)) {
+    return `${loginRejectHint(undefined)} (${targetHost}:${targetPort})`;
+  }
+  if (raw.trim()) return `${raw} (${targetHost}:${targetPort})`;
+  return `Falha Icom LAN em ${targetHost}:${targetPort} (UDP controle). Confira IP, Network User, senha, Network Control ON e sessão concorrente`;
+}
+
 export async function icomLanConnect(opts: ConnectOpts): Promise<IcomLanSnapshot> {
-  const gen = ++connectGen;
+  // disconnect() sempre sobe connectGen para cancelar connects em voo.
+  // Por isso a geração deste connect só é reservada DEPOIS do teardown inicial —
+  // senão gen !== connectGen aborta na hora com error vazio (falso “Falha 50001”).
   await icomLanDisconnect({ keepRadioMark: true });
-  if (gen !== connectGen) return snap();
+  const gen = ++connectGen;
 
   radioId = opts.radioId;
   host = String(opts.host || "").trim();
@@ -332,8 +352,12 @@ export async function icomLanConnect(opts: ConnectOpts): Promise<IcomLanSnapshot
   });
   attachCivListeners(control);
   let loginHint = "";
+  let loginCode: number | undefined;
   control.events.on("login", (res) => {
-    if (!res.ok) loginHint = loginRejectHint(res.errorCode);
+    if (!res.ok) {
+      loginCode = res.errorCode;
+      loginHint = loginRejectHint(res.errorCode);
+    }
   });
   rig = control;
 
@@ -341,6 +365,11 @@ export async function icomLanConnect(opts: ConnectOpts): Promise<IcomLanSnapshot
     await control.connect({ timeout: 22_000 });
     if (gen !== connectGen) {
       await control.disconnect().catch(() => undefined);
+      if (rig === control) rig = null;
+      // snap() já reflete idle/error do disconnect concorrente; se ainda estamos
+      // nesta tentativa órfã, marca cancelamento explícito.
+      if (!error) error = "Conexão Icom LAN cancelada";
+      if (phase === "connecting") phase = "idle";
       return snap();
     }
     phase = "ready";
@@ -358,10 +387,8 @@ export async function icomLanConnect(opts: ConnectOpts): Promise<IcomLanSnapshot
   } catch (err) {
     phase = "error";
     const raw = err instanceof Error ? err.message : String(err);
-    error =
-      loginHint ||
-      raw ||
-      "Falha ao autenticar no Icom LAN (UDP 50001). Confira IP, Network User (maiúsculas), senha e se o rádio já não tem outra sessão aberta.";
+    if (!loginHint && loginCode != null) loginHint = loginRejectHint(loginCode);
+    error = formatLanConnectError(raw, loginHint, host, controlPort);
     try {
       await control.disconnect().catch(() => undefined);
     } catch {

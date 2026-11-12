@@ -511,7 +511,11 @@ export async function radiosConnect(raw: Partial<StationRadio>): Promise<RadiosS
         radios = radios.map((r) => (r.id === next.id ? r : { ...r, connected: false }));
       } else {
         next.connected = false;
-        next.error = lan.error || "Falha ao autenticar no Icom LAN (UDP 50001)";
+        next.error =
+          lan.error ||
+          (lan.phase === "idle"
+            ? "Conexão Icom LAN cancelada"
+            : `Falha Icom LAN (${next.host}:${next.port || 50001}). Confira IP, Network User, senha e Network Control`);
       }
     } else {
       // Flex / HL2 / Anan: ainda sem driver nativo — marca conectado só se host:porta ok.

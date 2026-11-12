@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.07.04** (`version.json`).
+Versão atual neste canal: **0.1.07.05** (`version.json`).
 
 ## Versionamento
 
@@ -20,10 +20,10 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.07.04",
+  "version": "0.1.07.05",
   "channel": "main",
-  "file": "ham-cockpit-0.1.07.04.tgz",
-  "notes": "Ham Cockpit v0.1.07.04 — campo Nome ao adicionar rádio (primeiro input) e nome centralizado no topo do card VFO no Painel; fallback IC-705/Rádio."
+  "file": "ham-cockpit-0.1.07.05.tgz",
+  "notes": "Ham Cockpit v0.1.07.05 — corrige IC-705 LAN (connectGen abortava auth), alinha nome do rádio no Painel aos outros cards e faz Copiar do Serial no Status funcionar em HTTP."
 }
 ```
 

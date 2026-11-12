@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { isValidCallsign, isValidEmail, licenseGateOf, normalizeCallsign, normalizeEmail } from "@shared/license";
+import { copyText } from "./clipboard";
 import { useConsole } from "./state";
 import { ConsoleInput, GhostBtn, PageHead, Panel, PanelTitle, PrimaryBtn } from "./widgets";
 
@@ -186,7 +187,11 @@ export function LicensePage({ embedded = false }: { embedded?: boolean }) {
             <GhostBtn
               disabled={!serialShown}
               onClick={() => {
-                if (serialShown) void navigator.clipboard.writeText(serialShown);
+                if (!serialShown) return;
+                void copyText(serialShown).then((ok) => {
+                  if (ok) toast.success(tx("copied"));
+                  else toast.error(tx("copyFail"));
+                });
               }}
             >
               {tx("licCopy")}
