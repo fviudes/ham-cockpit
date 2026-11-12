@@ -356,6 +356,38 @@ export function stageLabel(tx: (k: I18nKey) => string, stage: string): string {
   return key ? tx(key) : stage;
 }
 
+function fmtBytes(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let v = n;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  return `${v >= 10 || i === 0 ? v.toFixed(0) : v.toFixed(1)} ${units[i]}`;
+}
+
+export function progressHint(row: {
+  stage?: string;
+  bytes?: number;
+  totalBytes?: number;
+  etaSec?: number;
+}): string {
+  const bits: string[] = [];
+  const got = Number(row.bytes || 0);
+  const total = Number(row.totalBytes || 0);
+  if (total > 0) bits.push(`${fmtBytes(got)} / ${fmtBytes(total)}`);
+  else if (got > 0) bits.push(fmtBytes(got));
+  const eta = Number(row.etaSec || 0);
+  if (eta > 0) {
+    const m = Math.floor(eta / 60);
+    const s = eta % 60;
+    bits.push(m > 0 ? `~${m} min ${s} s` : `~${s} s`);
+  }
+  return bits.join(" · ");
+}
+
 export function UpdatesMenu() {
   const { s, tx } = useConsole();
   const [, navigate] = useLocation();
@@ -476,11 +508,13 @@ export function ActionProgress({
   active,
   value,
   label,
+  hint = "",
   determinate = true,
 }: {
   active: boolean;
   value: number;
   label: string;
+  hint?: string;
   determinate?: boolean;
 }) {
   if (!active) return null;
@@ -495,12 +529,15 @@ export function ActionProgress({
       aria-label={label}
     >
       <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="text-[10px] tracking-wide text-[#8ea0b3] uppercase">{label}</span>
-        <span className="font-['IBM_Plex_Mono'] text-[11px] text-[#4fc3f7]">{pct}%</span>
+        <span className="min-w-0 truncate text-[10px] tracking-wide text-[#8ea0b3] uppercase">
+          {label}
+          {hint ? <span className="ml-2 font-['IBM_Plex_Mono'] normal-case tracking-normal">{hint}</span> : null}
+        </span>
+        <span className="shrink-0 font-['IBM_Plex_Mono'] text-[11px] text-[#4fc3f7]">{pct}%</span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-[#16232e]">
         {determinate ? (
-          <div className="h-full rounded-full bg-[#4fc3f7] transition-[width] duration-300 ease-out" style={{ width: `${pct}%` }} />
+          <div className="h-full rounded-full bg-[#4fc3f7] transition-[width] duration-200 ease-out" style={{ width: `${pct}%` }} />
         ) : (
           <div className="h-full w-2/5 animate-pulse rounded-full bg-[#4fc3f7]" />
         )}

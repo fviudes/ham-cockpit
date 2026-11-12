@@ -60,10 +60,19 @@ os_upgradable() {
 }
 
 docker_wavelog_ver() {
-  local v
-  v="$(timeout 2 docker inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}} {{.Config.Image}}' wavelog-main 2>/dev/null || true)"
-  v="$(awk '{print ($1!="" && $1!="<no" && $1!="<no value>") ? $1 : $2}' <<<"$v")"
-  [[ "$v" == "<no" || "$v" == "<no value>" ]] && v=""
+  local v img
+  v="$(timeout 2 docker inspect --format '{{index .Config.Labels "org.opencontainers.image.version"}}' wavelog-main 2>/dev/null || true)"
+  v="$(tr -d '[:space:]' <<<"${v:-}")"
+  if [[ -z "$v" || "$v" == "<no" || "$v" == "<no"* ]]; then
+    if [[ -f /opt/wavelog/IMAGE_VERSION ]]; then
+      v="$(tr -d '[:space:]' </opt/wavelog/IMAGE_VERSION)"
+    fi
+  fi
+  if [[ -z "$v" ]]; then
+    img="$(timeout 2 docker inspect --format '{{.Config.Image}}' wavelog-main 2>/dev/null || true)"
+    v="${img##*:}"
+    [[ "$v" == "$img" || "$v" == "latest" ]] && v=""
+  fi
   echo "${v:-}"
 }
 
@@ -79,6 +88,7 @@ APP_HOME="/opt/ham-cockpit"
 if [[ ! -d "$APP_HOME" && -d /opt/cat-bridge ]]; then
   APP_HOME="/opt/cat-bridge"
 fi
+NEED_CONSOLE_RESTART=0
 
 app_ver() {
   if [[ -f "$APP_HOME/VERSION" ]]; then
@@ -111,20 +121,54 @@ check_app() {
   emit_item app "$cur" "$cur" "false" "github.com/fviudes/ham-cockpit/update"
 }
 
+# Heartbeat enquanto um comando longo roda (prepare/install/restart sem byte count).
+run_with_heartbeat() {
+  local id="$1" stage="$2" lo="$3" hi="$4" eta="$5"
+  shift 5
+  python3 - "$id" "$stage" "$lo" "$hi" "$eta" "$@" <<'PY'
+import json, subprocess, sys, threading, time
+uid, stage, lo, hi, eta = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), float(sys.argv[5] or 8)
+cmd = sys.argv[6:]
+stop = False
+t0 = time.time()
+
+def emit(pct):
+    elapsed = time.time() - t0
+    remain = max(0, int(eta - elapsed))
+    print(
+        "HC_PROGRESS "
+        + json.dumps({"id": uid, "pct": int(pct), "stage": stage, "determinate": True, "etaSec": remain}),
+        file=sys.stderr,
+        flush=True,
+    )
+
+def beat():
+    while not stop:
+        elapsed = time.time() - t0
+        frac = 1 - pow(2, -elapsed / max(eta, 1.5))
+        emit(lo + (hi - lo) * min(0.97, frac))
+        time.sleep(0.35)
+
+th = threading.Thread(target=beat, daemon=True)
+th.start()
+try:
+    rc = subprocess.call(cmd)
+finally:
+    stop = True
+sys.exit(rc)
+PY
+}
+
 download_with_progress() {
-  local id="$1" url="$2" dest="$3"
-  python3 - "$id" "$url" "$dest" <<'PY'
-import json, sys, urllib.request
+  local id="$1" url="$2" dest="$3" lo="${4:-8}" hi="${5:-55}"
+  python3 - "$id" "$url" "$dest" "$lo" "$hi" <<'PY'
+import json, sys, time, urllib.request
 uid, url, dest = sys.argv[1], sys.argv[2], sys.argv[3]
-def hook(block, size, total):
-    got = block * size
-    if total and total > 0:
-        pct = max(8, min(55, int(got * 50 / total) + 8))
-        print("HC_PROGRESS " + json.dumps({"id": uid, "pct": pct, "stage": "download", "determinate": True}), file=sys.stderr, flush=True)
-    else:
-        print("HC_PROGRESS " + json.dumps({"id": uid, "pct": 15, "stage": "download", "determinate": False}), file=sys.stderr, flush=True)
-req = urllib.request.Request(url, headers={"User-Agent": "Ham-Cockpit/0.1.05"})
-with urllib.request.urlopen(req, timeout=90) as r, open(dest, "wb") as out:
+lo, hi = int(sys.argv[4]), int(sys.argv[5])
+req = urllib.request.Request(url, headers={"User-Agent": "Ham-Cockpit/0.1.06"})
+t0 = time.time()
+last = 0.0
+with urllib.request.urlopen(req, timeout=120) as r, open(dest, "wb") as out:
     total = int(r.headers.get("Content-Length") or 0)
     n = 0
     bs = 64 * 1024
@@ -134,15 +178,143 @@ with urllib.request.urlopen(req, timeout=90) as r, open(dest, "wb") as out:
             break
         out.write(chunk)
         n += len(chunk)
-        hook(n, 1, total)
+        now = time.time()
+        if now - last < 0.2 and (total <= 0 or n < total):
+            continue
+        last = now
+        elapsed = max(now - t0, 0.001)
+        rate = n / elapsed
+        if total > 0:
+            frac = min(1.0, n / total)
+            eta = int((total - n) / rate) if rate > 0 else 0
+        else:
+            # Sem Content-Length: sobe em curva até hi, ETA pela taxa recente.
+            frac = min(0.97, 1 - pow(2, -n / (12 * 1024 * 1024)))
+            eta = int(max(8, (12 * 1024 * 1024 - n) / rate)) if rate > 0 else 20
+        pct = int(lo + (hi - lo) * frac)
+        print(
+            "HC_PROGRESS "
+            + json.dumps({
+                "id": uid,
+                "pct": pct,
+                "stage": "download",
+                "determinate": True,
+                "bytes": n,
+                "totalBytes": total,
+                "etaSec": max(0, eta),
+            }),
+            file=sys.stderr,
+            flush=True,
+        )
 PY
+}
+
+docker_pull_progress() {
+  local id="$1" image="$2"
+  python3 - "$id" "$image" <<'PY'
+import json, re, subprocess, sys, threading, time
+uid, image = sys.argv[1], sys.argv[2]
+t0 = time.time()
+stop = False
+got = tot = 0
+units = {"B": 1, "kB": 1000, "KB": 1000, "MB": 1_000_000, "GB": 1_000_000_000}
+
+def emit(pct, eta, stage="download"):
+    print(
+        "HC_PROGRESS "
+        + json.dumps({
+            "id": uid,
+            "pct": int(max(8, min(68, pct))),
+            "stage": stage,
+            "determinate": True,
+            "bytes": int(got),
+            "totalBytes": int(tot),
+            "etaSec": int(max(0, eta)),
+        }),
+        file=sys.stderr,
+        flush=True,
+    )
+
+def beat():
+    while not stop:
+        elapsed = time.time() - t0
+        frac = 1 - pow(2, -elapsed / 40.0)
+        emit(8 + 58 * min(0.96, frac), max(5, 45 - elapsed), "download")
+        time.sleep(0.4)
+
+th = threading.Thread(target=beat, daemon=True)
+th.start()
+p = subprocess.Popen(
+    ["docker", "pull", image],
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+    text=True,
+    bufsize=1,
+)
+assert p.stdout is not None
+for line in p.stdout:
+    m = re.search(
+        r"(\d+(?:\.\d+)?)\s*(B|kB|KB|MB|GB)\s*/\s*(\d+(?:\.\d+)?)\s*(B|kB|KB|MB|GB)",
+        line,
+        re.I,
+    )
+    if not m:
+        continue
+    got = float(m.group(1)) * units.get(m.group(2), 1)
+    tot = float(m.group(3)) * units.get(m.group(4), 1)
+    elapsed = max(time.time() - t0, 0.001)
+    eta = ((tot - got) / (got / elapsed)) if got > 0 and tot > got else 0
+    frac = (got / tot) if tot else 0
+    emit(8 + 60 * min(1.0, frac), eta)
+rc = p.wait()
+stop = True
+sys.exit(rc)
+PY
+}
+
+schedule_console_restart() {
+  # Fora do cgroup do console — senão o apply morre com código nulo.
+  if command -v systemd-run >/dev/null 2>&1; then
+    systemd-run --quiet --collect --no-block \
+      /bin/bash -c 'sleep 3; systemctl try-restart ham-cockpit.service >/dev/null 2>&1 || true' \
+      >/dev/null 2>&1 || true
+    return 0
+  fi
+  nohup bash -c 'sleep 3; systemctl try-restart ham-cockpit.service >/dev/null 2>&1 || true' >/dev/null 2>&1 &
+}
+
+github_wavelog_tag() {
+  python3 - <<'PY'
+import json, urllib.request
+req = urllib.request.Request(
+    "https://api.github.com/repos/wavelog/wavelog/releases/latest",
+    headers={"Accept": "application/vnd.github+json", "User-Agent": "Ham-Cockpit/0.1.06"},
+)
+try:
+    with urllib.request.urlopen(req, timeout=12) as r:
+        tag = str(json.load(r).get("tag_name") or "").strip().lstrip("vV")
+    print(tag)
+except Exception:
+    print("")
+PY
+}
+
+set_env_kv() {
+  local f="$1" k="$2" v="$3"
+  mkdir -p "$(dirname "$f")"
+  touch "$f"
+  if grep -q "^${k}=" "$f" 2>/dev/null; then
+    sed -i "s|^${k}=.*|${k}=${v}|" "$f"
+  else
+    printf '%s=%s\n' "$k" "$v" >>"$f"
+  fi
 }
 
 # Copia o console (dist) + bin/ sem apagar configs da estação
 # (layouts, net, services, equipment, radios, ldg, lp100a, mmdvm…).
 apply_app() {
   local meta ver file tmp src unit
-  emit_progress app 5 prepare 1
+  emit_progress app 3 prepare 1
   meta="$(github_app_meta)"
   if [[ -z "${meta:-}" ]]; then
     echo "update/version.json ausente em github.com/fviudes/ham-cockpit" >&2
@@ -155,9 +327,9 @@ apply_app() {
   trap "rm -rf '$tmp'" RETURN
   if [[ -n "$file" ]]; then
     emit_progress app 8 download 1
-    download_with_progress app "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/${file}" "$tmp/pkg.tgz"
+    download_with_progress app "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/${file}" "$tmp/pkg.tgz" 8 56
     emit_progress app 58 install 1
-    tar -xzf "$tmp/pkg.tgz" -C "$tmp"
+    run_with_heartbeat app install 58 68 12 tar -xzf "$tmp/pkg.tgz" -C "$tmp"
   else
     echo "canal de update sem arquivo .tgz (version.json.file vazio)" >&2
     return 1
@@ -201,6 +373,10 @@ apply_app() {
     mkdir -p "$APP_HOME/wavelog-gate" /opt/wavelog-gate
     cp -a "$src/wavelog-gate/." "$APP_HOME/wavelog-gate/"
   fi
+  if [[ -d "$src/wavelog" ]]; then
+    mkdir -p "$APP_HOME/wavelog"
+    cp -a "$src/wavelog/." "$APP_HOME/wavelog/"
+  fi
   if [[ -d "$src/systemd" ]]; then
     mkdir -p "$APP_HOME/systemd"
     cp -a "$src/systemd/." "$APP_HOME/systemd/"
@@ -215,9 +391,9 @@ apply_app() {
   elif [[ -f "$src/VERSION" ]]; then
     cp -a "$src/VERSION" "$APP_HOME/VERSION"
   fi
-  emit_progress app 82 install 1
+  emit_progress app 78 install 1
   if [[ -f "$APP_HOME/package.json" ]]; then
-    (cd "$APP_HOME" && npm install --omit=dev) || true
+    run_with_heartbeat app install 78 86 20 bash -c "cd \"$APP_HOME\" && npm install --omit=dev" || true
   fi
   # Backup do INI do operador ANTES dos hooks. Nunca copiar template por cima.
   # (3× no lab: OTA apagou indicativo/ID na tela; stop Host derruba PartOf.)
@@ -232,7 +408,7 @@ apply_app() {
   done
   # Garante units/bin mesmo se o postinstall do npm não rodou.
   if [[ -x "$APP_HOME/ota-hooks.sh" ]]; then
-    bash "$APP_HOME/ota-hooks.sh" || true
+    run_with_heartbeat app install 86 94 25 bash "$APP_HOME/ota-hooks.sh" || true
   fi
   chown -R hamcockpit:hamcockpit "$APP_HOME" 2>/dev/null || chown -R catbridge:catbridge "$APP_HOME" 2>/dev/null || true
   # Helpers root ficam root:root (sudoers -n).
@@ -240,10 +416,9 @@ apply_app() {
     chown root:root "$APP_HOME"/bin/* 2>/dev/null || true
     chmod 0755 "$APP_HOME"/bin/* 2>/dev/null || true
   fi
-  emit_progress app 92 restart 1
-  systemctl restart ham-cockpit.service 2>/dev/null || systemctl restart cat-bridge.service 2>/dev/null || true
-  systemctl try-restart ham-cockpit-ap.service 2>/dev/null || true
-  emit_progress app 100 done 1
+  emit_progress app 96 restart 1
+  NEED_CONSOLE_RESTART=1
+  emit_progress app 99 done 1
 }
 
 compose_wavelog() {
@@ -413,8 +588,7 @@ for line in sys.stdin:
 
 apply_os() {
   apt_prepare os
-  emit_progress os 12 update 0
-  timeout 45 apt-get update -qq >/dev/null || true
+  run_with_heartbeat os update 10 20 25 timeout 45 apt-get update -qq || true
   emit_progress os 22 install 1
   if ! apt_with_progress os upgrade >/dev/null; then
     echo "falha no apt-get upgrade (veja o journal: journalctl -u ham-cockpit)" >&2
@@ -440,7 +614,7 @@ apply_pkg() {
   fi
   apt_prepare "$id"
   emit_progress "$id" 12 update 0
-  timeout 45 apt-get update -qq >/dev/null || true
+  run_with_heartbeat "$id" update 10 20 25 timeout 45 apt-get update -qq || true
   cur="$(pkg_installed "$@")"
   cand="$(pkg_candidate "$@")"
   if [[ -n "${cur:-}" && -n "${cand:-}" && "$cur" == "$cand" ]]; then
@@ -473,18 +647,82 @@ ensure_docker() {
 }
 
 apply_wavelog() {
+  local tag image cur
   emit_progress wavelog 4 prepare 1
+  tag="$(github_wavelog_tag)"
+  if [[ -z "${tag:-}" ]]; then
+    echo "não foi possível ler a release do Wavelog no GitHub" >&2
+    return 1
+  fi
+  image="ghcr.io/wavelog/wavelog:${tag}"
   ensure_docker
-  emit_progress wavelog 8 download 0
-  compose_wavelog pull
+  emit_progress wavelog 8 download 1
+  if ! docker_pull_progress wavelog "$image"; then
+    echo "tag ${tag} ausente no GHCR — tentando :latest" >&2
+    image="ghcr.io/wavelog/wavelog:latest"
+    if ! docker_pull_progress wavelog "$image"; then
+      echo "falha ao baixar imagem Docker do Wavelog" >&2
+      return 1
+    fi
+  fi
   emit_progress wavelog 70 install 1
-  compose_wavelog up -d --remove-orphans
+  set_env_kv /opt/wavelog/.env WAVELOG_IMAGE "$image"
+  if [[ -f "$APP_HOME/wavelog/docker-compose.yml" ]]; then
+    install -o root -g hamcockpit -m 0644 "$APP_HOME/wavelog/docker-compose.yml" /opt/wavelog/docker-compose.yml || true
+  fi
+  run_with_heartbeat wavelog install 70 88 25 bash -c 'cd /opt/wavelog && docker compose up -d --remove-orphans'
   if [[ -x /opt/wavelog/wavelog-ctl.sh ]]; then
-    emit_progress wavelog 88 restart 1
+    emit_progress wavelog 90 restart 1
     sed -i 's/\r$//' /opt/wavelog/wavelog-ctl.sh
     /opt/wavelog/wavelog-ctl.sh ensure-db || true
   fi
+  cur="$(docker_wavelog_ver)"
+  [[ -n "$cur" ]] && printf '%s\n' "$cur" >/opt/wavelog/IMAGE_VERSION
+  if [[ -z "$cur" ]]; then
+    printf '%s\n' "$tag" >/opt/wavelog/IMAGE_VERSION
+    cur="$tag"
+  fi
+  if app_newer "$tag" "$cur"; then
+    echo "Wavelog continua em ${cur} (esperado ${tag})" >&2
+    return 1
+  fi
   emit_progress wavelog 100 done 1
+}
+
+apply_wlg() {
+  local remote tmp cur
+  emit_progress wlg 4 prepare 1
+  remote="$(curl -fsSL --max-time 12 -A "Ham-Cockpit/0.1.06" \
+    "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/deploy/wavelog-gate/VERSION" | tr -d '[:space:]' || true)"
+  if [[ -z "${remote:-}" ]]; then
+    echo "não foi possível ler deploy/wavelog-gate/VERSION no GitHub" >&2
+    return 1
+  fi
+  tmp="$(mktemp)"
+  emit_progress wlg 10 download 1
+  if ! download_with_progress wlg \
+    "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/deploy/wavelog-gate/wavelog-gate.mjs" \
+    "$tmp" 10 70; then
+    rm -f "$tmp"
+    echo "falha ao baixar wavelog-gate.mjs" >&2
+    return 1
+  fi
+  mkdir -p /opt/wavelog-gate
+  install -o hamcockpit -g hamcockpit -m 0755 "$tmp" /opt/wavelog-gate/wavelog-gate.mjs
+  rm -f "$tmp"
+  printf '%s\n' "$remote" >/opt/wavelog-gate/VERSION
+  chown hamcockpit:hamcockpit /opt/wavelog-gate/wavelog-gate.mjs /opt/wavelog-gate/VERSION 2>/dev/null || true
+  mkdir -p "$APP_HOME/wavelog-gate"
+  cp -a /opt/wavelog-gate/wavelog-gate.mjs "$APP_HOME/wavelog-gate/wavelog-gate.mjs" 2>/dev/null || true
+  cp -a /opt/wavelog-gate/VERSION "$APP_HOME/wavelog-gate/VERSION" 2>/dev/null || true
+  emit_progress wlg 82 restart 1
+  systemctl restart waveloggate.service 2>/dev/null || true
+  cur="$(wlg_ver)"
+  if [[ "$cur" != "$remote" ]]; then
+    echo "WaveLogGate continua em ${cur} (esperado ${remote})" >&2
+    return 1
+  fi
+  emit_progress wlg 100 done 1
 }
 
 cmd="${1:-}"
@@ -524,27 +762,7 @@ case "$cmd" in
         apply_wavelog
         ;;
       wlg)
-        emit_progress wlg 20 download 0
-        mkdir -p /opt/wavelog-gate
-        if [[ -f "$APP_HOME/wavelog-gate/wavelog-gate.mjs" ]]; then
-          install -o hamcockpit -g hamcockpit -m 0755 "$APP_HOME/wavelog-gate/wavelog-gate.mjs" /opt/wavelog-gate/wavelog-gate.mjs
-        else
-          curl -fsSL --max-time 20 -A "Ham-Cockpit" \
-            "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/deploy/wavelog-gate/wavelog-gate.mjs" \
-            -o /opt/wavelog-gate/wavelog-gate.mjs || true
-          chmod 0755 /opt/wavelog-gate/wavelog-gate.mjs 2>/dev/null || true
-        fi
-        if [[ -f "$APP_HOME/wavelog-gate/VERSION" ]]; then
-          install -o hamcockpit -g hamcockpit -m 0644 "$APP_HOME/wavelog-gate/VERSION" /opt/wavelog-gate/VERSION
-        else
-          curl -fsSL --max-time 12 -A "Ham-Cockpit" \
-            "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/deploy/wavelog-gate/VERSION" \
-            -o /opt/wavelog-gate/VERSION || true
-        fi
-        chown hamcockpit:hamcockpit /opt/wavelog-gate/wavelog-gate.mjs /opt/wavelog-gate/VERSION 2>/dev/null || true
-        emit_progress wlg 80 restart 1
-        systemctl restart waveloggate.service 2>/dev/null || true
-        emit_progress wlg 100 done 1
+        apply_wlg
         ;;
       *)
         echo '{"ok":false,"error":"componente desconhecido"}' >&2
@@ -552,6 +770,9 @@ case "$cmd" in
         ;;
     esac
     check_all
+    if [[ "${NEED_CONSOLE_RESTART:-0}" == 1 ]]; then
+      schedule_console_restart
+    fi
     ;;
   *)
     echo "uso: station-upd check|refresh|apply ID" >&2

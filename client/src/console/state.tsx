@@ -339,6 +339,9 @@ export type Station = {
       determinate: boolean;
       stage: string;
       error: string;
+      bytes?: number;
+      totalBytes?: number;
+      etaSec?: number;
     }[];
     items: {
       id: UpdateId;
@@ -351,6 +354,9 @@ export type Station = {
       progress: number;
       stage: string;
       determinate: boolean;
+      bytes: number;
+      totalBytes: number;
+      etaSec: number;
     }[];
   };
 };
@@ -591,6 +597,9 @@ function initial(): Station {
         progress: 0,
         stage: "",
         determinate: false,
+        bytes: 0,
+        totalBytes: 0,
+        etaSec: 0,
       })),
     },
   };
@@ -1098,7 +1107,6 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
   }, []);
 
   useEffect(() => {
-    const busyRef = { current: false };
     const apply = (j: {
       pending?: number;
       os?: string;
@@ -1114,6 +1122,9 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
         progress?: number;
         stage?: string;
         determinate?: boolean;
+        bytes?: number;
+        totalBytes?: number;
+        etaSec?: number;
       }[];
     }) => {
       if (!j || !Array.isArray(j.items)) return;
@@ -1135,10 +1146,12 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
           progress: Number(hit?.progress ?? job?.pct ?? 0) || 0,
           stage: String(hit?.stage || job?.stage || ""),
           determinate: Boolean(hit?.determinate ?? job?.determinate),
+          bytes: Number(hit?.bytes ?? job?.bytes ?? 0) || 0,
+          totalBytes: Number(hit?.totalBytes ?? job?.totalBytes ?? 0) || 0,
+          etaSec: Number(hit?.etaSec ?? job?.etaSec ?? 0) || 0,
         };
       });
       const pending = items.filter((row) => row.updatable).length;
-      busyRef.current = items.some((row) => row.applying) || jobs.some((row) => row.status === "running");
       setS((p) => ({ ...p, updates: { pending, os: String(j.os || p.updates.os), items, jobs } }));
       if (pending > 0 && sessionStorage.getItem("hamcockpit.updToast") !== "1") {
         sessionStorage.setItem("hamcockpit.updToast", "1");
@@ -1152,14 +1165,8 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
         .catch(() => undefined);
     };
     pull();
-    const slow = window.setInterval(pull, 60_000);
-    const fast = window.setInterval(() => {
-      if (busyRef.current) pull();
-    }, 700);
-    return () => {
-      window.clearInterval(slow);
-      window.clearInterval(fast);
-    };
+    const tick = window.setInterval(pull, 500);
+    return () => window.clearInterval(tick);
   }, [lang]);
 
   const pushLog = useCallback((kind: LogKind, msg: string) => {

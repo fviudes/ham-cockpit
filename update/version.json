@@ -1,6 +1,6 @@
 {
-  "version": "0.1.06",
+  "version": "0.1.06.01",
   "channel": "main",
-  "file": "ham-cockpit-0.1.06.tgz",
-  "notes": "Ham Cockpit v0.1.06 — imagem de cartão com as correções 0.1.05.04 (IC-705 LAN, autostart, terminal, Status, Docker/Wavelog, JSON, WaveLogGate, barras com %)."
+  "file": "ham-cockpit-0.1.06.01.tgz",
+  "notes": "Ham Cockpit v0.1.06.01 — OTA não mata o console no apply (código ?), barras com download/ETA, Wavelog e WaveLogGate passam a gravar a versão nova."
 }

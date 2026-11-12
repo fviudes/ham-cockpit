@@ -29,7 +29,7 @@ services:
       - wavelog
 
   wavelog-main:
-    image: ghcr.io/wavelog/wavelog:latest
+    image: ${WAVELOG_IMAGE:-ghcr.io/wavelog/wavelog:latest}
     container_name: wavelog-main
     depends_on:
       wavelog-db:

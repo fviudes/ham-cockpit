@@ -435,9 +435,9 @@ if command -v docker >/dev/null 2>&1 || [[ -x /usr/bin/docker ]]; then
   systemctl start docker.socket 2>/dev/null || true
   systemctl start docker.service 2>/dev/null || \
     systemctl start docker.service --job-mode=ignore-dependencies 2>/dev/null || true
-  # Reinicia o console para herdar SupplementaryGroups=docker e as rotas novas.
-  systemctl restart ham-cockpit.service 2>/dev/null || \
-    systemctl kill -s TERM ham-cockpit.service 2>/dev/null || true
+  # NÃO reinicia ham-cockpit aqui: o apply roda como filho do console.
+  # systemctl restart no meio do OTA mata o Node e o station-upd (código ?).
+  # O station-upd agenda o restart depois de devolver o JSON.
   if systemctl cat wavelog.service >/dev/null 2>&1; then
     systemctl reset-failed wavelog.service 2>/dev/null || true
     systemctl restart wavelog.service 2>/dev/null || systemctl start wavelog.service 2>/dev/null || true

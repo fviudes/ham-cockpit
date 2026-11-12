@@ -47,6 +47,9 @@ export type UpdateJob = {
   determinate: boolean;
   stage: string;
   error: string;
+  bytes: number;
+  totalBytes: number;
+  etaSec: number;
 };
 
 export type UpdateItem = {
@@ -60,6 +63,9 @@ export type UpdateItem = {
   progress: number;
   stage: string;
   determinate: boolean;
+  bytes: number;
+  totalBytes: number;
+  etaSec: number;
 };
 
 export type UpdatesSnapshot = {
@@ -134,6 +140,9 @@ function item(id: UpdateId, current: string, available: string, note = "", error
     progress: job?.pct ?? 0,
     stage: job?.stage ?? "",
     determinate: job?.determinate ?? false,
+    bytes: job?.bytes ?? 0,
+    totalBytes: job?.totalBytes ?? 0,
+    etaSec: job?.etaSec ?? 0,
   };
 }
 
@@ -233,7 +242,7 @@ async function helper(cmd: string, id = ""): Promise<UpdatesSnapshot | null> {
   if (process.platform !== "linux" || !existsSync(bin)) return null;
   try {
     const args = id ? [cmd, id] : [cmd];
-    const timeout = cmd === "apply" ? 300_000 : cmd === "refresh" ? 50_000 : 18_000;
+    const timeout = cmd === "apply" ? 900_000 : cmd === "refresh" ? 50_000 : 18_000;
     const { stdout } = await execFileAsync("sudo", ["-n", bin, ...args], {
       timeout,
       windowsHide: true,
@@ -287,6 +296,9 @@ function snapshot(items: UpdateItem[], os: string, ok = true, error = ""): Updat
       progress: job.pct,
       stage: job.stage,
       determinate: job.determinate,
+      bytes: job.bytes,
+      totalBytes: job.totalBytes,
+      etaSec: job.etaSec,
     };
   });
   return {
@@ -362,11 +374,17 @@ function ingestProgress(id: UpdateId, text: string) {
         stage?: string;
         determinate?: boolean;
         error?: string;
+        bytes?: number;
+        totalBytes?: number;
+        etaSec?: number;
       };
       if (typeof j.pct === "number" && Number.isFinite(j.pct)) job.pct = Math.max(0, Math.min(100, Math.round(j.pct)));
       if (typeof j.stage === "string" && j.stage) job.stage = j.stage;
       if (typeof j.determinate === "boolean") job.determinate = j.determinate;
       if (typeof j.error === "string" && j.error) job.error = j.error;
+      if (typeof j.bytes === "number" && Number.isFinite(j.bytes)) job.bytes = Math.max(0, Math.round(j.bytes));
+      if (typeof j.totalBytes === "number" && Number.isFinite(j.totalBytes)) job.totalBytes = Math.max(0, Math.round(j.totalBytes));
+      if (typeof j.etaSec === "number" && Number.isFinite(j.etaSec)) job.etaSec = Math.max(0, Math.round(j.etaSec));
     } catch {
       /* ignore */
     }
@@ -405,7 +423,17 @@ function lastJsonObject(text: string): string {
 
 function spawnApply(sid: UpdateId): Promise<UpdatesSnapshot> {
   const bin = helperPath();
-  const job: UpdateJob = { id: sid, status: "running", pct: 2, determinate: false, stage: "prepare", error: "" };
+  const job: UpdateJob = {
+    id: sid,
+    status: "running",
+    pct: 2,
+    determinate: true,
+    stage: "prepare",
+    error: "",
+    bytes: 0,
+    totalBytes: 0,
+    etaSec: 0,
+  };
   jobs.set(sid, job);
   return new Promise((resolve) => {
     const child = spawn("sudo", ["-n", bin, "apply", sid], {
@@ -413,9 +441,11 @@ function spawnApply(sid: UpdateId): Promise<UpdatesSnapshot> {
     });
     let stdout = "";
     let stderr = "";
-    const killer = setTimeout(() => child.kill("SIGTERM"), 300_000);
+    const killer = setTimeout(() => child.kill("SIGTERM"), 900_000);
     child.stdout?.on("data", (buf: Buffer) => {
-      stdout += String(buf);
+      const chunk = String(buf);
+      stdout += chunk;
+      ingestProgress(sid, chunk);
     });
     child.stderr?.on("data", (buf: Buffer) => {
       const chunk = String(buf);
@@ -446,7 +476,9 @@ function spawnApply(sid: UpdateId): Promise<UpdatesSnapshot> {
       job.status = "error";
       job.determinate = true;
       job.stage = "error";
-      job.error = errText || `falha ao aplicar ${sid} (código ${code ?? "?"})`;
+      job.error =
+        errText ||
+        `falha ao aplicar ${sid} (código ${code == null ? "sinal/timeout" : code})`;
       const cur = cache?.snap ?? (await updatesStatus(true));
       const failed = snapshot(
         cur.items.map((row) => (row.id === sid ? { ...row, error: job.error } : row)),
@@ -463,8 +495,8 @@ function spawnApply(sid: UpdateId): Promise<UpdatesSnapshot> {
     child.on("error", (err) => {
       void finish(1, String(err.message || err));
     });
-    child.on("close", (code) => {
-      void finish(code);
+    child.on("close", (code, signal) => {
+      void finish(code, signal ? `processo encerrado (${signal})` : "");
     });
   });
 }

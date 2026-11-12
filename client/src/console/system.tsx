@@ -9,7 +9,7 @@ import type { I18nKey } from "./i18n";
 import { formatWatts, useConsole, type LogKind } from "./state";
 import { TermPage } from "./term";
 import { BackupPage } from "./backup";
-import { ActionProgress, Chip, ConsoleInput, Field, GhostBtn, PageHead, Panel, PanelTitle, PrimaryBtn, stageLabel } from "./widgets";
+import { ActionProgress, Chip, ConsoleInput, Field, GhostBtn, PageHead, Panel, PanelTitle, PrimaryBtn, progressHint, stageLabel } from "./widgets";
 
 type LinuxUser = { name: string; sudo: boolean };
 
@@ -429,6 +429,9 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
       determinate: boolean;
       stage: string;
       error: string;
+      bytes?: number;
+      totalBytes?: number;
+      etaSec?: number;
     }[];
     items?: {
       id: UpdateId;
@@ -441,6 +444,9 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
       progress?: number;
       stage?: string;
       determinate?: boolean;
+      bytes?: number;
+      totalBytes?: number;
+      etaSec?: number;
     }[];
   }) => {
     if (!Array.isArray(j.items)) return;
@@ -462,6 +468,9 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
         progress: Number(hit?.progress ?? job?.pct ?? 0) || 0,
         stage: String(hit?.stage || job?.stage || ""),
         determinate: Boolean(hit?.determinate ?? job?.determinate),
+        bytes: Number(hit?.bytes ?? job?.bytes ?? 0) || 0,
+        totalBytes: Number(hit?.totalBytes ?? job?.totalBytes ?? 0) || 0,
+        etaSec: Number(hit?.etaSec ?? job?.etaSec ?? 0) || 0,
       };
     });
     setS((p) => ({
@@ -496,10 +505,10 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
         ...p.updates,
         jobs: [
           ...p.updates.jobs.filter((row) => row.id !== id),
-          { id, status: "running", pct: 2, determinate: false, stage: "prepare", error: "" },
+          { id, status: "running", pct: 2, determinate: true, stage: "prepare", error: "" },
         ],
         items: p.updates.items.map((row) =>
-          row.id === id ? { ...row, applying: true, progress: 2, stage: "prepare", determinate: false } : row,
+          row.id === id ? { ...row, applying: true, progress: 2, stage: "prepare", determinate: true } : row,
         ),
       },
     }));
@@ -595,6 +604,7 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
                   value={row.progress}
                   determinate={row.determinate || row.progress > 0}
                   label={barLabel}
+                  hint={progressHint(row)}
                 />
               </div>
             </Panel>
