@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.07.06** (`version.json`).
+Versão atual neste canal: **0.1.07.07** (`version.json`).
 
 ## Versionamento
 
@@ -20,10 +20,10 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.07.06",
+  "version": "0.1.07.07",
   "channel": "main",
-  "file": "ham-cockpit-0.1.07.06.tgz",
-  "notes": "Ham Cockpit v0.1.07.06 — telemetria CI-V no painel/LCD, apply OS (apt update real + contador), título Lextel, LCD âmbar, LAN connectGen, Copiar Serial."
+  "file": "ham-cockpit-0.1.07.07.tgz",
+  "notes": "Ham Cockpit v0.1.07.07 — apply OS com upgrade --with-new-pkgs (corrige held-back/falso sucesso), telemetria CI-V, LCD âmbar, nome Lextel, Copiar Serial."
 }
 ```
 

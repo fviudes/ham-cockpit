@@ -47,15 +47,23 @@ os_pretty() {
   fi
 }
 
+# Conta pacotes que o apply_os realmente instala (upgrade --with-new-pkgs).
+# `apt-get -s upgrade` puro dá 0 Inst quando há held-back por deps novas — falso "já atualizado".
+os_pending_count() {
+  local n
+  n="$(timeout 25 apt-get -s -o Debug::NoLocking=1 upgrade --with-new-pkgs 2>/dev/null | grep -c '^Inst ' || true)"
+  echo "${n:-0}"
+}
+
 os_upgradable() {
-  # Contagem rápida: motd/notifier. No refresh (UPD_POLICY=1) força apt-check / simulação.
+  # Contagem rápida: motd/notifier. No refresh (UPD_POLICY=1) força apt-check / simulação real.
   local n=""
   if [[ "${UPD_POLICY:-0}" == 1 ]]; then
     if [[ -x /usr/lib/update-notifier/apt-check ]]; then
       n="$(timeout 8 /usr/lib/update-notifier/apt-check 2>&1 | awk -F';' '{print $1+0}')" || true
     fi
     if [[ -z "${n:-}" || "${n:-0}" -eq 0 ]]; then
-      n="$(timeout 20 apt-get -s -o Debug::NoLocking=1 upgrade 2>/dev/null | grep -c '^Inst ' || true)"
+      n="$(os_pending_count)"
     fi
     echo "${n:-0}"
     return 0
@@ -72,10 +80,16 @@ os_upgradable() {
 # Regrava o contador do motd para o card OS não ficar "pendente" eterno após o apply.
 refresh_os_notifier() {
   local n=0
+  n="$(os_pending_count)"
   if [[ -x /usr/lib/update-notifier/apt-check ]]; then
-    n="$(timeout 8 /usr/lib/update-notifier/apt-check 2>&1 | awk -F';' '{print $1+0}')" || n=0
-  else
-    n="$(timeout 20 apt-get -s -o Debug::NoLocking=1 upgrade 2>/dev/null | grep -c '^Inst ' || true)"
+    # apt-check pode ficar stale; se a simulação real diz 0, zera o motd.
+    local chk
+    chk="$(timeout 8 /usr/lib/update-notifier/apt-check 2>&1 | awk -F';' '{print $1+0}')" || chk="$n"
+    if [[ "${n:-0}" -eq 0 ]]; then
+      n=0
+    elif [[ "${chk:-0}" -gt 0 ]]; then
+      n="$chk"
+    fi
   fi
   n="${n:-0}"
   mkdir -p /var/lib/update-notifier
@@ -567,11 +581,12 @@ apt_prepare() {
     -o Dpkg::Options::=--force-confdef
     -o Dpkg::Options::=--force-confold
   )
-  if ! dpkg --configure -a; then
+  # stdout silencioso: o Node só parseia o JSON final do station-upd.
+  if ! dpkg --configure -a >/dev/null; then
     echo "falha ao concluir configuração pendente do dpkg (dpkg --configure -a)" >&2
     return 1
   fi
-  if ! apt-get "${apt_opts[@]}" -y -f install; then
+  if ! apt-get "${apt_opts[@]}" -y -f install >/dev/null; then
     echo "falha ao corrigir pacotes quebrados (apt-get -f install)" >&2
     return 1
   fi
@@ -621,7 +636,8 @@ apply_os() {
   fi
   emit_progress os 22 install 1
   local pending
-  pending="$(timeout 25 apt-get -s -o Debug::NoLocking=1 upgrade 2>/dev/null | grep -c '^Inst ' || true)"
+  # Mesma política do apply: plain `upgrade` simula 0 Inst com held-back (deps novas).
+  pending="$(os_pending_count)"
   pending="${pending:-0}"
   if [[ "$pending" -eq 0 ]]; then
     echo "nenhum pacote pendente no apt; sincronizando contador do console" >&2

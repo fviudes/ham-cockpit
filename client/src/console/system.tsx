@@ -600,9 +600,8 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
     }
   };
 
-  const ready = s.updates.items.filter(
-    (row) => row.updatable && isNewerVersion(row.available, row.current) && !row.applying,
-  );
+  // OS usa "N pacotes" / flag do helper — não exigir isNewerVersion semver.
+  const ready = s.updates.items.filter((row) => row.updatable && !row.applying);
   return (
     <div>
       {embedded ? null : <PageHead kicker={tx("admin")} title={tx("update")} />}
@@ -650,7 +649,7 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
               {row.error ? <p className="mb-3 text-xs text-[#f87171]">{row.error}</p> : null}
               <div className="flex items-center gap-3">
                 <PrimaryBtn
-                  disabled={!row.updatable || !isNewerVersion(row.available, row.current) || applying}
+                  disabled={!row.updatable || applying}
                   onClick={() => void applyOne(row.id)}
                 >
                   {applying ? tx("updApplying") : tx("updApply")}
