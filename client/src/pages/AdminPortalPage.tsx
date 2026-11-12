@@ -29,6 +29,30 @@ function formatLicensedAt(sec: number | null | undefined): string {
     second: "2-digit",
   });
 }
+
+/** Cor do indicativo no grid: definitiva ativa → verde; trial válido → amarelo; resto → vermelho. */
+type CallsignTone = "definitive" | "trial" | "invalid";
+
+function callsignTone(l: Pick<LicRow, "type" | "status">): CallsignTone {
+  if (l.type === "definitive" && l.status === "active") return "definitive";
+  if (l.type === "trial" && l.status === "active") return "trial";
+  return "invalid";
+}
+
+const CALLSIGN_BADGE: Record<CallsignTone, string> = {
+  definitive:
+    "lic-callsign lic-callsign--definitive rounded border border-emerald-400/40 bg-emerald-400/10 px-1.5 py-0.5 font-mono text-xs font-semibold tracking-wide text-emerald-400",
+  trial:
+    "lic-callsign lic-callsign--trial rounded border border-[#ffb300]/35 bg-[#ffb300]/10 px-1.5 py-0.5 font-mono text-xs font-semibold tracking-wide text-[#ffb300]",
+  invalid:
+    "lic-callsign lic-callsign--invalid rounded border border-red-400/40 bg-red-400/10 px-1.5 py-0.5 font-mono text-xs font-semibold tracking-wide text-red-400",
+};
+
+const CALLSIGN_EMPTY: Record<CallsignTone, string> = {
+  definitive: "lic-callsign lic-callsign--definitive text-xs text-emerald-400/50",
+  trial: "lic-callsign lic-callsign--trial text-xs text-[#ffb300]/50",
+  invalid: "lic-callsign lic-callsign--invalid text-xs text-red-400/70",
+};
 type PayRow = { id: string; provider: string; status: string; currency: string; amount_cents: number; created_at: number };
 type UserRow = {
   id: string;
@@ -589,17 +613,16 @@ export default function AdminPortalPage() {
                       {licenses.map((l) => {
                         const token = l.token || "";
                         const open = expandedToken === l.id;
+                        const tone = callsignTone(l);
                         return (
                           <tr key={l.id} className="border-t border-[rgba(79,195,247,0.08)] align-top">
                             <td className="px-2 py-2 font-mono text-xs break-all">{l.id}</td>
                             <td className="px-2 py-2 font-mono text-xs break-all">{l.serial}</td>
                             <td className="px-2 py-2">
                               {l.callsign ? (
-                                <span className="rounded border border-[#ffb300]/35 bg-[#ffb300]/10 px-1.5 py-0.5 font-mono text-xs font-semibold tracking-wide text-[#ffb300]">
-                                  {l.callsign}
-                                </span>
+                                <span className={CALLSIGN_BADGE[tone]}>{l.callsign}</span>
                               ) : (
-                                <span className="text-xs text-[#64748b]">—</span>
+                                <span className={CALLSIGN_EMPTY[tone]}>—</span>
                               )}
                             </td>
                             <td className="px-2 py-2 text-xs text-[#94a3b8] break-all">{l.email || "—"}</td>
