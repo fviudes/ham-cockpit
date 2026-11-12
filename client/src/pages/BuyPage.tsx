@@ -158,7 +158,7 @@ export default function BuyPage() {
       <main className="container max-w-2xl flex-1 pt-24 pb-16">
         <p className="mb-2 font-['IBM_Plex_Mono'] text-xs font-bold tracking-widest text-[#FFB300]">{t(BUY.kicker)}</p>
         <h1 className="mb-3 font-['Space_Grotesk'] text-3xl font-bold text-white">{t(BUY.title)}</h1>
-        <p className="mb-8 text-sm leading-relaxed text-[#94a3b8]">{t(BUY.lead)}</p>
+        <p className="mb-8 whitespace-pre-line text-sm leading-relaxed text-[#94a3b8]">{t(BUY.lead)}</p>
 
         <label className="mb-1 block text-sm text-[#94a3b8]">{t(LIC.serial)}</label>
         <input

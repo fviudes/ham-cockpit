@@ -34,8 +34,8 @@ export const BUY = {
   kicker: { pt: "COMPRAR", en: "BUY" } satisfies Pair,
   title: { pt: "Licença definitiva", en: "Perpetual license" } satisfies Pair,
   lead: {
-    pt: "Pagamento único para o serial informado. Sem renovação anual. Sem reembolso (já houve trial de 30 dias).",
-    en: "One-time payment for the given serial. No yearly renewal. No refunds (the 30-day trial already applied).",
+    pt: "Pagamento único e sem mensalidades para o serial informado.\nLicença e atualizações vitalícias mesmo o dispositivo sendo transferido para outro usuário.\nA licença é válida e fixa para o dispositivo pois é atrelada ao número serial do aparelho",
+    en: "One-time payment with no subscription for the given serial.\nLifetime license and updates even if the device is transferred to another user.\nThe license is fixed to the device because it is tied to the appliance serial number",
   } satisfies Pair,
   priceUsd: { pt: "Preço (USD)", en: "Price (USD)" } satisfies Pair,
   priceBrl: { pt: "≈ em reais", en: "≈ in BRL" } satisfies Pair,
