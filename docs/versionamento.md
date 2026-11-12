@@ -56,6 +56,8 @@ Se `VERSION` tiver sufixo OTA no momento do bake, o script de imagem usa só `im
 | Console Node + UI | sim | sim |
 | Helpers / units | sim | sim |
 | Ubuntu + apt stack | sim | não |
-| Binários MMDVM nativos | sim (bake ARM64) | sim, se `mmdvm-arm64.tgz` estiver no pacote / `update/` |
+| Binários MMDVM nativos | **sim** (compilados no chroot ARM64 → `/usr/local/bin`) | opcional: inclui `mmdvm-arm64.tgz` só como **ponte** para estações antigas / reparo Nextion — **não** é o caminho de install limpo |
+
+**Regra de produto:** imagem única = install limpo já tem MMDVM Host, gateways, Nextion e drivers/UART. O arquivo `update/mmdvm-arm64.tgz` é artefato auxiliar do OTA (e byproduct do bake), não um “pacote de fora” que a imagem dependa para funcionar.
 
 Detalhes do canal OTA: [`update/README.md`](../update/README.md). Bake: [`docs/imagem-os.md`](imagem-os.md).

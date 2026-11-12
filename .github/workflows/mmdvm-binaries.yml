@@ -1,7 +1,9 @@
 name: MMDVM ARM64 binaries
 
-# Compila g4klx + NextionDriver no runner ARM e publica update/mmdvm-arm64.tgz
-# para o OTA instalar em estações sem bake recente.
+# Ponte OTA apenas — NÃO substitui a imagem única.
+# A imagem (workflow "Ham Cockpit OS image") já compila e instala MMDVM/Nextion
+# em /usr/local/bin no chroot. Este job só republica update/mmdvm-arm64.tgz para
+# aparelhos antigos (pré-bake com MMDVM) ou reparo via ota-hooks, sem re-bake.
 on:
   workflow_dispatch:
   push:

@@ -210,13 +210,16 @@ function main() {
     }
   }
 
-  // Binários nativos ARM64 (opcional até o workflow/bake publicar update/mmdvm-arm64.tgz).
+  // Ponte OTA (estações antigas / reparo Nextion). Imagem bake já tem os bins
+  // em /usr/local/bin — este tgz não é requisito de install limpo.
   const mmdvmTgz = join(UPDATE_DIR, "mmdvm-arm64.tgz");
   if (existsSync(mmdvmTgz)) {
     cpSync(mmdvmTgz, join(stage, "mmdvm-arm64.tgz"));
-    console.log("incluindo mmdvm-arm64.tgz no pacote OTA");
+    console.log("incluindo mmdvm-arm64.tgz no pacote OTA (ponte; bake já embute os bins)");
   } else {
-    console.warn("AVISO: update/mmdvm-arm64.tgz ausente — OTA tentará baixar no Pi");
+    console.warn(
+      "AVISO: update/mmdvm-arm64.tgz ausente — OTA só reparará MMDVM em estações sem bins (download/build); imagem limpa não depende deste arquivo",
+    );
   }
 
   // No Windows o working tree pode ter CRLF; no Pi isso quebra shebang/units (`$'\r': command not found`).

@@ -33,4 +33,8 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 O pacote traz o console compilado (`index.js` + `public/`), `package.json` de runtime, helpers em `bin/` e units em `systemd/`. **Não** inclui configs da estação (rádios, Wi‑Fi, bindings, layouts, ser2net…).
 
+### `mmdvm-arm64.tgz` neste canal
+
+Arquivo auxiliar (~12 MB) com Host/gateways/Nextion + hosts D-Star. **A imagem OS já instala esses binários no bake** (`/usr/local/bin`); este tarball existe para OTA em cartões antigos e reparo (ex.: Nextion sem `HC_FD2_GUARD`). Não é um “pacote de fora” que a imagem única precise baixar no primeiro boot. Detalhe: [docs/imagem-os.md](../docs/imagem-os.md).
+
 Instalação e operação: [README na raiz](../README.md). Imagem do cartão: [`instaladores/`](../instaladores/).

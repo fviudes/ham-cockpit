@@ -11,7 +11,9 @@
 #   (ciclo PartOf DMR/YSF). Host inativo: start UMA vez. Host já up: não parar.
 #   stop+start do Host derruba filhos PartOf e apaga indicativo/ID no Nextion.
 #
-# MMDVM: instala binários ARM64 de mmdvm-arm64.tgz (no pacote OTA ou no canal update/).
+# MMDVM: imagem bake recente JÁ tem os bins em /usr/local/bin.
+# mmdvm-arm64.tgz é ponte OTA (estações antigas / reparo Nextion sem HC_FD2_GUARD),
+# não requisito de install limpo. Fontes: pacote OTA, /opt/ham-cockpit/, ou update/ no GitHub.
 # Docker.io: se o pacote não estiver na imagem, OTA não instala apt — precisa bake.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"

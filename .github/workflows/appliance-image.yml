@@ -75,6 +75,8 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
+      # mmdvm-arm64.tgz no artifact/Release = byproduct do bake (ponte OTA).
+      # Os bins já estão em /usr/local/bin dentro do .img.xz (imagem única).
       - name: Publish GitHub Release
         if: github.repository == 'fviudes/ham-cockpit'
         env:
@@ -87,7 +89,7 @@ jobs:
           MMDVM="image/out/mmdvm-arm64.tgz"
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
             --title "Ham Cockpit ${TAG}" \
-            --notes "Imagem Ubuntu Server 24.04 LTS ARM64 (+raspi) com Ham Cockpit ${TAG} para Raspberry Pi 3 / 4 / 5 (Docker, ser2net, Hamlib, console, AP Wi-Fi). Wavelog baixa as imagens Docker no primeiro boot com Ethernet. Grave no cartão/SSD com o Raspberry Pi Imager (Use custom)."
+            --notes "Imagem Ubuntu Server 24.04 LTS ARM64 (+raspi) com Ham Cockpit ${TAG} para Raspberry Pi 3 / 4 / 5 (Docker, ser2net, Hamlib, console, AP Wi-Fi, stack MMDVM/Nextion já em /usr/local/bin). Wavelog baixa as imagens Docker no primeiro boot com Ethernet. Grave no cartão/SSD com o Raspberry Pi Imager (Use custom). O asset mmdvm-arm64.tgz é só ponte OTA para estações antigas — não é requisito da imagem limpa."
           ls -lh "$IMG" "$SUM"
           # GitHub Release asset ≤ 2 GiB. Se passar, o artifact Actions ainda fica disponível.
           BYTES=$(stat -c%s "$IMG")
@@ -97,6 +99,7 @@ jobs:
           fi
           gh release upload "$TAG" "$IMG" "$SUM" --clobber
           # O bake (sudo) deixa update/mmdvm-arm64.tgz root:root — não copiar por cima.
+          # Upload do tgz = ponte OTA; a imagem .img.xz já embute os mesmos bins.
           if [[ -f "$MMDVM" ]]; then
             gh release upload "$TAG" "$MMDVM" --clobber
           fi

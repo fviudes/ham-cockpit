@@ -163,7 +163,9 @@ if [[ ! -f "$MNT/etc/systemd/system/nextiondriver.service" ]]; then
   exit 1
 fi
 
-# Pacote OTA reutilizável (estações antigas sem bake MMDVM).
+# Byproduct OTA: cópia dos binários JÁ instalados na rootfs acima.
+# A imagem única não depende deste tarball no boot — é ponte para estações
+# antigas / ota-hooks / canal update/. Ver docs/imagem-os.md.
 MMDVM_TGZ="$OUT/mmdvm-arm64.tgz"
 STAGE_MMDVM="$(mktemp -d)"
 mkdir -p "$STAGE_MMDVM/bin" "$STAGE_MMDVM/etc"
