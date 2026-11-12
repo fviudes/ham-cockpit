@@ -4,6 +4,7 @@ export const ONE_YEAR_MS = 1000 * 60 * 60 * 24 * 365;
 export const SERVICE_IDS = [
   "ser2net",
   "wavelog",
+  "db",
   "wlg",
   "mmdvm",
   "radio",

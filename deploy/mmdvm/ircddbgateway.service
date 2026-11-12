@@ -7,6 +7,8 @@ Wants=network-online.target mosquitto.service
 # Se "Transaction order is cyclic" voltar: subir com systemd-run --unit=ircddbgateway-manual
 # (sem PartOf) em vez de amarrar de novo ao mmdvmhost.
 ConditionPathExists=/usr/local/bin/ircddbgatewayd
+StartLimitIntervalSec=600
+StartLimitBurst=20
 
 [Service]
 Type=simple
@@ -17,7 +19,7 @@ ExecStartPre=/bin/mkdir -p /var/log/mmdvm
 ExecStartPre=/bin/chown hamcockpit:dialout /var/log/mmdvm
 ExecStart=/bin/bash -c 'CONFDIR=/opt/ham-cockpit/mmdvm; [[ -f /etc/ircddbgateway ]] && CONFDIR=/etc; exec /usr/local/bin/ircddbgatewayd -foreground -nolog -logdir:/var/log/mmdvm -confdir:"$CONFDIR"'
 Restart=on-failure
-RestartSec=3
+RestartSec=10
 
 [Install]
 WantedBy=ham-cockpit.target

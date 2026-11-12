@@ -662,29 +662,62 @@ function applyConfig(host: Ini, gw: Ini, ysf: Ini, dstar: Conf, cfg: Partial<Mmd
 async function helper(cmd: string, ...args: string[]): Promise<string> {
   if (!existsSync(HELPER)) return "";
   try {
+    if (cmd === "start" || cmd === "stop" || cmd === "restart") unitCache = null;
     const { stdout } = await execFileAsync("sudo", ["-n", HELPER, cmd, ...args], {
-      timeout: 20_000,
+      timeout: cmd === "is-active-all" || cmd === "is-active" ? 8_000 : 90_000,
       windowsHide: true,
     });
+    if (cmd === "start" || cmd === "stop" || cmd === "restart") unitCache = null;
     return String(stdout || "").trim();
   } catch {
     return "";
   }
 }
 
+const UNIT_NAMES = ["mmdvmhost", "dmrgateway", "ysfgateway", "ircddbgateway", "nextiondriver"] as const;
+let unitCache: { at: number; map: Record<string, string> } | null = null;
+let unitInflight: Promise<Record<string, string>> | null = null;
+
+/** Um único spawn (sudo mmdvm-ctl is-active-all) com cache curto — antes eram 5–10 por poll. */
+async function unitStates(): Promise<Record<string, string>> {
+  if (unitCache && Date.now() - unitCache.at < 2500) return unitCache.map;
+  if (unitInflight) return unitInflight;
+  unitInflight = (async () => {
+    const map: Record<string, string> = {};
+    const out = await helper("is-active-all");
+    for (const line of out.split(/\r?\n/)) {
+      const m = line.match(/^(\w+)=(\S+)/);
+      if (m) map[m[1]] = m[2];
+    }
+    if (!UNIT_NAMES.every((n) => n in map)) {
+      try {
+        const { stdout } = await execFileAsync(
+          "systemctl",
+          ["is-active", ...UNIT_NAMES.map((n) => `${n}.service`)],
+          { timeout: 4000, windowsHide: true },
+        );
+        String(stdout).split(/\r?\n/).forEach((v, i) => {
+          if (UNIT_NAMES[i] && v.trim()) map[UNIT_NAMES[i]] = v.trim();
+        });
+      } catch (err) {
+        // is-active sai ≠0 se algum estiver inativo, mas o stdout traz todos.
+        const out2 = String((err as { stdout?: string }).stdout || "");
+        out2.split(/\r?\n/).forEach((v, i) => {
+          if (UNIT_NAMES[i] && v.trim()) map[UNIT_NAMES[i]] = v.trim();
+        });
+      }
+    }
+    unitCache = { at: Date.now(), map };
+    return map;
+  })().finally(() => {
+    unitInflight = null;
+  });
+  return unitInflight;
+}
+
 async function unitActive(unit: GwUnit): Promise<boolean> {
   if (!linux()) return false;
-  const out = await helper("is-active", unit);
-  if (out === "active") return true;
-  try {
-    const { stdout } = await execFileAsync("systemctl", ["is-active", `${unit}.service`], {
-      timeout: 3000,
-      windowsHide: true,
-    });
-    return String(stdout).trim() === "active";
-  } catch {
-    return false;
-  }
+  return (await unitStates())[unit] === "active";
 }
 
 function logDate(offsetSec = 0): string {

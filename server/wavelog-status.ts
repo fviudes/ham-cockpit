@@ -120,14 +120,14 @@ async function fileExists(path: string): Promise<boolean> {
 export async function wavelogStatus(port = 8086): Promise<WavelogStatus> {
   const compose = await composeDir();
   const url = `http://127.0.0.1:${port}/`;
-  const hasBin = await dockerBinaryPresent();
-  const daemon = hasBin ? await dockerDaemonUp() : false;
-  const docker = hasBin && daemon;
-  const hasCompose = await fileExists(join(compose, "docker-compose.yml"));
+  // Sonda HTTP primeiro: se responde, não precisa gastar `docker info` (CLI pesado no Pi 3).
   const probe = await probeWavelog(port);
   if (probe.ok) {
-    return { ok: true, url, port, docker: hasBin, compose, reason: "ok", httpStatus: probe.httpStatus };
+    return { ok: true, url, port, docker: true, compose, reason: "ok", httpStatus: probe.httpStatus };
   }
+  const hasBin = await dockerBinaryPresent();
+  const daemon = hasBin ? await dockerDaemonUp() : false;
+  const hasCompose = await fileExists(join(compose, "docker-compose.yml"));
   if (!hasCompose) {
     return { ok: false, url, port, docker: hasBin, compose, reason: "no-compose", error: probe.error };
   }
@@ -252,12 +252,46 @@ async function readEnvFile(file: string): Promise<string> {
   }
 }
 
+/** Fallback: senha que o container MariaDB realmente usa (MARIADB_PASSWORD). */
+async function passwordFromContainer(): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync(
+      "docker",
+      ["inspect", "--format", "{{range .Config.Env}}{{println .}}{{end}}", DB_CONTAINER],
+      { timeout: 6_000, windowsHide: true },
+    );
+    return envValueFromText(String(stdout), "MARIADB_PASSWORD");
+  } catch {
+    return "";
+  }
+}
+
 async function readDbPassword(dir: string): Promise<{ password: string; envFile: string; source: "env" | "missing" }> {
   const envFile = join(dir, ".env");
-  if (!(await fileExists(envFile))) return { password: "", envFile, source: "missing" };
-  const text = await readEnvFile(envFile);
-  const password = envValueFromText(text, "WAVELOG_DB_PASSWORD");
+  let password = "";
+  if (await fileExists(envFile)) {
+    const text = await readEnvFile(envFile);
+    password = envValueFromText(text, "WAVELOG_DB_PASSWORD");
+  }
+  if (!password) password = await passwordFromContainer();
   return { password, envFile, source: password ? "env" : "missing" };
+}
+
+/** Só a senha (rápido) — usado pelo botão "ver senha" sem esperar as consultas SQL. */
+export async function wavelogDbPassword(): Promise<{ password: string; envFile: string; source: "env" | "missing"; error?: string }> {
+  const compose = await composeDir();
+  const out = await readDbPassword(compose);
+  return out.password ? out : { ...out, error: "WAVELOG_DB_PASSWORD ausente em .env e no container" };
+}
+
+export async function wavelogDbUp(httpPort = 8086): Promise<WavelogDatabase> {
+  await stationSvc("start", "db");
+  return wavelogDatabase(httpPort);
+}
+
+export async function wavelogDbDown(httpPort = 8086): Promise<WavelogDatabase> {
+  await stationSvc("stop", "db");
+  return wavelogDatabase(httpPort);
 }
 
 async function dockerInspectDb(): Promise<{ running: boolean; health: string; image: string }> {

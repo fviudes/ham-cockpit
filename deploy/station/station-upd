@@ -303,6 +303,8 @@ set_env_kv() {
   local f="$1" k="$2" v="$3"
   mkdir -p "$(dirname "$f")"
   touch "$f"
+  # .env sem \n final: o append colava a chave na última linha e corrompia WAVELOG_DB_PASSWORD.
+  if [[ -s "$f" && -n "$(tail -c1 "$f" 2>/dev/null)" ]]; then printf '\n' >>"$f"; fi
   if grep -q "^${k}=" "$f" 2>/dev/null; then
     sed -i "s|^${k}=.*|${k}=${v}|" "$f"
   else

@@ -50,6 +50,7 @@ add_station_user admin 1234
 install -d -o hamcockpit -g hamcockpit /opt/ham-cockpit /opt/ham-cockpit/bin /opt/ham-cockpit/radios /opt/ham-cockpit/equipment /opt/ser2net /opt/wavelog /opt/wavelog-gate /opt/lextel /backup
 install -m 0755 "$HERE/ham-cockpit-ap.sh" /opt/ham-cockpit/bin/ham-cockpit-ap.sh
 install -m 0755 "$HERE/first-boot.sh" /opt/ham-cockpit/bin/first-boot.sh
+install -m 0755 "$HERE/hc-tune.sh" /opt/ham-cockpit/bin/hc-tune.sh
 install -o root -g root -m 0755 "$HERE/root-login" /opt/ham-cockpit/bin/root-login
 install -o root -g root -m 0755 "$HERE/station-user" /opt/ham-cockpit/bin/station-user
 install -o root -g root -m 0755 "$HERE/ser2net-ctl" /opt/ham-cockpit/bin/ser2net-ctl
@@ -332,6 +333,8 @@ enable_units nextiondriver.service mmdvmhost.service dmrgateway.service ysfgatew
 enable_units seatd.service ham-cockpit-vfo.service ham-cockpit-vfo-idle.service
 # ircddbgatewayd (g4klx recente) exige broker MQTT local; sem mosquitto → Connection refused.
 enable_units mosquitto.service
+# Swap, journald/sysctl enxutos, mask de snapd/apt-daily etc. (Pi 3 travava sem swap).
+/opt/ham-cockpit/bin/hc-tune.sh || true
 # docker.io deve existir após packages.list (bake) / apt (install vivo).
 if ! command -v docker >/dev/null 2>&1; then
   echo "AVISO: binário docker ausente — instale docker.io (nova imagem bake se for appliance)" >&2

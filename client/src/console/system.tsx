@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import { APP_VERSION } from "@shared/brand";
 import { UPDATE_IDS, type UpdateId } from "@shared/const";
 import { isNewerVersion } from "@shared/version";
-import { SERVICE_IDS, SVC_HINT, SVC_LABEL, serviceLive, type ServiceId } from "./services-ui";
+import { SERVICE_IDS, SVC_HINT, SVC_LABEL, SVC_POWER, serviceLive, type ServiceId } from "./services-ui";
 import type { I18nKey } from "./i18n";
 import { formatWatts, useConsole, type LogKind } from "./state";
 import { TermPage } from "./term";
@@ -358,12 +358,45 @@ function useServiceAutostart() {
       setBusy(null);
     }
   };
-  return { busy, setAutostart };
+  const [powerBusy, setPowerBusy] = useState<ServiceId | null>(null);
+  const setPower = async (id: ServiceId, on: boolean) => {
+    setPowerBusy(id);
+    try {
+      const r = await fetch("/api/services/power", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, on }),
+      });
+      const j = (await r.json()) as {
+        ok?: boolean;
+        items?: { id: ServiceId; autostart?: boolean; running?: boolean }[];
+        error?: string;
+      };
+      if (Array.isArray(j.items)) {
+        const items = SERVICE_IDS.map((sid) => {
+          const hit = j.items!.find((row) => row.id === sid);
+          return { id: sid, autostart: hit?.autostart !== false, running: Boolean(hit?.running) };
+        });
+        setS((p) => ({ ...p, services: items }));
+      }
+      if (!r.ok || j.ok === false) {
+        toast.error(j.error || tx("svcPowerFail"));
+        return;
+      }
+      pushLog("SYS", `${tx(SVC_LABEL[id])} · ${on ? tx("svcPowerOn") : tx("svcPowerOff")}`);
+      toast.success(on ? tx("svcPowerOnOk") : tx("svcPowerOffOk"));
+    } catch {
+      toast.error(tx("svcPowerFail"));
+    } finally {
+      setPowerBusy(null);
+    }
+  };
+  return { busy, setAutostart, powerBusy, setPower };
 }
 
 export function ServicesPage({ embedded = false }: { embedded?: boolean }) {
   const { s, tx } = useConsole();
-  const { busy, setAutostart } = useServiceAutostart();
+  const { busy, setAutostart, powerBusy, setPower } = useServiceAutostart();
   return (
     <div>
       {embedded ? null : <PageHead kicker={tx("admin")} title={tx("services")} />}
@@ -383,6 +416,14 @@ export function ServicesPage({ embedded = false }: { embedded?: boolean }) {
                   <Chip active={live} tone={live ? "ok" : "cyan"}>
                     {live ? tx("svcRunning") : tx("svcStopped")}
                   </Chip>
+                  {SVC_POWER.has(row.id) ? (
+                    <GhostBtn
+                      disabled={powerBusy === row.id || busy === row.id}
+                      onClick={() => void setPower(row.id, !live)}
+                    >
+                      {powerBusy === row.id ? "…" : live ? tx("svcPowerOff") : tx("svcPowerOn")}
+                    </GhostBtn>
+                  ) : null}
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] tracking-wide text-[#8ea0b3] uppercase">{tx("svcAutostart")}</span>
                     <AutostartSwitch
@@ -519,6 +560,7 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
         ),
       },
     }));
+    window.setTimeout(() => window.dispatchEvent(new Event("hc-updates-wake")), 800);
     try {
       const r = await fetch("/api/updates", {
         method: "POST",

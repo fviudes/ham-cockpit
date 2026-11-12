@@ -8,10 +8,19 @@ import { radiosConnect, radiosDisconnect, radiosMarkBle, radiosRemove, radiosRes
 import { loadSer2net, saveSer2net } from "./ser2net-store";
 import { attachTerminal } from "./term";
 import { createUser, deleteUser, listUsers, sshStatus } from "./users";
-import { wavelogDatabase, wavelogDbUpdate, wavelogDown, wavelogStatus, wavelogUp } from "./wavelog-status";
+import {
+  wavelogDatabase,
+  wavelogDbDown,
+  wavelogDbPassword,
+  wavelogDbUp,
+  wavelogDbUpdate,
+  wavelogDown,
+  wavelogStatus,
+  wavelogUp,
+} from "./wavelog-status";
 import { wlgDown, wlgStatus, wlgUp } from "./wlg-status";
 import { netConnect, netForget, netSave, netScan, netSetAp, netSetHostname, netSetIp, netSetLink, netStatus } from "./net";
-import { servicesApplyBoot, servicesSetAutostart, servicesStatus } from "./services";
+import { servicesApplyBoot, servicesPower, servicesSetAutostart, servicesStatus } from "./services";
 import { updatesApply, updatesRefresh, updatesStatus } from "./updates";
 import { layoutGet, layoutSave } from "./layouts";
 import { isLoopback, vfoDisplayExit } from "./vfo-display";
@@ -426,6 +435,16 @@ async function startServer() {
     }
   });
 
+  app.post("/api/services/power", async (req, res) => {
+    try {
+      res.setTimeout(300_000);
+      const body = await servicesPower(String(req.body?.id ?? ""), Boolean(req.body?.on));
+      res.status(body.ok ? 200 : 400).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, items: [], error: String(err) });
+    }
+  });
+
   app.get("/api/updates", async (_req, res) => {
     try {
       res.json(await updatesStatus());
@@ -482,6 +501,30 @@ async function startServer() {
   app.get("/api/wavelog/database", async (_req, res) => {
     try {
       res.json(await wavelogDatabase());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.get("/api/wavelog/database/password", async (_req, res) => {
+    try {
+      const out = await wavelogDbPassword();
+      res.status(out.password ? 200 : 404).json({ ok: Boolean(out.password), ...out });
+    } catch (err) {
+      res.status(500).json({ ok: false, password: "", error: String(err) });
+    }
+  });
+  app.post("/api/wavelog/db/up", async (_req, res) => {
+    try {
+      res.setTimeout(300_000);
+      res.json(await wavelogDbUp());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/wavelog/db/down", async (_req, res) => {
+    try {
+      res.setTimeout(120_000);
+      res.json(await wavelogDbDown());
     } catch (err) {
       res.status(500).json({ ok: false, error: String(err) });
     }

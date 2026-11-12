@@ -1,10 +1,13 @@
 [Unit]
 Description=Wavelog logbook (MariaDB + PHP) — Ham Cockpit
 Documentation=https://github.com/wavelog/wavelog
-Requires=docker.service
+# Wants (não Requires): se o Docker demorar/cair uma vez, a unit tenta de novo (Restart abaixo)
+# em vez de ficar "failed" para sempre.
+Wants=docker.service docker.socket network-online.target
 After=docker.service docker.socket network-online.target
-Wants=network-online.target docker.socket
 RequiresMountsFor=/opt/wavelog
+StartLimitIntervalSec=900
+StartLimitBurst=8
 # MariaDB + wavelog-main em :8086. Não publica 3306.
 
 [Service]
@@ -13,10 +16,13 @@ RemainAfterExit=yes
 WorkingDirectory=/opt/wavelog
 Environment=WAVELOG_DIR=/opt/wavelog
 # Espera o API do Docker (sock) — Avoid race no boot do Pi.
-ExecStartPre=/bin/bash -c 'for i in $(seq 1 90); do docker info >/dev/null 2>&1 && exit 0; sleep 1; done; echo "docker.service sem API após 90s" >&2; exit 1'
+ExecStartPre=/bin/bash -c 'for i in $(seq 1 120); do docker info >/dev/null 2>&1 && exit 0; sleep 1; done; echo "docker.service sem API após 120s" >&2; exit 1'
 ExecStart=/bin/bash /opt/wavelog/wavelog-ctl.sh start
 ExecStop=/bin/bash /opt/wavelog/wavelog-ctl.sh stop
 TimeoutStartSec=0
+Restart=on-failure
+RestartSec=30
 
 [Install]
 WantedBy=ham-cockpit.target
+WantedBy=multi-user.target

@@ -2,6 +2,8 @@
 Description=Hamlib rigctld IC-705 via ser2net :4001
 After=ser2net.service
 Requires=ser2net.service
+StartLimitIntervalSec=300
+StartLimitBurst=20
 # -r 127.0.0.1:4001 = CI-V sobre TCP (não é NET rigctl).
 # Clientes (WSJT-X, WaveLogGate): modelo 2 em 127.0.0.1:4532.
 
@@ -9,7 +11,7 @@ Requires=ser2net.service
 Type=simple
 ExecStart=/usr/bin/rigctld -m 3085 -r 127.0.0.1:4001 -s 115200 -t 4532 -c 0xA4
 Restart=on-failure
-RestartSec=3
+RestartSec=5
 
 [Install]
 WantedBy=ham-cockpit.target

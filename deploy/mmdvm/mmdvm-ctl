@@ -21,13 +21,63 @@ units_of() {
   esac
 }
 
+wait_pty() {
+  local i t
+  for i in $(seq 1 40); do
+    t="$(readlink -f /dev/ttyNextionDriver 2>/dev/null || true)"
+    if [[ -c "$t" ]]; then
+      chgrp dialout "$t" 2>/dev/null || true
+      chmod 660 "$t" 2>/dev/null || chmod 666 "$t" 2>/dev/null || true
+      return 0
+    fi
+    sleep 0.25
+  done
+  return 1
+}
+
+# start normal; se o systemd recusar por ciclo ("Transaction order is cyclic"), ignora dependências.
+start_unit() {
+  local u="$1"
+  systemctl reset-failed "$u" >/dev/null 2>&1 || true
+  systemctl is-active --quiet "$u" && return 0
+  systemctl start "$u" >/dev/null 2>&1 \
+    || systemctl start --job-mode=ignore-dependencies "$u" >/dev/null 2>&1 \
+    || true
+}
+
+stop_unit() {
+  systemctl stop "$1" >/dev/null 2>&1 \
+    || systemctl stop --job-mode=ignore-dependencies "$1" >/dev/null 2>&1 \
+    || true
+}
+
 cmd="${1:-}"
 case "$cmd" in
   start|stop|restart)
-    for u in $(units_of "${2:-all}"); do
-      systemctl "$cmd" "$u" >/dev/null 2>&1 || true
+    target="${2:-all}"
+    if [[ "$cmd" == "stop" ]]; then
+      # Gateways primeiro, Host depois, Nextion por último.
+      for u in $(units_of "$target" | tr ' ' '\n' | tac); do stop_unit "$u"; done
+      echo ok
+      exit 0
+    fi
+    if [[ "$cmd" == "restart" ]]; then
+      for u in $(units_of "$target" | tr ' ' '\n' | tac); do stop_unit "$u"; done
+      sleep 1
+    fi
+    # Ordem: Nextion → PTY → Host → gateways (um por vez; Pi 3 não aguenta tudo junto).
+    for u in $(units_of "$target"); do
+      start_unit "$u"
+      if [[ "$u" == "$nextion_unit" ]]; then wait_pty || true; fi
     done
     echo ok
+    ;;
+  is-active-all)
+    names=(mmdvmhost dmrgateway ysfgateway ircddbgateway nextiondriver)
+    mapfile -t st < <(systemctl is-active "$host_unit" "$dmr_unit" "$ysf_unit" "$dstar_unit" "$nextion_unit" 2>/dev/null || true)
+    for i in "${!names[@]}"; do
+      printf '%s=%s\n' "${names[$i]}" "${st[$i]:-inactive}"
+    done
     ;;
   is-active)
     target="${2:-host}"

@@ -76,12 +76,18 @@ case "${1:-}" in
     ensure_app_db
     ;;
   stop) compose stop ;;
+  db-start)
+    ensure_env
+    compose up -d wavelog-db
+    ensure_app_db
+    ;;
+  db-stop) compose stop wavelog-db ;;
   ensure-db)
     ensure_env
     ensure_app_db
     ;;
   *)
-    echo "uso: $0 start|stop|pull|ensure-db" >&2
+    echo "uso: $0 start|stop|pull|ensure-db|db-start|db-stop" >&2
     exit 1
     ;;
 esac

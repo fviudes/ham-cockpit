@@ -10,6 +10,8 @@ Wants=network-online.target
 # LCD no HAT: unit sempre instalada e habilitada (WantedBy ham-cockpit.target).
 # ABRT fd2=-1: patch HC_FD2_GUARD no binário, não ordem vs Docker.
 ConditionPathExists=/usr/local/bin/NextionDriver
+StartLimitIntervalSec=600
+StartLimitBurst=20
 
 [Service]
 Type=simple

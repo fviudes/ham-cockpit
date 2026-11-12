@@ -99,6 +99,8 @@ export function WavelogPage() {
   const [detail, setDetail] = useState("");
   const [db, setDb] = useState<WlDatabase | null>(null);
   const [showPass, setShowPass] = useState(false);
+  const [passBusy, setPassBusy] = useState(false);
+  const [dbPower, setDbPower] = useState(false);
 
   const applyStatus = (st: WlStatus) => {
     setS((p) => ({ ...p, wavelog: { ...p.wavelog, running: st.ok } }));
@@ -168,8 +170,33 @@ export function WavelogPage() {
                 placeholder={db?.passwordSource === "missing" ? tx("wlDbPassMissing") : "••••"}
               />
               <GhostBtn
-                disabled={!db?.password}
-                onClick={() => setShowPass((v) => !v)}
+                disabled={passBusy}
+                onClick={async () => {
+                  if (showPass) {
+                    setShowPass(false);
+                    return;
+                  }
+                  if (db?.password) {
+                    setShowPass(true);
+                    return;
+                  }
+                  // Senha vem de endpoint próprio (lê só o .env) — não depende das consultas SQL.
+                  setPassBusy(true);
+                  try {
+                    const r = await fetch("/api/wavelog/database/password");
+                    const j = (await r.json()) as { password?: string; error?: string };
+                    if (!j.password) {
+                      toast.error(j.error || tx("wlDbPassMissing"));
+                      return;
+                    }
+                    setDb((prev) => ({ ...(prev ?? ({} as WlDatabase)), password: j.password!, passwordSource: "env" }));
+                    setShowPass(true);
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : String(err));
+                  } finally {
+                    setPassBusy(false);
+                  }
+                }}
               >
                 {showPass ? <EyeOff size={16} /> : <Eye size={16} />}
                 <span className="ml-1">{showPass ? tx("wlDbHide") : tx("wlDbShow")}</span>
@@ -250,6 +277,24 @@ export function WavelogPage() {
           >
             {dbBusy ? tx("wlDbUpdating") : tx("wlDbUpdate")}
           </PrimaryBtn>
+          <GhostBtn
+            disabled={dbBusy || dbPower}
+            onClick={async () => {
+              setDbPower(true);
+              try {
+                const res = await fetch(dbOn ? "/api/wavelog/db/down" : "/api/wavelog/db/up", { method: "POST" });
+                const next = await readJson<WlDatabase>(res);
+                setDb((prev) => ({ ...next, password: next.password || prev?.password || "" }));
+                toast.success(dbOn ? tx("svcPowerOffOk") : tx("svcPowerOnOk"));
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : tx("svcPowerFail"));
+              } finally {
+                setDbPower(false);
+              }
+            }}
+          >
+            {dbPower ? "…" : dbOn ? tx("wlDbStop") : tx("wlDbStart")}
+          </GhostBtn>
           <GhostBtn
             disabled={dbBusy}
             onClick={async () => {

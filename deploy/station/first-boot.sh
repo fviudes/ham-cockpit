@@ -9,6 +9,8 @@ hostnamectl set-hostname ham-cockpit || true
 sed -i 's/\r$//' /opt/wavelog/wavelog-ctl.sh 2>/dev/null || true
 sed -i 's/\r$//' /opt/ham-cockpit/bin/mmdvm-ctl 2>/dev/null || true
 sed -i 's/\r$//' /opt/ham-cockpit/bin/first-boot.sh 2>/dev/null || true
+# Swap + ajustes de RAM (a imagem é gerada em chroot, sem swapon real).
+[[ -x /opt/ham-cockpit/bin/hc-tune.sh ]] && /opt/ham-cockpit/bin/hc-tune.sh || true
 
 # UART Dual Hat (PL011 /dev/ttyAMA0) — mesmo critério do install-station.
 if [[ "$(tr -d '\0' </proc/device-tree/model 2>/dev/null || true)" == *Raspberry* ]]; then

@@ -4,6 +4,10 @@ After=ham-cockpit.service nginx.service first-boot.service
 Wants=ham-cockpit.service nginx.service
 Conflicts=getty@tty1.service
 OnFailure=getty@tty1.service
+# Sem monitor HDMI ligado não sobe cage/Xwayland/WebKit (centenas de MB no Pi 3).
+# Falha repetida não pode virar laço: no máximo 5 tentativas em 10 min.
+StartLimitIntervalSec=600
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -17,13 +21,23 @@ TTYVHangup=yes
 StandardInput=tty
 StandardOutput=journal
 StandardError=journal
-Environment=XDG_RUNTIME_DIR=/run/user/%U
+# %U em unit de sistema é 0 (root): /run/user/0 não é do hamcockpit. Pasta própria do serviço.
+RuntimeDirectory=hc-vfo
+RuntimeDirectoryMode=0700
+Environment=XDG_RUNTIME_DIR=/run/hc-vfo
 Environment=XDG_SESSION_TYPE=wayland
-ExecStartPre=+/bin/mkdir -p /run/user/%U /var/lib/hamcockpit/chromium
-ExecStartPre=+/bin/chown hamcockpit:hamcockpit /run/user/%U /var/lib/hamcockpit/chromium
+# Perfil AppArmor do surf só permite @{HOME}/.surf (HOME real = /home/hamcockpit) e
+# nega dconf em /run/user — sem isto o surf morria e o unit entrava em laço (CPU/RAM).
+Environment=HOME=/home/hamcockpit
+Environment=GSETTINGS_BACKEND=memory
+Environment=GIO_USE_VFS=local
+Environment=NO_AT_BRIDGE=1
+ExecCondition=/bin/bash -c 'for f in /sys/class/drm/card*-HDMI-A-*/status; do [[ -r "$f" ]] && grep -qx connected "$f" && exit 0; done; exit 1'
+ExecStartPre=+/bin/mkdir -p /var/lib/hamcockpit/chromium /home/hamcockpit/.surf /home/hamcockpit/.cache
+ExecStartPre=+/bin/chown -R hamcockpit:hamcockpit /var/lib/hamcockpit/chromium /home/hamcockpit/.surf /home/hamcockpit/.cache
 ExecStart=/opt/ham-cockpit/bin/vfo-display-kiosk
 Restart=on-failure
-RestartSec=5
+RestartSec=30
 TimeoutStopSec=8
 
 [Install]

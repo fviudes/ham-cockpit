@@ -1,6 +1,13 @@
 #!/bin/bash
 # Liga/desliga unidades no boot e start/stop sob demanda. Chamado via sudo -n.
+#   station-svc is-active-all            → "id=estado" (um spawn só; usado no polling do console)
+#   station-svc enable|disable|start|stop|is-enabled|is-active ID
+# IDs com unit própria: ser2net wavelog wlg mmdvm spe wifi bluetooth web docker
+# IDs especiais: db (container wavelog-db), mmdvm (pilha Nextion+Host+gateways via mmdvm-ctl)
 set -euo pipefail
+
+WAVELOG_CTL=/opt/wavelog/wavelog-ctl.sh
+MMDVM_CTL=/opt/ham-cockpit/bin/mmdvm-ctl
 
 unit_of() {
   case "${1:-}" in
@@ -13,6 +20,7 @@ unit_of() {
     bluetooth) echo bluetooth.service ;;
     web) echo ham-cockpit.service ;;
     docker) echo docker.service ;;
+    db) echo wavelog-db ;; # container, não unit
     *) echo "" ;;
   esac
 }
@@ -37,13 +45,40 @@ ensure_docker() {
   wait_docker_api
 }
 
+db_running() {
+  [[ "$(docker inspect -f '{{.State.Running}}' wavelog-db 2>/dev/null || true)" == "true" ]]
+}
+
+# start com fallback para ciclo de ordem do systemd ("Transaction order is cyclic").
+unit_start() {
+  systemctl reset-failed "$1" >/dev/null 2>&1 || true
+  systemctl start "$1" || systemctl start --job-mode=ignore-dependencies "$1"
+}
+
 cmd="${1:-}"
+
+if [[ "$cmd" == "is-active-all" ]]; then
+  ids=(ser2net wavelog wlg mmdvm spe wifi bluetooth web)
+  units=()
+  for i in "${ids[@]}"; do units+=("$(unit_of "$i")"); done
+  mapfile -t st < <(systemctl is-active "${units[@]}" 2>/dev/null || true)
+  for i in "${!ids[@]}"; do
+    printf '%s=%s\n' "${ids[$i]}" "${st[$i]:-inactive}"
+  done
+  if command -v docker >/dev/null 2>&1 && db_running; then echo "db=active"; else echo "db=inactive"; fi
+  exit 0
+fi
+
 id="${2:-}"
 unit="$(unit_of "$id")"
 [[ -n "$unit" ]] || { echo "serviço desconhecido" >&2; exit 2; }
 
 case "$cmd" in
   enable)
+    if [[ "$id" == "db" ]]; then
+      echo enabled # só a marca do console (boot.json); o container usa restart: unless-stopped
+      exit 0
+    fi
     systemctl enable "$unit" >/dev/null
     if [[ "$id" == "web" ]]; then
       systemctl enable nginx.service >/dev/null 2>&1 || true
@@ -54,6 +89,10 @@ case "$cmd" in
     echo enabled
     ;;
   disable)
+    if [[ "$id" == "db" ]]; then
+      echo disabled
+      exit 0
+    fi
     if [[ "$id" == "web" ]]; then
       systemctl disable ham-cockpit.service nginx.service >/dev/null 2>&1 || true
     else
@@ -62,30 +101,56 @@ case "$cmd" in
     echo disabled
     ;;
   start)
-    if [[ "$id" == "wavelog" || "$id" == "docker" ]]; then
-      ensure_docker || { echo "docker não respondeu" >&2; exit 1; }
-    fi
-    if [[ "$id" != "docker" ]]; then
-      systemctl start "$unit"
-    fi
+    case "$id" in
+      wavelog | docker | db)
+        ensure_docker || { echo "docker não respondeu" >&2; exit 1; }
+        ;;
+    esac
+    case "$id" in
+      docker) ;;
+      db)
+        if [[ -x "$WAVELOG_CTL" ]]; then
+          bash "$WAVELOG_CTL" db-start
+        else
+          docker start wavelog-db
+        fi
+        ;;
+      mmdvm)
+        if [[ -x "$MMDVM_CTL" ]]; then "$MMDVM_CTL" start all >/dev/null; else unit_start "$unit"; fi
+        ;;
+      *) unit_start "$unit" ;;
+    esac
     echo started
     ;;
   stop)
-    if [[ "$id" == "docker" ]]; then
-      echo "recusado: não para o Docker da estação" >&2
-      exit 1
-    fi
-    systemctl stop "$unit"
+    case "$id" in
+      docker)
+        echo "recusado: não para o Docker da estação" >&2
+        exit 1
+        ;;
+      db)
+        if [[ -x "$WAVELOG_CTL" ]]; then bash "$WAVELOG_CTL" db-stop; else docker stop wavelog-db; fi
+        ;;
+      mmdvm)
+        if [[ -x "$MMDVM_CTL" ]]; then "$MMDVM_CTL" stop all >/dev/null; else systemctl stop "$unit"; fi
+        ;;
+      *) systemctl stop "$unit" ;;
+    esac
     echo stopped
     ;;
   is-enabled)
+    if [[ "$id" == "db" ]]; then echo enabled; exit 0; fi
     systemctl is-enabled "$unit" 2>/dev/null || echo disabled
     ;;
   is-active)
+    if [[ "$id" == "db" ]]; then
+      if db_running; then echo active; else echo inactive; fi
+      exit 0
+    fi
     systemctl is-active "$unit" 2>/dev/null || echo inactive
     ;;
   *)
-    echo "uso: station-svc enable|disable|start|stop|is-enabled|is-active ID" >&2
+    echo "uso: station-svc is-active-all | enable|disable|start|stop|is-enabled|is-active ID" >&2
     exit 1
     ;;
 esac

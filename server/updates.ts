@@ -391,6 +391,31 @@ function ingestProgress(id: UpdateId, text: string) {
   }
 }
 
+/**
+ * Uma única verificação por vez (single-flight). Sem isso, vários navegadores/abas e o
+ * polling do console disparavam `station-upd check` + curl em paralelo no Pi 3 (1 GB)
+ * e o equipamento travava por falta de RAM/CPU.
+ */
+let inflight: Promise<UpdatesSnapshot> | null = null;
+let inflightKind: "check" | "refresh" | null = null;
+
+function runCheck(kind: "check" | "refresh"): Promise<UpdatesSnapshot> {
+  if (inflight) return inflight;
+  inflightKind = kind;
+  inflight = (async () => {
+    try {
+      const [live, rem] = await Promise.all([helper(kind), fetchRemotes()]);
+      const snap = applyRemotes(live ?? baseline(), rem);
+      cache = { at: Date.now(), snap };
+      return snap;
+    } finally {
+      inflight = null;
+      inflightKind = null;
+    }
+  })();
+  return inflight;
+}
+
 export async function updatesStatus(force = false): Promise<UpdatesSnapshot> {
   const running = Array.from(jobs.values()).some((j) => j.status === "running");
   if (running) {
@@ -400,18 +425,21 @@ export async function updatesStatus(force = false): Promise<UpdatesSnapshot> {
   if (!force && cache && Date.now() - cache.at < 60_000) {
     return snapshot(cache.snap.items, cache.snap.os, cache.snap.ok, cache.snap.error);
   }
-  const [live, rem] = await Promise.all([helper("check"), fetchRemotes()]);
-  const snap = applyRemotes(live ?? baseline(), rem);
-  cache = { at: Date.now(), snap };
-  return snap;
+  // Já existe verificação em andamento: reaproveita (ou devolve o cache velho sem esperar).
+  if (inflight) {
+    if (cache && !force) return snapshot(cache.snap.items, cache.snap.os, cache.snap.ok, cache.snap.error);
+    return inflight;
+  }
+  return runCheck("check");
 }
 
 export async function updatesRefresh(): Promise<UpdatesSnapshot> {
+  if (inflight && inflightKind === "refresh") return inflight;
+  if (inflight) {
+    await inflight.catch(() => undefined);
+  }
   cache = null;
-  const [live, rem] = await Promise.all([helper("refresh"), fetchRemotes()]);
-  const snap = applyRemotes(live ?? baseline(), rem);
-  cache = { at: Date.now(), snap };
-  return snap;
+  return runCheck("refresh");
 }
 
 function lastJsonObject(text: string): string {
@@ -501,6 +529,8 @@ function spawnApply(sid: UpdateId): Promise<UpdatesSnapshot> {
   });
 }
 
+let applyChain: Promise<void> = Promise.resolve();
+
 export async function updatesApply(id: string): Promise<UpdatesSnapshot> {
   if (!UPDATE_IDS.includes(id as UpdateId)) {
     const cur = await updatesStatus();
@@ -521,7 +551,24 @@ export async function updatesApply(id: string): Promise<UpdatesSnapshot> {
     };
   }
   try {
-    return await spawnApply(sid);
+    // Um apply por vez (apt + docker pull + npm em paralelo derrubava o Pi 3).
+    jobs.set(sid, {
+      id: sid,
+      status: "running",
+      pct: 1,
+      determinate: true,
+      stage: "queued",
+      error: "",
+      bytes: 0,
+      totalBytes: 0,
+      etaSec: 0,
+    });
+    const run = applyChain.then(() => spawnApply(sid));
+    applyChain = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return await run;
   } catch (err) {
     const cur = await updatesStatus(true);
     return { ...cur, ok: false, error: String(err) };

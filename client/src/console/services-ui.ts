@@ -5,6 +5,7 @@ import type { Station } from "./state";
 export const SVC_LABEL: Record<ServiceId, I18nKey> = {
   ser2net: "svcSer2net",
   wavelog: "svcWavelog",
+  db: "svcDb",
   wlg: "svcWlg",
   mmdvm: "svcMmdvm",
   radio: "svcRadio",
@@ -24,6 +25,7 @@ export const SVC_LABEL: Record<ServiceId, I18nKey> = {
 export const SVC_HINT: Record<ServiceId, I18nKey> = {
   ser2net: "svcSer2netHint",
   wavelog: "svcWavelogHint",
+  db: "svcDbHint",
   wlg: "svcWlgHint",
   mmdvm: "svcMmdvmHint",
   radio: "svcRadioHint",
@@ -40,6 +42,21 @@ export const SVC_HINT: Record<ServiceId, I18nKey> = {
   web: "svcWebHint",
 };
 
+/** Serviços com botão Ligar/Desligar (espelha POWER_IDS em server/services.ts). */
+export const SVC_POWER = new Set<ServiceId>([
+  "ser2net",
+  "wavelog",
+  "db",
+  "wlg",
+  "mmdvm",
+  "spe",
+  "bluetooth",
+  "radio",
+  "lextel",
+  "ldg",
+  "lp100a",
+]);
+
 export function serviceLive(id: ServiceId, s: Station, running: boolean) {
   if (id === "web") return true;
   if (id === "radio") return s.ic705.phase === "ready" || s.ic705.civ || s.radios.items.some((r) => r.connected);
@@ -48,6 +65,7 @@ export function serviceLive(id: ServiceId, s: Station, running: boolean) {
   if (id === "lp100a") return s.lp100a.connected;
   if (id === "wifi") return s.wifi.staConnected || s.wifi.ethConnected;
   if (id === "wavelog") return s.wavelog.running;
+  if (id === "db") return running;
   if (id === "wlg") return s.wlg.running;
   if (id === "mmdvm") return s.mmdvm.running || running;
   if (id === "bluetooth") return s.ic705.phase === "ready" || s.ble.connected;

@@ -666,6 +666,7 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
   const [s, setS] = useState<Station>(initial);
   const radiosRef = useRef<StationRadio[]>([]);
   const servicesRef = useRef(s.services);
+  const applyingRef = useRef(false);
   const inflightPrimary = useRef(false);
   const usbTried = useRef(false);
   const pickerArmed = useRef(false);
@@ -1158,15 +1159,40 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
         toast.warning(`${t(lang, "updPending")} · ${pending} ${t(lang, "updPendingN")}`);
       }
     };
-    const pull = () => {
-      void fetch("/api/updates")
-        .then((r) => r.json())
-        .then(apply)
-        .catch(() => undefined);
+    // Rápido (500 ms) só enquanto há apply rodando — o servidor responde da memória.
+    // Parado: 20 s. Nunca empilha requisições (Pi 3 travava com polling agressivo).
+    let stopped = false;
+    let timer = 0;
+    let busy = false;
+    const loop = async () => {
+      if (stopped) return;
+      if (!busy) {
+        busy = true;
+        try {
+          const r = await fetch("/api/updates");
+          const j = await r.json();
+          apply(j);
+          applyingRef.current = Array.isArray(j?.items) && j.items.some((row: { applying?: boolean }) => row.applying)
+            || (Array.isArray(j?.jobs) && j.jobs.some((row: { status?: string }) => row.status === "running"));
+        } catch {
+          /* ignore */
+        } finally {
+          busy = false;
+        }
+      }
+      timer = window.setTimeout(loop, applyingRef.current ? 500 : 20_000);
     };
-    pull();
-    const tick = window.setInterval(pull, 500);
-    return () => window.clearInterval(tick);
+    void loop();
+    const wake = () => {
+      window.clearTimeout(timer);
+      void loop();
+    };
+    window.addEventListener("hc-updates-wake", wake);
+    return () => {
+      stopped = true;
+      window.clearTimeout(timer);
+      window.removeEventListener("hc-updates-wake", wake);
+    };
   }, [lang]);
 
   const pushLog = useCallback((kind: LogKind, msg: string) => {

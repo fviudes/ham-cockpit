@@ -1,8 +1,11 @@
 [Unit]
 Description=WaveLogGate (UDP QSO → Wavelog logbook)
 Documentation=https://github.com/wavelog/WaveLogGate
-After=network-online.target wavelog.service rigctld@ic705.service
-Wants=network-online.target wavelog.service
+# NÃO depender de wavelog.service/rigctld: o Wavelog leva minutos para subir no Pi 3 e
+# segurava o WLG parado no boot. O gate só fala HTTP/UDP local e reconecta sozinho.
+After=network.target
+StartLimitIntervalSec=300
+StartLimitBurst=20
 
 [Service]
 Type=simple

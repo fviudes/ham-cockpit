@@ -6,6 +6,8 @@ Wants=network-online.target
 # Sem BindsTo: junto com Nextion Before/Wants gerava "Transaction order is cyclic".
 PartOf=mmdvmhost.service
 ConditionPathExists=/usr/local/bin/YSFGateway
+StartLimitIntervalSec=600
+StartLimitBurst=20
 
 [Service]
 Type=simple
@@ -14,7 +16,7 @@ Group=dialout
 ExecStartPre=/bin/mkdir -p /var/log/mmdvm
 ExecStart=/bin/bash -c 'INI=/opt/ham-cockpit/mmdvm/ysfgateway.ini; [[ -f /etc/ysfgateway ]] && INI=/etc/ysfgateway; exec /usr/local/bin/YSFGateway "$INI"'
 Restart=on-failure
-RestartSec=3
+RestartSec=10
 
 [Install]
 WantedBy=ham-cockpit.target

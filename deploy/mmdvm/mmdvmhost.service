@@ -7,6 +7,8 @@ Wants=network-online.target
 # com PartOf/BindsTo dos gateways isso gerava "Transaction order is cyclic".
 # A ordem fica no ExecStartPre: espera o PTY já chmod pelo nextiondriver.service.
 ConditionPathExists=/usr/local/bin/MMDVMHost
+StartLimitIntervalSec=600
+StartLimitBurst=20
 
 [Service]
 Type=simple
@@ -17,7 +19,7 @@ ExecStartPre=/bin/mkdir -p /var/log/mmdvm
 ExecStartPre=/bin/bash -c 'for i in $(seq 1 40); do t=$(readlink -f /dev/ttyNextionDriver 2>/dev/null || true); if [[ -c "$t" && -r "$t" && -w "$t" ]]; then exit 0; fi; sleep 0.25; done; exit 0'
 ExecStart=/bin/bash -c 'INI=/opt/ham-cockpit/mmdvm/mmdvmhost.ini; [[ -f /etc/mmdvmhost ]] && INI=/etc/mmdvmhost; exec /usr/local/bin/MMDVMHost "$INI"'
 Restart=on-failure
-RestartSec=3
+RestartSec=10
 Nice=-5
 
 [Install]

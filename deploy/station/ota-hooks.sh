@@ -236,6 +236,15 @@ if [[ -d "$ROOT/bin" ]]; then
   fi
 fi
 
+# Estabilidade (swap, journald, mask de serviços pesados, CRLF, ser2net vazio).
+if [[ -f "$ROOT/bin/hc-tune.sh" ]]; then
+  sed -i 's/\r$//' "$ROOT/bin/hc-tune.sh" 2>/dev/null || true
+  install -m 0755 "$ROOT/bin/hc-tune.sh" /opt/ham-cockpit/bin/hc-tune.sh
+fi
+if [[ -x /opt/ham-cockpit/bin/hc-tune.sh ]]; then
+  /opt/ham-cockpit/bin/hc-tune.sh || true
+fi
+
 # Daemon g4klx lê ircddbgateway (sem .conf) no confdir.
 if [[ -f /opt/ham-cockpit/mmdvm/ircddbgateway.conf && ! -e /opt/ham-cockpit/mmdvm/ircddbgateway ]]; then
   ln -sfn ircddbgateway.conf /opt/ham-cockpit/mmdvm/ircddbgateway
@@ -396,7 +405,11 @@ elif [[ -f /opt/wavelog/.env ]] && getent passwd hamcockpit >/dev/null 2>&1; the
 fi
 # Garante usuário/banco wavelog alinhados ao .env (não rotaciona senha).
 mkdir -p /opt/wavelog
+COMPOSE_CHANGED=0
 if [[ -f "$ROOT/wavelog/docker-compose.yml" ]]; then
+  if ! cmp -s "$ROOT/wavelog/docker-compose.yml" /opt/wavelog/docker-compose.yml 2>/dev/null; then
+    COMPOSE_CHANGED=1
+  fi
   install -o root -g hamcockpit -m 0644 "$ROOT/wavelog/docker-compose.yml" /opt/wavelog/docker-compose.yml
 fi
 if [[ -f "$ROOT/bin/wavelog-ctl.sh" ]]; then
@@ -440,7 +453,13 @@ if command -v docker >/dev/null 2>&1 || [[ -x /usr/bin/docker ]]; then
   # O station-upd agenda o restart depois de devolver o JSON.
   if systemctl cat wavelog.service >/dev/null 2>&1; then
     systemctl reset-failed wavelog.service 2>/dev/null || true
-    systemctl restart wavelog.service 2>/dev/null || systemctl start wavelog.service 2>/dev/null || true
+    # Não faz restart (derrubava MariaDB/Wavelog a cada OTA e pesava no Pi 3). Só sobe se parado.
+    if ! systemctl is-active --quiet wavelog.service; then
+      systemctl start --no-block wavelog.service 2>/dev/null || true
+    elif [[ "${COMPOSE_CHANGED:-0}" == 1 && -x /opt/wavelog/wavelog-ctl.sh ]]; then
+      # Compose novo (ex.: MariaDB enxuto): recria só o que mudou, em segundo plano.
+      nohup /opt/wavelog/wavelog-ctl.sh start >/var/log/wavelog-recompose.log 2>&1 </dev/null &
+    fi
   fi
 else
   echo "ota-hooks: docker ausente neste host — grave imagem bake com docker.io" >&2

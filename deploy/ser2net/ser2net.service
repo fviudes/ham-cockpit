@@ -3,12 +3,15 @@ Description=ser2net serial-over-TCP (Ham Cockpit)
 Documentation=man:ser2net.yaml(5)
 After=network-online.target
 Wants=network-online.target
+# Sem laço infinito: no máximo 20 tentativas em 5 min (config inválida não pode saturar o Pi).
+StartLimitIntervalSec=300
+StartLimitBurst=20
 
 [Service]
 Type=simple
 ExecStart=/usr/sbin/ser2net -n -c /opt/ser2net/ser2net.yaml
 Restart=on-failure
-RestartSec=2
+RestartSec=5
 
 [Install]
 WantedBy=ham-cockpit.target

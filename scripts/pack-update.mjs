@@ -19,6 +19,7 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -44,6 +45,7 @@ const BIN_FROM_STATION = [
   "vfo-display-kiosk",
   "vfo-display-idle",
   "ldg-serial",
+  "hc-tune.sh",
 ];
 
 const BIN_EXTRA = [
@@ -65,6 +67,11 @@ const SYSTEMD_UNITS = [
 /** Units fora de deploy/station (caminho relativo ao ROOT). */
 const SYSTEMD_EXTRA = [
   ["deploy/wavelog/wavelog.service", "wavelog.service"],
+  ["deploy/wavelog-gate/waveloggate.service", "waveloggate.service"],
+  ["deploy/ser2net/ser2net.service", "ser2net.service"],
+  ["deploy/hamlib/rigctld@ic705.service", "rigctld@ic705.service"],
+  ["deploy/hamlib/rigctld@cat2.service", "rigctld@cat2.service"],
+  ["deploy/hamlib/ampctld@spe.service", "ampctld@spe.service"],
   ["deploy/mmdvm/mmdvmhost.service", "mmdvmhost.service"],
   ["deploy/mmdvm/dmrgateway.service", "dmrgateway.service"],
   ["deploy/mmdvm/ysfgateway.service", "ysfgateway.service"],
@@ -87,6 +94,28 @@ function readVersion() {
   if (fromFile) return fromFile;
   const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   return String(pkg.version || "").replace(/^v/i, "");
+}
+
+const BINARY_EXT = /\.(tgz|gz|xz|zip|png|jpe?g|gif|webp|ico|woff2?|ttf|otf|eot|mp3|wav|ogg|bin|dat|node|so)$/i;
+
+/** Converte CRLF→LF em todo arquivo de texto do stage. Retorna quantos foram alterados. */
+function normalizeEolTree(dir) {
+  let n = 0;
+  for (const ent of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, ent.name);
+    if (ent.isDirectory()) {
+      n += normalizeEolTree(p);
+      continue;
+    }
+    if (!ent.isFile() || BINARY_EXT.test(ent.name)) continue;
+    const buf = readFileSync(p);
+    if (buf.includes(0)) continue;
+    if (!buf.includes(13)) continue;
+    const out = Buffer.from(buf.toString("latin1").replace(/\r\n/g, "\n"), "latin1");
+    writeFileSync(p, out);
+    n += 1;
+  }
+  return n;
 }
 
 function run(cmd, args) {
@@ -189,6 +218,10 @@ function main() {
   } else {
     console.warn("AVISO: update/mmdvm-arm64.tgz ausente — OTA tentará baixar no Pi");
   }
+
+  // No Windows o working tree pode ter CRLF; no Pi isso quebra shebang/units (`$'\r': command not found`).
+  const fixed = normalizeEolTree(stage);
+  if (fixed) console.log(`CRLF→LF em ${fixed} arquivo(s) do pacote`);
 
   mkdirSync(UPDATE_DIR, { recursive: true });
   const tgzName = `${pkgName}.tgz`;

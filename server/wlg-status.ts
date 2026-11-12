@@ -36,8 +36,19 @@ function probe(port: number): Promise<boolean> {
   });
 }
 
+const STATION_SVC = "/opt/ham-cockpit/bin/station-svc";
+
+/** start/stop/enable exigem root: via `sudo station-svc` (systemctl direto falhava com polkit). */
 async function systemctl(action: "start" | "stop" | "enable" | "is-active"): Promise<boolean> {
   try {
+    if (existsSync(STATION_SVC)) {
+      const { stdout } = await execFileAsync("sudo", ["-n", STATION_SVC, action, "wlg"], {
+        timeout: 30_000,
+        windowsHide: true,
+      });
+      if (action === "is-active") return stdout.trim() === "active";
+      return true;
+    }
     const { stdout } = await execFileAsync("systemctl", [action, "waveloggate.service"], {
       timeout: 20_000,
       windowsHide: true,

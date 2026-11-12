@@ -4,16 +4,17 @@ Documentation=file:///opt/ham-cockpit/bin/ham-cockpit-ap.sh
 After=NetworkManager.service network.target
 Wants=NetworkManager.service
 # Sem network-online: no campo sem cabo o "online" pode nunca chegar.
+# Cada tentativa varre o Wi‑Fi (brcmfmac) e pesa no Pi 3 — limite de tentativas.
+StartLimitIntervalSec=900
+StartLimitBurst=6
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/bin/bash /opt/ham-cockpit/bin/ham-cockpit-ap.sh
-# Firmware wlan e NM atrasam no 1.º boot — tenta de novo.
+# Firmware wlan e NM atrasam no 1.º boot — tenta de novo (o script já faz 10 tentativas internas).
 Restart=on-failure
-RestartSec=15
-StartLimitIntervalSec=300
-StartLimitBurst=12
+RestartSec=60
 
 [Install]
 WantedBy=ham-cockpit.target

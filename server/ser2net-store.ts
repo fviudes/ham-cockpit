@@ -93,7 +93,9 @@ function renderYaml(bind: string, services: Ser2netSvc[]): string {
     "# ser2net 4 — único processo na TTY. Rádio CAT/USB e acessórios falam TCP (bind:porta); Hamlib usa -r bind:porta.",
     `# Pasta: ${dataDir()}`,
     "",
-    ...(blocks.length ? blocks : ["# (nenhum serviço cadastrado)"]),
+    // ser2net 4 recusa documento só com comentários ("Unexpected scalar value") e o
+    // systemd reiniciava a cada 2 s. `define` vazio é aceito e mantém o daemon de pé.
+    ...(blocks.length ? blocks : ["# (nenhum serviço cadastrado)", 'define: &hc_empty ""']),
     "",
   ].join("\n");
 }
