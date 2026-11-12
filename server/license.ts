@@ -220,10 +220,8 @@ async function toApi(store: LicenseStore, online: boolean | null = null): Promis
   store.clock = nextClock;
   writeStore(store);
   const display = serial ? await serialDisplay(serial) : null;
-  const chk = display?.slice(-2);
-  const buyUrl = serial
-    ? `${PORTAL_ORIGIN}/comprar?serial=${encodeURIComponent(serial)}${chk ? `&chk=${chk}` : ""}`
-    : null;
+  // Portal `/comprar` mostra este mesmo formato no campo e no card de preço.
+  const buyUrl = display ? `${PORTAL_ORIGIN}/comprar?serial=${encodeURIComponent(display)}` : null;
   const body: LicenseApiBody = {
     serial,
     serialDisplay: display,
@@ -429,8 +427,8 @@ export function registerLicenseRoutes(app: Express) {
         email: store.email,
         appVersion: APP_VERSION,
         portalUrl: PORTAL_ORIGIN,
-        buyUrl: `${PORTAL_ORIGIN}/comprar?serial=${encodeURIComponent(serial)}&chk=${chk}`,
-        licenseUrl: `${PORTAL_ORIGIN}/licenca?serial=${encodeURIComponent(serial)}`,
+        buyUrl: `${PORTAL_ORIGIN}/comprar?serial=${encodeURIComponent(display)}`,
+        licenseUrl: `${PORTAL_ORIGIN}/licenca?serial=${encodeURIComponent(display)}`,
       });
     } catch (err) {
       res.status(500).json({ ok: false, error: String(err) });

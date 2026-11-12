@@ -89,6 +89,30 @@ function formatCivAddr(n: number): string {
   return `0x${n.toString(16).toUpperCase().padStart(2, "0")}`;
 }
 
+/**
+ * Network User do Icom é case-sensitive e o menu do rádio grava em maiúsculas.
+ * `pr2pt` ≠ `PR2PT` → login 0xFEFFFFFF na UDP 50001.
+ */
+export function normalizeIcomNetUser(user: string): string {
+  return String(user || "")
+    .trim()
+    .toUpperCase()
+    .slice(0, 16);
+}
+
+function loginRejectHint(errorCode: number | undefined): string {
+  const code = errorCode != null ? errorCode >>> 0 : undefined;
+  // Rádio manda LE 0xFEFFFFFF (bytes ff ff ff fe); libs BE leem 0xFFFFFFFE.
+  const authFail = code === 0xfeffffff || code === 0xfffffffe || code === 0xffffffff;
+  if (authFail) {
+    return "Login Icom LAN recusado — confira Network User/senha (maiúsculas/minúsculas) e se outro cliente (wfview/RS-BA1) já está conectado";
+  }
+  if (code != null) {
+    return `Login Icom LAN recusado (código 0x${code.toString(16).toUpperCase()}) — confira Network User/senha e sessão concorrente`;
+  }
+  return "Login Icom LAN recusado — confira Network User/senha e se outro cliente já está na LAN";
+}
+
 /** Resolve perfil icom-wlan-node a partir do catálogo / nome. */
 export function resolveIcomLanModel(equipmentId?: string, hint?: string): IcomModelId | "auto" {
   const id = `${equipmentId || ""} ${hint || ""}`.toLowerCase();
@@ -286,7 +310,8 @@ export async function icomLanConnect(opts: ConnectOpts): Promise<IcomLanSnapshot
     error = "Informe o IP ou hostname do rádio";
     return snap();
   }
-  if (!opts.userName?.trim()) {
+  const userName = normalizeIcomNetUser(opts.userName || "");
+  if (!userName) {
     phase = "error";
     error = "Informe o Network User do Icom LAN";
     return snap();
@@ -294,10 +319,11 @@ export async function icomLanConnect(opts: ConnectOpts): Promise<IcomLanSnapshot
 
   ensureTcpBridge();
 
+  const password = String(opts.password || "").slice(0, 16);
   const control = new IcomControl({
     control: { ip: host, port: controlPort },
-    userName: opts.userName.trim().slice(0, 16),
-    password: String(opts.password || "").slice(0, 16),
+    userName,
+    password,
     model: modelLabel === "auto" ? "auto" : (modelLabel as IcomModelId),
     connectTimeoutMs: 18_000,
     logger: () => {
@@ -307,12 +333,7 @@ export async function icomLanConnect(opts: ConnectOpts): Promise<IcomLanSnapshot
   attachCivListeners(control);
   let loginHint = "";
   control.events.on("login", (res) => {
-    if (!res.ok) {
-      loginHint =
-        res.errorCode != null
-          ? `login recusado (código ${res.errorCode}) — confira Network User/senha e se outro cliente já está na LAN`
-          : "login recusado — confira Network User/senha e se outro cliente já está na LAN";
-    }
+    if (!res.ok) loginHint = loginRejectHint(res.errorCode);
   });
   rig = control;
 
@@ -340,7 +361,7 @@ export async function icomLanConnect(opts: ConnectOpts): Promise<IcomLanSnapshot
     error =
       loginHint ||
       raw ||
-      "Falha ao autenticar no Icom LAN (UDP 50001). Confira IP, Network User, senha e se o rádio já não tem outra sessão aberta.";
+      "Falha ao autenticar no Icom LAN (UDP 50001). Confira IP, Network User (maiúsculas), senha e se o rádio já não tem outra sessão aberta.";
     try {
       await control.disconnect().catch(() => undefined);
     } catch {

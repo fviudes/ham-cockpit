@@ -94,7 +94,7 @@ export default function LicensePage() {
           </button>
           <button
             type="button"
-            onClick={() => navigate(`/comprar?serial=${encodeURIComponent(serial.trim())}&lang=${lang}`)}
+            onClick={() => navigate(`/comprar?serial=${encodeURIComponent(serial.trim())}`)}
             className="rounded-md border border-[rgba(79,195,247,0.35)] px-4 py-2 text-sm text-[#4fc3f7]"
           >
             {t(LIC.buy)}

@@ -2,5 +2,5 @@
   "version": "0.1.07.03",
   "channel": "main",
   "file": "ham-cockpit-0.1.07.03.tgz",
-  "notes": "Ham Cockpit v0.1.07.03 — gate de licença, e-mail, Terminal sudo, backup com stages, remove aba senha; MMDVM: indicativo persistente, RX/TX editáveis."
+  "notes": "Ham Cockpit v0.1.07.03 — gate de licença, e-mail, Terminal, backup; MMDVM callsign/RX/TX; IC-705 LAN (Network User em maiúsculas); portal /comprar serial alinhado ao card."
 }

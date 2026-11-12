@@ -269,7 +269,7 @@ export function Ic705Page() {
     setCivAddr(row.civAddr);
     setHost(row.host || (row.link === "network" ? row.device : ""));
     setNetProfile(row.netProfile || "");
-    setNetUser(row.netUser || "");
+    setNetUser((row.netUser || "").toUpperCase());
     setNetPassword(row.netPassword || "");
   };
 
@@ -738,9 +738,12 @@ export function Ic705Page() {
                   <Field label={tx("radioNetUser")}>
                     <ConsoleInput
                       value={netUser}
-                      onChange={(e) => setNetUser(e.target.value)}
-                      placeholder="Network User"
+                      onChange={(e) =>
+                        setNetUser(needNetAuth ? e.target.value.toUpperCase() : e.target.value)
+                      }
+                      placeholder="PR2PT"
                       autoComplete="username"
+                      spellCheck={false}
                     />
                   </Field>
                   <Field label={tx("radioNetPassword")}>

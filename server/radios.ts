@@ -6,7 +6,14 @@ import { promisify } from "node:util";
 import { randomBytes } from "node:crypto";
 import { SER2NET_RADIO_ID } from "../shared/const";
 import { EQUIPMENT_MAKERS, getEquipment, type EquipmentMaker } from "../shared/equipment";
-import { icomLanConnect, icomLanDisconnect, icomLanLive, icomLanStatus, resolveIcomLanModel } from "./icom-lan";
+import {
+  icomLanConnect,
+  icomLanDisconnect,
+  icomLanLive,
+  icomLanStatus,
+  normalizeIcomNetUser,
+  resolveIcomLanModel,
+} from "./icom-lan";
 import { listSerialDevices } from "./list-serials";
 import { loadSer2net, saveSer2net } from "./ser2net-store";
 
@@ -188,7 +195,10 @@ function sanitize(raw: Partial<StationRadio>, fallback?: StationRadio): StationR
   const deviceName = String(raw.deviceName ?? fallback?.deviceName ?? "").trim();
   const host = String(raw.host ?? fallback?.host ?? "").trim();
   const netProfile = String(raw.netProfile ?? fallback?.netProfile ?? "").trim();
-  const netUser = String(raw.netUser ?? fallback?.netUser ?? "").trim();
+  // Icom Network User é case-sensitive; o rádio grava em maiúsculas.
+  const netUserRaw = String(raw.netUser ?? fallback?.netUser ?? "").trim();
+  const netUser =
+    link === "network" && maker === "icom" ? normalizeIcomNetUser(netUserRaw) : netUserRaw;
   // Senha vazia no payload = manter a gravada (formulário não reenvia).
   const incomingPass = raw.netPassword;
   const netPassword =

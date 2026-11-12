@@ -34,7 +34,16 @@ export default function BuyPage() {
   const [, navigate] = useLocation();
   const search = useSearch();
   const params = useMemo(() => new URLSearchParams(search), [search]);
-  const [serial, setSerial] = useState(params.get("serial") ?? "");
+  /** Fonte de verdade: query `?serial=` (e `chk` opcional, links antigos). */
+  const serialParam = useMemo(() => (params.get("serial") ?? "").trim(), [params]);
+  const chkParam = useMemo(() => {
+    const c = (params.get("chk") ?? "").trim().toUpperCase();
+    return c || undefined;
+  }, [params]);
+  const fromDevice = Boolean(serialParam);
+
+  /** Digitação manual só quando a URL não trouxe serial. */
+  const [manualSerial, setManualSerial] = useState("");
   const [cfg, setCfg] = useState<Config | null>(null);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [provider, setProvider] = useState("");
@@ -43,41 +52,72 @@ export default function BuyPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
-  useEffect(() => {
-    if (!serial.trim()) {
-      setCfg(null);
-      return;
-    }
-    void fetch(`/api/checkout/config?serial=${encodeURIComponent(serial.trim())}&lang=${lang}`)
-      .then((r) => r.json())
-      .then((j: Config) => {
-        setCfg(j);
-        const first = j.providers?.[0]?.id ?? "";
-        setProvider(first);
-      })
-      .catch(() => setErr(t(LIC.errPortal)));
-  }, [serial, lang, t]);
+  const serialForApi = fromDevice ? serialParam : manualSerial.trim();
+  /** Campo e card usam o mesmo display canônico do portal. */
+  const serialShown =
+    quote?.serialDisplay || cfg?.serial?.display || (fromDevice ? serialParam : manualSerial);
 
   useEffect(() => {
-    if (!cfg?.serial?.valid || !cfg.priceConfigured || cfg.alreadyLicensed) {
+    setCfg(null);
+    setQuote(null);
+    setErr("");
+    if (!fromDevice) setManualSerial("");
+  }, [serialParam, fromDevice]);
+
+  useEffect(() => {
+    if (!serialForApi) {
+      setCfg(null);
       setQuote(null);
       return;
     }
+    const qs = new URLSearchParams({ serial: serialForApi, lang });
+    if (chkParam) qs.set("chk", chkParam);
+    let cancelled = false;
+    void fetch(`/api/checkout/config?${qs}`)
+      .then((r) => r.json())
+      .then((j: Config) => {
+        if (cancelled) return;
+        setCfg(j);
+        setProvider(j.providers?.[0]?.id ?? "");
+      })
+      .catch(() => {
+        if (!cancelled) setErr(t(LIC.errPortal));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [serialForApi, chkParam, lang, t]);
+
+  useEffect(() => {
+    if (!cfg?.serial?.valid || !cfg.priceConfigured || cfg.alreadyLicensed || !serialForApi) {
+      setQuote(null);
+      return;
+    }
+    let cancelled = false;
     setBusy(true);
     void fetch("/api/checkout/quote", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ serial: serial.trim() }),
+      body: JSON.stringify({ serial: serialForApi, chk: chkParam }),
     })
       .then(async (r) => {
         const j = (await r.json()) as Quote;
         if (!r.ok) throw new Error(j.message || j.error || "quote");
-        setQuote(j);
-        setErr("");
+        if (!cancelled) {
+          setQuote(j);
+          setErr("");
+        }
       })
-      .catch((e: Error) => setErr(e.message || t(LIC.errPortal)))
-      .finally(() => setBusy(false));
-  }, [cfg, serial, t]);
+      .catch((e: Error) => {
+        if (!cancelled) setErr(e.message || t(LIC.errPortal));
+      })
+      .finally(() => {
+        if (!cancelled) setBusy(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [cfg, serialForApi, chkParam, t]);
 
   const start = async () => {
     if (!quote?.quoteId || !provider || !accept) return;
@@ -123,20 +163,28 @@ export default function BuyPage() {
         <label className="mb-1 block text-sm text-[#94a3b8]">{t(LIC.serial)}</label>
         <input
           className="mb-4 w-full rounded-md border border-[rgba(79,195,247,0.25)] bg-[#132033] px-3 py-2 font-mono text-sm text-white"
-          value={serial}
-          placeholder={t(LIC.serialPh)}
-          onChange={(e) => setSerial(e.target.value)}
+          value={serialShown}
+          readOnly={fromDevice}
+          placeholder={fromDevice ? undefined : t(LIC.serialPh)}
+          onChange={(e) => {
+            if (fromDevice) return;
+            setManualSerial(e.target.value);
+          }}
+          spellCheck={false}
+          autoComplete="off"
         />
 
-        {!serial.trim() ? <p className="text-sm text-[#94a3b8]">{t(BUY.needSerial)}</p> : null}
+        {!serialForApi ? <p className="text-sm text-[#94a3b8]">{t(BUY.needSerial)}</p> : null}
         {cfg && cfg.serial && !cfg.serial.valid ? <p className="text-sm text-red-400">{t(LIC.errSerial)}</p> : null}
         {cfg?.alreadyLicensed ? <p className="text-sm text-emerald-400">{t(BUY.already)}</p> : null}
         {cfg?.serial?.valid && !cfg.priceConfigured ? <p className="text-sm text-amber-400">{t(BUY.noPrice)}</p> : null}
-        {cfg?.serial?.valid && cfg.priceConfigured && !(cfg.providers?.length) ? <p className="text-sm text-amber-400">{t(BUY.noProviders)}</p> : null}
+        {cfg?.serial?.valid && cfg.priceConfigured && !(cfg.providers?.length) ? (
+          <p className="text-sm text-amber-400">{t(BUY.noProviders)}</p>
+        ) : null}
 
         {quote?.quoteId ? (
           <div className="mb-6 rounded-md border border-[rgba(79,195,247,0.2)] bg-[#132033] p-4">
-            <p className="mb-1 font-mono text-sm text-white">{quote.serialDisplay}</p>
+            <p className="mb-1 font-mono text-sm text-white">{serialShown}</p>
             <p className="text-lg text-[#4fc3f7]">
               {t(BUY.priceUsd)}: {money(quote.usdCents, "US$")}
             </p>
