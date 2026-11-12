@@ -75,6 +75,12 @@ function portalPlugin(): Plugin {
         console.warn("[portal] sem versão de imagem — a página de download mostra o aviso padrão");
       }
       this.emitFile({ type: "asset", fileName: "_redirects", source: "/* /index.html 200\n" });
+      // Functions só em /api/* — o restante fica no SPA estático.
+      this.emitFile({
+        type: "asset",
+        fileName: "_routes.json",
+        source: JSON.stringify({ version: 1, include: ["/api/*"], exclude: [] }, null, 2) + "\n",
+      });
       this.emitFile({
         type: "asset",
         fileName: "_headers",

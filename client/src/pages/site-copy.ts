@@ -5,6 +5,7 @@ export const NAV = {
   home: { pt: "Início", en: "Home" } satisfies Pair,
   docs: { pt: "Documentação", en: "Docs" } satisfies Pair,
   manual: { pt: "Manual", en: "Manual" } satisfies Pair,
+  license: { pt: "Licença", en: "License" } satisfies Pair,
   console: { pt: "Abrir console", en: "Open console" } satisfies Pair,
   download: { pt: "Download", en: "Download" } satisfies Pair,
 };

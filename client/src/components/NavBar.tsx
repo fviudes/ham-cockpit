@@ -33,6 +33,11 @@ export default function NavBar() {
             {t(NAV.docs)}
           </button>
           {IS_PORTAL ? (
+            <button type="button" onClick={() => navigate("/licenca")} className={`hidden sm:inline ${link("/licenca")}`}>
+              {t(NAV.license)}
+            </button>
+          ) : null}
+          {IS_PORTAL ? (
             <button type="button" onClick={() => navigate("/manual")} className={`hidden sm:inline ${link("/manual")}`}>
               {t(NAV.manual)}
             </button>
