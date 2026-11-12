@@ -478,6 +478,7 @@ const dict = {
     backupStageArchive: "Compactando…",
     backupStageFinalize: "Finalizando…",
     backupStageDone: "Concluído",
+    mmdvmCallsignBad: "Informe um indicativo válido (ex.: PY2ABC; não use N0CALL).",
     update: "Atualização",
     updateHelp:
       "O card Ham Cockpit lê github.com/fviudes/ham-cockpit/update na branch main (versão x.y.zz ou OTA x.y.zz.NN). Os outros cartões comparam a versão instalada com a publicada (apt ou Docker). Atualizar aplica só esse componente. Um reboot pode ser preciso depois do sistema operacional.",
@@ -1314,6 +1315,7 @@ const dict = {
     backupStageArchive: "Archiving…",
     backupStageFinalize: "Finishing…",
     backupStageDone: "Done",
+    mmdvmCallsignBad: "Enter a valid callsign (do not use N0CALL).",
     update: "Update",
     updateHelp:
       "The Ham Cockpit card reads github.com/fviudes/ham-cockpit/update on main (version x.y.zz or OTA x.y.zz.NN). The other cards compare the installed version with the published one (apt or Docker). Update applies only that component. The OS may need a reboot afterwards.",

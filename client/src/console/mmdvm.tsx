@@ -144,10 +144,17 @@ function dstarRpt(callsign: string, module: string) {
   return `${base.padEnd(7, " ")}${mod}`;
 }
 
+/** Aceita 433.475 ou 433,475 durante a digitação; não arredonda enquanto incompleto. */
 function fromMhz(v: string, fallback: number) {
-  const n = Number(v.replace(",", "."));
+  const cleaned = v.trim().replace(/\s/g, "").replace(",", ".");
+  if (!cleaned || cleaned === "." || cleaned.endsWith(".")) return fallback;
+  const n = Number(cleaned);
   if (!Number.isFinite(n) || n <= 0) return fallback;
   return Math.round(n * 1_000_000);
+}
+
+function normalizeCallInput(raw: string) {
+  return raw.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
 }
 
 async function callMmdvm(path: string, method: "GET" | "POST" | "PUT" = "GET", body?: unknown) {
@@ -168,6 +175,9 @@ export function MmdvmPage() {
   const [serials, setSerials] = useState<string[]>([]);
   const [tg, setTg] = useState("91");
   const [slot, setSlot] = useState("2");
+  /** Rascunho MHz enquanto o campo está em foco — evita toFixed a cada tecla. */
+  const [rxDraft, setRxDraft] = useState<string | null>(null);
+  const [txDraft, setTxDraft] = useState<string | null>(null);
   const dirtyRef = useRef(false);
 
   const syncSidebar = (j: MmdvmApi) => {
@@ -287,12 +297,22 @@ export function MmdvmPage() {
     if (!st) return;
     setBusy(true);
     try {
+      const callsign = normalizeCallInput(st.callsign || "");
+      if (!callsign) {
+        toast.error(tx("mmdvmCallsignBad"));
+        return;
+      }
+      // Fecha rascunhos MHz antes de gravar.
+      const rxHz = rxDraft != null ? fromMhz(rxDraft, st.rxHz) : st.rxHz;
+      const txHz = txDraft != null ? fromMhz(txDraft, st.txHz) : st.txHz;
+      setRxDraft(null);
+      setTxDraft(null);
       const next = await callMmdvm("/api/mmdvm", "PUT", {
-        callsign: st.callsign,
+        callsign,
         dmrId: st.dmrId,
         duplex: st.duplex,
-        rxHz: st.rxHz,
-        txHz: st.txHz,
+        rxHz,
+        txHz,
         colorCode: st.colorCode,
         latitude: st.latitude,
         longitude: st.longitude,
@@ -314,13 +334,23 @@ export function MmdvmPage() {
         modes: st.modes,
         networks: st.networks,
       });
+      if (next.error) {
+        toast.error(next.error);
+        return;
+      }
       applyFull(next);
       if (restart) {
-        applyFull(await callMmdvm("/api/mmdvm/restart", "POST"));
-        pushLog("MMDVM", `${st.callsign} · INI salvo · host+gateway reiniciados`);
+        const rst = await callMmdvm("/api/mmdvm/restart", "POST");
+        if (rst.error) {
+          toast.error(rst.error);
+          applyFull(rst);
+          return;
+        }
+        applyFull(rst);
+        pushLog("MMDVM", `${callsign} · INI salvo · host+gateway reiniciados`);
         toast.success(tx("mmdvmRestarted"));
       } else {
-        pushLog("MMDVM", `${st.callsign} · ${next.hostIni || st.hostIni}`);
+        pushLog("MMDVM", `${callsign} · ${next.hostIni || st.hostIni}`);
         toast.success(tx("mmdvmSaved"));
       }
     } catch (err) {
@@ -367,8 +397,8 @@ export function MmdvmPage() {
   const paused = st?.paused ?? emptyPaused();
   const nets = st?.networks ?? [];
   const heard = st?.lastHeard ?? [];
-  const mhzRx = mhz(st?.rxHz ?? 433_475_000);
-  const mhzTx = mhz(st?.txHz ?? 433_475_000);
+  const mhzRx = rxDraft ?? mhz(st?.rxHz ?? 433_475_000);
+  const mhzTx = txDraft ?? mhz(st?.txHz ?? 433_475_000);
   const ports = Array.from(new Set(["/dev/ttyAMA0", "/dev/ttyUSB0", "/dev/ttyACM0", st?.modemPort ?? "", ...serials].filter(Boolean)));
   const anyPaused = MODES.some((m) => paused[m.id]);
 
@@ -548,7 +578,9 @@ export function MmdvmPage() {
             <ConsoleInput
               value={st?.callsign ?? ""}
               maxLength={8}
-              onChange={(e) => patch({ callsign: e.target.value.toUpperCase() })}
+              autoCapitalize="characters"
+              spellCheck={false}
+              onChange={(e) => patch({ callsign: normalizeCallInput(e.target.value) })}
             />
           </Field>
           <Field label={tx("mmdvmId")}>
@@ -565,15 +597,44 @@ export function MmdvmPage() {
           </Field>
           <Field label={`${tx("mmdvmRx")} (MHz)`}>
             <ConsoleInput
+              inputMode="decimal"
               value={mhzRx}
-              onChange={(e) => patch({ rxHz: fromMhz(e.target.value, st?.rxHz ?? 433_475_000) })}
+              onFocus={() => setRxDraft(mhz(st?.rxHz ?? 433_475_000))}
+              onChange={(e) => {
+                const raw = e.target.value.replace(/[^\d.,]/g, "");
+                setRxDraft(raw);
+                dirtyRef.current = true;
+                const hz = fromMhz(raw, st?.rxHz ?? 433_475_000);
+                if (raw.trim() && !raw.endsWith(".") && !raw.endsWith(",")) {
+                  setSt((p) => (p ? { ...p, rxHz: hz } : p));
+                }
+              }}
+              onBlur={() => {
+                const hz = fromMhz(rxDraft ?? "", st?.rxHz ?? 433_475_000);
+                patch({ rxHz: hz });
+                setRxDraft(null);
+              }}
             />
           </Field>
           <Field label={`${tx("mmdvmTx")} (MHz)`}>
             <ConsoleInput
+              inputMode="decimal"
               value={mhzTx}
-              disabled={!st?.duplex}
-              onChange={(e) => patch({ txHz: fromMhz(e.target.value, st?.txHz ?? 433_475_000) })}
+              onFocus={() => setTxDraft(mhz(st?.txHz ?? 433_475_000))}
+              onChange={(e) => {
+                const raw = e.target.value.replace(/[^\d.,]/g, "");
+                setTxDraft(raw);
+                dirtyRef.current = true;
+                const hz = fromMhz(raw, st?.txHz ?? 433_475_000);
+                if (raw.trim() && !raw.endsWith(".") && !raw.endsWith(",")) {
+                  setSt((p) => (p ? { ...p, txHz: hz } : p));
+                }
+              }}
+              onBlur={() => {
+                const hz = fromMhz(txDraft ?? "", st?.txHz ?? 433_475_000);
+                patch({ txHz: hz });
+                setTxDraft(null);
+              }}
             />
           </Field>
           <Field label={tx("mmdvmDuplex")}>
@@ -581,7 +642,9 @@ export function MmdvmPage() {
               value={st?.duplex ? "1" : "0"}
               onChange={(e) => {
                 const duplex = e.target.value === "1";
+                // Simplex: sugere TX=RX, mas o campo TX continua editável.
                 patch({ duplex, txHz: duplex ? st?.txHz ?? st?.rxHz ?? 433_475_000 : st?.rxHz ?? 433_475_000 });
+                setTxDraft(null);
               }}
             >
               <option value="0">{tx("mmdvmSimplex")}</option>

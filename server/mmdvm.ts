@@ -520,14 +520,22 @@ function configFromFiles(): MmdvmConfig {
 
 function applyConfig(host: Ini, gw: Ini, ysf: Ini, dstar: Conf, cfg: Partial<MmdvmConfig>) {
   const cur = { ...defaultConfig(), ...configFromFiles(), ...cfg };
-  const call = cur.callsign.toUpperCase().slice(0, 8);
+  // Preferir o callsign enviado no PUT; nunca voltar ao placeholder se o operador mandou outro.
+  const rawCall = String(cfg.callsign ?? cur.callsign ?? "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 8);
+  const call = rawCall || cur.callsign.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8) || "N0CALL";
   const id = cur.dmrId.replace(/\D/g, "").slice(0, 9) || "0000000";
   const mod = (cur.dstarModule || "B").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 1) || "B";
+  const rxHz = Number.isFinite(cur.rxHz) && cur.rxHz > 0 ? Math.round(cur.rxHz) : 433_475_000;
+  const txHz = Number.isFinite(cur.txHz) && cur.txHz > 0 ? Math.round(cur.txHz) : rxHz;
   setKv(host, "General", "Callsign", call);
   setKv(host, "General", "Id", id);
   setKv(host, "General", "Duplex", cur.duplex ? "1" : "0");
-  setKv(host, "Info", "RXFrequency", String(cur.rxHz));
-  setKv(host, "Info", "TXFrequency", String(cur.duplex ? cur.txHz : cur.rxHz));
+  setKv(host, "Info", "RXFrequency", String(rxHz));
+  // TX é sempre persistido (editável no console); não forçar TX=RX no save.
+  setKv(host, "Info", "TXFrequency", String(txHz));
   setKv(host, "Info", "Latitude", cur.latitude);
   setKv(host, "Info", "Longitude", cur.longitude);
   setKv(host, "Info", "Location", cur.location);
@@ -544,7 +552,7 @@ function applyConfig(host: Ini, gw: Ini, ysf: Ini, dstar: Conf, cfg: Partial<Mmd
     if (board.uartSpeed > 0) uartSpeed = board.uartSpeed;
     if (board.duplex !== null) {
       setKv(host, "General", "Duplex", board.duplex ? "1" : "0");
-      if (!board.duplex) setKv(host, "Info", "TXFrequency", String(cur.rxHz));
+      // Não sobrescrever TXFrequency aqui — o valor do console já foi gravado acima.
     }
     if (board.slot1 === false) setKv(host, "DMR Network", "Slot1", "0");
     if (board.slot1 === true) setKv(host, "DMR Network", "Slot1", "1");
@@ -600,8 +608,8 @@ function applyConfig(host: Ini, gw: Ini, ysf: Ini, dstar: Conf, cfg: Partial<Mmd
   setKv(ysf, "General", "RptPort", "3200");
   setKv(ysf, "General", "LocalAddress", "127.0.0.1");
   setKv(ysf, "General", "LocalPort", "4200");
-  setKv(ysf, "Info", "RXFrequency", String(cur.rxHz));
-  setKv(ysf, "Info", "TXFrequency", String(cur.duplex ? cur.txHz : cur.rxHz));
+  setKv(ysf, "Info", "RXFrequency", String(rxHz));
+  setKv(ysf, "Info", "TXFrequency", String(txHz));
   setKv(ysf, "Info", "Latitude", cur.latitude);
   setKv(ysf, "Info", "Longitude", cur.longitude);
   setKv(ysf, "Info", "Name", cur.location || "Ham Cockpit");
@@ -618,7 +626,7 @@ function applyConfig(host: Ini, gw: Ini, ysf: Ini, dstar: Conf, cfg: Partial<Mmd
   dstar.longitude = cur.longitude;
   dstar.latitude1 = cur.latitude;
   dstar.longitude1 = cur.longitude;
-  dstar.frequency1 = (cur.rxHz / 1_000_000).toFixed(6);
+  dstar.frequency1 = (rxHz / 1_000_000).toFixed(6);
   dstar.reflector1 = (cur.dstarReflector || "").toUpperCase().slice(0, 8);
   dstar.atStartup1 = cur.dstarReflector ? "1" : "0";
   dstar.reconnect1 = cur.dstarReflector ? "2" : "0";
@@ -1270,6 +1278,15 @@ export async function mmdvmSave(body: Record<string, unknown>): Promise<MmdvmSta
   const ysf = parseIniFile(existsSync(ysfPath) ? ysfPath : shippedYsfIni());
   const dstar = parseConfFile(existsSync(dstarPath) ? dstarPath : shippedDstarConf());
   const cfg = pickConfig(body);
+  const call = String(cfg.callsign ?? "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, 8);
+  if (!call) {
+    const st = await mmdvmStatus();
+    return { ...st, error: "Informe um indicativo" };
+  }
+  cfg.callsign = call;
   // MMDVMHost rejeita Id 0 / ≤1000 (CCS/DMR); placeholder de fábrica não pode ir para produção.
   const idNum = Number(String(cfg.dmrId ?? "").replace(/\D/g, "") || "0");
   if (!Number.isFinite(idNum) || idNum <= 1000) {

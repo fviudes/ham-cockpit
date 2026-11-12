@@ -23,7 +23,7 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
   "version": "0.1.07.03",
   "channel": "main",
   "file": "ham-cockpit-0.1.07.03.tgz",
-  "notes": "Ham Cockpit v0.1.07.03 — gate de licença no console, e-mail obrigatório, Terminal sudo (cwd), backup com stages até 100%, serial no Status, gráfico Histórico full-width, remove aba Alterar senha."
+  "notes": "Ham Cockpit v0.1.07.03 — gate de licença, e-mail, Terminal sudo, backup com stages, remove aba senha; MMDVM: indicativo persistente, RX/TX editáveis."
 }
 ```
 
