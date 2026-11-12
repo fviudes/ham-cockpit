@@ -9,6 +9,11 @@ on:
         description: ID do run Actions que tem o artifact Ham-Cockpit-OS
         required: true
         type: string
+      tag:
+        description: Tag da Release de imagem (3 partes). Vazio = v + base de VERSION
+        required: false
+        default: ""
+        type: string
 
 jobs:
   publish:
@@ -33,8 +38,20 @@ jobs:
       - name: Upload Release (único ou .part*)
         run: |
           set -euo pipefail
-          VER="$(tr -d ' \r\n' < VERSION)"
-          TAG="v${VER}"
+          VER_FULL="$(tr -d ' \r\n' < VERSION)"
+          VER="$(printf '%s\n' "$VER_FULL" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+)(\.[0-9]+)?$/\1/')"
+          if [[ -n "${{ inputs.tag }}" ]]; then
+            TAG="${{ inputs.tag }}"
+            TAG="${TAG#v}"
+            TAG="v${TAG}"
+          else
+            TAG="v${VER}"
+          fi
+          # Release de imagem = só 3 partes (v0.1.07). Nunca publicar .img em tag OTA (v0.1.07.02).
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERRO: tag de imagem inválida: $TAG (esperado vX.Y.ZZ)" >&2
+            exit 1
+          fi
           IMG="$(ls image/out/ham-cockpit-*-raspi.img.xz | head -n 1)"
           SUM="${IMG}.sha256"
           MMDVM="image/out/mmdvm-arm64.tgz"
