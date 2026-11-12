@@ -13,6 +13,7 @@ import { t, type I18nKey, type Lang } from "./i18n";
 import { applyHtmlLang, LANG_EVENT, readLang, writeLang } from "./lang-store";
 import { bleAvailable, bleErrorMessage, ic705Ble, isBleCancel, looksLikeBleId, type BlePhase } from "./ic705-ble";
 import { SERVICE_IDS, UPDATE_IDS, asSer2netDevice, type ServiceId, type UpdateId, type Ser2netDevice } from "@shared/const";
+import { licenseGateOf, type LicenseGate } from "@shared/license";
 import { isNewerVersion } from "@shared/version";
 
 export const BANDS = [
@@ -654,6 +655,8 @@ export type LicenseSnap = {
   serialDisplay: string | null;
   callsign: string | null;
   state: string | null;
+  /** Gate de UI: unlicensed | trial | trial_expired | licensed. */
+  gate: LicenseGate;
   type: string | null;
   daysLeft: number | null;
   provisionalEndsAt: number | null;
@@ -705,11 +708,18 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
     try {
       const r = await fetch("/api/license");
       const j = (await r.json()) as Record<string, unknown>;
+      const state = typeof j.state === "string" ? j.state : null;
+      const gateRaw = typeof j.gate === "string" ? j.gate : null;
+      const gate: LicenseGate =
+        gateRaw === "licensed" || gateRaw === "trial" || gateRaw === "trial_expired" || gateRaw === "unlicensed"
+          ? gateRaw
+          : licenseGateOf(state);
       setLicense({
         serial: typeof j.serial === "string" ? j.serial : null,
         serialDisplay: typeof j.serialDisplay === "string" ? j.serialDisplay : null,
         callsign: typeof j.callsign === "string" && j.callsign ? j.callsign : null,
-        state: typeof j.state === "string" ? j.state : null,
+        state,
+        gate,
         type: typeof j.type === "string" ? j.type : null,
         daysLeft: typeof j.daysLeft === "number" ? j.daysLeft : null,
         provisionalEndsAt: typeof j.provisionalEndsAt === "number" ? j.provisionalEndsAt : null,

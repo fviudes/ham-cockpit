@@ -4,7 +4,9 @@ import {
   TOKEN_PREFIX,
   importPrivateKey,
   isValidCallsign,
+  isValidEmail,
   normalizeCallsign,
+  normalizeEmail,
   parseSerialInput,
   serialDisplay,
   signBlob,
@@ -93,22 +95,49 @@ export async function buildCrl(ctx: Ctx): Promise<{ crl: string; version: number
 export async function upsertDevice(
   ctx: Ctx,
   serial: string,
-  meta: { appVersion?: string; image?: string; model?: string; callsign?: string | null },
+  meta: {
+    appVersion?: string;
+    image?: string;
+    model?: string;
+    callsign?: string | null;
+    email?: string | null;
+  },
 ): Promise<{ blocked: boolean; reason: string | null; created: boolean }> {
   const now = ctx.now();
   const ih = await ipHash(ctx);
   const callsign = meta.callsign ? clip(meta.callsign, 16) : null;
+  const email = meta.email ? clip(meta.email, 120) : null;
   const ins = await ctx.env.DB.prepare(
-    "INSERT INTO devices (serial, first_seen_at, last_seen_at, last_app_version, last_image_version, model, last_country, last_ip_hash, callsign) VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8) ON CONFLICT (serial) DO NOTHING",
+    "INSERT INTO devices (serial, first_seen_at, last_seen_at, last_app_version, last_image_version, model, last_country, last_ip_hash, callsign, email) VALUES (?1, ?2, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) ON CONFLICT (serial) DO NOTHING",
   )
-    .bind(serial, now, clip(meta.appVersion, 32) || null, clip(meta.image, 32) || null, clip(meta.model, 64) || null, ctx.country || null, ih, callsign)
+    .bind(
+      serial,
+      now,
+      clip(meta.appVersion, 32) || null,
+      clip(meta.image, 32) || null,
+      clip(meta.model, 64) || null,
+      ctx.country || null,
+      ih,
+      callsign,
+      email,
+    )
     .run();
   const created = (ins.meta.changes ?? 0) > 0;
   if (!created) {
     await ctx.env.DB.prepare(
-      "UPDATE devices SET last_seen_at = ?2, last_app_version = COALESCE(?3, last_app_version), last_image_version = COALESCE(?4, last_image_version), model = COALESCE(?5, model), last_country = COALESCE(?6, last_country), last_ip_hash = ?7, callsign = COALESCE(?8, callsign) WHERE serial = ?1",
+      "UPDATE devices SET last_seen_at = ?2, last_app_version = COALESCE(?3, last_app_version), last_image_version = COALESCE(?4, last_image_version), model = COALESCE(?5, model), last_country = COALESCE(?6, last_country), last_ip_hash = ?7, callsign = COALESCE(?8, callsign), email = COALESCE(?9, email) WHERE serial = ?1",
     )
-      .bind(serial, now, clip(meta.appVersion, 32) || null, clip(meta.image, 32) || null, clip(meta.model, 64) || null, ctx.country || null, ih, callsign)
+      .bind(
+        serial,
+        now,
+        clip(meta.appVersion, 32) || null,
+        clip(meta.image, 32) || null,
+        clip(meta.model, 64) || null,
+        ctx.country || null,
+        ih,
+        callsign,
+        email,
+      )
       .run();
   }
   const row = await ctx.env.DB.prepare("SELECT blocked, blocked_reason FROM devices WHERE serial = ?1")
@@ -180,7 +209,18 @@ export async function createDefinitive(
   if (created) {
     await licenseEvent(ctx, "definitive_issued", actor, serial, lid, { source, paymentId });
     // Data/hora da virada trial → definitiva (grid admin e cadastro do aparelho).
-    await ctx.env.DB.prepare("UPDATE devices SET licensed_at = ?2 WHERE serial = ?1").bind(serial, now).run();
+    // Se o pagamento trouxe e-mail e o aparelho ainda não tem, grava agora.
+    let payerEmail: string | null = null;
+    if (paymentId) {
+      const pay = await ctx.env.DB.prepare("SELECT payer_email FROM payments WHERE id = ?1")
+        .bind(paymentId)
+        .first<{ payer_email: string | null }>();
+      const raw = pay?.payer_email ? normalizeEmail(pay.payer_email) : "";
+      payerEmail = isValidEmail(raw) ? raw : null;
+    }
+    await ctx.env.DB.prepare("UPDATE devices SET licensed_at = ?2, email = COALESCE(email, ?3) WHERE serial = ?1")
+      .bind(serial, now, payerEmail)
+      .run();
     await ctx.env.DB.prepare(
       "UPDATE licenses SET status = 'superseded' WHERE serial = ?1 AND type = 'trial' AND status = 'active' AND id <> ?2",
     )
@@ -234,6 +274,8 @@ export interface ActivateBody {
   /** Prefixo/indicativo do operador (metadado; serial continua a chave). */
   callsign?: string;
   prefix?: string;
+  /** E-mail do operador (obrigatório em activate). */
+  email?: string;
 }
 
 export type LicStatus = "trial" | "definitive" | "expired" | "revoked";
@@ -267,16 +309,28 @@ export async function activate(ctx: Ctx, body: ActivateBody, mode: "activate" | 
   const rawCall = typeof body.callsign === "string" ? body.callsign : typeof body.prefix === "string" ? body.prefix : "";
   const callsign = normalizeCallsign(rawCall);
   const callMeta = callsign && isValidCallsign(callsign) ? callsign : null;
+  const emailRaw = typeof body.email === "string" ? normalizeEmail(body.email) : "";
+  const emailMeta = isValidEmail(emailRaw) ? emailRaw : null;
+  if (mode === "activate" && !emailMeta) {
+    throw new HttpError(400, "email_required", "Informe um e-mail válido.");
+  }
   const dev = await upsertDevice(ctx, serial, {
     appVersion: body.appVersion,
     image: body.image,
     model: body.model,
     callsign: callMeta,
+    email: emailMeta,
   });
   if (dev.blocked) throw new HttpError(403, "device_blocked", "Este serial está bloqueado. Fale com o suporte.");
 
   let row = await currentLicense(ctx, serial);
   if (!row) row = await grantTrial(ctx, serial);
+  if (mode === "activate") {
+    await licenseEvent(ctx, "activate", "device", serial, row.id, {
+      callsign: callMeta,
+      email: emailMeta,
+    });
+  }
   if (mode === "sync") await licenseEvent(ctx, "sync", "device", serial, row.id);
 
   const settings = await getSettings(ctx);

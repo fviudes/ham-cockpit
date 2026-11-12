@@ -14,6 +14,7 @@ type LicRow = {
   issuedAt: number;
   licensedAt?: number | null;
   callsign?: string | null;
+  email?: string | null;
   expiresAt: number | null;
 };
 
@@ -458,6 +459,7 @@ export default function AdminPortalPage() {
                       <tr>
                         <th className="px-3 py-2">ID</th>
                         <th className="px-3 py-2">Serial</th>
+                        <th className="px-3 py-2">{t(ADM.email)}</th>
                         <th className="px-3 py-2">{t(ADM.licenseKey)}</th>
                         <th className="px-3 py-2">Tipo</th>
                         <th className="px-3 py-2">Estado</th>
@@ -481,6 +483,7 @@ export default function AdminPortalPage() {
                               </span>
                             </td>
                             <td className="px-3 py-2 font-mono text-xs">{l.serial}</td>
+                            <td className="px-3 py-2 text-xs text-[#94a3b8]">{l.email || "—"}</td>
                             <td className="px-3 py-2">
                               {token ? (
                                 <div className="max-w-[16rem] space-y-1">

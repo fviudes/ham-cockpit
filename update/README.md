@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.07.02** (`version.json`).
+Versão atual neste canal: **0.1.07.03** (`version.json`).
 
 ## Versionamento
 
@@ -20,10 +20,10 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.07.02",
+  "version": "0.1.07.03",
   "channel": "main",
-  "file": "ham-cockpit-0.1.07.02.tgz",
-  "notes": "Ham Cockpit v0.1.07.02 — licença: corrige EACCES /run, serial na UI, prefixo obrigatório e badge no menu; instala mmdvm-arm64 no apply OTA."
+  "file": "ham-cockpit-0.1.07.03.tgz",
+  "notes": "Ham Cockpit v0.1.07.03 — gate de licença no console, e-mail obrigatório, Terminal sudo (cwd), backup com stages até 100%, serial no Status, gráfico Histórico full-width, remove aba Alterar senha."
 }
 ```
 

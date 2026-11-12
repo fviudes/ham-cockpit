@@ -138,11 +138,13 @@ export function Chip({
   children,
   onClick,
   tone = "cyan",
+  disabled,
 }: {
   active?: boolean;
   children: ReactNode;
   onClick?: () => void;
   tone?: "cyan" | "amber" | "danger" | "ok";
+  disabled?: boolean;
 }) {
   const activeCls = {
     cyan: "bg-[#4fc3f7] text-[#071018] border-[#4fc3f7]",
@@ -154,8 +156,9 @@ export function Chip({
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       className={cn(
-        "h-8 shrink-0 whitespace-nowrap rounded-md border px-2.5 text-[11px] font-semibold transition-colors sm:px-3 sm:text-xs",
+        "h-8 shrink-0 whitespace-nowrap rounded-md border px-2.5 text-[11px] font-semibold transition-colors sm:px-3 sm:text-xs disabled:cursor-not-allowed disabled:opacity-40",
         active
           ? activeCls
           : "border-[rgba(79,195,247,0.22)] bg-transparent text-[#c5d4e0] hover:border-[#4fc3f7] hover:text-[#4fc3f7]"
@@ -465,7 +468,15 @@ export function UpdatesMenu() {
   );
 }
 
-export function UserMenu({ name, onLogout }: { name: string; onLogout: () => void }) {
+export function UserMenu({
+  name,
+  onLogout,
+  menusOpen = true,
+}: {
+  name: string;
+  onLogout: () => void;
+  menusOpen?: boolean;
+}) {
   const { tx } = useConsole();
   const [, navigate] = useLocation();
   return (
@@ -481,10 +492,12 @@ export function UserMenu({ name, onLogout }: { name: string; onLogout: () => voi
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className={menuBox}>
-        <DropdownMenuItem className={menuItem} onSelect={() => navigate("/console/password")}>
-          <KeyRound size={14} />
-          {tx("changePass")}
-        </DropdownMenuItem>
+        {menusOpen ? (
+          <DropdownMenuItem className={menuItem} onSelect={() => navigate("/console/admin")}>
+            <KeyRound size={14} />
+            {tx("changePass")}
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem className={cn(menuItem, "text-[#f87171] focus:text-[#f87171]")} onSelect={onLogout}>
           <LogOut size={14} />
           {tx("logout")}

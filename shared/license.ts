@@ -191,6 +191,21 @@ export function isValidCallsign(raw: string): boolean {
   return /^[A-Z0-9]{1,3}[0-9][A-Z0-9]{0,3}[A-Z]$/.test(c);
 }
 
+/** Normaliza e-mail (trim + minúsculas). */
+export function normalizeEmail(raw: string): string {
+  return String(raw ?? "")
+    .trim()
+    .toLowerCase()
+    .slice(0, 120);
+}
+
+/** Formato básico de e-mail (obrigatório no Licenciar). */
+export function isValidEmail(raw: string): boolean {
+  const e = normalizeEmail(raw);
+  if (e.length < 5 || e.length > 120) return false;
+  return /^[^\s@]{1,64}@[^\s@]{1,200}\.[^\s@]{2,24}$/.test(e);
+}
+
 /* ------------------------------ criptografia --------------------------- */
 
 const pubCache = new Map<string, CryptoKey>();
@@ -356,6 +371,25 @@ export type LicenseState =
   | "revogada"
   | "invalida"
   | "sem_serial";
+
+/**
+ * Estado de UI / gate de navegação do console.
+ * Independente do enforce de serviços (observação): menus liberados só em trial/licensed.
+ */
+export type LicenseGate = "unlicensed" | "trial" | "trial_expired" | "licensed";
+
+/** Mapeia o veredito interno para o gate do console. */
+export function licenseGateOf(state: LicenseState | string | null | undefined): LicenseGate {
+  if (state === "ativa") return "licensed";
+  if (state === "trial") return "trial";
+  if (state === "expirada") return "trial_expired";
+  return "unlicensed";
+}
+
+/** Menus do console liberados (trial ativo ou licença definitiva). */
+export function licenseMenusOpen(gate: LicenseGate): boolean {
+  return gate === "licensed" || gate === "trial";
+}
 
 export interface Verdict {
   state: LicenseState;

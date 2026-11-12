@@ -10,8 +10,12 @@ import {
   evaluateLicense,
   importPrivateKey,
   isValidCallsign,
+  isValidEmail,
   isValidSerial,
+  licenseGateOf,
+  licenseMenusOpen,
   normalizeCallsign,
+  normalizeEmail,
   normalizeSerial,
   parseSerialInput,
   serialCheck,
@@ -160,6 +164,26 @@ describe("veredito", () => {
     // token inválido dentro da janela: "invalida" mas segue liberado
     expect(evaluateLicense({ ...base, token: { ok: false, error: "bad_signature" }, now: T0 + DAY })).toMatchObject({ state: "invalida", allowed: true, reason: "bad_signature" });
     expect(evaluateLicense({ ...base, token: { ok: false, error: "bad_signature" }, now: T0 + 8 * DAY })).toMatchObject({ state: "sem_licenca", allowed: false });
+  });
+
+  it("licenseGateOf mapeia veredito → gate de UI", () => {
+    expect(licenseGateOf("ativa")).toBe("licensed");
+    expect(licenseGateOf("trial")).toBe("trial");
+    expect(licenseGateOf("expirada")).toBe("trial_expired");
+    expect(licenseGateOf("provisional")).toBe("unlicensed");
+    expect(licenseGateOf("sem_licenca")).toBe("unlicensed");
+    expect(licenseGateOf("revogada")).toBe("unlicensed");
+    expect(licenseMenusOpen("licensed")).toBe(true);
+    expect(licenseMenusOpen("trial")).toBe(true);
+    expect(licenseMenusOpen("trial_expired")).toBe(false);
+    expect(licenseMenusOpen("unlicensed")).toBe(false);
+  });
+
+  it("e-mail: normaliza e valida formato básico", () => {
+    expect(normalizeEmail("  Foo.Bar@Example.COM ")).toBe("foo.bar@example.com");
+    expect(isValidEmail("a@b.co")).toBe(true);
+    expect(isValidEmail("not-an-email")).toBe(false);
+    expect(isValidEmail("")).toBe(false);
   });
 });
 

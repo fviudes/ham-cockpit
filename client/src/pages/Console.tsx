@@ -38,9 +38,12 @@ import {
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { APP_LOGO } from "@shared/brand";
+import { licenseGateOf, licenseMenusOpen, type LicenseGate } from "@shared/license";
 
 const AUTH_KEY = "hamcockpit.auth";
 const AUTH_USER_KEY = "hamcockpit.user";
+/** Após login, sempre aterrissa em /console/license uma vez. */
+const POST_LOGIN_KEY = "hamcockpit.postLogin";
 
 type PageId =
   | "wizard"
@@ -60,7 +63,6 @@ type PageId =
   | "ser2net"
   | "logs"
   | "admin"
-  | "password"
   | "services"
   | "updates"
   | "backup"
@@ -124,7 +126,6 @@ const PAGES: Record<PageId, ComponentType> = {
   ser2net: Ser2netPage,
   logs: AdminPage,
   admin: AdminPage,
-  password: AdminPage,
   services: AdminPage,
   updates: AdminPage,
   backup: AdminPage,
@@ -143,6 +144,7 @@ export default function Console() {
           onLogout={() => {
             sessionStorage.removeItem(AUTH_KEY);
             sessionStorage.removeItem(AUTH_USER_KEY);
+            sessionStorage.removeItem(POST_LOGIN_KEY);
             setAuthed(false);
           }}
         />
@@ -151,6 +153,7 @@ export default function Console() {
           onOk={(name) => {
             sessionStorage.setItem(AUTH_KEY, "1");
             sessionStorage.setItem(AUTH_USER_KEY, name);
+            sessionStorage.setItem(POST_LOGIN_KEY, "1");
             setAuthed(true);
           }}
         />
@@ -254,6 +257,20 @@ function Shell({ onLogout }: { onLogout: () => void }) {
     setOpen(false);
   }, [page]);
 
+  const gate: LicenseGate = license?.gate ?? licenseGateOf(license?.state);
+  const menusOpen = licenseMenusOpen(gate);
+  const licenseReady = license !== null;
+
+  useEffect(() => {
+    if (sessionStorage.getItem(POST_LOGIN_KEY) === "1") {
+      sessionStorage.removeItem(POST_LOGIN_KEY);
+      navigate("/console/license");
+      return;
+    }
+    if (!licenseReady) return;
+    if (!menusOpen && page !== "license") navigate("/console/license");
+  }, [licenseReady, menusOpen, page, navigate]);
+
   useEffect(() => {
     const el = headerFreqRef.current;
     if (!el) return;
@@ -277,23 +294,19 @@ function Shell({ onLogout }: { onLogout: () => void }) {
     return () => el.removeEventListener("wheel", onWheel);
   }, [s.vfo, s.freq, s.freqB, s.radios.items, s.ic705.ble, s.ic705.phase, s.wlg.hamlibPort, setFreq, setS]);
 
-  const licState = license?.state || "";
-  const licLicensed = licState === "ativa" || licState === "trial";
-  const licCall = licLicensed && license?.callsign ? license.callsign : null;
+  const licCall = menusOpen && license?.callsign ? license.callsign : null;
   let licBadgeText = tx("licBadgeNone");
-  let licBadgeClass = "border-amber-500/40 bg-amber-500/15 text-amber-200";
-  if (licState === "ativa") {
+  let licBadgeClass = "border-[#ef4444]/45 bg-[#ef4444]/15 text-[#f87171]";
+  if (gate === "licensed") {
     licBadgeText = tx("licBadgeLicensed");
     licBadgeClass = "border-emerald-500/40 bg-emerald-500/15 text-emerald-300";
-  } else if (licState === "trial") {
-    const days =
-      typeof license?.daysLeft === "number"
-        ? license.daysLeft
-        : license?.provisionalEndsAt
-          ? Math.max(0, Math.ceil((license.provisionalEndsAt - Date.now() / 1000) / 86400))
-          : null;
+  } else if (gate === "trial") {
+    const days = typeof license?.daysLeft === "number" ? license.daysLeft : null;
     licBadgeText = days != null ? tx("licBadgeTrialDays").replace("{n}", String(days)) : tx("licBadgeTrial");
-    licBadgeClass = "border-[#4fc3f7]/40 bg-[#4fc3f7]/15 text-[#7ee0ff]";
+    licBadgeClass = "border-[#ffb300]/45 bg-[#ffb300]/15 text-[#ffb300]";
+  } else if (gate === "trial_expired") {
+    licBadgeText = tx("licBadgeExpired");
+    licBadgeClass = "border-[#ef4444]/45 bg-[#ef4444]/15 text-[#f87171]";
   }
 
   const nav = (
@@ -339,16 +352,22 @@ function Shell({ onLogout }: { onLogout: () => void }) {
                     page === "services" ||
                     page === "updates" ||
                     page === "backup" ||
-                    page === "license" ||
-                    page === "password"
+                    page === "license"
                   : page === it.id;
               return (
                 <button
                   key={it.id}
                   type="button"
-                  onClick={() => navigate(`/console/${it.id}`)}
-                  className={`mb-0.5 flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm ${
-                    active ? "bg-[#4fc3f7]/15 text-[#4fc3f7]" : "text-[#c5d4e0] hover:bg-white/5"
+                  disabled={!menusOpen}
+                  onClick={() => {
+                    if (!menusOpen) {
+                      navigate("/console/license");
+                      return;
+                    }
+                    navigate(`/console/${it.id}`);
+                  }}
+                  className={`mb-0.5 flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40 ${
+                    active && menusOpen ? "bg-[#4fc3f7]/15 text-[#4fc3f7]" : "text-[#c5d4e0] hover:bg-white/5"
                   }`}
                 >
                   <Icon size={16} />
@@ -358,6 +377,16 @@ function Shell({ onLogout }: { onLogout: () => void }) {
             })}
           </div>
         ))}
+        {!menusOpen ? (
+          <button
+            type="button"
+            onClick={() => navigate("/console/license")}
+            className="mb-2 flex w-full items-center gap-2.5 rounded-md bg-[#ef4444]/15 px-2.5 py-2 text-sm font-semibold text-[#f87171]"
+          >
+            <Settings size={16} />
+            {tx("licTab")}
+          </button>
+        ) : null}
       </div>
       <div className="border-t border-[rgba(79,195,247,0.12)] p-3">
         <button type="button" onClick={onLogout} className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm text-[#8ea0b3] hover:text-[#f87171]">
@@ -397,8 +426,9 @@ function Shell({ onLogout }: { onLogout: () => void }) {
             </p>
             <button
               type="button"
-              onClick={() => navigate("/console/ic705")}
-              className={`shrink-0 rounded-md px-2 py-1 font-['IBM_Plex_Mono'] text-[11px] font-semibold ${
+              disabled={!menusOpen}
+              onClick={() => menusOpen && navigate("/console/ic705")}
+              className={`shrink-0 rounded-md px-2 py-1 font-['IBM_Plex_Mono'] text-[11px] font-semibold disabled:opacity-40 ${
                 s.radios.items.some((r) => r.connected) || s.ic705.phase === "ready"
                   ? "bg-[#10b981]/15 text-[#34d399]"
                   : "bg-white/5 text-[#8ea0b3]"
@@ -408,8 +438,9 @@ function Shell({ onLogout }: { onLogout: () => void }) {
             </button>
             <button
               type="button"
-              onClick={() => navigate("/console/lextel")}
-              className={`shrink-0 rounded-md px-2 py-1 font-['IBM_Plex_Mono'] text-[11px] font-semibold ${
+              disabled={!menusOpen}
+              onClick={() => menusOpen && navigate("/console/lextel")}
+              className={`shrink-0 rounded-md px-2 py-1 font-['IBM_Plex_Mono'] text-[11px] font-semibold disabled:opacity-40 ${
                 s.lextel.connected ? "bg-[#10b981]/15 text-[#34d399]" : "bg-white/5 text-[#8ea0b3]"
               }`}
             >
@@ -428,8 +459,8 @@ function Shell({ onLogout }: { onLogout: () => void }) {
             </span>
           </div>
           <LangToggle />
-          <UpdatesMenu />
-          <UserMenu name={user} onLogout={onLogout} />
+          {menusOpen ? <UpdatesMenu /> : null}
+          <UserMenu name={user} onLogout={onLogout} menusOpen={menusOpen} />
         </header>
         <main
           className={

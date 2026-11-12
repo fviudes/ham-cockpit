@@ -26,7 +26,13 @@ import { layoutGet, layoutSave } from "./layouts";
 import { isLoopback, vfoDisplayExit } from "./vfo-display";
 import { ldgCmd, ldgConnect, ldgDisconnect, ldgPeek, ldgSave, ldgStatus } from "./ldg";
 import { lp100aCmd, lp100aConnect, lp100aDisconnect, lp100aPeek, lp100aSave, lp100aStatus } from "./lp100a";
-import { backupCreate, backupDelete, backupList, backupRestore } from "./backup";
+import {
+  backupCreateStart,
+  backupDelete,
+  backupJobGet,
+  backupList,
+  backupRestoreStart,
+} from "./backup";
 import { hostStatus } from "./host-status";
 import {
   mmdvmControl,
@@ -721,12 +727,17 @@ async function startServer() {
       res.status(500).json({ ok: false, items: [], error: String(err) });
     }
   });
-  app.post("/api/backup", async (req, res) => {
-    req.setTimeout(300_000);
-    res.setTimeout(300_000);
+  app.get("/api/backup/jobs/:id", (req, res) => {
+    const job = backupJobGet(req.params.id);
+    if (!job) {
+      res.status(404).json({ ok: false, error: "job_not_found" });
+      return;
+    }
+    res.json({ ok: true, job });
+  });
+  app.post("/api/backup", (req, res) => {
     try {
-      const body = await backupCreate(String(req.body?.user ?? "admin"));
-      res.status(body.ok ? 200 : 500).json(body);
+      res.json(backupCreateStart(String(req.body?.user ?? "admin")));
     } catch (err) {
       res.status(500).json({ ok: false, error: String(err) });
     }
@@ -739,11 +750,9 @@ async function startServer() {
       res.status(500).json({ ok: false, error: String(err) });
     }
   });
-  app.post("/api/backup/:id/restore", async (req, res) => {
-    req.setTimeout(300_000);
-    res.setTimeout(300_000);
+  app.post("/api/backup/:id/restore", (req, res) => {
     try {
-      const body = await backupRestore(req.params.id, Boolean(req.body?.confirm));
+      const body = backupRestoreStart(req.params.id, Boolean(req.body?.confirm));
       res.status(body.ok ? 200 : 400).json(body);
     } catch (err) {
       res.status(500).json({ ok: false, error: String(err) });

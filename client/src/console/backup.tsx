@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { currentLayoutUser } from "./panel-layout";
 import { useConsole } from "./state";
 import { ActionProgress, GhostBtn, PageHead, Panel, PanelTitle, PrimaryBtn } from "./widgets";
+import type { I18nKey } from "./i18n";
 
 type BackupItem = {
   id: string;
@@ -16,7 +17,30 @@ type BackupItem = {
 
 type ListBody = { ok?: boolean; folder?: string; items?: BackupItem[]; error?: string };
 
-const FETCH_MS = 300_000;
+type BackupJob = {
+  id: string;
+  kind: "create" | "restore";
+  status: "running" | "ok" | "error";
+  pct: number;
+  stage: string;
+  error: string;
+  item?: BackupItem;
+  warnings?: string[];
+};
+
+const FETCH_MS = 30_000;
+const POLL_MS = 500;
+
+const STAGE_KEY: Record<string, I18nKey> = {
+  prepare: "backupStagePrepare",
+  station: "backupStageStation",
+  wlg: "backupStageWlg",
+  wavelog: "backupStageWavelog",
+  archive: "backupStageArchive",
+  finalize: "backupStageFinalize",
+  done: "backupStageDone",
+  error: "backupFail",
+};
 
 function fmtSize(n: number) {
   if (n < 1024) return `${n} B`;
@@ -47,6 +71,7 @@ export function BackupPage({ embedded = false }: { embedded?: boolean }) {
   const [items, setItems] = useState<BackupItem[]>([]);
   const [busy, setBusy] = useState<"create" | "restore" | "delete" | null>(null);
   const [progress, setProgress] = useState(0);
+  const [stage, setStage] = useState("");
   const [target, setTarget] = useState<BackupItem | null>(null);
   const [ack, setAck] = useState(false);
 
@@ -64,42 +89,51 @@ export function BackupPage({ embedded = false }: { embedded?: boolean }) {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (busy !== "create" && busy !== "restore") return;
-    setProgress(8);
-    const timer = window.setInterval(() => {
-      setProgress((p) => {
-        if (p >= 92) return p;
-        const step = Math.max(0.35, (92 - p) * 0.05);
-        return Math.min(92, p + step);
-      });
-    }, 450);
-    return () => window.clearInterval(timer);
-  }, [busy]);
+  const trackJob = async (jobId: string) => {
+    let last: BackupJob | null = null;
+    for (;;) {
+      const j = await api<{ ok?: boolean; job?: BackupJob; error?: string }>(`/api/backup/jobs/${encodeURIComponent(jobId)}`);
+      if (!j.ok || !j.job) throw new Error(j.error || "job");
+      last = j.job;
+      setProgress(j.job.pct);
+      setStage(j.job.stage);
+      if (j.job.status !== "running") break;
+      await new Promise((r) => window.setTimeout(r, POLL_MS));
+    }
+    return last!;
+  };
 
   const create = async () => {
     setBusy("create");
-    setProgress(8);
+    setProgress(2);
+    setStage("prepare");
     try {
-      const j = await api<{ ok?: boolean; item?: BackupItem; error?: string }>("/api/backup", {
+      const started = await api<{ ok?: boolean; jobId?: string; error?: string }>("/api/backup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user: currentLayoutUser() }),
       });
-      if (!j.ok) {
-        toast.error(j.error || tx("backupFail"));
+      if (!started.ok || !started.jobId) {
+        toast.error(started.error || tx("backupFail"));
+        return;
+      }
+      const job = await trackJob(started.jobId);
+      if (job.status !== "ok") {
+        toast.error(job.error || tx("backupFail"));
         return;
       }
       setProgress(100);
+      setStage("done");
       toast.success(tx("backupOk"));
-      pushLog("SYS", `backup ${j.item?.id || ""}`);
-      await new Promise((resolve) => window.setTimeout(resolve, 400));
+      pushLog("SYS", `backup ${job.item?.id || ""}`);
+      await new Promise((resolve) => window.setTimeout(resolve, 450));
       await load();
     } catch {
       toast.error(tx("backupFail"));
     } finally {
       setBusy(null);
       setProgress(0);
+      setStage("");
     }
   };
 
@@ -129,9 +163,10 @@ export function BackupPage({ embedded = false }: { embedded?: boolean }) {
   const restore = async () => {
     if (!target || !ack) return;
     setBusy("restore");
-    setProgress(8);
+    setProgress(2);
+    setStage("prepare");
     try {
-      const j = await api<{ ok?: boolean; error?: string; warnings?: string[] }>(
+      const started = await api<{ ok?: boolean; jobId?: string; error?: string }>(
         `/api/backup/${encodeURIComponent(target.id)}/restore`,
         {
           method: "POST",
@@ -139,15 +174,21 @@ export function BackupPage({ embedded = false }: { embedded?: boolean }) {
           body: JSON.stringify({ confirm: true }),
         },
       );
-      if (!j.ok) {
-        toast.error(j.error || tx("backupRestoreFail"));
+      if (!started.ok || !started.jobId) {
+        toast.error(started.error || tx("backupRestoreFail"));
+        return;
+      }
+      const job = await trackJob(started.jobId);
+      if (job.status !== "ok") {
+        toast.error(job.error || tx("backupRestoreFail"));
         return;
       }
       setProgress(100);
+      setStage("done");
       toast.success(tx("backupRestoreOk"));
       pushLog("SYS", `restore ${target.id}`);
-      if (j.warnings?.length) toast.message(j.warnings.slice(0, 3).join(" · "));
-      await new Promise((resolve) => window.setTimeout(resolve, 400));
+      if (job.warnings?.length) toast.message(job.warnings.slice(0, 3).join(" · "));
+      await new Promise((resolve) => window.setTimeout(resolve, 450));
       setTarget(null);
       setAck(false);
       await load();
@@ -156,6 +197,7 @@ export function BackupPage({ embedded = false }: { embedded?: boolean }) {
     } finally {
       setBusy(null);
       setProgress(0);
+      setStage("");
     }
   };
 
@@ -167,6 +209,8 @@ export function BackupPage({ embedded = false }: { embedded?: boolean }) {
     setAck(false);
     setTarget(row);
   };
+
+  const barLabel = stage && STAGE_KEY[stage] ? tx(STAGE_KEY[stage]) : tx("updProgress");
 
   return (
     <div>
@@ -189,7 +233,7 @@ export function BackupPage({ embedded = false }: { embedded?: boolean }) {
               {tx("backupRestore")}
             </GhostBtn>
           </div>
-          <ActionProgress active={busy === "create"} value={progress} label={tx("updProgress")} />
+          <ActionProgress active={busy === "create"} value={progress} label={barLabel} />
         </div>
         {items.length === 0 ? (
           <p className="text-sm text-[#8ea0b3]">{tx("backupEmpty")}</p>
@@ -289,7 +333,7 @@ export function BackupPage({ embedded = false }: { embedded?: boolean }) {
                   {busy === "restore" ? tx("backupRestoring") : tx("backupDlgGo")}
                 </PrimaryBtn>
               </div>
-              <ActionProgress active={busy === "restore"} value={progress} label={tx("updProgress")} />
+              <ActionProgress active={busy === "restore"} value={progress} label={barLabel} />
             </div>
           </div>
         </div>

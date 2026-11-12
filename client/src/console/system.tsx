@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { APP_VERSION } from "@shared/brand";
 import { UPDATE_IDS, type UpdateId } from "@shared/const";
+import { licenseGateOf, licenseMenusOpen } from "@shared/license";
 import { isNewerVersion } from "@shared/version";
 import { SERVICE_IDS, SVC_HINT, SVC_LABEL, SVC_POWER, serviceLive, type ServiceId } from "./services-ui";
 import type { I18nKey } from "./i18n";
@@ -97,13 +98,14 @@ function ChangePassPanel() {
 }
 
 export function AdminPage() {
-  const { s, tx, pushLog, setS } = useConsole();
+  const { s, tx, pushLog, setS, license } = useConsole();
   const [loc, navigate] = useLocation();
   const path = loc.replace(/^\/console\/?/, "").split(/[?#]/)[0] || "admin";
   const tab =
-    path === "logs" || path === "term" || path === "services" || path === "updates" || path === "password" || path === "backup" || path === "license"
+    path === "logs" || path === "term" || path === "services" || path === "updates" || path === "backup" || path === "license"
       ? path
       : "admin";
+  const menusOpen = licenseMenusOpen(license?.gate ?? licenseGateOf(license?.state));
   const [nu, setNu] = useState("");
   const [np, setNp] = useState("");
   const [busy, setBusy] = useState(false);
@@ -185,42 +187,36 @@ export function AdminPage() {
                 ? tx("services")
                 : tab === "updates"
                   ? tx("update")
-                  : tab === "password"
-                    ? tx("changePass")
-                    : tab === "backup"
-                      ? tx("backupTitle")
-                      : tab === "license"
-                        ? tx("licTab")
-                        : tx("adminTitle")
+                  : tab === "backup"
+                    ? tx("backupTitle")
+                    : tab === "license"
+                      ? tx("licTab")
+                      : tx("adminTitle")
         }
       />
       <div className="mb-5 flex flex-wrap gap-2">
-        <Chip active={tab === "admin"} onClick={() => navigate("/console/admin")}>
+        <Chip active={tab === "admin"} disabled={!menusOpen} onClick={() => navigate("/console/admin")}>
           {tx("admin")}
         </Chip>
-        <Chip active={tab === "password"} onClick={() => navigate("/console/password")}>
-          {tx("changePass")}
-        </Chip>
-        <Chip active={tab === "services"} onClick={() => navigate("/console/services")}>
+        <Chip active={tab === "services"} disabled={!menusOpen} onClick={() => navigate("/console/services")}>
           {tx("services")}
         </Chip>
-        <Chip active={tab === "updates"} onClick={() => navigate("/console/updates")}>
+        <Chip active={tab === "updates"} disabled={!menusOpen} onClick={() => navigate("/console/updates")}>
           {tx("update")}
         </Chip>
-        <Chip active={tab === "backup"} onClick={() => navigate("/console/backup")}>
+        <Chip active={tab === "backup"} disabled={!menusOpen} onClick={() => navigate("/console/backup")}>
           {tx("backup")}
         </Chip>
         <Chip active={tab === "license"} onClick={() => navigate("/console/license")}>
           {tx("licTab")}
         </Chip>
-        <Chip active={tab === "logs"} onClick={() => navigate("/console/logs")}>
+        <Chip active={tab === "logs"} disabled={!menusOpen} onClick={() => navigate("/console/logs")}>
           {tx("logs")}
         </Chip>
-        <Chip active={tab === "term"} onClick={() => navigate("/console/term")}>
+        <Chip active={tab === "term"} disabled={!menusOpen} onClick={() => navigate("/console/term")}>
           {tx("term")}
         </Chip>
       </div>
-      {tab === "password" ? <ChangePassPanel /> : null}
       {tab === "services" ? <ServicesPage embedded /> : null}
       {tab === "updates" ? <UpdatesPage embedded /> : null}
       {tab === "backup" ? <BackupPage embedded /> : null}
@@ -687,6 +683,8 @@ type HostSnap = {
   soc?: string;
   osPretty?: string;
   appVersion?: string;
+  serial?: string | null;
+  serialDisplay?: string | null;
   uptimeSec?: number;
   cpuPct?: number | null;
   ramPct?: number | null;
@@ -839,11 +837,16 @@ export function StatusPage() {
   return (
     <div>
       <PageHead kicker={tx("status")} title={tx("statusTitle")} />
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Mini k={tx("hardware")} v={host?.hardware?.trim() || "—"} />
         <Mini k={tx("software")} v={software} />
         <Mini k="SoC" v={host?.soc?.trim() || "—"} />
         <Mini k="Uptime" v={formatUptime(host?.uptimeSec)} />
+        <Mini
+          k={tx("deviceSerial")}
+          v={host?.serialDisplay?.trim() || host?.serial?.trim() || "—"}
+          copyable={Boolean(host?.serialDisplay || host?.serial)}
+        />
       </div>
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <Panel>
@@ -892,17 +895,20 @@ export function StatusPage() {
           </div>
         </Panel>
       </div>
-      <Panel className="mt-4">
+      <Panel className="mt-4 overflow-hidden">
         <PanelTitle>{tx("healthHist")}</PanelTitle>
         <p className="-mt-2 mb-3 text-xs text-[#8ea0b3]">{tx("healthHistHint")}</p>
-        <Spark
-          cpu={cpuSeries}
-          ram={ramSeries}
-          temp={tempSeries}
-          cpuLabel={tx("healthHistCpu")}
-          ramLabel={tx("healthHistRam")}
-          tempLabel={tx("healthHistTemp")}
-        />
+        {/* -mx-5 cancela o padding do Panel: o SVG vai de ponta a ponta no card. */}
+        <div className="-mx-5">
+          <Spark
+            cpu={cpuSeries}
+            ram={ramSeries}
+            temp={tempSeries}
+            cpuLabel={tx("healthHistCpu")}
+            ramLabel={tx("healthHistRam")}
+            tempLabel={tx("healthHistTemp")}
+          />
+        </div>
       </Panel>
       <Panel className="mt-4">
         <PanelTitle>{tx("network")}</PanelTitle>
@@ -947,10 +953,22 @@ export function StatusPage() {
   );
 }
 
-function Mini({ k, v }: { k: string; v: string }) {
+function Mini({ k, v, copyable = false }: { k: string; v: string; copyable?: boolean }) {
+  const { tx } = useConsole();
   return (
     <div className="rounded-lg bg-[#101c28] px-3 py-2">
-      <p className="text-[10px] tracking-wide text-[#8ea0b3] uppercase">{k}</p>
+      <div className="mb-0.5 flex items-center justify-between gap-2">
+        <p className="text-[10px] tracking-wide text-[#8ea0b3] uppercase">{k}</p>
+        {copyable && v && v !== "—" ? (
+          <button
+            type="button"
+            className="shrink-0 text-[10px] font-semibold tracking-wide text-[#4fc3f7] uppercase hover:text-[#7ee0ff]"
+            onClick={() => void navigator.clipboard.writeText(v)}
+          >
+            {tx("licCopy")}
+          </button>
+        ) : null}
+      </div>
       <p className="break-words font-['IBM_Plex_Mono'] text-sm text-[#4fc3f7]">{v}</p>
     </div>
   );
@@ -1054,29 +1072,65 @@ function Spark({
   ramLabel: string;
   tempLabel: string;
 }) {
-  const w = 640;
-  const h = 140;
-  const pad = 10;
+  const w = 1000;
+  const h = 160;
+  const padT = 10;
+  const padB = 8;
+  const padL = 4;
+  const padR = 28; // só o necessário para os números do eixo Y
+  const plotW = w - padL - padR;
+  const plotH = h - padT - padB;
   const ticks = [0, 25, 50, 75, 100];
+  const pathAt = (values: Array<number | null>) => {
+    const n = values.length;
+    if (n < 2) return "";
+    let d = "";
+    let started = false;
+    for (let i = 0; i < n; i++) {
+      const v = values[i];
+      if (v == null || !Number.isFinite(v)) {
+        started = false;
+        continue;
+      }
+      const x = padL + (i / (n - 1)) * plotW;
+      const y = padT + plotH - (Math.min(Math.max(v, 0), 100) / 100) * plotH;
+      d += `${started ? "L" : "M"} ${x} ${y} `;
+      started = true;
+    }
+    return d.trim();
+  };
   return (
     <div>
-      <svg viewBox={`0 0 ${w} ${h}`} className="h-36 w-full" role="img" aria-label={`${cpuLabel} ${ramLabel} ${tempLabel}`}>
+      <svg
+        viewBox={`0 0 ${w} ${h}`}
+        className="block h-40 w-full"
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={`${cpuLabel} ${ramLabel} ${tempLabel}`}
+      >
         {ticks.map((t) => {
-          const y = pad + ((100 - t) / 100) * (h - pad * 2);
+          const y = padT + ((100 - t) / 100) * plotH;
           return (
             <g key={t}>
-              <line x1="0" x2={w - 36} y1={y} y2={y} stroke="rgba(79,195,247,0.16)" strokeWidth="1" />
-              <text x={w - 34} y={y + 3} fill="#8ea0b3" fontSize="9" fontFamily="IBM Plex Mono, ui-monospace, monospace">
+              <line x1={padL} x2={padL + plotW} y1={y} y2={y} stroke="rgba(79,195,247,0.16)" strokeWidth="1" />
+              <text
+                x={w - 4}
+                y={y + 3}
+                textAnchor="end"
+                fill="#8ea0b3"
+                fontSize="11"
+                fontFamily="IBM Plex Mono, ui-monospace, monospace"
+              >
                 {t}
               </text>
             </g>
           );
         })}
-        <path d={seriesPath(cpu, 100, w - 36, h, pad)} fill="none" stroke="#4fc3f7" strokeWidth="2" />
-        <path d={seriesPath(ram, 100, w - 36, h, pad)} fill="none" stroke="#34d399" strokeWidth="2" />
-        <path d={seriesPath(temp, 100, w - 36, h, pad)} fill="none" stroke="#f87171" strokeWidth="2" />
+        <path d={pathAt(cpu)} fill="none" stroke="#4fc3f7" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+        <path d={pathAt(ram)} fill="none" stroke="#34d399" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+        <path d={pathAt(temp)} fill="none" stroke="#f87171" strokeWidth="2" vectorEffect="non-scaling-stroke" />
       </svg>
-      <div className="mt-2 flex flex-wrap gap-4 text-[11px] text-[#8ea0b3]">
+      <div className="mt-2 flex flex-wrap gap-4 px-5 text-[11px] text-[#8ea0b3]">
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block h-0.5 w-4 bg-[#4fc3f7]" />
           {cpuLabel} (%)

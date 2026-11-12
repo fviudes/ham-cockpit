@@ -3,6 +3,8 @@ import { existsSync, readdirSync, readFileSync, statfsSync } from "node:fs";
 import os from "node:os";
 import { promisify } from "node:util";
 import { APP_VERSION } from "../shared/brand";
+import { serialDisplay, serialFromCpuinfo } from "../shared/license";
+import { readDeviceSerial } from "./license";
 
 const execFileAsync = promisify(execFile);
 
@@ -33,6 +35,9 @@ export type HostStatus = {
   soc: string;
   osPretty: string;
   appVersion: string;
+  /** Serial do Raspberry (display com dígito verificador, se disponível). */
+  serial: string | null;
+  serialDisplay: string | null;
   uptimeSec: number;
   cpuPct: number | null;
   ramPct: number | null;
@@ -50,7 +55,8 @@ let cpuPrev: { idle: number; total: number } | null = null;
 let netPrev: { t: number; rx: number; tx: number } | null = null;
 let sampler: ReturnType<typeof setInterval> | null = null;
 let sampling = false;
-let identity: { hardware: string; soc: string; osPretty: string } | null = null;
+let identity: { hardware: string; soc: string; osPretty: string; serial: string | null; serialDisplay: string | null } | null =
+  null;
 
 /** Tipos oficiais (new-style revision, bits 4–11). */
 const PI_TYPE: Record<number, string> = {
@@ -458,18 +464,47 @@ async function windowsIdentity(): Promise<{ hardware: string; soc: string; osPre
   return quick;
 }
 
-async function readIdentity(): Promise<{ hardware: string; soc: string; osPretty: string }> {
+async function readSerialFields(): Promise<{ serial: string | null; serialDisplay: string | null }> {
+  try {
+    const serial = readDeviceSerial();
+    if (!serial) {
+      // Fallback direto do cpuinfo (mesmo caminho da licença).
+      const cpu = existsSync("/proc/cpuinfo") ? readFileSync("/proc/cpuinfo", "utf8") : null;
+      const dt = existsSync("/proc/device-tree/serial-number")
+        ? readFileSync("/proc/device-tree/serial-number", "utf8")
+        : null;
+      const s = serialFromCpuinfo(cpu, dt);
+      if (!s) return { serial: null, serialDisplay: null };
+      return { serial: s, serialDisplay: await serialDisplay(s) };
+    }
+    return { serial, serialDisplay: await serialDisplay(serial) };
+  } catch {
+    return { serial: null, serialDisplay: null };
+  }
+}
+
+async function readIdentity(): Promise<{
+  hardware: string;
+  soc: string;
+  osPretty: string;
+  serial: string | null;
+  serialDisplay: string | null;
+}> {
   if (identity) return identity;
   if (process.platform === "win32") {
-    identity = await windowsIdentity();
+    const base = await windowsIdentity();
+    identity = { ...base, serial: null, serialDisplay: null };
     return identity;
   }
   const hw = linuxHardware();
   const osPretty = formatOsPretty(readOsRelease());
+  const ser = await readSerialFields();
   identity = {
     hardware: hw.hardware,
     soc: hw.soc,
     osPretty: osPretty || `${os.type()} ${os.release()}`,
+    serial: ser.serial,
+    serialDisplay: ser.serialDisplay,
   };
   return identity;
 }
@@ -535,6 +570,8 @@ function emptyStatus(error: string): HostStatus {
     soc: "",
     osPretty: "",
     appVersion: APP_VERSION,
+    serial: null,
+    serialDisplay: null,
     uptimeSec: Math.floor(os.uptime()),
     cpuPct: null,
     ramPct: null,
@@ -580,6 +617,8 @@ export async function hostStatus(): Promise<HostStatus> {
       soc: id.soc,
       osPretty: id.osPretty,
       appVersion: APP_VERSION,
+      serial: id.serial,
+      serialDisplay: id.serialDisplay,
       uptimeSec: Math.floor(os.uptime()),
       cpuPct: row?.cpuPct ?? null,
       ramPct: ram.pct,

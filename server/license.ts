@@ -16,12 +16,16 @@ import {
   EMPTY_CLOCK_STATE,
   evaluateLicense,
   isValidCallsign,
+  isValidEmail,
+  licenseGateOf,
   normalizeCallsign,
+  normalizeEmail,
   serialDisplay,
   serialFromCpuinfo,
   verifyBlob,
   verifyLicenseToken,
   type ClockState,
+  type LicenseGate,
   type ReceiptPayload,
   type Verdict,
 } from "../shared/license";
@@ -49,6 +53,8 @@ interface LicenseStore {
   revoked: string[];
   /** Prefixo/indicativo do operador (obrigatório para Licenciar). */
   callsign: string | null;
+  /** E-mail do operador (obrigatório para Licenciar). */
+  email: string | null;
 }
 
 function emptyStore(now = Math.floor(Date.now() / 1000)): LicenseStore {
@@ -62,6 +68,7 @@ function emptyStore(now = Math.floor(Date.now() / 1000)): LicenseStore {
     crlVersion: 0,
     revoked: [],
     callsign: null,
+    email: null,
   };
 }
 
@@ -101,6 +108,7 @@ function readStore(): LicenseStore {
       ...emptyStore(typeof raw.firstSeen === "number" ? raw.firstSeen : undefined),
       ...raw,
       callsign: typeof raw.callsign === "string" && raw.callsign ? normalizeCallsign(raw.callsign) || null : null,
+      email: typeof raw.email === "string" && raw.email && isValidEmail(raw.email) ? normalizeEmail(raw.email) : null,
       clock: raw.clock ? { ...EMPTY_CLOCK_STATE, ...raw.clock } : { ...EMPTY_CLOCK_STATE },
       revoked: Array.isArray(raw.revoked) ? raw.revoked.map(String) : [],
     };
@@ -151,7 +159,11 @@ export interface LicenseApiBody {
   serial: string | null;
   serialDisplay: string | null;
   callsign: string | null;
+  email: string | null;
+  /** Veredito interno (provisional/trial/ativa/…). */
   state: Verdict["state"];
+  /** Gate de UI: unlicensed | trial | trial_expired | licensed. */
+  gate: LicenseGate;
   type: Verdict["type"];
   licenseId: string | null;
   issuedAt: number | null;
@@ -216,7 +228,9 @@ async function toApi(store: LicenseStore, online: boolean | null = null): Promis
     serial,
     serialDisplay: display,
     callsign: store.callsign,
+    email: store.email,
     state: verdict.state,
+    gate: licenseGateOf(verdict.state),
     type: verdict.type,
     licenseId: verdict.licenseId,
     issuedAt: verdict.issuedAt,
@@ -264,7 +278,7 @@ async function applyPortalResponse(
 }
 
 export async function activateWithPortal(
-  opts: { callsign?: string } = {},
+  opts: { callsign?: string; email?: string } = {},
 ): Promise<{ ok: boolean; body: LicenseApiBody; error?: string }> {
   const store = readStore();
   const serial = readDeviceSerial();
@@ -273,7 +287,12 @@ export async function activateWithPortal(
   if (!isValidCallsign(callsign)) {
     return { ok: false, body: await toApi(store, null), error: "callsign_required" };
   }
+  const email = normalizeEmail(opts.email ?? store.email ?? "");
+  if (!isValidEmail(email)) {
+    return { ok: false, body: await toApi(store, null), error: "email_required" };
+  }
   store.callsign = callsign;
+  store.email = email;
   writeStore(store);
   try {
     const r = await fetch(`${PORTAL_ORIGIN}/api/lic/activate`, {
@@ -285,6 +304,7 @@ export async function activateWithPortal(
         nonce: crypto.randomUUID(),
         callsign,
         prefix: callsign,
+        email,
       }),
       signal: AbortSignal.timeout(15000),
     });
@@ -341,13 +361,16 @@ export function registerLicenseRoutes(app: Express) {
       } catch {
         serialDisp = serial;
       }
+      const state = serial ? "sem_licenca" : "sem_serial";
       res.status(500).json({
         ok: false,
         error: String(err),
         serial,
         serialDisplay: serialDisp,
         callsign: null,
-        state: serial ? "sem_licenca" : "sem_serial",
+        email: null,
+        state,
+        gate: licenseGateOf(state),
       });
     }
   });
@@ -360,7 +383,8 @@ export function registerLicenseRoutes(app: Express) {
           : typeof req.body?.prefix === "string"
             ? req.body.prefix
             : undefined;
-      const r = await activateWithPortal({ callsign });
+      const email = typeof req.body?.email === "string" ? req.body.email : undefined;
+      const r = await activateWithPortal({ callsign, email });
       const status = r.ok ? 200 : r.error === "portal_unreachable" ? 502 : 400;
       res.status(status).json(r);
     } catch (err) {
@@ -402,6 +426,7 @@ export function registerLicenseRoutes(app: Express) {
         display,
         chk,
         callsign: store.callsign,
+        email: store.email,
         appVersion: APP_VERSION,
         portalUrl: PORTAL_ORIGIN,
         buyUrl: `${PORTAL_ORIGIN}/comprar?serial=${encodeURIComponent(serial)}&chk=${chk}`,

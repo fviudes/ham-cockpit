@@ -12,7 +12,9 @@ function spawnShell(): ChildProcessWithoutNullStreams {
   if (process.platform === "win32") {
     return spawn("powershell.exe", ["-NoLogo"], { env, windowsHide: true });
   }
-  const cwd = existsSync("/root") ? "/root" : process.cwd();
+  // Nunca usar cwd=/root: o User=hamcockpit não consegue chdir (EACCES no spawn do sudo).
+  // O root-login ajusta HOME/cwd depois do privilege escalation.
+  const cwd = existsSync("/opt/ham-cockpit") ? "/opt/ham-cockpit" : process.cwd();
   const rootEnv = { ...env, HOME: "/root", USER: "root", LOGNAME: "root" };
   const sudoBin = existsSync("/usr/bin/sudo") ? "/usr/bin/sudo" : "sudo";
   if (existsSync(ROOT_LOGIN) && existsSync("/usr/bin/script")) {

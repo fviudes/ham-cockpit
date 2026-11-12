@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { isValidCallsign, normalizeCallsign } from "@shared/license";
+import { isValidCallsign, isValidEmail, licenseGateOf, normalizeCallsign, normalizeEmail } from "@shared/license";
 import { useConsole } from "./state";
 import { ConsoleInput, GhostBtn, PageHead, Panel, PanelTitle, PrimaryBtn } from "./widgets";
 
@@ -8,7 +8,9 @@ type LicenseBody = {
   serial?: string | null;
   serialDisplay?: string | null;
   callsign?: string | null;
+  email?: string | null;
   state?: string;
+  gate?: string;
   type?: string | null;
   licenseId?: string | null;
   daysLeft?: number | null;
@@ -39,6 +41,7 @@ export function LicensePage({ embedded = false }: { embedded?: boolean }) {
   const { tx, pushLog, refreshLicense } = useConsole();
   const [info, setInfo] = useState<LicenseBody | null>(null);
   const [prefix, setPrefix] = useState("");
+  const [email, setEmail] = useState("");
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -48,6 +51,7 @@ export function LicensePage({ embedded = false }: { embedded?: boolean }) {
       const j = (await r.json()) as LicenseBody;
       setInfo(j);
       if (typeof j.callsign === "string" && j.callsign) setPrefix(j.callsign);
+      if (typeof j.email === "string" && j.email) setEmail(j.email);
       void refreshLicense();
     } catch {
       toast.error(tx("licErrPortal"));
@@ -59,12 +63,23 @@ export function LicensePage({ embedded = false }: { embedded?: boolean }) {
   }, [load]);
 
   const prefixOk = isValidCallsign(prefix);
+  const emailOk = isValidEmail(email);
   const serialShown = info?.serialDisplay || info?.serial || "";
+  const gate =
+    info?.gate === "licensed" || info?.gate === "trial" || info?.gate === "trial_expired" || info?.gate === "unlicensed"
+      ? info.gate
+      : licenseGateOf(info?.state);
+  const buyEmphasis = gate === "trial_expired";
 
   const activate = async () => {
     const callsign = normalizeCallsign(prefix);
+    const mail = normalizeEmail(email);
     if (!isValidCallsign(callsign)) {
       toast.error(tx("licErrPrefix"));
+      return;
+    }
+    if (!isValidEmail(mail)) {
+      toast.error(tx("licErrEmail"));
       return;
     }
     if (!info?.serial && !info?.serialDisplay) {
@@ -76,13 +91,14 @@ export function LicensePage({ embedded = false }: { embedded?: boolean }) {
       const r = await fetch("/api/license/activate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ callsign, prefix: callsign }),
+        body: JSON.stringify({ callsign, prefix: callsign, email: mail }),
       });
       const j = (await r.json()) as { ok?: boolean; body?: LicenseBody; error?: string };
       if (!r.ok || !j.ok) {
         const map: Record<string, string> = {
           portal_unreachable: "licErrPortal",
           callsign_required: "licErrPrefix",
+          email_required: "licErrEmail",
           serial_unavailable: "licStNoSerial",
         };
         toast.error(tx((map[j.error || ""] || "licErrPortal") as "licErrPortal"));
@@ -92,6 +108,7 @@ export function LicensePage({ embedded = false }: { embedded?: boolean }) {
       if (j.body) {
         setInfo(j.body);
         if (j.body.callsign) setPrefix(j.body.callsign);
+        if (j.body.email) setEmail(j.body.email);
       }
       toast.success(tx("licOk"));
       pushLog("SYS", "licença ativada/sincronizada");
@@ -186,6 +203,18 @@ export function LicensePage({ embedded = false }: { embedded?: boolean }) {
           />
           <p className="mb-4 text-xs text-[#64748b]">{tx("licPrefixHint")}</p>
 
+          <label className="mb-1 block text-sm text-[#8ea0b3]">{tx("licEmail")}</label>
+          <ConsoleInput
+            className="mb-1"
+            type="email"
+            autoComplete="email"
+            value={email}
+            placeholder={tx("licEmailPh")}
+            maxLength={120}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <p className="mb-4 text-xs text-[#64748b]">{tx("licEmailHint")}</p>
+
           <p className="mb-1 text-sm text-[#8ea0b3]">{tx("licState")}</p>
           <p className="mb-2 text-base text-white">{stateLabel()}</p>
           {info?.daysLeft != null ? (
@@ -202,15 +231,28 @@ export function LicensePage({ embedded = false }: { embedded?: boolean }) {
             {info?.online === false ? tx("licOffline") : tx("licOnline")}
           </p>
           <div className="flex flex-wrap gap-2">
-            <PrimaryBtn disabled={busy || !prefixOk || !serialShown} onClick={() => void activate()}>
+            <PrimaryBtn disabled={busy || !prefixOk || !emailOk || !serialShown} onClick={() => void activate()}>
               {tx("licActivate")}
             </PrimaryBtn>
             {info?.buyUrl ? (
-              <GhostBtn onClick={() => window.open(info.buyUrl!, "_blank", "noopener")}>{tx("licBuy")}</GhostBtn>
+              buyEmphasis ? (
+                <button
+                  type="button"
+                  className="rounded-md bg-[#ef4444] px-3 py-2 text-sm font-semibold text-white hover:bg-[#f87171]"
+                  onClick={() => window.open(info.buyUrl!, "_blank", "noopener")}
+                >
+                  {tx("licBuy")}
+                </button>
+              ) : (
+                <GhostBtn onClick={() => window.open(info.buyUrl!, "_blank", "noopener")}>{tx("licBuy")}</GhostBtn>
+              )
             ) : null}
           </div>
           {!prefixOk && prefix.trim() ? (
             <p className="mt-2 text-xs text-amber-200">{tx("licErrPrefix")}</p>
+          ) : null}
+          {!emailOk && email.trim() ? (
+            <p className="mt-2 text-xs text-amber-200">{tx("licErrEmail")}</p>
           ) : null}
         </Panel>
 

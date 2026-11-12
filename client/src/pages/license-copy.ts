@@ -108,6 +108,7 @@ export const ADM = {
   name: { pt: "Nome", en: "Name" } satisfies Pair,
   active: { pt: "Ativo", en: "Active" } satisfies Pair,
   disabled: { pt: "Desativado", en: "Disabled" } satisfies Pair,
+  email: { pt: "E-mail", en: "Email" } satisfies Pair,
   licenseKey: { pt: "Chave", en: "Key" } satisfies Pair,
   copy: { pt: "Copiar", en: "Copy" } satisfies Pair,
   showFull: { pt: "Ver completa", en: "Show full" } satisfies Pair,

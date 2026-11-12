@@ -441,7 +441,39 @@ export function backupList(): { ok: boolean; folder: string; items: BackupItem[]
   return { ok: true, folder: dir, items };
 }
 
-export async function backupCreate(user: string): Promise<{ ok: boolean; item?: BackupItem; folder?: string; error?: string }> {
+export type BackupJob = {
+  id: string;
+  kind: "create" | "restore";
+  status: "running" | "ok" | "error";
+  pct: number;
+  stage: string;
+  error: string;
+  item?: BackupItem;
+  folder?: string;
+  warnings?: string[];
+};
+
+const jobs = new Map<string, BackupJob>();
+
+function jobId(kind: "create" | "restore") {
+  return `bk-${kind}-${Date.now().toString(36)}-${randomBytes(3).toString("hex")}`;
+}
+
+function setProg(job: BackupJob, pct: number, stage: string) {
+  job.pct = Math.max(0, Math.min(99, Math.round(pct)));
+  job.stage = stage;
+}
+
+export function backupJobGet(id: string): BackupJob | null {
+  return jobs.get(id) ?? null;
+}
+
+type ProgressFn = (pct: number, stage: string) => void;
+
+export async function backupCreate(
+  user: string,
+  onProgress?: ProgressFn,
+): Promise<{ ok: boolean; item?: BackupItem; folder?: string; error?: string }> {
   const who = String(user || "admin")
     .replace(/[^a-zA-Z0-9._-]/g, "")
     .slice(0, 32) || "admin";
@@ -452,8 +484,11 @@ export async function backupCreate(user: string): Promise<{ ok: boolean; item?: 
   mkdirSync(join(staging, "station"), { recursive: true });
   const parts: string[] = [];
   const warnings: string[] = [];
+  const prog = onProgress ?? (() => undefined);
   try {
+    prog(5, "prepare");
     await ensureWavelogEnvPerms(warnings);
+    prog(15, "station");
     for (const src of stationSources()) {
       if (copyTree(src.dir, join(staging, "station", src.key), warnings, `station:${src.key}`)) {
         parts.push(`station:${src.key}`);
@@ -466,8 +501,11 @@ export async function backupCreate(user: string): Promise<{ ok: boolean; item?: 
     } catch (err) {
       warnings.push(`users: ${err instanceof Error ? err.message : String(err)}`);
     }
+    prog(35, "wlg");
     if (copyTree(wlgDir(), join(staging, "wlg"), warnings, "wlg")) parts.push("wlg");
+    prog(45, "wavelog");
     await dumpWavelog(join(staging, "wavelog"), warnings, parts);
+    prog(75, "archive");
     writeFileSync(
       join(staging, "manifest.json"),
       `${JSON.stringify({ version: 1, id, user: who, createdAt: now.toISOString(), parts, warnings }, null, 2)}\n`,
@@ -482,6 +520,7 @@ export async function backupCreate(user: string): Promise<{ ok: boolean; item?: 
     } catch {
       /* */
     }
+    prog(95, "finalize");
     const sc: Sidecar = { version: 1, id, user: who, createdAt: now.toISOString(), parts, warnings };
     writeFileSync(sidecarPath(dir, id), `${JSON.stringify(sc, null, 2)}\n`);
     const item = toItem(dir, id);
@@ -491,6 +530,38 @@ export async function backupCreate(user: string): Promise<{ ok: boolean; item?: 
   } finally {
     rmSync(staging, { recursive: true, force: true });
   }
+}
+
+/** Inicia backup em background; a UI faz poll em /api/backup/jobs/:id. */
+export function backupCreateStart(user: string): { ok: true; jobId: string } {
+  const id = jobId("create");
+  const job: BackupJob = { id, kind: "create", status: "running", pct: 2, stage: "prepare", error: "" };
+  jobs.set(id, job);
+  void backupCreate(user, (pct, stage) => setProg(job, pct, stage))
+    .then((r) => {
+      if (r.ok) {
+        job.status = "ok";
+        job.pct = 100;
+        job.stage = "done";
+        job.item = r.item;
+        job.folder = r.folder;
+      } else {
+        job.status = "error";
+        job.stage = "error";
+        job.error = r.error || "backup";
+      }
+    })
+    .catch((err) => {
+      job.status = "error";
+      job.stage = "error";
+      job.error = err instanceof Error ? err.message : String(err);
+    })
+    .finally(() => {
+      setTimeout(() => {
+        if (jobs.get(id)?.status !== "running") jobs.delete(id);
+      }, 60_000);
+    });
+  return { ok: true, jobId: id };
 }
 
 export function backupDelete(id: string): { ok: boolean; error?: string } {
@@ -506,6 +577,7 @@ export function backupDelete(id: string): { ok: boolean; error?: string } {
 export async function backupRestore(
   id: string,
   confirm: boolean,
+  onProgress?: ProgressFn,
 ): Promise<{ ok: boolean; warnings?: string[]; error?: string }> {
   if (!confirm) return { ok: false, error: "confirm" };
   if (!ID_RE.test(id)) return { ok: false, error: "id" };
@@ -515,9 +587,13 @@ export async function backupRestore(
   const staging = join(tmpdir(), `restore-${id}`);
   mkdirSync(staging, { recursive: true });
   const warnings: string[] = [];
+  const prog = onProgress ?? (() => undefined);
   try {
+    prog(5, "prepare");
+    prog(15, "archive");
     const tar = await run("tar", ["-xzf", file, "-C", staging], { timeout: 180_000 });
     if (tar.code !== 0) return { ok: false, error: tar.stderr.trim() || "tar" };
+    prog(35, "station");
     const station = join(staging, "station");
     if (existsSync(station)) {
       for (const src of stationSources()) {
@@ -527,6 +603,7 @@ export async function backupRestore(
         copyTree(from, src.dir, warnings, `restore station:${src.key}`);
       }
     }
+    prog(55, "wlg");
     const wlg = join(staging, "wlg");
     if (existsSync(wlg)) {
       const gateEnv = join(wlg, "wavelog-gate.env");
@@ -536,8 +613,10 @@ export async function backupRestore(
         await installPrivilegedFile(gateEnv, destEnv, warnings, "restore wlg:env");
       }
     }
+    prog(70, "wavelog");
     const wav = join(staging, "wavelog");
     if (existsSync(wav)) await restoreWavelog(wav, warnings);
+    prog(92, "finalize");
     await ensureWavelogEnvPerms(warnings);
     return { ok: true, warnings };
   } catch (err) {
@@ -545,4 +624,36 @@ export async function backupRestore(
   } finally {
     rmSync(staging, { recursive: true, force: true });
   }
+}
+
+export function backupRestoreStart(id: string, confirm: boolean): { ok: true; jobId: string } | { ok: false; error: string } {
+  if (!confirm) return { ok: false, error: "confirm" };
+  if (!ID_RE.test(id)) return { ok: false, error: "id" };
+  const jobKey = jobId("restore");
+  const job: BackupJob = { id: jobKey, kind: "restore", status: "running", pct: 2, stage: "prepare", error: "" };
+  jobs.set(jobKey, job);
+  void backupRestore(id, true, (pct, stage) => setProg(job, pct, stage))
+    .then((r) => {
+      if (r.ok) {
+        job.status = "ok";
+        job.pct = 100;
+        job.stage = "done";
+        job.warnings = r.warnings;
+      } else {
+        job.status = "error";
+        job.stage = "error";
+        job.error = r.error || "restore";
+      }
+    })
+    .catch((err) => {
+      job.status = "error";
+      job.stage = "error";
+      job.error = err instanceof Error ? err.message : String(err);
+    })
+    .finally(() => {
+      setTimeout(() => {
+        if (jobs.get(jobKey)?.status !== "running") jobs.delete(jobKey);
+      }, 60_000);
+    });
+  return { ok: true, jobId: jobKey };
 }
