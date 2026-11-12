@@ -1,0 +1,27 @@
+name: Portal — refazer deploy
+
+# Refaz o deploy do portal (Cloudflare Pages) para ele mostrar a imagem mais recente.
+# O bake (appliance-image.yml) já faz isso no fim. Este workflow cobre release manual
+# e o disparo à mão (Actions → Run workflow).
+
+on:
+  release:
+    types: [published, edited]
+  workflow_dispatch:
+
+jobs:
+  redeploy:
+    if: github.repository == 'fviudes/ham-cockpit'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Disparar o deploy hook do Pages
+        env:
+          CF_PAGES_DEPLOY_HOOK: ${{ secrets.CF_PAGES_DEPLOY_HOOK }}
+        run: |
+          if [[ -z "${CF_PAGES_DEPLOY_HOOK:-}" ]]; then
+            echo "Secret CF_PAGES_DEPLOY_HOOK ausente (veja docs/portal.md)." >&2
+            exit 1
+          fi
+          curl -fsS -X POST "$CF_PAGES_DEPLOY_HOOK" >/dev/null
+          echo "Deploy do portal disparado."

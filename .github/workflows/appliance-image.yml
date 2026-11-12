@@ -104,3 +104,17 @@ jobs:
           if [[ -n "$OTA" && -f "$OTA" ]]; then
             gh release upload "$TAG" "$OTA" --clobber
           fi
+      - name: Atualizar o portal (Cloudflare Pages)
+        if: github.repository == 'fviudes/ham-cockpit'
+        continue-on-error: true
+        env:
+          CF_PAGES_DEPLOY_HOOK: ${{ secrets.CF_PAGES_DEPLOY_HOOK }}
+        run: |
+          # A release já está publicada: refaz o deploy do portal para ele mostrar a nova versão da imagem.
+          # Sem o secret, o portal ainda se atualiza sozinho no navegador (API pública de releases).
+          if [[ -z "${CF_PAGES_DEPLOY_HOOK:-}" ]]; then
+            echo "CF_PAGES_DEPLOY_HOOK ausente — deploy do portal não disparado." >&2
+            exit 0
+          fi
+          curl -fsS -X POST "$CF_PAGES_DEPLOY_HOOK" >/dev/null
+          echo "Deploy do portal disparado."

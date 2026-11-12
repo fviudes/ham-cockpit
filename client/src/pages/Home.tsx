@@ -16,6 +16,8 @@ import {
 import { useLocation } from "wouter";
 import NavBar from "@/components/NavBar";
 import { APP_IMAGE_VERSION, APP_LOGO_LG, APP_NAME, APP_VERSION } from "@shared/brand";
+import LatestImageChip from "@/components/LatestImageChip";
+import { IS_PORTAL } from "@/lib/portal";
 import {
   FigAcomCable,
   FigBoot,
@@ -30,6 +32,7 @@ import { PRODUCT, Photo } from "./product-media";
 import { useSiteLang } from "./site-lang";
 import {
   HOME,
+  NAV,
   HOME_DEVICES,
   HOME_FEATURES,
   HOME_FLOW,
@@ -69,7 +72,7 @@ export default function Home() {
               className="mb-6 h-[120px] w-[120px] object-contain drop-shadow-[0_12px_28px_rgba(0,0,0,0.55)] sm:h-[140px] sm:w-[140px]"
             />
             <p className="mb-3 font-['IBM_Plex_Mono'] text-xs font-bold tracking-widest text-[#FFB300]">
-              {t(HOME.kicker)} · v{APP_VERSION} · UBUNTU 24.04 ARM64
+              {t(HOME.kicker)}{IS_PORTAL ? "" : ` · v${APP_VERSION}`} · UBUNTU 24.04 ARM64
             </p>
             <h1 className="mb-5 font-['Space_Grotesk'] text-4xl leading-tight font-bold text-white sm:text-5xl lg:text-6xl">
               {t(HOME.h1a)}
@@ -77,14 +80,25 @@ export default function Home() {
             </h1>
             <p className="mb-8 max-w-xl text-lg leading-relaxed text-[#c5d4e0]">{t(HOME.lead)}</p>
             <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => navigate("/console")}
-                className="inline-flex items-center gap-2 rounded-lg bg-[#4fc3f7] px-7 py-3.5 font-bold text-[#0d1b2a] hover:bg-[#80d8ff]"
-              >
-                <Radio size={18} />
-                {t(HOME.openConsole)}
-              </button>
+              {IS_PORTAL ? (
+                <button
+                  type="button"
+                  onClick={() => navigate("/download")}
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#4fc3f7] px-7 py-3.5 font-bold text-[#0d1b2a] hover:bg-[#80d8ff]"
+                >
+                  <Download size={18} />
+                  {t(NAV.download)}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => navigate("/console")}
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#4fc3f7] px-7 py-3.5 font-bold text-[#0d1b2a] hover:bg-[#80d8ff]"
+                >
+                  <Radio size={18} />
+                  {t(HOME.openConsole)}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => navigate("/docs")}
@@ -92,14 +106,26 @@ export default function Home() {
               >
                 {t(HOME.fullDocs)}
               </button>
-              <a
-                href={`https://github.com/fviudes/ham-cockpit/releases/tag/v${APP_IMAGE_VERSION}`}
-                className="inline-flex items-center gap-2 rounded-lg border border-[rgba(255,179,0,0.45)] px-7 py-3.5 font-bold text-[#FFB300] hover:bg-[rgba(255,179,0,0.08)]"
-              >
-                <Download size={18} />
-                {t(HOME.osImage)}
-              </a>
+              {IS_PORTAL ? (
+                <button
+                  type="button"
+                  onClick={() => navigate("/manual")}
+                  className="inline-flex items-center gap-2 rounded-lg border border-[rgba(255,179,0,0.45)] px-7 py-3.5 font-bold text-[#FFB300] hover:bg-[rgba(255,179,0,0.08)]"
+                >
+                  <BookMarked size={18} />
+                  {t(HOME.readManual)}
+                </button>
+              ) : (
+                <a
+                  href={`https://github.com/fviudes/ham-cockpit/releases/tag/v${APP_IMAGE_VERSION}`}
+                  className="inline-flex items-center gap-2 rounded-lg border border-[rgba(255,179,0,0.45)] px-7 py-3.5 font-bold text-[#FFB300] hover:bg-[rgba(255,179,0,0.08)]"
+                >
+                  <Download size={18} />
+                  {t(HOME.osImage)}
+                </a>
+              )}
             </div>
+            {IS_PORTAL ? <LatestImageChip className="mt-5" /> : null}
             <p className="mt-5 font-['IBM_Plex_Mono'] text-[11px] text-[#8ea0b3]">{t(HOME.creds)}</p>
           </motion.div>
           <motion.div initial="hidden" animate="visible" variants={fadeUp} className="min-w-0">
@@ -180,8 +206,8 @@ export default function Home() {
               src={PRODUCT.contest}
               alt={t({ pt: "Motor de contest Wavelog", en: "Wavelog contest engine" })}
               caption={t({
-                pt: "Contest 3.0: CAT radio do Gate, Quick QSY :54321, SCP, mapa, serial multi-op.",
-                en: "Contest 3.0: Gate CAT radio, Quick QSY :54321, SCP, map, multi-op serial.",
+                pt: "Contest 3.0: rádio CAT publicado pelo Gate, Quick QSY (:54321), Super Check Partial, mapa e número de série para multi-operador.",
+                en: "Contest 3.0: CAT radio published by the Gate, Quick QSY (:54321), Super Check Partial, map and multi-operator serial numbers.",
               })}
             />
           </div>
@@ -193,12 +219,12 @@ export default function Home() {
             <div className="rounded-xl border border-[rgba(79,195,247,0.16)] bg-[#0b1520] p-5">
               <p className="font-['IBM_Plex_Mono'] text-[11px] tracking-widest text-[#FFB300] uppercase">WPSD</p>
               <h3 className="mt-1 font-['Space_Grotesk'] text-lg font-semibold text-white">
-                {t({ pt: "Mesmo stack, outro dashboard", en: "Same stack, different dashboard" })}
+                {t({ pt: "Mesmos serviços, painel próprio", en: "Same services, our own dashboard" })}
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-[#94a3b8]">
                 {t({
-                  pt: "MMDVM Host, DMR Gateway, last heard nos logs, Instant Mode, BrandMeister/TGIF/XLX. O PHP do WPSD não roda na porta 80 — o nginx do Ham Cockpit já é o site.",
-                  en: "MMDVM Host, DMR Gateway, last heard from logs, Instant Mode, BrandMeister/TGIF/XLX. WPSD PHP does not run on port 80 — Ham Cockpit nginx already is the site.",
+                  pt: "MMDVM Host, DMR Gateway, últimos ouvidos lidos dos logs, Instant Mode e redes BrandMeister, TGIF e XLX. O painel PHP do WPSD não é instalado: o nginx do Ham Cockpit já serve o site na porta 80.",
+                  en: "MMDVM Host, DMR Gateway, last heard read from the logs, Instant Mode and the BrandMeister, TGIF and XLX networks. The WPSD PHP dashboard is not installed: the Ham Cockpit nginx already serves the site on port 80.",
                 })}
               </p>
             </div>
@@ -312,14 +338,14 @@ export default function Home() {
       <section className="py-16">
         <div className="container text-center">
           <h2 className="mb-4 font-['Space_Grotesk'] text-4xl font-bold text-white">{t(HOME.ctaTitle)}</h2>
-          <p className="mx-auto mb-8 max-w-2xl text-lg text-[#94a3b8]">{t(HOME.ctaP)}</p>
+          <p className="mx-auto mb-8 max-w-2xl text-lg text-[#94a3b8]">{t(IS_PORTAL ? HOME.ctaPortalP : HOME.ctaP)}</p>
           <div className="flex flex-wrap justify-center gap-3">
             <button
               type="button"
-              onClick={() => navigate("/console")}
+              onClick={() => navigate(IS_PORTAL ? "/download" : "/console")}
               className="inline-flex items-center gap-2 rounded-lg bg-[#4fc3f7] px-8 py-4 font-bold text-[#0d1b2a] hover:bg-[#80d8ff]"
             >
-              {t(HOME.openConsole)}
+              {t(IS_PORTAL ? NAV.download : HOME.openConsole)}
             </button>
             <button
               type="button"
@@ -335,7 +361,7 @@ export default function Home() {
       <footer className="border-t border-[rgba(79,195,247,0.1)] py-8">
         <div className="container flex flex-wrap items-center justify-between gap-3 text-xs text-[#5d7184]">
           <span className="font-['IBM_Plex_Mono']">
-            Ham Cockpit v{APP_VERSION} · Raspberry Pi 3 / 4 / 5 · Ubuntu Server 24.04 LTS
+            Ham Cockpit{IS_PORTAL ? "" : ` v${APP_VERSION}`} · Raspberry Pi 3 / 4 / 5 · Ubuntu Server 24.04 LTS
           </span>
           <span>{t(HOME.footerRight)}</span>
         </div>
