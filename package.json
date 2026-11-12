@@ -1,6 +1,6 @@
 {
   "name": "ham-cockpit",
-  "version": "0.1.07",
+  "version": "0.1.07.01",
   "type": "module",
   "license": "MIT",
   "scripts": {

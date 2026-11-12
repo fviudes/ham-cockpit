@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.07** (`version.json`).
+Versão atual neste canal: **0.1.07.01** (`version.json`).
 
 ## Versionamento
 
@@ -20,10 +20,10 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.07",
+  "version": "0.1.07.01",
   "channel": "main",
-  "file": "ham-cockpit-0.1.07.tgz",
-  "notes": "Ham Cockpit v0.1.07 — licenciamento em modo observação (aba Licença, trial/portal), estabilizações do Pi e imagem alinhada à base 0.1.07."
+  "file": "ham-cockpit-0.1.07.01.tgz",
+  "notes": "Ham Cockpit v0.1.07.01 — corrige a aba Admin → Licença (rota /console/license abria o painel)."
 }
 ```
 
@@ -32,9 +32,5 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 - Notas de release: passe `--notes "…"` no pack (convenção: `Ham Cockpit vX.Y.ZZ[.NN] — …`).
 
 O pacote traz o console compilado (`index.js` + `public/`), `package.json` de runtime, helpers em `bin/` e units em `systemd/`. **Não** inclui configs da estação (rádios, Wi‑Fi, bindings, layouts, ser2net…).
-
-### `mmdvm-arm64.tgz` neste canal
-
-Arquivo auxiliar (~12 MB) com Host/gateways/Nextion + hosts D-Star. **A imagem OS já instala esses binários no bake** (`/usr/local/bin`); este tarball existe para OTA em cartões antigos e reparo (ex.: Nextion sem `HC_FD2_GUARD`). Não é um “pacote de fora” que a imagem única precise baixar no primeiro boot. Detalhe: [docs/imagem-os.md](../docs/imagem-os.md).
 
 Instalação e operação: [README na raiz](../README.md). Imagem do cartão: [`instaladores/`](../instaladores/).

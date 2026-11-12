@@ -64,6 +64,7 @@ type PageId =
   | "services"
   | "updates"
   | "backup"
+  | "license"
   | "status"
   | "term"
   | "manual";
@@ -127,6 +128,7 @@ const PAGES: Record<PageId, ComponentType> = {
   services: AdminPage,
   updates: AdminPage,
   backup: AdminPage,
+  license: AdminPage,
   status: StatusPage,
   term: AdminPage,
   manual: ManualPage,
@@ -305,6 +307,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
                     page === "services" ||
                     page === "updates" ||
                     page === "backup" ||
+                    page === "license" ||
                     page === "password"
                   : page === it.id;
               return (

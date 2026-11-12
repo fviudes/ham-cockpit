@@ -1,6 +1,6 @@
 {
-  "version": "0.1.07",
+  "version": "0.1.07.01",
   "channel": "main",
-  "file": "ham-cockpit-0.1.07.tgz",
-  "notes": "Ham Cockpit v0.1.07 — licenciamento em modo observação (aba Licença, trial/portal), estabilizações do Pi e imagem alinhada à base 0.1.07."
+  "file": "ham-cockpit-0.1.07.01.tgz",
+  "notes": "Ham Cockpit v0.1.07.01 — corrige a aba Admin → Licença (rota /console/license abria o painel)."
 }
