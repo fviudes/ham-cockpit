@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ham-cockpit",
+  "compatibility_date": "2026-11-12",
+  "pages_build_output_dir": "dist/portal",
+  "vars": {
+    "PORTAL_ORIGIN": "https://ham-cockpit.pages.dev",
+    "LICENSE_ACTIVE_KID": "d8GApVW5"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ham-cockpit-licenses",
+      "database_id": "7e5fc4da-76dd-4c9a-bde3-2cc10c4c0320",
+      "preview_database_id": "971bdb01-d364-4ec3-ac6d-5744d75e8335",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
