@@ -217,7 +217,7 @@ function Login({ onOk }: { onOk: (name: string) => void }) {
 
 function Shell({ onLogout }: { onLogout: () => void }) {
   const { tx, s, setFreq, setS, license } = useConsole();
-  const headerFreqRef = useRef<HTMLParagraphElement>(null);
+  const headerFreqRef = useRef<HTMLDivElement>(null);
   const [loc, navigate] = useLocation();
   const mobile = useIsMobile();
   const [open, setOpen] = useState(false);
@@ -414,16 +414,15 @@ function Shell({ onLogout }: { onLogout: () => void }) {
             </button>
           ) : null}
           <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
-            <p
+            <div
               ref={headerFreqRef}
               title={tx("freqWheel")}
-              className="shrink-0 cursor-ns-resize font-['IBM_Plex_Mono'] text-base font-semibold text-[#7ee0ff] md:text-xl"
+              className="shrink-0 cursor-ns-resize rounded-[3px] border border-[#6b4a10] bg-[#1a1200] px-2.5 py-1 shadow-[inset_0_1px_0_rgba(255,176,0,0.14),inset_0_-1px_0_rgba(0,0,0,0.45)]"
             >
-              {vfo.int}.{vfo.khz}.{vfo.hz}
-              <span className="ml-2 text-xs font-normal tracking-widest text-[#8ea0b3]">
-                MHz · VFO {vfoLetter} · {vfoMode}
-              </span>
-            </p>
+              <p className="whitespace-nowrap font-['IBM_Plex_Mono'] text-[11px] font-semibold tracking-[0.04em] text-[#ffb000] md:text-[13px]">
+                {vfo.int}.{vfo.khz}.{vfo.hz}MHz · VFO {vfoLetter} · {vfoMode} - {s.ptt ? tx("tx") : tx("rx")}
+              </p>
+            </div>
             <button
               type="button"
               disabled={!menusOpen}
@@ -454,9 +453,6 @@ function Shell({ onLogout }: { onLogout: () => void }) {
                 {tx(SVC_LABEL[row.id])}
               </span>
             ))}
-            <span className={`shrink-0 rounded-md px-2 py-1 font-['IBM_Plex_Mono'] text-[11px] font-semibold ${s.ptt ? "bg-[#ef4444]/20 text-[#f87171]" : "bg-[#10b981]/15 text-[#34d399]"}`}>
-              {s.ptt ? tx("tx") : tx("rx")}
-            </span>
           </div>
           <LangToggle />
           {menusOpen ? <UpdatesMenu /> : null}

@@ -2,5 +2,5 @@
   "version": "0.1.07.05",
   "channel": "main",
   "file": "ham-cockpit-0.1.07.05.tgz",
-  "notes": "Ham Cockpit v0.1.07.05 — corrige IC-705 LAN (connectGen abortava auth), alinha nome do rádio no Painel aos outros cards e faz Copiar do Serial no Status funcionar em HTTP."
+  "notes": "Ham Cockpit v0.1.07.05 — IC-705 LAN (connectGen), nome do rádio no Painel, Copiar Serial no Status e LCD âmbar no header (freq/VFO/modo/TX-RX)."
 }
