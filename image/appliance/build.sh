@@ -114,14 +114,28 @@ fi
 
 DOCK="$STAGE/docker"
 mkdir -p "$DOCK"
-if [[ ${SKIP_DOCKER_CACHE:-1} != 1 ]] && command -v docker >/dev/null 2>&1; then
-  echo "pré-carregando imagens Docker linux/arm64 (Wavelog + MariaDB)..."
+# Padrão do produto: imagem completa — Wavelog/MariaDB embutidos (tar.gz).
+# SKIP_DOCKER_CACHE=1 só para debug local com pouco disco.
+EMBED_DOCKER=1
+if [[ ${SKIP_DOCKER_CACHE:-0} == 1 ]]; then
+  EMBED_DOCKER=0
+fi
+if [[ $EMBED_DOCKER -eq 1 ]]; then
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "ERRO: docker ausente no host do bake — necessário para embutir Wavelog/MariaDB" >&2
+    exit 1
+  fi
+  echo "pré-carregando imagens Docker linux/arm64 (Wavelog + MariaDB)…"
   docker pull --platform linux/arm64 "$DOCKER_WAVELG"
   docker pull --platform linux/arm64 "$DOCKER_MARIADB"
-  docker save "$DOCKER_WAVELG" -o "$DOCK/wavelog.tar"
-  docker save "$DOCKER_MARIADB" -o "$DOCK/mariadb.tar"
+  # gzip: cabe melhor no .img.xz (limite 2 GiB da Release) e no disco do runner.
+  docker save "$DOCKER_WAVELG" | gzip -1 >"$DOCK/wavelog.tar.gz"
+  docker save "$DOCKER_MARIADB" | gzip -1 >"$DOCK/mariadb.tar.gz"
+  ls -lh "$DOCK"/*.tar.gz
+  docker rmi "$DOCKER_WAVELG" "$DOCKER_MARIADB" 2>/dev/null || true
+  docker system prune -af 2>/dev/null || true
 else
-  echo "Wavelog/MariaDB: pull no primeiro boot (sem tarball na imagem)"
+  echo "AVISO: SKIP_DOCKER_CACHE=1 — Wavelog/MariaDB só no primeiro boot (rede)" >&2
 fi
 
 echo "copiando seed Ham Cockpit..."
@@ -130,8 +144,9 @@ mkdir -p "$SEED/deploy" "$SEED/dist" "$MNT/opt/wavelog-seed-images"
 rsync -a "$ROOT/deploy/" "$SEED/deploy/"
 rsync -a "$ROOT/dist/" "$SEED/dist/"
 cp -a "$ROOT/package.json" "$ROOT/VERSION" "$SEED/"
-if ls "$DOCK"/*.tar >/dev/null 2>&1; then
-  cp -a "$DOCK/"*.tar "$MNT/opt/wavelog-seed-images/"
+if ls "$DOCK"/*.tar.gz >/dev/null 2>&1; then
+  cp -a "$DOCK/"*.tar.gz "$MNT/opt/wavelog-seed-images/"
+  rm -f "$DOCK"/*.tar.gz
 fi
 install -m 0755 "$ROOT/image/appliance/chroot-setup.sh" "$MNT/tmp/chroot-setup.sh"
 install -m 0644 "$ROOT/image/appliance/user-data" "$MNT/boot/firmware/user-data"
@@ -141,10 +156,10 @@ df -h
 echo "chroot ARM64 — instalando Docker, ser2net, Hamlib, console, MMDVM…"
 if [[ $NATIVE_ARM -eq 1 ]]; then
   chroot "$MNT" /bin/bash -c \
-    "NODE_VER='$NODE_VER' HAMCOCKPIT_SEED=/opt/ham-cockpit-seed bash /tmp/chroot-setup.sh"
+    "NODE_VER='$NODE_VER' HAMCOCKPIT_SEED=/opt/ham-cockpit-seed EMBED_DOCKER='$EMBED_DOCKER' bash /tmp/chroot-setup.sh"
 else
   chroot "$MNT" /usr/bin/qemu-aarch64-static /bin/bash -c \
-    "NODE_VER='$NODE_VER' HAMCOCKPIT_SEED=/opt/ham-cockpit-seed bash /tmp/chroot-setup.sh"
+    "NODE_VER='$NODE_VER' HAMCOCKPIT_SEED=/opt/ham-cockpit-seed EMBED_DOCKER='$EMBED_DOCKER' bash /tmp/chroot-setup.sh"
 fi
 
 echo "conferindo binários MMDVM na imagem montada…"
@@ -161,6 +176,16 @@ fi
 if [[ ! -f "$MNT/etc/systemd/system/nextiondriver.service" ]]; then
   echo "ERRO: imagem sem nextiondriver.service" >&2
   exit 1
+fi
+if [[ $EMBED_DOCKER -eq 1 ]]; then
+  echo "conferindo tarballs Docker (Wavelog/MariaDB) em /opt/wavelog/images…"
+  if ! ls "$MNT/opt/wavelog/images"/wavelog.tar.gz >/dev/null 2>&1 \
+    || ! ls "$MNT/opt/wavelog/images"/mariadb.tar.gz >/dev/null 2>&1; then
+    echo "ERRO: bake sem /opt/wavelog/images/{wavelog,mariadb}.tar.gz — first-boot dependeria de pull" >&2
+    ls -la "$MNT/opt/wavelog/images" 2>/dev/null || true
+    exit 1
+  fi
+  ls -lh "$MNT/opt/wavelog/images"/*.tar.gz
 fi
 
 # Byproduct OTA: cópia dos binários JÁ instalados na rootfs acima.
@@ -201,11 +226,11 @@ cleanup
 trap - EXIT
 LOOP=""
 
-echo "comprimindo $IMG_XZ (xz -9 — Release GitHub limita asset a 2 GiB) ..."
-# -4 da 0.1.03 passou de 2 GiB; -9 mantém o .img.xz publicável na Release.
-xz -T0 -9 -v -k -f "$IMG_RAW"
+echo "comprimindo $IMG_XZ (xz -9e — Release GitHub limita asset a 2 GiB) ..."
+# Sem -k: libera os ~10G do .img cru durante/após o xz (disco do runner).
+# -9e: melhor razão p/ caber Wavelog/MariaDB embutidos sob 2 GiB.
+xz -T0 -9e -v -f "$IMG_RAW"
 mv -f "${IMG_RAW}.xz" "$IMG_XZ"
-rm -f "$IMG_RAW"
 sha256sum "$IMG_XZ" | tee "$IMG_XZ.sha256"
 ls -lh "$IMG_XZ"
 echo "grave com Raspberry Pi Imager ou: instaladores/flash.ps1 -DiskNumber N"

@@ -20,11 +20,12 @@ GitHub Actions em **`ubuntu-24.04-arm`** (runner ARM nativo, disponível em repo
 2. Baixa `ubuntu-24.04.4-preinstalled-server-arm64+raspi.img.xz`
 3. Faz chroot **sem QEMU** e instala Docker, ser2net, Hamlib, nginx, Node, o console
 4. Compila nativo (ARM64) e instala em `/usr/local/bin`: `MMDVMHost`, `DMRGateway`, `YSFGateway`, `ircddbgatewayd` (g4klx) e `NextionDriver` (on7lds) via `deploy/mmdvm/build-binaries.sh`
-5. Publica `ham-cockpit-<base>-raspi.img.xz` na Release (só 3 partes `x.y.zz`; ver [versionamento.md](versionamento.md))
+5. Pré-carrega Wavelog + MariaDB (`docker pull` + `docker save | gzip`) em `/opt/wavelog/images/*.tar.gz` — first-boot só faz `docker load` + `compose up --pull=never`
+6. Publica `ham-cockpit-<base>-raspi.img.xz` na Release (só 3 partes `x.y.zz`; ver [versionamento.md](versionamento.md))
 
-Wavelog/MariaDB fazem `docker compose pull` no primeiro boot com Ethernet (não vão em tarball, para caber no disco de 14 GB do runner e acelerar o bake).
+**Imagem completa (padrão):** MMDVM, apt (Docker, ser2net, Hamlib, mosquitto, nginx…), console e tarballs Docker do Wavelog/DB vão no `.img`. O cartão gravado **não** depende de download externo para subir o core. O runner ARM libera disco agressivamente; os saves vão em `.tar.gz` e o xz usa `-9e` para caber no limite de 2 GiB da Release. `SKIP_DOCKER_CACHE=1` fica só para debug com pouco disco (aí o first-boot volta a poder fazer pull).
 
-Tempo típico: **35–60 min** no runner ARM (inclui a compilação MMDVM). O `vite build` de produção usa `vite.config.prod.ts` para o Node sair depois de gerar o `dist` (o config de desenvolvimento importa o Lextel e ficava preso no CI).
+Tempo típico: **45–90 min** no runner ARM (MMDVM + pull/save Docker + xz -9e). O `vite build` de produção usa `vite.config.prod.ts` para o Node sair depois de gerar o `dist` (o config de desenvolvimento importa o Lextel e ficava preso no CI).
 
 ### MMDVM / Nextion no bake
 
@@ -47,8 +48,8 @@ Tempo típico: **35–60 min** no runner ARM (inclui a compilação MMDVM). O `v
 sudo bash image/appliance/build.sh
 ```
 
-`SKIP_DOCKER_CACHE=1` é o padrão. Para embutir os `.tar` do Wavelog: `SKIP_DOCKER_CACHE=0`.
+`SKIP_DOCKER_CACHE=0` é o padrão do produto (Wavelog/MariaDB embutidos). `SKIP_DOCKER_CACHE=1` pula o pré-load (só debug).
 
-Artefato: Release `v<versão>` em `fviudes/ham-cockpit` (imagem **v0.1.06**: `ham-cockpit-0.1.06-raspi.img.xz`). O `.img.xz` não entra no Git.
+Artefato: Release `v<versão>` em `fviudes/ham-cockpit` (imagem **v0.1.07**: `ham-cockpit-0.1.07-raspi.img.xz`). O `.img.xz` não entra no Git.
 
 O bake instala o stack MMDVM já com os ajustes do lab (NextionDriver 1.26 patched, unit real, INI Dual/Nextion, UART `disable-bt`, `ircddbgateway` sem extensão, mosquitto/libdlt2, hosts REF*, `mmdvm-arm64.tgz` em `/opt/ham-cockpit`). **Não é necessário repetir os fixes do Pi de lab** num cartão gravado desta imagem. Detalhe operacional: [mmdvm-lab-checklist.md](mmdvm-lab-checklist.md).

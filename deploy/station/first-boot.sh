@@ -56,17 +56,22 @@ if [[ "$ready" -ne 1 ]]; then
   echo "AVISO: docker info falhou após 90s — Wavelog pode subir no próximo boot" >&2
 fi
 
-if ls /opt/wavelog/images/*.tar >/dev/null 2>&1; then
-  for t in /opt/wavelog/images/*.tar; do
-    docker load -i "$t" || true
-  done
-fi
+# Imagem completa: load dos tar.gz embutidos no bake (sem pull). Fallback pull só se faltar.
+shopt -s nullglob
+for t in /opt/wavelog/images/*.tar /opt/wavelog/images/*.tar.gz /opt/wavelog/images/*.tgz; do
+  echo "first-boot: docker load $(basename "$t")"
+  docker load -i "$t" || true
+done
+shopt -u nullglob
 
 systemctl enable --now ssh.service 2>/dev/null || systemctl enable --now sshd.service 2>/dev/null || true
 systemctl enable wavelog.service 2>/dev/null || true
 if [[ -x /opt/wavelog/wavelog-ctl.sh ]]; then
-  # Compose up (usa tarballs locais se houver; senão tenta pull com rede).
-  /opt/wavelog/wavelog-ctl.sh start || /opt/wavelog/wavelog-ctl.sh pull || true
+  # Preferir imagens locais; pull só se start falhar (rede).
+  if ! /opt/wavelog/wavelog-ctl.sh start; then
+    echo "AVISO: wavelog start local falhou — tentando pull" >&2
+    /opt/wavelog/wavelog-ctl.sh pull || true
+  fi
   /opt/wavelog/wavelog-ctl.sh ensure-db || true
 fi
 systemctl start wavelog.service || true

@@ -8,11 +8,12 @@ on:
 jobs:
   image:
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 120
+    timeout-minutes: 150
     permissions:
       contents: write
     env:
-      SKIP_DOCKER_CACHE: "1"
+      # Imagem completa: embute Wavelog + MariaDB (tar.gz) no .img — sem pull no first-boot.
+      SKIP_DOCKER_CACHE: "0"
       CI: "true"
     steps:
       - uses: actions/checkout@v4
@@ -23,14 +24,24 @@ jobs:
           cache: pnpm
       - name: Free disk
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/.ghcup \
+            /usr/local/share/powershell /usr/share/swift /opt/hostedtoolcache/CodeQL \
+            2>/dev/null || true
+          sudo docker system prune -af 2>/dev/null || true
           uname -m
           df -h
       - name: Host tools
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y qemu-utils cloud-guest-utils \
-            parted e2fsprogs xz-utils rsync wget ca-certificates
+            parted e2fsprogs xz-utils rsync wget ca-certificates gzip
+          # docker no host do bake: pull/save das imagens arm64 para embutir.
+          if ! command -v docker >/dev/null 2>&1; then
+            sudo apt-get install -y docker.io
+            sudo systemctl start docker
+          fi
+          docker version
+          df -h
       - name: Install JS deps
         timeout-minutes: 8
         run: |
@@ -59,7 +70,7 @@ jobs:
           ls -lh dist dist/public
           df -h
       - name: Bake Ubuntu Server 24.04 + Ham Cockpit
-        timeout-minutes: 100
+        timeout-minutes: 120
         run: sudo -E bash image/appliance/build.sh
       - name: Checksum
         run: |
@@ -87,9 +98,12 @@ jobs:
           IMG="$(ls image/out/ham-cockpit-*-raspi.img.xz | head -n 1)"
           SUM="${IMG}.sha256"
           MMDVM="image/out/mmdvm-arm64.tgz"
-          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
-            --title "Ham Cockpit ${TAG}" \
-            --notes "Imagem Ubuntu Server 24.04 LTS ARM64 (+raspi) com Ham Cockpit ${TAG} para Raspberry Pi 3 / 4 / 5 (Docker, ser2net, Hamlib, console, AP Wi-Fi, stack MMDVM/Nextion já em /usr/local/bin). Wavelog baixa as imagens Docker no primeiro boot com Ethernet. Grave no cartão/SSD com o Raspberry Pi Imager (Use custom). O asset mmdvm-arm64.tgz é só ponte OTA para estações antigas — não é requisito da imagem limpa."
+          NOTES="Imagem Ubuntu Server 24.04 LTS ARM64 (+raspi) com Ham Cockpit ${TAG} para Raspberry Pi 3 / 4 / 5. Stack completo embutido: Docker, ser2net, Hamlib, console, AP Wi-Fi, MMDVM/Nextion em /usr/local/bin, e imagens Docker Wavelog+MariaDB em /opt/wavelog/images (first-boot faz docker load — sem pull obrigatório). Grave no cartão/SSD com o Raspberry Pi Imager (Use custom). O asset mmdvm-arm64.tgz é só ponte OTA para estações antigas."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes "$NOTES"
+          else
+            gh release create "$TAG" --title "Ham Cockpit ${TAG}" --notes "$NOTES"
+          fi
           ls -lh "$IMG" "$SUM"
           # GitHub Release asset ≤ 2 GiB. Se passar, o artifact Actions ainda fica disponível.
           BYTES=$(stat -c%s "$IMG")

@@ -11,6 +11,8 @@ UBUNTU_IMG='ubuntu-24.04.4-preinstalled-server-arm64+raspi.img.xz'
 UBUNTU_IMG_URL='https://cdimage.ubuntu.com/releases/24.04.4/release/ubuntu-24.04.4-preinstalled-server-arm64+raspi.img.xz'
 UBUNTU_SHA_URL='https://cdimage.ubuntu.com/releases/24.04.4/release/SHA256SUMS'
 NODE_VER='20.18.3'
-IMAGE_SIZE='8G'
+# 10G: rootfs com apt + Node + MMDVM + tarballs Docker (Wavelog/MariaDB).
+# Espaço livre comprime bem com xz; o cartão precisa caber o stack completo offline.
+IMAGE_SIZE='10G'
 DOCKER_WAVELG='ghcr.io/wavelog/wavelog:latest'
 DOCKER_MARIADB='mariadb:11.8'

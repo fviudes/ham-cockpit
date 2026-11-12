@@ -132,10 +132,22 @@ if [[ ! -f /etc/systemd/system/nextiondriver.service ]]; then
   exit 1
 fi
 
-if ls /opt/wavelog-seed-images/*.tar >/dev/null 2>&1; then
-  mkdir -p /opt/wavelog/images
-  cp -a /opt/wavelog-seed-images/*.tar /opt/wavelog/images/
+mkdir -p /opt/wavelog/images
+shopt -s nullglob
+for seed_img in /opt/wavelog-seed-images/*.tar /opt/wavelog-seed-images/*.tar.gz; do
+  cp -a "$seed_img" /opt/wavelog/images/
+done
+shopt -u nullglob
+if [[ ${EMBED_DOCKER:-0} == 1 ]]; then
+  if [[ ! -f /opt/wavelog/images/wavelog.tar.gz || ! -f /opt/wavelog/images/mariadb.tar.gz ]]; then
+    echo "ERRO: EMBED_DOCKER=1 mas faltam wavelog.tar.gz / mariadb.tar.gz em /opt/wavelog/images" >&2
+    ls -la /opt/wavelog-seed-images /opt/wavelog/images 2>/dev/null || true
+    exit 1
+  fi
+  ls -lh /opt/wavelog/images/*.tar.gz
 fi
+# Economiza espaço no .img (docs/man do apt) — ajuda a caber na Release ≤ 2 GiB.
+rm -rf /usr/share/doc/* /usr/share/man/* /usr/share/info/* /var/cache/apt/archives/* 2>/dev/null || true
 
 # enable já feito em install-station.sh (com fallback de symlinks no chroot).
 # Reforça docker + target sem depender do D-Bus.

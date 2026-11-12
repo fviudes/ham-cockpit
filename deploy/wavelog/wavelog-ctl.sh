@@ -69,10 +69,15 @@ case "${1:-}" in
     ;;
   start)
     ensure_env
-    if ls "$DIR"/images/*.tar >/dev/null 2>&1; then
-      for t in "$DIR"/images/*.tar; do docker load -i "$t" || true; done
+    shopt -s nullglob
+    for t in "$DIR"/images/*.tar "$DIR"/images/*.tar.gz "$DIR"/images/*.tgz; do
+      docker load -i "$t" || true
+    done
+    shopt -u nullglob
+    # --pull=never: usa só o que já está local (bake/first-boot load). Sem rede.
+    if ! compose up -d --pull=never --remove-orphans; then
+      compose up -d --remove-orphans
     fi
-    compose up -d --remove-orphans
     ensure_app_db
     ;;
   stop) compose stop ;;
