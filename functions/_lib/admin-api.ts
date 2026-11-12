@@ -1,10 +1,18 @@
-import { normalizeSerial, serialDisplay } from "../../shared/license";
+import { normalizeSerial, serialDisplay, type LicenseType } from "../../shared/license";
 import { createAdminUser, hashPassword, normalizeUsername, requireAdmin } from "./admin-auth";
 import { settlePayment, loadPayment } from "./checkout";
 import { audit, getSettings, setSetting } from "./db";
 import type { Ctx } from "./env";
 import { getFxRate, setManualRate } from "./fx";
-import { createDefinitive, extendTrial, revokeLicense, upsertDevice, type LicenseRow } from "./licenses";
+import {
+  createDefinitive,
+  extendTrial,
+  patchLicense,
+  revokeLicense,
+  upsertDevice,
+  type LicenseRow,
+  type LicenseStatus,
+} from "./licenses";
 import { getPrice, previewPrice } from "./pricing";
 import { getProvider, loadProviderCfg, loadProviderRow, missingFields, saveProviderSecrets } from "./providers";
 import type { PaymentRow, ProviderMode } from "./providers/types";
@@ -535,6 +543,48 @@ export async function adminRoute(ctx: Ctx, request: Request, path: string): Prom
   if ((m = path.match(/^\/licenses\/(lic_[0-9a-z]{16})$/)) && method === "GET") {
     await need();
     return licenseDetail(ctx, m[1]);
+  }
+  if ((m = path.match(/^\/licenses\/(lic_[0-9a-z]{16})$/)) && method === "PATCH") {
+    const a = await need("admin");
+    const b = await readJson<{
+      status?: string;
+      type?: string;
+      email?: string | null;
+      callsign?: string | null;
+    }>(request);
+    const patch: {
+      status?: LicenseStatus;
+      type?: LicenseType;
+      email?: string | null;
+      callsign?: string | null;
+    } = {};
+    if (b.status !== undefined) {
+      if (b.status !== "active" && b.status !== "expired" && b.status !== "revoked" && b.status !== "superseded") {
+        throw new HttpError(400, "invalid_status", "Estado inválido.");
+      }
+      patch.status = b.status;
+    }
+    if (b.type !== undefined) {
+      if (b.type !== "trial" && b.type !== "definitive") {
+        throw new HttpError(400, "invalid_type", "Tipo inválido (trial ou definitiva).");
+      }
+      patch.type = b.type;
+    }
+    if (b.email !== undefined) patch.email = b.email;
+    if (b.callsign !== undefined) patch.callsign = b.callsign;
+    if (patch.status === undefined && patch.type === undefined && patch.email === undefined && patch.callsign === undefined) {
+      throw new HttpError(400, "empty_patch", "Informe ao menos um campo para alterar.");
+    }
+    const r = await patchLicense(ctx, m[1], patch, `admin:${a.id}`);
+    await audit(ctx, a.id, "license_patch", r.license.id, r.before, r.after);
+    return json({
+      ok: true,
+      id: r.license.id,
+      type: r.license.type,
+      status: effectiveStatus(ctx, r.license.status, r.license.expires_at),
+      email: r.device.email,
+      callsign: r.device.callsign,
+    });
   }
   if ((m = path.match(/^\/licenses\/(lic_[0-9a-z]{16})\/(extend|revoke)$/)) && method === "POST") {
     const a = await need("admin");

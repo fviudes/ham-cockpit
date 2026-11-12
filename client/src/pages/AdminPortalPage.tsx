@@ -110,6 +110,11 @@ export default function AdminPortalPage() {
   const [formStatus, setFormStatus] = useState<"active" | "disabled">("active");
   const [formPassword, setFormPassword] = useState("");
   const [formPasswordConfirm, setFormPasswordConfirm] = useState("");
+  const [editingLic, setEditingLic] = useState<LicRow | null>(null);
+  const [licStatus, setLicStatus] = useState<"active" | "expired" | "revoked" | "superseded">("active");
+  const [licType, setLicType] = useState<"trial" | "definitive">("trial");
+  const [licEmail, setLicEmail] = useState("");
+  const [licCallsign, setLicCallsign] = useState("");
 
   const authed = !!csrf;
   const canManageUsers = meRole === "owner";
@@ -241,6 +246,54 @@ export default function AdminPortalPage() {
       setGrantSerial("");
       await refresh();
     }
+  };
+
+  const statusLabel = (status: string) => {
+    if (status === "active") return t(ADM.stActive);
+    if (status === "expired") return t(ADM.stExpired);
+    if (status === "revoked") return t(ADM.stRevoked);
+    if (status === "superseded") return t(ADM.stSuperseded);
+    return status;
+  };
+
+  const typeLabel = (type: string) => {
+    if (type === "trial") return t(ADM.typeTrial);
+    if (type === "definitive") return t(ADM.typeDefinitive);
+    return type;
+  };
+
+  const openEditLicense = (l: LicRow) => {
+    setEditingLic(l);
+    const st =
+      l.status === "expired" || l.status === "revoked" || l.status === "superseded" || l.status === "active"
+        ? l.status
+        : "active";
+    setLicStatus(st);
+    setLicType(l.type === "definitive" ? "definitive" : "trial");
+    setLicEmail(l.email || "");
+    setLicCallsign(l.callsign || "");
+    setErr("");
+  };
+
+  const submitLicenseEdit = async () => {
+    if (!editingLic) return;
+    setErr("");
+    const r = await api<{ message?: string }>(`/api/admin/licenses/${editingLic.id}`, {
+      method: "PATCH",
+      csrf,
+      body: JSON.stringify({
+        status: licStatus,
+        type: licType,
+        email: licEmail.trim() ? licEmail.trim() : null,
+        callsign: licCallsign.trim() ? licCallsign.trim() : null,
+      }),
+    });
+    if (!r.ok) {
+      setErr(r.body.message || "Não foi possível salvar a licença.");
+      return;
+    }
+    setEditingLic(null);
+    await refresh();
   };
 
   const openCreateUser = () => {
@@ -380,7 +433,7 @@ export default function AdminPortalPage() {
   return (
     <div className="flex min-h-screen flex-col bg-[#0d1b2a]">
       <NavBar />
-      <main className="container max-w-4xl flex-1 pt-24 pb-16">
+      <main className="mx-auto w-full max-w-[1600px] flex-1 px-3 pt-24 pb-16 sm:px-4 lg:px-5">
         <p className="mb-2 font-['IBM_Plex_Mono'] text-xs font-bold tracking-widest text-[#FFB300]">{t(ADM.kicker)}</p>
         <div className="mb-6 flex items-center justify-between gap-3">
           <h1 className="font-['Space_Grotesk'] text-3xl font-bold text-white">{t(ADM.title)}</h1>
@@ -453,40 +506,106 @@ export default function AdminPortalPage() {
                     {t(ADM.grant)}
                   </button>
                 </div>
-                <div className="overflow-x-auto rounded-md border border-[rgba(79,195,247,0.15)]">
-                  <table className="min-w-full text-left text-sm text-[#e2e8f0]">
+
+                {editingLic ? (
+                  <div className="max-w-lg space-y-3 rounded-md border border-[rgba(79,195,247,0.2)] bg-[#132033] p-4">
+                    <h2 className="font-semibold text-white">
+                      {t(ADM.editLicense)} · <span className="font-mono text-sm text-[#94a3b8]">{editingLic.id}</span>
+                    </h2>
+                    <label className="block text-sm text-[#94a3b8]">{t(ADM.status)}</label>
+                    <select
+                      className={inputCls}
+                      value={licStatus}
+                      onChange={(e) => setLicStatus(e.target.value as "active" | "expired" | "revoked" | "superseded")}
+                    >
+                      <option value="active">{t(ADM.stActive)}</option>
+                      <option value="expired">{t(ADM.stExpired)}</option>
+                      <option value="revoked">{t(ADM.stRevoked)}</option>
+                      <option value="superseded">{t(ADM.stSuperseded)}</option>
+                    </select>
+                    <label className="block text-sm text-[#94a3b8]">{t(ADM.type)}</label>
+                    <select
+                      className={inputCls}
+                      value={licType}
+                      onChange={(e) => setLicType(e.target.value as "trial" | "definitive")}
+                    >
+                      <option value="trial">{t(ADM.typeTrial)}</option>
+                      <option value="definitive">{t(ADM.typeDefinitive)}</option>
+                    </select>
+                    <label className="block text-sm text-[#94a3b8]">{t(ADM.email)}</label>
+                    <input
+                      className={inputCls}
+                      type="email"
+                      value={licEmail}
+                      onChange={(e) => setLicEmail(e.target.value)}
+                      autoComplete="off"
+                    />
+                    <label className="block text-sm text-[#94a3b8]">{t(ADM.callsign)}</label>
+                    <input
+                      className={inputCls}
+                      value={licCallsign}
+                      onChange={(e) => setLicCallsign(e.target.value.toUpperCase())}
+                      autoComplete="off"
+                      placeholder="PY2ABC"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" className={btnPrimary} onClick={() => void submitLicenseEdit()}>
+                        {t(ADM.save)}
+                      </button>
+                      <button type="button" className={btnGhost} onClick={() => setEditingLic(null)}>
+                        {t(ADM.cancel)}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="-mx-1 overflow-x-auto rounded-md border border-[rgba(79,195,247,0.15)] sm:mx-0">
+                  <table className="w-full min-w-[1100px] table-fixed text-left text-sm text-[#e2e8f0]">
                     <thead className="bg-[#132033] text-[#94a3b8]">
                       <tr>
-                        <th className="px-3 py-2">ID</th>
-                        <th className="px-3 py-2">Serial</th>
-                        <th className="px-3 py-2">{t(ADM.email)}</th>
-                        <th className="px-3 py-2">{t(ADM.licenseKey)}</th>
-                        <th className="px-3 py-2">Tipo</th>
-                        <th className="px-3 py-2">Estado</th>
-                        <th className="px-3 py-2">Licenciamento</th>
+                        <th className="px-2 py-2 font-medium">ID</th>
+                        <th className="px-2 py-2 font-medium">Serial</th>
+                        <th className="px-2 py-2 font-medium">{t(ADM.callsign)}</th>
+                        <th className="px-2 py-2 font-medium">{t(ADM.email)}</th>
+                        <th className="px-2 py-2 font-medium">{t(ADM.licenseKey)}</th>
+                        <th className="px-2 py-2 font-medium">{t(ADM.type)}</th>
+                        <th className="px-2 py-2 font-medium">{t(ADM.status)}</th>
+                        <th className="px-2 py-2 font-medium whitespace-nowrap">Licenciamento</th>
+                        <th className="px-2 py-2 font-medium">{t(ADM.actions)}</th>
                       </tr>
                     </thead>
+                    <colgroup>
+                      <col className="w-[11%]" />
+                      <col className="w-[12%]" />
+                      <col className="w-[8%]" />
+                      <col className="w-[14%]" />
+                      <col className="w-[22%]" />
+                      <col className="w-[8%]" />
+                      <col className="w-[8%]" />
+                      <col className="w-[11%]" />
+                      <col className="w-[6%]" />
+                    </colgroup>
                     <tbody>
                       {licenses.map((l) => {
                         const token = l.token || "";
                         const open = expandedToken === l.id;
                         return (
                           <tr key={l.id} className="border-t border-[rgba(79,195,247,0.08)] align-top">
-                            <td className="px-3 py-2 font-mono text-xs">
-                              <span className="inline-flex flex-wrap items-center gap-2">
-                                <span>{l.id}</span>
-                                {l.callsign ? (
-                                  <span className="rounded border border-[#ffb300]/35 bg-[#ffb300]/10 px-1.5 py-0.5 font-semibold tracking-wide text-[#ffb300]">
-                                    {l.callsign}
-                                  </span>
-                                ) : null}
-                              </span>
+                            <td className="px-2 py-2 font-mono text-xs break-all">{l.id}</td>
+                            <td className="px-2 py-2 font-mono text-xs break-all">{l.serial}</td>
+                            <td className="px-2 py-2">
+                              {l.callsign ? (
+                                <span className="rounded border border-[#ffb300]/35 bg-[#ffb300]/10 px-1.5 py-0.5 font-mono text-xs font-semibold tracking-wide text-[#ffb300]">
+                                  {l.callsign}
+                                </span>
+                              ) : (
+                                <span className="text-xs text-[#64748b]">—</span>
+                              )}
                             </td>
-                            <td className="px-3 py-2 font-mono text-xs">{l.serial}</td>
-                            <td className="px-3 py-2 text-xs text-[#94a3b8]">{l.email || "—"}</td>
-                            <td className="px-3 py-2">
+                            <td className="px-2 py-2 text-xs text-[#94a3b8] break-all">{l.email || "—"}</td>
+                            <td className="px-2 py-2">
                               {token ? (
-                                <div className="max-w-[16rem] space-y-1">
+                                <div className="space-y-1">
                                   <p className={`font-mono text-xs text-[#94a3b8] ${open ? "break-all" : "truncate"}`}>
                                     {open ? token : truncateKey(token)}
                                   </p>
@@ -507,10 +626,15 @@ export default function AdminPortalPage() {
                                 <span className="text-xs text-[#64748b]">—</span>
                               )}
                             </td>
-                            <td className="px-3 py-2">{l.type}</td>
-                            <td className="px-3 py-2">{l.status}</td>
-                            <td className="px-3 py-2 whitespace-nowrap text-xs text-[#94a3b8]">
+                            <td className="px-2 py-2 whitespace-nowrap">{typeLabel(l.type)}</td>
+                            <td className="px-2 py-2 whitespace-nowrap">{statusLabel(l.status)}</td>
+                            <td className="px-2 py-2 whitespace-nowrap text-xs text-[#94a3b8]">
                               {formatLicensedAt(l.licensedAt ?? l.issuedAt)}
+                            </td>
+                            <td className="px-2 py-2">
+                              <button type="button" className={btnGhost} onClick={() => openEditLicense(l)}>
+                                {t(ADM.editLicense)}
+                              </button>
                             </td>
                           </tr>
                         );

@@ -263,6 +263,217 @@ export async function extendTrial(ctx: Ctx, id: string, days: number, reason: st
   return { ...row, expires_at: exp, token, kid, status: "active" };
 }
 
+export type LicenseStatus = LicenseRow["status"];
+
+export interface PatchLicenseInput {
+  status?: LicenseStatus;
+  type?: LicenseType;
+  email?: string | null;
+  callsign?: string | null;
+}
+
+/** Atualiza estado/tipo da licença e e-mail/indicativo do aparelho (admin). */
+export async function patchLicense(
+  ctx: Ctx,
+  id: string,
+  input: PatchLicenseInput,
+  actor: string,
+): Promise<{
+  license: LicenseRow;
+  device: { email: string | null; callsign: string | null };
+  before: {
+    status: string;
+    type: string;
+    email: string | null;
+    callsign: string | null;
+  };
+  after: {
+    status: string;
+    type: string;
+    email: string | null;
+    callsign: string | null;
+  };
+}> {
+  const row = await ctx.env.DB.prepare("SELECT * FROM licenses WHERE id = ?1").bind(id).first<LicenseRow>();
+  if (!row) throw new HttpError(404, "license_not_found");
+  const dev = await ctx.env.DB.prepare("SELECT email, callsign FROM devices WHERE serial = ?1")
+    .bind(row.serial)
+    .first<{ email: string | null; callsign: string | null }>();
+  if (!dev) throw new HttpError(404, "device_not_found", "Aparelho da licença não encontrado.");
+
+  const before = {
+    status: row.status,
+    type: row.type,
+    email: dev.email,
+    callsign: dev.callsign,
+  };
+
+  let nextType: LicenseType = row.type;
+  if (input.type !== undefined) {
+    if (input.type !== "trial" && input.type !== "definitive") {
+      throw new HttpError(400, "invalid_type", "Tipo inválido (trial ou definitiva).");
+    }
+    nextType = input.type;
+  }
+
+  let nextStatus: LicenseStatus = row.status;
+  if (input.status !== undefined) {
+    if (input.status !== "active" && input.status !== "expired" && input.status !== "revoked" && input.status !== "superseded") {
+      throw new HttpError(400, "invalid_status", "Estado inválido.");
+    }
+    nextStatus = input.status;
+  }
+
+  let nextEmail = before.email;
+  if (input.email !== undefined) {
+    const raw = input.email == null ? "" : String(input.email);
+    if (!raw.trim()) {
+      nextEmail = null;
+    } else {
+      const email = normalizeEmail(raw);
+      if (!isValidEmail(email)) throw new HttpError(400, "invalid_email", "E-mail inválido.");
+      nextEmail = email;
+    }
+  }
+
+  let nextCallsign = before.callsign;
+  if (input.callsign !== undefined) {
+    const raw = input.callsign == null ? "" : String(input.callsign);
+    if (!raw.trim()) {
+      nextCallsign = null;
+    } else {
+      const callsign = normalizeCallsign(raw);
+      if (!isValidCallsign(callsign)) throw new HttpError(400, "invalid_callsign", "Indicativo inválido.");
+      nextCallsign = callsign;
+    }
+  }
+
+  const typeChanged = nextType !== row.type;
+  const statusChanged = nextStatus !== row.status;
+  const emailChanged = nextEmail !== before.email;
+  const callsignChanged = nextCallsign !== before.callsign;
+  if (!typeChanged && !statusChanged && !emailChanged && !callsignChanged) {
+    return {
+      license: row,
+      device: { email: nextEmail, callsign: nextCallsign },
+      before,
+      after: before,
+    };
+  }
+
+  let nextExp = row.expires_at;
+  let nextToken = row.token;
+  let nextKid = row.kid;
+  let revokedAt = row.revoked_at;
+  let revokedReason = row.revoked_reason;
+
+  if (typeChanged || (statusChanged && nextStatus === "active" && row.status === "revoked")) {
+    // Token precisa refletir tipo/vigência atuais.
+    if (nextType === "definitive") {
+      nextExp = null;
+    } else if (nextExp == null || nextExp <= ctx.now()) {
+      const settings = await getSettings(ctx);
+      nextExp = ctx.now() + settings.trialDays * 86400;
+    }
+    const issued = await issueToken(ctx, {
+      lid: row.id,
+      serial: row.serial,
+      type: nextType,
+      iat: row.issued_at,
+      exp: nextExp,
+    });
+    nextToken = issued.token;
+    nextKid = issued.kid;
+  } else if (typeChanged === false && nextType === "trial" && nextStatus === "active" && nextExp == null) {
+    const settings = await getSettings(ctx);
+    nextExp = ctx.now() + settings.trialDays * 86400;
+    const issued = await issueToken(ctx, {
+      lid: row.id,
+      serial: row.serial,
+      type: nextType,
+      iat: row.issued_at,
+      exp: nextExp,
+    });
+    nextToken = issued.token;
+    nextKid = issued.kid;
+  } else if (nextType === "definitive" && nextExp !== null) {
+    nextExp = null;
+    const issued = await issueToken(ctx, {
+      lid: row.id,
+      serial: row.serial,
+      type: nextType,
+      iat: row.issued_at,
+      exp: null,
+    });
+    nextToken = issued.token;
+    nextKid = issued.kid;
+  }
+
+  if (nextStatus === "revoked") {
+    if (row.status !== "revoked") {
+      revokedAt = ctx.now();
+      revokedReason = "admin_patch";
+      await bumpCrl(ctx, actor);
+    }
+  } else if (row.status === "revoked") {
+    revokedAt = null;
+    revokedReason = null;
+    await bumpCrl(ctx, actor);
+  }
+
+  if (nextType === "definitive" && nextStatus === "active") {
+    const other = await ctx.env.DB.prepare(
+      "SELECT id FROM licenses WHERE serial = ?1 AND type = 'definitive' AND status = 'active' AND id <> ?2 LIMIT 1",
+    )
+      .bind(row.serial, row.id)
+      .first<{ id: string }>();
+    if (other) {
+      throw new HttpError(409, "already_definitive", "Este serial já tem outra licença definitiva ativa.");
+    }
+  }
+
+  await ctx.env.DB.prepare(
+    "UPDATE licenses SET type = ?2, status = ?3, expires_at = ?4, token = ?5, kid = ?6, revoked_at = ?7, revoked_reason = ?8 WHERE id = ?1",
+  )
+    .bind(id, nextType, nextStatus, nextExp, nextToken, nextKid, revokedAt, revokedReason)
+    .run();
+
+  if (emailChanged || callsignChanged) {
+    await ctx.env.DB.prepare("UPDATE devices SET email = ?2, callsign = ?3 WHERE serial = ?1")
+      .bind(row.serial, nextEmail, nextCallsign)
+      .run();
+  }
+
+  if (nextType === "definitive" && nextStatus === "active" && row.type === "trial") {
+    await ctx.env.DB.prepare(
+      "UPDATE licenses SET status = 'superseded' WHERE serial = ?1 AND type = 'trial' AND status = 'active' AND id <> ?2",
+    )
+      .bind(row.serial, row.id)
+      .run();
+    const licensed = await ctx.env.DB.prepare("SELECT licensed_at FROM devices WHERE serial = ?1")
+      .bind(row.serial)
+      .first<{ licensed_at: number | null }>();
+    if (licensed?.licensed_at == null) {
+      await ctx.env.DB.prepare("UPDATE devices SET licensed_at = ?2 WHERE serial = ?1").bind(row.serial, ctx.now()).run();
+    }
+  }
+
+  const after = { status: nextStatus, type: nextType, email: nextEmail, callsign: nextCallsign };
+  await licenseEvent(ctx, "admin_patch", actor, row.serial, id, { before, after });
+
+  const updated: LicenseRow = {
+    ...row,
+    type: nextType,
+    status: nextStatus,
+    expires_at: nextExp,
+    token: nextToken,
+    kid: nextKid,
+    revoked_at: revokedAt,
+    revoked_reason: revokedReason,
+  };
+  return { license: updated, device: { email: nextEmail, callsign: nextCallsign }, before, after };
+}
+
 export interface ActivateBody {
   serial?: string;
   chk?: string;

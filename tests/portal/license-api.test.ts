@@ -3,11 +3,12 @@ import { serialCheck, verifyBlob, type CrlPayload, type ReceiptPayload } from ".
 import { SERIAL, T0, fxHandler, makePortal, payloadOf } from "./harness";
 
 const DAY = 86400;
+const ACT = { email: "ops@example.com", callsign: "PY2ABC" };
 
 describe("API do aparelho: registro e trial", () => {
   it("concede trial de 30 dias a partir da concessão e é idempotente por serial", async () => {
     const p = await makePortal();
-    const a = await p.json("POST", "/api/lic/activate", { json: { serial: SERIAL, appVersion: "0.1.06.02" } });
+    const a = await p.json("POST", "/api/lic/activate", { json: { serial: SERIAL, appVersion: "0.1.06.02", ...ACT } });
     expect(a.status).toBe(200);
     expect(a.body.status).toBe("trial");
     const ver = await p.verify(a.body.license.token);
@@ -23,7 +24,7 @@ describe("API do aparelho: registro e trial", () => {
 
     // Dias depois: mesma licença, sem trial novo.
     p.clock.t = T0 + 5 * DAY;
-    const b = await p.json("POST", "/api/lic/activate", { json: { serial: SERIAL, lid: a.body.license.lid } });
+    const b = await p.json("POST", "/api/lic/activate", { json: { serial: SERIAL, lid: a.body.license.lid, ...ACT } });
     expect(b.body.license.lid).toBe(a.body.license.lid);
     expect(b.body.license.token).toBe(a.body.license.token);
     expect(b.body.changed).toBe(false);
@@ -33,7 +34,11 @@ describe("API do aparelho: registro e trial", () => {
 
   it("corrida: vários registros simultâneos do mesmo serial geram uma única concessão", async () => {
     const p = await makePortal();
-    const rs = await Promise.all(Array.from({ length: 6 }, (_, i) => p.json("POST", "/api/lic/activate", { json: { serial: SERIAL }, ip: `192.0.2.${i + 1}` })));
+    const rs = await Promise.all(
+      Array.from({ length: 6 }, (_, i) =>
+        p.json("POST", "/api/lic/activate", { json: { serial: SERIAL, ...ACT }, ip: `192.0.2.${i + 1}` }),
+      ),
+    );
     expect(rs.every(r => r.status === 200)).toBe(true);
     expect(new Set(rs.map(r => r.body.license.lid)).size).toBe(1);
     const n = await p.db.prepare("SELECT COUNT(*) AS n FROM licenses").first<{ n: number }>();
@@ -42,21 +47,26 @@ describe("API do aparelho: registro e trial", () => {
 
   it("valida o serial (formato, zeros e dígito verificador)", async () => {
     const p = await makePortal();
-    expect((await p.json("POST", "/api/lic/activate", { json: { serial: "abc" } })).body.error).toBe("serial_invalid");
-    expect((await p.json("POST", "/api/lic/activate", { json: { serial: "0000000000000000" } })).body.error).toBe("serial_invalid");
+    expect((await p.json("POST", "/api/lic/activate", { json: { serial: "abc", ...ACT } })).body.error).toBe("serial_invalid");
+    expect((await p.json("POST", "/api/lic/activate", { json: { serial: "0000000000000000", ...ACT } })).body.error).toBe("serial_invalid");
     expect((await p.json("POST", "/api/lic/activate", { json: {} })).status).toBe(400);
     const chk = await serialCheck(SERIAL);
     const wrong = chk === "00" ? "01" : "00";
-    expect((await p.json("POST", "/api/lic/activate", { json: { serial: SERIAL, chk: wrong } })).body.error).toBe("serial_check_failed");
-    expect((await p.json("POST", "/api/lic/activate", { json: { serial: SERIAL, chk } })).status).toBe(200);
-    expect((await p.json("POST", "/api/lic/activate", { json: { serial: "1000-0000-A1B2-C3D4-" + chk }, ip: "192.0.2.77" })).status).toBe(200);
+    expect((await p.json("POST", "/api/lic/activate", { json: { serial: SERIAL, chk: wrong, ...ACT } })).body.error).toBe("serial_check_failed");
+    expect((await p.json("POST", "/api/lic/activate", { json: { serial: SERIAL, chk, ...ACT } })).status).toBe(200);
+    expect(
+      (await p.json("POST", "/api/lic/activate", { json: { serial: "1000-0000-A1B2-C3D4-" + chk, ...ACT }, ip: "192.0.2.77" })).status,
+    ).toBe(200);
   });
 
   it("limita requisições por IP (429)", async () => {
     const p = await makePortal();
     let last = 200;
     for (let i = 0; i < 12; i++) {
-      const r = await p.json("POST", "/api/lic/activate", { json: { serial: `10000000a1b2${String(1000 + i).padStart(4, "0")}` }, ip: "192.0.2.50" });
+      const r = await p.json("POST", "/api/lic/activate", {
+        json: { serial: `10000000a1b2${String(1000 + i).padStart(4, "0")}`, ...ACT },
+        ip: "192.0.2.50",
+      });
       last = r.status;
       if (last === 429) break;
     }
@@ -65,7 +75,7 @@ describe("API do aparelho: registro e trial", () => {
 
   it("trial expirado não renova e aparece como expirado", async () => {
     const p = await makePortal();
-    const a = await p.json("POST", "/api/lic/activate", { json: { serial: SERIAL } });
+    const a = await p.json("POST", "/api/lic/activate", { json: { serial: SERIAL, ...ACT } });
     p.clock.t = T0 + 31 * DAY;
     const b = await p.json("POST", "/api/lic/sync", { json: { serial: SERIAL, lid: a.body.license.lid } });
     expect(b.body.status).toBe("expired");
@@ -76,7 +86,7 @@ describe("API do aparelho: registro e trial", () => {
 
   it("serial bloqueado não recebe licença", async () => {
     const p = await makePortal();
-    await p.json("POST", "/api/lic/activate", { json: { serial: SERIAL } });
+    await p.json("POST", "/api/lic/activate", { json: { serial: SERIAL, ...ACT } });
     await p.db.prepare("UPDATE devices SET blocked = 1 WHERE serial = ?1").bind(SERIAL).run();
     expect((await p.json("POST", "/api/lic/sync", { json: { serial: SERIAL } })).status).toBe(403);
   });
@@ -148,7 +158,7 @@ describe("admin: licenças", () => {
   it("lista com serial mascarado, filtra, concede, estende, revoga e publica na CRL", async () => {
     const p = await makePortal();
     const s = await p.login();
-    const act = await p.json("POST", "/api/lic/activate", { json: { serial: SERIAL } });
+    const act = await p.json("POST", "/api/lic/activate", { json: { serial: SERIAL, ...ACT } });
     const lid = act.body.license.lid as string;
 
     const list = await p.admin(s, "GET", "/api/admin/licenses?type=trial");
@@ -163,7 +173,7 @@ describe("admin: licenças", () => {
     // estender trial exige motivo
     expect((await p.admin(s, "POST", `/api/admin/licenses/${lid}/extend`, { days: 10 })).body.error).toBe("reason_required");
     expect((await p.admin(s, "POST", `/api/admin/licenses/${lid}/extend`, { days: 10, reason: "suporte" })).status).toBe(200);
-    const again = await p.json("POST", "/api/lic/activate", { json: { serial: SERIAL, lid: "old" } });
+    const again = await p.json("POST", "/api/lic/activate", { json: { serial: SERIAL, lid: "old", ...ACT } });
     expect(payloadOf(again.body.license.token).exp).toBe(T0 + 40 * DAY);
     expect(payloadOf(again.body.license.token).iat).toBe(T0); // iat original preservado
 
@@ -197,6 +207,49 @@ describe("admin: licenças", () => {
   it("viewer/permissões: mutação sem sessão é recusada", async () => {
     const p = await makePortal();
     expect((await p.json("POST", "/api/admin/licenses/grant", { json: { serial: SERIAL } })).status).toBe(401);
+  });
+
+  it("PATCH altera estado, tipo, e-mail e indicativo com auditoria", async () => {
+    const p = await makePortal();
+    const s = await p.login();
+    const act = await p.json("POST", "/api/lic/activate", {
+      json: { serial: SERIAL, email: "ops@example.com", callsign: "PY2ABC" },
+    });
+    const lid = act.body.license.lid as string;
+
+    expect((await p.admin(s, "PATCH", `/api/admin/licenses/${lid}`, {})).body.error).toBe("empty_patch");
+    expect((await p.admin(s, "PATCH", `/api/admin/licenses/${lid}`, { status: "nope" })).body.error).toBe("invalid_status");
+    expect((await p.admin(s, "PATCH", `/api/admin/licenses/${lid}`, { type: "lifetime" })).body.error).toBe("invalid_type");
+    expect((await p.admin(s, "PATCH", `/api/admin/licenses/${lid}`, { email: "ruim" })).body.error).toBe("invalid_email");
+    expect((await p.admin(s, "PATCH", `/api/admin/licenses/${lid}`, { callsign: "XX" })).body.error).toBe("invalid_callsign");
+
+    const patched = await p.admin(s, "PATCH", `/api/admin/licenses/${lid}`, {
+      status: "active",
+      type: "definitive",
+      email: "novo@example.com",
+      callsign: "PU2XYZ",
+    });
+    expect(patched.status).toBe(200);
+    expect(patched.body).toMatchObject({
+      ok: true,
+      type: "definitive",
+      status: "active",
+      email: "novo@example.com",
+      callsign: "PU2XYZ",
+    });
+
+    const list = await p.admin(s, "GET", "/api/admin/licenses?type=definitive");
+    const row = list.body.items.find((x: { id: string }) => x.id === lid);
+    expect(row).toMatchObject({
+      type: "definitive",
+      status: "active",
+      email: "novo@example.com",
+      callsign: "PU2XYZ",
+    });
+
+    const aud = await p.admin(s, "GET", "/api/admin/audit");
+    const actions = aud.body.audit.map((a: { action: string }) => a.action);
+    expect(actions).toContain("license_patch");
   });
 });
 
