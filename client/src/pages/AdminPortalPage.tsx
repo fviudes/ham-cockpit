@@ -86,6 +86,7 @@ export default function AdminPortalPage() {
   const [formRole, setFormRole] = useState<"owner" | "admin" | "viewer">("admin");
   const [formStatus, setFormStatus] = useState<"active" | "disabled">("active");
   const [formPassword, setFormPassword] = useState("");
+  const [formPasswordConfirm, setFormPasswordConfirm] = useState("");
 
   const authed = !!csrf;
   const canManageUsers = meRole === "owner";
@@ -226,6 +227,7 @@ export default function AdminPortalPage() {
     setFormRole("admin");
     setFormStatus("active");
     setFormPassword("");
+    setFormPasswordConfirm("");
     setUserForm("create");
     setErr("");
   };
@@ -237,6 +239,7 @@ export default function AdminPortalPage() {
     setFormRole((u.role as "owner" | "admin" | "viewer") || "admin");
     setFormStatus(u.status === "disabled" ? "disabled" : "active");
     setFormPassword("");
+    setFormPasswordConfirm("");
     setUserForm("edit");
     setErr("");
   };
@@ -244,19 +247,34 @@ export default function AdminPortalPage() {
   const openPasswordUser = (u: UserRow) => {
     setEditingUser(u);
     setFormPassword("");
+    setFormPasswordConfirm("");
     setUserForm("password");
     setErr("");
+  };
+
+  const passwordFieldsOk = () => {
+    if (!formPassword) {
+      setErr(t(ADM.passwordRequired));
+      return false;
+    }
+    if (formPassword !== formPasswordConfirm) {
+      setErr(t(ADM.passwordMismatch));
+      return false;
+    }
+    return true;
   };
 
   const submitUserForm = async () => {
     setErr("");
     if (userForm === "create") {
+      if (!passwordFieldsOk()) return;
       const r = await api<{ message?: string }>("/api/admin/users", {
         method: "POST",
         csrf,
         body: JSON.stringify({
           username: formUsername,
           password: formPassword,
+          passwordConfirm: formPasswordConfirm,
           role: formRole,
           name: formName || undefined,
         }),
@@ -281,10 +299,11 @@ export default function AdminPortalPage() {
         return;
       }
     } else if (userForm === "password" && editingUser) {
+      if (!passwordFieldsOk()) return;
       const r = await api<{ message?: string }>(`/api/admin/users/${editingUser.id}/password`, {
         method: "POST",
         csrf,
-        body: JSON.stringify({ password: formPassword }),
+        body: JSON.stringify({ password: formPassword, passwordConfirm: formPasswordConfirm }),
       });
       if (!r.ok) {
         setErr(r.body.message || "Não foi possível alterar a senha.");
@@ -626,12 +645,30 @@ export default function AdminPortalPage() {
                           value={formPassword}
                           onChange={(e) => setFormPassword(e.target.value)}
                           autoComplete="new-password"
-                          placeholder="mín. 12 caracteres"
                         />
+                        <label className="block text-sm text-[#94a3b8]">{t(ADM.passwordConfirm)}</label>
+                        <input
+                          className={inputCls}
+                          type="password"
+                          value={formPasswordConfirm}
+                          onChange={(e) => setFormPasswordConfirm(e.target.value)}
+                          autoComplete="new-password"
+                        />
+                        {formPasswordConfirm && formPassword !== formPasswordConfirm ? (
+                          <p className="text-sm text-[#f87171]">{t(ADM.passwordMismatch)}</p>
+                        ) : null}
                       </>
                     ) : null}
                     <div className="flex flex-wrap gap-2">
-                      <button type="button" className={btnPrimary} onClick={() => void submitUserForm()}>
+                      <button
+                        type="button"
+                        className={btnPrimary}
+                        disabled={
+                          (userForm === "create" || userForm === "password") &&
+                          (!formPassword || formPassword !== formPasswordConfirm)
+                        }
+                        onClick={() => void submitUserForm()}
+                      >
                         {t(ADM.save)}
                       </button>
                       <button

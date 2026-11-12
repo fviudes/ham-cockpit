@@ -36,8 +36,8 @@ if (!/^[a-z][a-z0-9_]{2,31}$/.test(username)) {
   console.error("username inválido (3–32: a-z, 0-9, _)");
   process.exit(1);
 }
-if (password.length < 12) {
-  console.error("senha precisa de pelo menos 12 caracteres");
+if (!password) {
+  console.error("informe uma senha");
   process.exit(1);
 }
 

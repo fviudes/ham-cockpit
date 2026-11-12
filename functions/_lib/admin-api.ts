@@ -385,11 +385,15 @@ export async function adminRoute(ctx: Ctx, request: Request, path: string): Prom
   }
   if (path === "/users" && method === "POST") {
     const a = await need("owner");
-    const b = await readJson<{ username?: string; password?: string; role?: string; name?: string }>(request);
+    const b = await readJson<{ username?: string; password?: string; passwordConfirm?: string; role?: string; name?: string }>(request);
+    const password = String(b.password ?? "");
+    if (typeof b.passwordConfirm === "string" && b.passwordConfirm !== password) {
+      throw new HttpError(400, "password_mismatch", "As senhas não coincidem.");
+    }
     const role = b.role === "owner" || b.role === "viewer" || b.role === "admin" ? b.role : "admin";
     const created = await createAdminUser(ctx, {
       username: String(b.username ?? ""),
-      password: String(b.password ?? ""),
+      password,
       role,
       name: b.name ? clip(b.name, 80) : undefined,
       actorId: a.id,
@@ -398,13 +402,16 @@ export async function adminRoute(ctx: Ctx, request: Request, path: string): Prom
   }
   if ((m = path.match(/^\/users\/(adm_[0-9a-z]{16})\/password$/)) && method === "POST") {
     const a = await need("owner");
-    const b = await readJson<{ password?: string }>(request);
+    const b = await readJson<{ password?: string; passwordConfirm?: string }>(request);
     const target = await ctx.env.DB.prepare("SELECT id FROM admin_users WHERE id = ?1")
       .bind(m[1])
       .first<{ id: string }>();
     if (!target) throw new HttpError(404, "user_not_found", "Usuário não encontrado.");
     const password = String(b.password ?? "");
-    if (password.length < 12) throw new HttpError(400, "weak_password", "Senha com pelo menos 12 caracteres.");
+    if (!password) throw new HttpError(400, "empty_password", "Informe uma senha.");
+    if (typeof b.passwordConfirm === "string" && b.passwordConfirm !== password) {
+      throw new HttpError(400, "password_mismatch", "As senhas não coincidem.");
+    }
     const password_hash = await hashPassword(password);
     await ctx.env.DB.prepare("UPDATE admin_users SET password_hash = ?2 WHERE id = ?1").bind(target.id, password_hash).run();
     await ctx.env.DB.prepare("DELETE FROM admin_sessions WHERE admin_id = ?1").bind(target.id).run();
@@ -413,7 +420,14 @@ export async function adminRoute(ctx: Ctx, request: Request, path: string): Prom
   }
   if ((m = path.match(/^\/users\/(adm_[0-9a-z]{16})$/)) && method === "PATCH") {
     const a = await need("owner");
-    const b = await readJson<{ status?: string; role?: string; password?: string; username?: string; name?: string | null }>(request);
+    const b = await readJson<{
+      status?: string;
+      role?: string;
+      password?: string;
+      passwordConfirm?: string;
+      username?: string;
+      name?: string | null;
+    }>(request);
     const target = await ctx.env.DB.prepare("SELECT id, username, name, role, status FROM admin_users WHERE id = ?1")
       .bind(m[1])
       .first<{ id: string; username: string | null; name: string | null; role: string; status: string }>();
@@ -458,7 +472,9 @@ export async function adminRoute(ctx: Ctx, request: Request, path: string): Prom
       await audit(ctx, a.id, "admin_user_name", target.id, { name: target.name }, { name });
     }
     if (typeof b.password === "string" && b.password.length > 0) {
-      if (b.password.length < 12) throw new HttpError(400, "weak_password", "Senha com pelo menos 12 caracteres.");
+      if (typeof b.passwordConfirm === "string" && b.passwordConfirm !== b.password) {
+        throw new HttpError(400, "password_mismatch", "As senhas não coincidem.");
+      }
       const password_hash = await hashPassword(b.password);
       await ctx.env.DB.prepare("UPDATE admin_users SET password_hash = ?2 WHERE id = ?1").bind(target.id, password_hash).run();
       await ctx.env.DB.prepare("DELETE FROM admin_sessions WHERE admin_id = ?1").bind(target.id).run();

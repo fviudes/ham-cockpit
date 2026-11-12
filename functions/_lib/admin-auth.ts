@@ -145,7 +145,7 @@ export async function adminLogin(ctx: Ctx, body: { username?: string; password?:
 
   const username = normalizeUsername(String(body.username ?? ""));
   const password = String(body.password ?? "");
-  if (!username || password.length < 8) {
+  if (!username || !password) {
     await audit(ctx, null, "admin_login_failed", null, undefined, undefined);
     throw new HttpError(401, "invalid_credentials", "Usuário ou senha inválidos.");
   }
@@ -226,7 +226,7 @@ export async function createAdminUser(
 ): Promise<AdminUserRow> {
   const username = normalizeUsername(opts.username);
   if (!username) throw new HttpError(400, "invalid_username", "Usuário inválido (3–32 chars: a-z, 0-9, _).");
-  if (opts.password.length < 12) throw new HttpError(400, "weak_password", "Senha com pelo menos 12 caracteres.");
+  if (!opts.password) throw new HttpError(400, "empty_password", "Informe uma senha.");
   const role = opts.role ?? "admin";
   if (!["owner", "admin", "viewer"].includes(role)) throw new HttpError(400, "invalid_role");
   const id = newId("adm");

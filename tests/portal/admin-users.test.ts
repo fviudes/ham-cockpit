@@ -17,11 +17,16 @@ describe("admin users CRUD", () => {
     expect(list0.body.users[0].username).toBe("admin");
 
     expect((await p.admin(s, "POST", "/api/admin/users", { username: "ab", password: "curta" })).body.error).toBe("invalid_username");
-    expect((await p.admin(s, "POST", "/api/admin/users", { username: "ops1", password: "curta" })).body.error).toBe("weak_password");
+    expect((await p.admin(s, "POST", "/api/admin/users", { username: "ops1", password: "" })).body.error).toBe("empty_password");
+    expect(
+      (await p.admin(s, "POST", "/api/admin/users", { username: "ops1", password: "curta", passwordConfirm: "outra" })).body
+        .error,
+    ).toBe("password_mismatch");
 
     const created = await p.admin(s, "POST", "/api/admin/users", {
       username: "ops1",
-      password: "senha-ops-12345",
+      password: "curta",
+      passwordConfirm: "curta",
       role: "admin",
       name: "Operações",
     });
@@ -29,7 +34,7 @@ describe("admin users CRUD", () => {
     const uid = created.body.id as string;
     expect(uid).toMatch(/^adm_/);
 
-    expect((await p.admin(s, "POST", "/api/admin/users", { username: "ops1", password: "senha-ops-12345" })).status).toBe(409);
+    expect((await p.admin(s, "POST", "/api/admin/users", { username: "ops1", password: "curta" })).status).toBe(409);
 
     const patch = await p.admin(s, "PATCH", `/api/admin/users/${uid}`, {
       username: "ops2",
@@ -39,9 +44,15 @@ describe("admin users CRUD", () => {
     });
     expect(patch.status).toBe(200);
 
-    const pwd = await p.admin(s, "POST", `/api/admin/users/${uid}/password`, { password: "nova-senha-ops2" });
+    const pwd = await p.admin(s, "POST", `/api/admin/users/${uid}/password`, {
+      password: "nova",
+      passwordConfirm: "nova",
+    });
     expect(pwd.status).toBe(200);
-    expect((await p.admin(s, "POST", `/api/admin/users/${uid}/password`, { password: "curta" })).body.error).toBe("weak_password");
+    expect((await p.admin(s, "POST", `/api/admin/users/${uid}/password`, { password: "" })).body.error).toBe("empty_password");
+    expect(
+      (await p.admin(s, "POST", `/api/admin/users/${uid}/password`, { password: "a", passwordConfirm: "b" })).body.error,
+    ).toBe("password_mismatch");
 
     // não exclui o último owner
     expect((await p.admin(s, "DELETE", `/api/admin/users/${me.body.id}`)).body.error).toBe("cannot_delete_self");
