@@ -2,7 +2,7 @@ import { BluetoothPage, WifiPage } from "@/console/network";
 import { AcomPage, HamplusPage, Ic705Page, LdgPage, LextelPage, Lp100aPage, PalstarPage, SpePage } from "@/console/devices";
 import { DEFAULT_PASS, DEFAULT_USER, type I18nKey } from "@/console/i18n";
 import { resolvePrimaryRoute, sendPrimaryCmd } from "@/console/radio-cmd";
-import { ConsoleProvider, formatVfo, useConsole } from "@/console/state";
+import { ConsoleProvider, useConsole } from "@/console/state";
 import { SVC_LABEL, serviceLive } from "@/console/services-ui";
 import { LangToggle, UpdatesMenu, UserMenu } from "@/console/widgets";
 import { RadioPage } from "@/console/radio";
@@ -70,7 +70,8 @@ type PageId =
   | "license"
   | "status"
   | "term"
-  | "manual";
+  | "manual"
+  | "support";
 
 type NavPageId = Extract<PageId, I18nKey>;
 
@@ -109,6 +110,97 @@ const NAV: { group: "navSetup" | "navOp" | "navDev" | "navNet" | "navSys"; items
   },
 ];
 
+type HeaderChip = {
+  key: string;
+  label: string;
+  className: string;
+  onClick?: () => void;
+  disabled?: boolean;
+};
+
+const HEADER_CHIP =
+  "min-w-0 max-w-max grow basis-0 shrink truncate rounded-md px-1 py-1 text-left font-['IBM_Plex_Mono'] text-[10px] font-semibold disabled:opacity-40 @[28rem]:px-2 @[28rem]:text-[11px]";
+
+/** Hz → kHz, com os dois dígitos abaixo de 1 kHz que o mostrador já exibia (passo de 10 Hz). */
+function formatHeaderKhz(hz: number): string {
+  const abs = Math.max(0, Math.round(hz));
+  const whole = Math.floor(abs / 1000);
+  const frac = Math.floor((abs % 1000) / 10);
+  return `${whole}.${String(frac).padStart(2, "0")}`;
+}
+
+function LcdSeg({ text }: { text: string }) {
+  const ghost = text.replace(/\d/g, "8");
+  return (
+    <span className="relative inline-block whitespace-nowrap leading-none">
+      <span className="lcd-7 lcd-ghost" aria-hidden="true">
+        {ghost}
+      </span>
+      <span className="lcd-7 lcd-on absolute inset-0">{text}</span>
+    </span>
+  );
+}
+
+function LcdDigits({ text }: { text: string }) {
+  const [whole, frac] = text.split(".");
+  if (!frac) return <LcdSeg text={whole} />;
+  return (
+    <span className="inline-flex items-end whitespace-nowrap leading-none">
+      <LcdSeg text={whole} />
+      <span className="sr-only">.</span>
+      <span className="lcd-dp" aria-hidden="true" />
+      <LcdSeg text={frac} />
+    </span>
+  );
+}
+
+function LcdLamp({ label, tone }: { label: string; tone: "amber" | "rx" | "tx" }) {
+  return (
+    <span className={`lcd-lamp lcd-14 lcd-lamp-${tone} inline-flex items-center justify-center rounded-full border`}>
+      {label}
+    </span>
+  );
+}
+
+/** Serviços ativos em exatamente duas linhas, encolhendo o chip em vez de rolar. */
+function HeaderServiceRows({ chips, corner }: { chips: HeaderChip[]; corner?: ReactNode }) {
+  const mid = Math.ceil(chips.length / 2);
+  const rows = [chips.slice(0, mid), chips.slice(mid)];
+  return (
+    <div className="@container col-start-2 row-span-2 grid h-full min-w-0 grid-rows-2 gap-1 overflow-hidden">
+      {rows.map((row, index) => (
+        <div key={index} className="flex w-full min-h-0 min-w-0 items-center gap-1 overflow-hidden">
+          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
+            {row.map((chip) => {
+              const cls = `${HEADER_CHIP} ${chip.className}`;
+              if (chip.onClick) {
+                return (
+                  <button
+                    key={chip.key}
+                    type="button"
+                    title={chip.label}
+                    disabled={chip.disabled}
+                    onClick={chip.onClick}
+                    className={cls}
+                  >
+                    {chip.label}
+                  </button>
+                );
+              }
+              return (
+                <span key={chip.key} title={chip.label} className={cls}>
+                  {chip.label}
+                </span>
+              );
+            })}
+          </div>
+          {index === 0 && corner ? <div className="flex shrink-0 items-center gap-2">{corner}</div> : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const PAGES: Record<PageId, ComponentType> = {
   wizard: WizardPage,
   radio: RadioPage,
@@ -135,6 +227,7 @@ const PAGES: Record<PageId, ComponentType> = {
   status: StatusPage,
   term: AdminPage,
   manual: ManualPage,
+  support: AdminPage,
 };
 
 export default function Console() {
@@ -189,11 +282,30 @@ function Login({ onOk }: { onOk: (name: string) => void }) {
             const fd = new FormData(e.currentTarget);
             const u = String(fd.get("user") || "");
             const p = String(fd.get("pass") || "");
-            if (u === DEFAULT_USER && p === DEFAULT_PASS) {
+            if (u !== DEFAULT_USER || p !== DEFAULT_PASS) {
+              setErr(true);
+              return;
+            }
+            void (async () => {
+              try {
+                const r = await fetch("/api/console/session", {
+                  method: "POST",
+                  credentials: "same-origin",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ user: u, password: p }),
+                });
+                if (!r.ok) {
+                  setErr(true);
+                  return;
+                }
+              } catch {
+                setErr(true);
+                return;
+              }
               setErr(false);
               void kickPrimary({ picker: false, gesture: true });
               onOk(u);
-            } else setErr(true);
+            })();
           }}
         >
           <h2 className="mb-5 font-['Space_Grotesk'] text-lg text-white">{tx("loginTitle")}</h2>
@@ -227,7 +339,8 @@ function Shell({ onLogout }: { onLogout: () => void }) {
   const page = (loc.replace(/^\/console\/?/, "").split(/[?#]/)[0] || "radio") as PageId;
   const Page = PAGES[page] ?? RadioPage;
   const vfoLetter = s.vfo === "B" ? "B" : "A";
-  const vfo = formatVfo(vfoLetter === "B" ? s.freqB : s.freq);
+  const vfoHz = vfoLetter === "B" ? s.freqB : s.freq;
+  const vfoKhz = formatHeaderKhz(vfoHz);
   const vfoMode = vfoLetter === "B" ? s.modeB : s.mode;
   const primaryRadio = s.radios.items.find((r) => r.primary);
   const liveRadio = s.radios.items.find((r) => r.connected) || primaryRadio;
@@ -246,13 +359,17 @@ function Shell({ onLogout }: { onLogout: () => void }) {
           : liveRadio && !(liveRadio.link === "bluetooth" && liveRadio.proto === "civ")
             ? `${makerLabel(liveRadio)} ${liveRadio.link === "network" ? "Rede" : liveRadio.link === "bluetooth" ? "BT" : "USB"}`
             : `${tx("ic705")} —`;
+  const previewAll =
+    import.meta.env.DEV &&
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("chips") === "all";
   const liveSvcs = s.services.filter(
     (row) =>
       row.id !== "radio" &&
       row.id !== "lextel" &&
       row.id !== "web" &&
       row.id !== "dhcp" &&
-      serviceLive(row.id, s, row.running),
+      (previewAll || serviceLive(row.id, s, row.running)),
   );
 
   useEffect(() => {
@@ -262,6 +379,34 @@ function Shell({ onLogout }: { onLogout: () => void }) {
   const gate: LicenseGate = license?.gate ?? licenseGateOf(license?.state);
   const menusOpen = licenseMenusOpen(gate);
   const licenseReady = license !== null;
+  const chipOn = "bg-[#10b981]/15 text-[#34d399]";
+  const chipOff = "bg-white/5 text-[#8ea0b3]";
+  const radioOn = s.radios.items.some((r) => r.connected) || s.ic705.phase === "ready";
+  const headerChips: HeaderChip[] = [
+    {
+      key: "radio",
+      label: radioChip,
+      className: radioOn ? chipOn : chipOff,
+      disabled: !menusOpen,
+      onClick: () => {
+        if (menusOpen) navigate("/console/ic705");
+      },
+    },
+    {
+      key: "lextel",
+      label: `MS-2000 ${s.lextel.connected ? "SPP" : "—"}`,
+      className: s.lextel.connected ? chipOn : chipOff,
+      disabled: !menusOpen,
+      onClick: () => {
+        if (menusOpen) navigate("/console/lextel");
+      },
+    },
+    ...liveSvcs.map((row) => ({
+      key: row.id,
+      label: tx(SVC_LABEL[row.id]),
+      className: chipOn,
+    })),
+  ];
 
   useEffect(() => {
     if (sessionStorage.getItem(POST_LOGIN_KEY) === "1") {
@@ -410,56 +555,39 @@ function Shell({ onLogout }: { onLogout: () => void }) {
         </div>
       ) : null}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-[rgba(79,195,247,0.12)] bg-[#071018]/95 px-4 py-3 backdrop-blur-sm">
+        <header className="sticky top-0 z-20 flex flex-nowrap items-center gap-2 border-b border-[rgba(79,195,247,0.12)] bg-[#071018]/95 px-4 py-2 backdrop-blur-sm">
           {mobile ? (
             <button type="button" onClick={() => setOpen((v) => !v)} className="grid size-9 shrink-0 place-items-center rounded-md border border-[rgba(79,195,247,0.2)] text-[#4fc3f7]" aria-label={tx("menu")}>
               {open ? <X size={18} /> : <Menu size={18} />}
             </button>
           ) : null}
-          <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto">
+          <div className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] grid-rows-[2rem_2rem] gap-x-2 gap-y-1">
             <div
               ref={headerFreqRef}
               title={tx("freqWheel")}
-              className="shrink-0 cursor-ns-resize rounded-[3px] border border-[#6b4a10] bg-[#1a1200] px-2.5 py-1 shadow-[inset_0_1px_0_rgba(255,176,0,0.14),inset_0_-1px_0_rgba(0,0,0,0.45)]"
+              className="lcd-bezel row-span-2 flex h-full min-h-0 w-max cursor-ns-resize flex-col items-stretch justify-center gap-1 px-2.5"
             >
-              <p className="whitespace-nowrap font-['IBM_Plex_Mono'] text-[11px] font-semibold tracking-[0.04em] text-[#ffb000] md:text-[13px]">
-                {vfo.int}.{vfo.khz}.{vfo.hz}MHz · VFO {vfoLetter} · {vfoMode} - {s.ptt ? tx("tx") : tx("rx")}
+              <p className="flex items-baseline justify-center gap-1.5 whitespace-nowrap leading-none">
+                <LcdDigits text={vfoKhz} />
+                <span className="lcd-14 lcd-unit">kHz</span>
               </p>
+              <div className="flex items-center justify-center gap-1.5">
+                <LcdLamp label={vfoLetter} tone="amber" />
+                <LcdLamp label={vfoMode} tone="amber" />
+                <LcdLamp label={s.ptt ? tx("tx") : tx("rx")} tone={s.ptt ? "tx" : "rx"} />
+              </div>
             </div>
-            <button
-              type="button"
-              disabled={!menusOpen}
-              onClick={() => menusOpen && navigate("/console/ic705")}
-              className={`shrink-0 rounded-md px-2 py-1 font-['IBM_Plex_Mono'] text-[11px] font-semibold disabled:opacity-40 ${
-                s.radios.items.some((r) => r.connected) || s.ic705.phase === "ready"
-                  ? "bg-[#10b981]/15 text-[#34d399]"
-                  : "bg-white/5 text-[#8ea0b3]"
-              }`}
-            >
-              {radioChip}
-            </button>
-            <button
-              type="button"
-              disabled={!menusOpen}
-              onClick={() => menusOpen && navigate("/console/lextel")}
-              className={`shrink-0 rounded-md px-2 py-1 font-['IBM_Plex_Mono'] text-[11px] font-semibold disabled:opacity-40 ${
-                s.lextel.connected ? "bg-[#10b981]/15 text-[#34d399]" : "bg-white/5 text-[#8ea0b3]"
-              }`}
-            >
-              MS-2000 {s.lextel.connected ? "SPP" : "—"}
-            </button>
-            {liveSvcs.map((row) => (
-              <span
-                key={row.id}
-                className="shrink-0 rounded-md bg-[#10b981]/15 px-2 py-1 font-['IBM_Plex_Mono'] text-[11px] font-semibold text-[#34d399]"
-              >
-                {tx(SVC_LABEL[row.id])}
-              </span>
-            ))}
+            <HeaderServiceRows
+              chips={headerChips}
+              corner={
+                <>
+                  <LangToggle />
+                  {menusOpen ? <UpdatesMenu /> : null}
+                  <UserMenu name={user} onLogout={onLogout} menusOpen={menusOpen} />
+                </>
+              }
+            />
           </div>
-          <LangToggle />
-          {menusOpen ? <UpdatesMenu /> : null}
-          <UserMenu name={user} onLogout={onLogout} menusOpen={menusOpen} />
         </header>
         <main
           className={

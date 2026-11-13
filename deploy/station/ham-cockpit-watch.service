@@ -1,0 +1,9 @@
+[Unit]
+Description=Ham Cockpit — sobe serviços caídos
+Documentation=file:///opt/ham-cockpit/bin/ham-cockpit-watch.sh
+
+[Service]
+Type=oneshot
+ExecStart=/opt/ham-cockpit/bin/ham-cockpit-watch.sh
+Nice=10
+TimeoutStartSec=60

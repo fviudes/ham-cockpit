@@ -28,30 +28,113 @@ export type ServicesSnapshot = {
 
 type BootMap = Record<ServiceId, boolean>;
 
+/**
+ * Unit (ou container) que o menu Serviços usa como indicador.
+ * active = ligado; inactive ou failed = parado.
+ * Acessório sem unit própria aponta para o ser2net da porta dele.
+ * dhcp aponta para o AP: dnsmasq.service fica mascarado de propósito.
+ * spe: ampctld@spe fica inactive de propósito; a porta rfc2217 é o ser2net.
+ * web: ham-cockpit.service e também nginx.service (os dois precisam estar active).
+ */
 const UNITS: Record<ServiceId, string> = {
   ser2net: "ser2net.service",
   wavelog: "wavelog.service",
   db: "wavelog-db",
   wlg: "waveloggate.service",
   mmdvm: "mmdvmhost.service",
-  radio: "",
+  radio: "ser2net.service",
   hamlib: "rigctld@ic705.service",
-  spe: "ampctld@spe.service",
-  hamplus: "",
-  palstar: "",
-  ldg: "",
-  lp100a: "",
-  acom: "",
+  spe: "ser2net.service",
+  hamplus: "ser2net.service",
+  palstar: "ser2net.service",
+  ldg: "ser2net.service",
+  lp100a: "ser2net.service",
+  acom: "ser2net.service",
   lextel: "",
   wifi: "ham-cockpit-ap.service",
   bluetooth: "bluetooth.service",
-  dhcp: "",
+  dhcp: "ham-cockpit-ap.service",
   web: "ham-cockpit.service",
 };
 
-/** Serviços com unit/container gerenciado pelo helper station-svc.
- *  spe: ampctld fica disponível via station-svc, mas o console usa protocolo nativo. */
-const HELPER_IDS = new Set<ServiceId>(SERVICE_IDS.filter((id) => UNITS[id] && id !== "spe"));
+/** IDs que o station-svc sabe ligar/desligar. Não inclui quem só empresta a unit de outro serviço. */
+const HELPER_IDS = new Set<ServiceId>([
+  "ser2net",
+  "wavelog",
+  "db",
+  "wlg",
+  "mmdvm",
+  "hamlib",
+  "wifi",
+  "bluetooth",
+  "web",
+]);
+
+/** Porta ser2net é o serviço: rádio e acessórios sem daemon próprio. */
+const SER2NET_PORT_IDS = new Set<ServiceId>(["radio", "spe", "hamplus", "palstar", "ldg", "lp100a", "acom"]);
+
+export type ServiceLinuxFacts = {
+  /** id → estado do station-svc is-active-all (active, inactive, failed, activating, …). */
+  states: Record<string, string>;
+  /** device do ser2net → porta TCP configurada. */
+  ports: Partial<Record<string, number>>;
+  /** null quando não deu para ler /proc/net/tcp. */
+  listen: Set<number> | null;
+  /** systemctl is-active nginx.service. */
+  nginx: string;
+  /** dnsmasq do AP escutando em UDP/67 ou em 192.168.4.1:53. Não é o dnsmasq.service. */
+  apDhcpUp: boolean;
+};
+
+/** Indicador do menu. Não olha sessão do aplicativo (rádio LAN, SPE nativo, Lextel pareado, cliente LP-100A). */
+export function serviceLinuxRunning(id: ServiceId, facts: ServiceLinuxFacts): boolean {
+  if (SER2NET_PORT_IDS.has(id)) {
+    if (facts.states.ser2net !== "active") return false;
+    const port = facts.ports[id];
+    if (!port) return false;
+    if (facts.listen && !facts.listen.has(port)) return false;
+    return true;
+  }
+  if (id === "dhcp") {
+    const ap = facts.states.wifi || "";
+    if (ap === "active") return true;
+    if (ap === "inactive" || ap === "failed" || ap === "") return false;
+    // oneshot do AP ainda em activating, mas o DHCP em 192.168.4.1 já subiu
+    return ap === "activating" && facts.apDhcpUp;
+  }
+  if (id === "web") return facts.states.web === "active" && facts.nginx === "active";
+  if (id === "lextel") return false;
+  if (!UNITS[id]) return false;
+  return facts.states[id] === "active";
+}
+
+/** Portas em TCP_LISTEN (estado 0A) em /proc/net/tcp. */
+export function tcpListenPorts(text: string): Set<number> {
+  const ports = new Set<number>();
+  for (const line of text.split(/\r?\n/)) {
+    const parts = line.trim().split(/\s+/);
+    if (parts.length < 4 || !parts[0]?.endsWith(":")) continue;
+    if (parts[3] !== "0A") continue;
+    const port = Number.parseInt(parts[1]?.split(":")[1] || "", 16);
+    if (Number.isInteger(port) && port > 0) ports.add(port);
+  }
+  return ports;
+}
+
+/** 192.168.4.1 em little-endian, como o /proc/net/udp escreve. */
+const AP_ADDR = "0104a8c0";
+
+export function apDhcpIsUp(text: string): boolean {
+  for (const line of text.split(/\r?\n/)) {
+    const parts = line.trim().split(/\s+/);
+    if (parts.length < 2 || !parts[0]?.endsWith(":")) continue;
+    const [addr, hexPort] = (parts[1] || "").split(":");
+    const port = Number.parseInt(hexPort || "", 16);
+    if (port === 67) return true;
+    if (port === 53 && (addr || "").toLowerCase() === AP_ADDR) return true;
+  }
+  return false;
+}
 
 /** Ligar/Desligar manual (além do início automático). */
 const POWER_IDS = new Set<ServiceId>([
@@ -175,58 +258,72 @@ async function unitStates(fresh = false): Promise<Record<string, string>> {
   return stateInflight;
 }
 
-async function probeRunning(id: ServiceId, states: Record<string, string>): Promise<boolean> {
-  if (id === "web") return true;
-  if (id === "lextel") {
-    try {
-      const { lextelStatus } = await import("./lextel");
-      const st = lextelStatus();
-      return Boolean(st.connected || st.phase === "streaming" || st.phase === "connecting");
-    } catch {
-      return false;
+function readProc(file: string): string {
+  try {
+    return readFileSync(file, "utf8");
+  } catch {
+    return "";
+  }
+}
+
+function readSer2netPorts(): Partial<Record<string, number>> {
+  const file = existsSync("/opt/ser2net/services.json")
+    ? "/opt/ser2net/services.json"
+    : join(ROOT, "data", "ser2net", "services.json");
+  try {
+    const raw = JSON.parse(readFileSync(file, "utf8")) as { services?: { device?: unknown; tcpPort?: unknown }[] };
+    const out: Partial<Record<string, number>> = {};
+    for (const row of raw.services || []) {
+      const device = typeof row.device === "string" ? row.device : "";
+      const port = Number(row.tcpPort);
+      if (!SER2NET_PORT_IDS.has(device as ServiceId)) continue;
+      if (!Number.isInteger(port) || port < 1 || port > 65535) continue;
+      out[device] = port;
     }
+    return out;
+  } catch {
+    return {};
   }
-  if (id === "spe") {
-    try {
-      const { speStatus } = await import("./spe");
-      const st = speStatus();
-      if (st.connected || st.phase === "connecting") return true;
-    } catch {
-      /* cai no ampctld */
-    }
+}
+
+async function unitActiveState(unit: string): Promise<string> {
+  try {
+    const { stdout } = await execFileAsync("systemctl", ["is-active", unit], {
+      timeout: 4_000,
+      windowsHide: true,
+    });
+    return String(stdout || "").trim() || "inactive";
+  } catch (err) {
+    const stdout =
+      err && typeof err === "object" && "stdout" in err ? String((err as { stdout?: unknown }).stdout || "") : "";
+    return stdout.trim() || "inactive";
   }
-  if (id === "ldg") {
-    try {
-      const { ldgStatus } = await import("./ldg");
-      return Boolean(ldgStatus().connected);
-    } catch {
-      return false;
-    }
-  }
-  if (id === "lp100a") {
-    try {
-      const { lp100aStatus } = await import("./lp100a");
-      return Boolean(lp100aStatus().connected);
-    } catch {
-      return false;
-    }
-  }
-  if (process.platform === "linux" && UNITS[id]) {
-    return states[id] === "active";
-  }
-  return false;
+}
+
+async function linuxFacts(): Promise<ServiceLinuxFacts> {
+  const states = await unitStates();
+  const ports = readSer2netPorts();
+  const listen = existsSync("/proc/net/tcp")
+    ? tcpListenPorts(`${readProc("/proc/net/tcp")}\n${readProc("/proc/net/tcp6")}`)
+    : null;
+  const nginx = await unitActiveState("nginx.service");
+  const apDhcpUp = existsSync("/proc/net/udp") ? apDhcpIsUp(readProc("/proc/net/udp")) : false;
+  return { states, ports, listen, nginx, apDhcpUp };
+}
+
+function emptyFacts(): ServiceLinuxFacts {
+  return { states: {}, ports: {}, listen: null, nginx: "inactive", apDhcpUp: false };
 }
 
 export async function servicesStatus(): Promise<ServicesSnapshot> {
-  const states = process.platform === "linux" ? await unitStates() : {};
-  const running = await Promise.all(SERVICE_IDS.map((id) => probeRunning(id, states)));
+  const facts = process.platform === "linux" ? await linuxFacts() : emptyFacts();
   return {
     ok: true,
     folder: dataDir(),
-    items: SERVICE_IDS.map((id, i) => ({
+    items: SERVICE_IDS.map((id) => ({
       id,
       autostart: boot[id] !== false,
-      running: Boolean(running[i]),
+      running: serviceLinuxRunning(id, facts),
       unit: UNITS[id],
       power: POWER_IDS.has(id),
     })),

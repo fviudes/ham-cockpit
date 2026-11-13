@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import {
@@ -42,10 +42,11 @@ import { Ser2netLink } from "./ser2net-link";
 import { Chip, ConsoleInput, ConsoleSelect, Field, GhostBtn, Lcd, Led, PageHead, Panel, PanelTitle, PrimaryBtn } from "./widgets";
 
 const RADIO_BAUDS = [1200, 4800, 9600, 19200, 38400, 57600, 115200, 230400];
-const MAKERS: RadioMaker[] = ["icom", "kenwood", "yaesu", "flex", "tentec", "xiegu", "hermes", "anan"];
+const MAKERS: RadioMaker[] = ["icom", "kenwood", "elecraft", "yaesu", "flex", "tentec", "xiegu", "hermes", "anan"];
 const MAKER_KEY: Record<RadioMaker, I18nKey> = {
   icom: "makerIcom",
   kenwood: "makerKenwood",
+  elecraft: "makerElecraft",
   yaesu: "makerYaesu",
   flex: "makerFlex",
   tentec: "makerTentec",
@@ -57,7 +58,7 @@ const MAKER_KEY: Record<RadioMaker, I18nKey> = {
 function defaultBaud(maker: RadioMaker, link: RadioLink) {
   if (link === "network") return 0;
   if (link === "bluetooth" && maker !== "icom") return 9600;
-  if (maker === "kenwood" || maker === "yaesu") return 38400;
+  if (maker === "kenwood" || maker === "yaesu" || maker === "elecraft") return 38400;
   if (maker === "tentec") return 57600;
   if (maker === "xiegu") return 19200;
   return 115200;
@@ -77,6 +78,45 @@ function preferLink(maker: RadioMaker, current?: RadioLink): RadioLink {
   const opts = makerLinkOptions(maker);
   if (current && opts.includes(current)) return current;
   return (opts.find((o) => o === "usb") || opts[0] || "usb") as RadioLink;
+}
+
+/** Série (IC-73xx, FT-99xx) quando o fabricante tem lista longa. */
+function seriesBucket(eq: EquipmentRadio): string {
+  const fam = eq.family || eq.label;
+  const m = fam.match(/^([A-Za-z]+)-?(\d{2,})/);
+  if (!m) return fam;
+  return `${m[1].toUpperCase()}-${m[2].slice(0, 2)}xx`;
+}
+
+function groupModels(list: EquipmentRadio[]): { label: string; items: EquipmentRadio[] }[] {
+  if (list.length < 16) return [{ label: "", items: list }];
+  const buckets = new Map<string, EquipmentRadio[]>();
+  for (const eq of list) {
+    const key = seriesBucket(eq);
+    const arr = buckets.get(key);
+    if (arr) arr.push(eq);
+    else buckets.set(key, [eq]);
+  }
+  return Array.from(buckets.entries())
+    .sort(([a], [b]) => a.localeCompare(b, "pt"))
+    .map(([label, items]) => ({ label, items }));
+}
+
+function civChoicesFor(list: EquipmentRadio[], current: string): { addr: string; label: string }[] {
+  const byAddr = new Map<string, string[]>();
+  for (const eq of list) {
+    if (eq.protocol !== "civ" || !eq.civAddr) continue;
+    const names = byAddr.get(eq.civAddr) ?? [];
+    if (!names.includes(eq.family)) names.push(eq.family);
+    byAddr.set(eq.civAddr, names);
+  }
+  if (current && !byAddr.has(current)) byAddr.set(current, [current]);
+  return Array.from(byAddr.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([addr, names]) => ({
+      addr,
+      label: names.length === 1 ? `${names[0]} (${addr})` : `${addr} · ${names.join(", ")}`,
+    }));
 }
 
 function linkLabelKey(link: RadioLink): I18nKey {
@@ -149,7 +189,12 @@ export function Ic705Page() {
 
   const icom = maker === "icom";
   const xiegu = maker === "xiegu";
-  const models = useMemo(() => listEquipmentByMaker(maker), [maker]);
+  const models = useMemo(
+    () => [...listEquipmentByMaker(maker)].sort((a, b) => a.label.localeCompare(b.label, "pt")),
+    [maker],
+  );
+  const modelGroups = useMemo(() => groupModels(models), [models]);
+  const civChoices = useMemo(() => civChoicesFor(models, civAddr), [models, civAddr]);
   const selectedEq = useMemo(() => (equipmentId ? getEquipment(equipmentId) : undefined), [equipmentId]);
   const showCiv = Boolean(
     selectedEq?.protocol === "civ" && proto === "civ" && (selectedEq.civAddr || selectedEq.hamlibPassCiv),
@@ -174,9 +219,10 @@ export function Ic705Page() {
   const gattUp = s.ic705.phase === "ready" || s.ic705.civ;
   const bleOn = gattUp || s.ic705.phase === "handshake" || s.ic705.phase === "connecting" || s.ic705.phase === "scanning";
   const lanCiv = Boolean(live && live.link === "network" && live.maker === "icom" && live.proto !== "cat");
+  const serialCiv = Boolean(s.ic705.serialCiv && live && live.link === "usb" && live.proto === "civ");
   const wiredLive = Boolean(live && !(live.link === "bluetooth" && live.proto === "civ"));
   const linked = gattUp || wiredLive;
-  const civOk = gattUp || lanCiv;
+  const civOk = gattUp || lanCiv || serialCiv;
   const selected = useMemo(() => picks.find((d) => d.path === device), [picks, device]);
   const phaseLabel: Record<BlePhase, string> = {
     idle: tx("blePhaseIdle"),
@@ -617,6 +663,7 @@ export function Ic705Page() {
               ...p.ic705,
               cat: false,
               civ: false,
+              serialCiv: false,
               usb: false,
               phase: p.ic705.ble ? p.ic705.phase : "idle",
               error: "",
@@ -672,7 +719,7 @@ export function Ic705Page() {
         <StatusTile
           label="CI-V"
           value={
-            gattUp || lanCiv
+            gattUp || lanCiv || serialCiv
               ? tx("blePhaseReady")
               : bleOn
                 ? phaseLabel[s.ic705.phase]
@@ -754,12 +801,25 @@ export function Ic705Page() {
                 }
               }}
             >
-              {models.map((eq) => (
-                <option key={eq.id} value={eq.id}>
-                  {eq.label}
-                  {eq.hamlibBackend === "ser2net" && eq.hamlibModel ? ` · Hamlib ${eq.hamlibModel}` : ""}
-                </option>
-              ))}
+              {modelGroups.map((g) =>
+                g.label ? (
+                  <optgroup key={g.label} label={g.label}>
+                    {g.items.map((eq) => (
+                      <option key={eq.id} value={eq.id}>
+                        {eq.label}
+                        {eq.hamlibBackend === "ser2net" && eq.hamlibModel ? ` · Hamlib ${eq.hamlibModel}` : ""}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : (
+                  g.items.map((eq) => (
+                    <option key={eq.id} value={eq.id}>
+                      {eq.label}
+                      {eq.hamlibBackend === "ser2net" && eq.hamlibModel ? ` · Hamlib ${eq.hamlibModel}` : ""}
+                    </option>
+                  ))
+                ),
+              )}
             </ConsoleSelect>
           </Field>
           <Field label={tx("radioLink")}>
@@ -939,14 +999,11 @@ export function Ic705Page() {
                   setS((p) => ({ ...p, ic705: { ...p.ic705, addr } }));
                 }}
               >
-                <option value="0xA4">IC-705 (0xA4)</option>
-                <option value="0x94">IC-7300 (0x94)</option>
-                <option value="0x18">IC-7100 (0x18)</option>
-                <option value="0x76">IC-7610 (0x76)</option>
-                <option value="0x98">IC-705 alt (0x98)</option>
-                <option value="0x88">IC-9700 (0x88)</option>
-                <option value="0x70">IC-7000 (0x70)</option>
-                <option value="0x48">IC-706 (0x48)</option>
+                {civChoices.map((row) => (
+                  <option key={row.addr} value={row.addr}>
+                    {row.label}
+                  </option>
+                ))}
               </ConsoleSelect>
             </Field>
           ) : null}
@@ -1443,6 +1500,9 @@ export function LextelPage() {
   const d = s.lextel;
   const nearby = d.devices.filter((row) => isLextelBtDevice(row));
   const busy = d.phase === "scanning" || d.phase === "pairing" || d.phase === "connecting";
+  const btLock = useRef(false);
+  const [btBusy, setBtBusy] = useState(false);
+  const waitBt = btBusy || d.phase === "pairing";
 
   const applySnap = (j: typeof d) => {
     const devices = Array.isArray(j.devices) ? j.devices.filter((row) => isLextelBtDevice(row)) : undefined;
@@ -1472,20 +1532,33 @@ export function LextelPage() {
   };
 
   const connect = async (addr?: string, name?: string) => {
+    if (btLock.current) return;
     const target = addr || d.addr;
     if (!target) {
       toast.error(tx("lextelNone"));
       return;
     }
+    btLock.current = true;
+    setBtBusy(true);
     try {
       const j = await post("/api/lextel/connect", { addr: target, name: name || d.name, pin: d.pin, channel: d.channel });
+      const extra = j as { skipped?: boolean; queued?: boolean };
+      if (extra.skipped) return;
+      if (extra.queued) {
+        toast.message(j.error || tx("lextelConnecting"));
+        return;
+      }
       if (j.phase === "error") toast.error(j.error || tx("lextelConnFail"));
-      else {
+      else if (j.connected && j.phase === "streaming") {
         pushLog("LEXTEL", `SPP ${target}`);
         toast.success(tx("connected"));
-      }
+      } else if (j.error) toast.message(j.error);
+      else toast.message(tx("lextelConnecting"));
     } catch (err) {
       toast.error(String(err));
+    } finally {
+      btLock.current = false;
+      setBtBusy(false);
     }
   };
 
@@ -1655,8 +1728,8 @@ export function LextelPage() {
             <PrimaryBtn disabled={busy} onClick={() => void scan()}>
               {busy && d.phase === "scanning" ? tx("scanning") : tx("lextelScanBt")}
             </PrimaryBtn>
-            <PrimaryBtn disabled={busy} onClick={() => void connect()}>
-              {tx("lextelConnect")}
+            <PrimaryBtn disabled={waitBt || d.phase === "scanning"} onClick={() => void connect()}>
+              {waitBt ? tx("lextelWait") : tx("lextelConnect")}
             </PrimaryBtn>
             <GhostBtn danger onClick={() => void disconnect()}>
               {tx("disconnect")}
@@ -1682,8 +1755,8 @@ export function LextelPage() {
                   {" · SPP"}
                 </p>
               </div>
-              <Chip active={d.addr === row.addr} onClick={() => void connect(row.addr, row.name)}>
-                {tx("connect")}
+              <Chip active={d.addr === row.addr} disabled={waitBt} onClick={() => void connect(row.addr, row.name)}>
+                {waitBt ? tx("lextelWait") : tx("connect")}
               </Chip>
             </div>
           ))}

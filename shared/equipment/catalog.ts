@@ -1,4 +1,5 @@
-import type { EquipmentRadio } from "./types";
+import type { EquipmentConnection, EquipmentRadio } from "./types";
+import { HAMLIB_SERIAL_RADIOS } from "./hamlib-rigs";
 
 const CAP_BASIC = { vfo: true, ptt: true, mode: true, meter: true, split: true } as const;
 const CAP_SDR = {
@@ -11,248 +12,143 @@ const CAP_SDR = {
   audioNet: true,
 } as const;
 
+const LAN: EquipmentConnection = {
+  kind: "icom-lan-udp",
+  auth: "network-user",
+  ports: { control: 50001, serial: 50002, audio: 50003 },
+  hamlibReady: true,
+  notes: "Network Control (UDP). O gateway autentica e expõe CI-V em 127.0.0.1:45002 para o rigctld.",
+};
+
+function overlay(
+  id: string,
+  connections: EquipmentConnection[],
+  notes?: string,
+): EquipmentRadio | undefined {
+  const base = HAMLIB_SERIAL_RADIOS.find((r) => r.id === id);
+  if (!base) return undefined;
+  return { ...base, connections, ...(notes ? { notes } : {}) };
+}
+
+const ic705 = overlay(
+  "icom-ic-705",
+  [
+    {
+      kind: "bluetooth-gatt",
+      preferred: true,
+      auth: "none",
+      hamlibReady: false,
+      notes: "Web Bluetooth GATT no Chrome; CI-V no navegador. Hamlib usa o caminho USB/ser2net.",
+    },
+    {
+      kind: "usb-serial",
+      auth: "none",
+      defaultBaud: 115200,
+      hamlibReady: true,
+      notes: "USB CI-V a 115200. ser2net TCP cru, rigctld -m 3085, sem -s. -c só se o CI-V da estação divergir de 0xA4.",
+    },
+    { ...LAN, notes: "WLAN do IC-705. Gateway para 127.0.0.1:45002 e rigctld -m 3085." },
+  ],
+  "Endereço CI-V padrão 0xA4. Standby confirmado: CI-V 0x18 0x02 (S_PWR_STDBY). Power off real é 0x00.",
+);
+
+const ic7610 = overlay("icom-ic-7610", [
+  { kind: "usb-serial", preferred: true, auth: "none", defaultBaud: 115200, hamlibReady: true },
+  { ...LAN, notes: "Ethernet do IC-7610. CI-V padrão deste -m é 0x98." },
+]);
+
+const ic9700 = overlay("icom-ic-9700", [
+  { kind: "usb-serial", preferred: true, auth: "none", defaultBaud: 38400, hamlibReady: true },
+  { ...LAN, notes: "Ethernet do IC-9700. CI-V padrão deste -m é 0xA2." },
+]);
+
+const x6100 = overlay("xiegu-x6100", [
+  {
+    kind: "usb-serial",
+    preferred: true,
+    auth: "none",
+    defaultBaud: 19200,
+    hamlibReady: true,
+    notes: "DEV USB SERIAL-B. Hamlib 4.6.5: -m 3087.",
+  },
+  {
+    kind: "bluetooth-spp",
+    auth: "none",
+    hamlibReady: false,
+    notes: "BT no X6100 é sobretudo periférico; CAT estável = USB.",
+  },
+]);
+
+const ic905 = overlay("icom-ic-905", [
+  { kind: "usb-serial", preferred: true, auth: "none", defaultBaud: 230400, hamlibReady: true },
+  { ...LAN, notes: "Ethernet do IC-905. CI-V padrão deste -m é 0xAC." },
+]);
+
+const ic7760 = overlay("icom-ic-7760", [
+  { kind: "usb-serial", preferred: true, auth: "none", defaultBaud: 19200, hamlibReady: true },
+  { ...LAN, notes: "Rede do IC-7760. CI-V padrão deste -m é 0xB2." },
+]);
+
+const x6200 = overlay("xiegu-x6200", [
+  {
+    kind: "usb-serial",
+    preferred: true,
+    auth: "none",
+    defaultBaud: 19200,
+    hamlibReady: true,
+    notes: "DEV USB SERIAL-B CI-V. Hamlib 4.6.5: -m 3091.",
+  },
+  { kind: "bluetooth-spp", auth: "none", hamlibReady: false },
+]);
+
+const OVERRIDES = new Map(
+  [ic705, ic7610, ic9700, ic905, ic7760, x6100, x6200]
+    .filter((r): r is EquipmentRadio => Boolean(r))
+    .map((r) => [r.id, r]),
+);
+
 /**
- * Catálogo estático versionado com o app.
- * Hamlib é o hub: entradas com hamlibModel + hamlibBackend ≠ none sobem via rigctld.
+ * IC-7300MK2: o Hamlib 4.6.5 não registra caps próprio.
+ * 3073 é o IC-7300 (CI-V 0x94). Não reutilizar esse -m.
+ */
+const IC7300MK2: EquipmentRadio = {
+  id: "icom-ic-7300mk2",
+  maker: "icom",
+  family: "IC-7300MK2",
+  label: "Icom IC-7300MK2",
+  protocol: "civ",
+  hamlibModel: null,
+  hamlibBackend: "none",
+  defaultBaud: 115200,
+  connections: [
+    {
+      kind: "usb-serial",
+      preferred: true,
+      auth: "none",
+      defaultBaud: 115200,
+      hamlibReady: false,
+      notes: "Sem -m no Hamlib 4.6.5. A ponte não sobe com o 3073 do IC-7300.",
+    },
+    {
+      kind: "icom-lan-udp",
+      auth: "network-user",
+      ports: { control: 50001, serial: 50002, audio: 50003 },
+      hamlibReady: false,
+      notes: "A LAN CI-V do console fala com o rádio. O rigctld não assume o modelo 3073.",
+    },
+  ],
+  capabilities: { ...CAP_BASIC, audioNet: true },
+  notes: "Hamlib 4.6.5 não tem IC-7300MK2. O -m 3073 fica só no IC-7300.",
+};
+
+/**
+ * Catálogo da estação.
+ * Seriais: lista do Hamlib 4.6.5 (riglist.h, o que `rigctl -l` dessa versão imprime).
+ * Flex, Hermes e Anan continuam proxy SDR — não são ser2net.
  */
 export const EQUIPMENT_CATALOG: EquipmentRadio[] = [
-  // ── Icom ──────────────────────────────────────────────────────────
-  {
-    id: "icom-ic-705",
-    maker: "icom",
-    family: "IC-705",
-    label: "Icom IC-705",
-    protocol: "civ",
-    hamlibModel: 3085,
-    hamlibBackend: "ser2net",
-    civAddr: "0xA4",
-    defaultBaud: 115200,
-    connections: [
-      {
-        kind: "bluetooth-gatt",
-        preferred: true,
-        auth: "none",
-        hamlibReady: false,
-        notes: "Web Bluetooth GATT no Chrome; CI-V no navegador. Hamlib usa o caminho USB/ser2net.",
-      },
-      {
-        kind: "usb-serial",
-        auth: "none",
-        defaultBaud: 115200,
-        hamlibReady: true,
-        notes: "USB CI-V → ser2net → rigctld -m 3085.",
-      },
-      {
-        kind: "icom-lan-udp",
-        auth: "network-user",
-        ports: { control: 50001, serial: 50002, audio: 50003 },
-        hamlibReady: true,
-        notes: "WLAN Network Control (UDP). O gateway autentica e expõe CI-V em 127.0.0.1:45002 → rigctld :4532.",
-      },
-    ],
-    capabilities: { ...CAP_BASIC, audioNet: true },
-    notes: "Endereço CI-V padrão 0xA4. Pairing Reception na 1.ª vez no GATT.",
-  },
-  {
-    id: "icom-ic-7300",
-    maker: "icom",
-    family: "IC-7300",
-    label: "Icom IC-7300",
-    protocol: "civ",
-    hamlibModel: 3073,
-    hamlibBackend: "ser2net",
-    civAddr: "0x94",
-    defaultBaud: 19200,
-    connections: [
-      { kind: "usb-serial", preferred: true, auth: "none", defaultBaud: 19200, hamlibReady: true },
-    ],
-    capabilities: CAP_BASIC,
-  },
-  {
-    id: "icom-ic-7610",
-    maker: "icom",
-    family: "IC-7610",
-    label: "Icom IC-7610",
-    protocol: "civ",
-    hamlibModel: 3078,
-    hamlibBackend: "ser2net",
-    civAddr: "0x76",
-    defaultBaud: 19200,
-    connections: [
-      { kind: "usb-serial", preferred: true, auth: "none", defaultBaud: 19200, hamlibReady: true },
-      {
-        kind: "icom-lan-udp",
-        auth: "network-user",
-        ports: { control: 50001, serial: 50002, audio: 50003 },
-        hamlibReady: true,
-        notes: "Ethernet Network Control (UDP). Gateway → 127.0.0.1:45002 → rigctld.",
-      },
-    ],
-    capabilities: { ...CAP_BASIC, panadapter: true, audioNet: true },
-  },
-  {
-    id: "icom-ic-9700",
-    maker: "icom",
-    family: "IC-9700",
-    label: "Icom IC-9700",
-    protocol: "civ",
-    hamlibModel: 3081,
-    hamlibBackend: "ser2net",
-    civAddr: "0x88",
-    defaultBaud: 19200,
-    connections: [
-      { kind: "usb-serial", preferred: true, auth: "none", defaultBaud: 19200, hamlibReady: true },
-      {
-        kind: "icom-lan-udp",
-        auth: "network-user",
-        ports: { control: 50001, serial: 50002, audio: 50003 },
-        hamlibReady: true,
-        notes: "Ethernet Network Control (UDP). Gateway → 127.0.0.1:45002 → rigctld.",
-      },
-    ],
-    capabilities: { ...CAP_BASIC, panadapter: true, audioNet: true },
-  },
-  {
-    id: "icom-ic-7100",
-    maker: "icom",
-    family: "IC-7100",
-    label: "Icom IC-7100",
-    protocol: "civ",
-    hamlibModel: 3070,
-    hamlibBackend: "ser2net",
-    civAddr: "0x18",
-    defaultBaud: 19200,
-    connections: [
-      { kind: "usb-serial", preferred: true, auth: "none", defaultBaud: 19200, hamlibReady: true },
-    ],
-    capabilities: CAP_BASIC,
-  },
-  {
-    id: "icom-ic-7300mk2",
-    maker: "icom",
-    family: "IC-7300MK2",
-    label: "Icom IC-7300MK2",
-    protocol: "civ",
-    hamlibModel: 3073,
-    hamlibBackend: "ser2net",
-    civAddr: "0x94",
-    defaultBaud: 19200,
-    connections: [
-      { kind: "usb-serial", preferred: true, auth: "none", defaultBaud: 19200, hamlibReady: true },
-      {
-        kind: "icom-lan-udp",
-        auth: "network-user",
-        ports: { control: 50001, serial: 50002, audio: 50003 },
-        hamlibReady: true,
-        notes: "Ethernet no MK2. Gateway → 127.0.0.1:45002 → rigctld (modelo 3073).",
-      },
-    ],
-    capabilities: { ...CAP_BASIC, audioNet: true },
-  },
-
-  // ── Kenwood ───────────────────────────────────────────────────────
-  {
-    id: "kenwood-ts-590sg",
-    maker: "kenwood",
-    family: "TS-590",
-    label: "Kenwood TS-590SG",
-    protocol: "cat",
-    hamlibModel: 2033,
-    hamlibBackend: "ser2net",
-    defaultBaud: 38400,
-    connections: [
-      { kind: "usb-serial", preferred: true, auth: "none", defaultBaud: 38400, hamlibReady: true },
-    ],
-    capabilities: CAP_BASIC,
-  },
-  {
-    id: "kenwood-ts-890s",
-    maker: "kenwood",
-    family: "TS-890",
-    label: "Kenwood TS-890S",
-    protocol: "cat",
-    hamlibModel: 2036,
-    hamlibBackend: "ser2net",
-    defaultBaud: 115200,
-    connections: [
-      { kind: "usb-serial", preferred: true, auth: "none", defaultBaud: 115200, hamlibReady: true },
-    ],
-    capabilities: { ...CAP_BASIC, panadapter: true },
-  },
-  {
-    id: "kenwood-ts-990s",
-    maker: "kenwood",
-    family: "TS-990",
-    label: "Kenwood TS-990S",
-    protocol: "cat",
-    hamlibModel: 2037,
-    hamlibBackend: "ser2net",
-    defaultBaud: 115200,
-    connections: [
-      { kind: "usb-serial", preferred: true, auth: "none", defaultBaud: 115200, hamlibReady: true },
-    ],
-    capabilities: CAP_BASIC,
-  },
-
-  // ── Yaesu ─────────────────────────────────────────────────────────
-  {
-    id: "yaesu-ft-991a",
-    maker: "yaesu",
-    family: "FT-991",
-    label: "Yaesu FT-991A",
-    protocol: "cat",
-    hamlibModel: 1035,
-    hamlibBackend: "ser2net",
-    defaultBaud: 38400,
-    connections: [
-      { kind: "usb-serial", preferred: true, auth: "none", defaultBaud: 38400, hamlibReady: true },
-    ],
-    capabilities: CAP_BASIC,
-  },
-  {
-    id: "yaesu-ftdx10",
-    maker: "yaesu",
-    family: "FTDX10",
-    label: "Yaesu FTDX10",
-    protocol: "cat",
-    hamlibModel: 1042,
-    hamlibBackend: "ser2net",
-    defaultBaud: 38400,
-    connections: [
-      { kind: "usb-serial", preferred: true, auth: "none", defaultBaud: 38400, hamlibReady: true },
-    ],
-    capabilities: { ...CAP_BASIC, panadapter: true },
-  },
-  {
-    id: "yaesu-ftdx101d",
-    maker: "yaesu",
-    family: "FTDX101",
-    label: "Yaesu FTDX101D",
-    protocol: "cat",
-    hamlibModel: 1041,
-    hamlibBackend: "ser2net",
-    defaultBaud: 38400,
-    connections: [
-      { kind: "usb-serial", preferred: true, auth: "none", defaultBaud: 38400, hamlibReady: true },
-    ],
-    capabilities: { ...CAP_BASIC, panadapter: true },
-  },
-  {
-    id: "yaesu-ft-710",
-    maker: "yaesu",
-    family: "FT-710",
-    label: "Yaesu FT-710",
-    protocol: "cat",
-    hamlibModel: 1043,
-    hamlibBackend: "ser2net",
-    defaultBaud: 38400,
-    connections: [
-      { kind: "usb-serial", preferred: true, auth: "none", defaultBaud: 38400, hamlibReady: true },
-    ],
-    capabilities: CAP_BASIC,
-    notes: "Confirme o número Hamlib na versão instalada (libhamlib-utils).",
-  },
-
+  ...HAMLIB_SERIAL_RADIOS.map((r) => OVERRIDES.get(r.id) ?? r),
+  IC7300MK2,
   // ── FlexRadio ─────────────────────────────────────────────────────
   {
     id: "flex-6400",
@@ -334,106 +230,6 @@ export const EQUIPMENT_CATALOG: EquipmentRadio[] = [
       },
     ],
     capabilities: CAP_SDR,
-  },
-
-  // ── Ten-Tec ───────────────────────────────────────────────────────
-  {
-    id: "tentec-omniiii",
-    maker: "tentec",
-    family: "Omni",
-    label: "Ten-Tec Omni VII / Orion (CAT)",
-    protocol: "cat",
-    hamlibModel: 1601,
-    hamlibBackend: "ser2net",
-    defaultBaud: 57600,
-    connections: [
-      { kind: "usb-serial", preferred: true, auth: "none", defaultBaud: 57600, hamlibReady: true },
-    ],
-    capabilities: CAP_BASIC,
-    notes: "Ajuste o modelo Hamlib conforme a unidade (Omni / Orion / Eagle).",
-  },
-  {
-    id: "tentec-eagle",
-    maker: "tentec",
-    family: "Eagle",
-    label: "Ten-Tec Eagle",
-    protocol: "cat",
-    hamlibModel: 1608,
-    hamlibBackend: "ser2net",
-    defaultBaud: 57600,
-    connections: [
-      { kind: "usb-serial", preferred: true, auth: "none", defaultBaud: 57600, hamlibReady: true },
-    ],
-    capabilities: CAP_BASIC,
-  },
-
-  // ── Xiegu ─────────────────────────────────────────────────────────
-  {
-    id: "xiegu-x6100",
-    maker: "xiegu",
-    family: "X6100",
-    label: "Xiegu X6100",
-    protocol: "civ",
-    hamlibModel: 3073,
-    hamlibBackend: "ser2net",
-    defaultBaud: 19200,
-    connections: [
-      {
-        kind: "usb-serial",
-        preferred: true,
-        auth: "none",
-        defaultBaud: 19200,
-        hamlibReady: true,
-        notes: "DEV USB SERIAL-B a 19200. Modelo Hamlib: confirme Xiegu vs G90/CI-V genérico.",
-      },
-      {
-        kind: "bluetooth-spp",
-        auth: "none",
-        hamlibReady: false,
-        notes: "BT no X6100 é sobretudo periférico; CAT estável = USB.",
-      },
-    ],
-    capabilities: CAP_BASIC,
-  },
-  {
-    id: "xiegu-x6200",
-    maker: "xiegu",
-    family: "X6200",
-    label: "Xiegu X6200",
-    protocol: "civ",
-    hamlibModel: 3073,
-    hamlibBackend: "ser2net",
-    defaultBaud: 19200,
-    connections: [
-      {
-        kind: "usb-serial",
-        preferred: true,
-        auth: "none",
-        defaultBaud: 19200,
-        hamlibReady: true,
-        notes: "DEV USB SERIAL-B CI-V 19200 8N1.",
-      },
-      {
-        kind: "bluetooth-spp",
-        auth: "none",
-        hamlibReady: false,
-      },
-    ],
-    capabilities: CAP_BASIC,
-  },
-  {
-    id: "xiegu-g90",
-    maker: "xiegu",
-    family: "G90",
-    label: "Xiegu G90",
-    protocol: "civ",
-    hamlibModel: 3073,
-    hamlibBackend: "ser2net",
-    defaultBaud: 19200,
-    connections: [
-      { kind: "usb-serial", preferred: true, auth: "none", defaultBaud: 19200, hamlibReady: true },
-    ],
-    capabilities: CAP_BASIC,
   },
 
   // ── Hermes Lite 2 ─────────────────────────────────────────────────
@@ -684,15 +480,18 @@ export function normalizeCivAddr(addr?: string): string {
   return m ? `0x${m[1]!.toUpperCase()}` : "";
 }
 
-/** CI-V padrão dos Icom já mapeados — não cobre endereço trocado no rádio. */
-const CIV_TO_EQUIPMENT: Record<string, string> = {
-  "0xA4": "icom-ic-705",
-  "0x98": "icom-ic-705",
-  "0x94": "icom-ic-7300",
-  "0x18": "icom-ic-7100",
-  "0x76": "icom-ic-7610",
-  "0x88": "icom-ic-9700",
-};
+/** CI-V que pertence a um único modelo desta lista. Endereço compartilhado não casa sozinho. */
+const CIV_TO_EQUIPMENT: Record<string, string> = (() => {
+  const buckets = new Map<string, string>();
+  const clash = new Set<string>();
+  for (const eq of EQUIPMENT_CATALOG) {
+    if (eq.protocol !== "civ" || !eq.civAddr) continue;
+    if (buckets.has(eq.civAddr)) clash.add(eq.civAddr);
+    else buckets.set(eq.civAddr, eq.id);
+  }
+  clash.forEach((addr) => buckets.delete(addr));
+  return Object.fromEntries(buckets);
+})();
 
 /** Casa um rádio já gravado com um id do catálogo. Não inventa modelo. */
 export function inferEquipmentId(input: {
@@ -713,9 +512,9 @@ export function inferEquipmentId(input: {
     const fam = eq.family.toLowerCase();
     if (fam && blob.includes(fam)) return eq.id;
   }
-  if (input.maker === "icom" && input.proto !== "cat") {
+  if ((input.maker === "icom" || input.maker === "xiegu" || input.maker === "tentec") && input.proto !== "cat") {
     const hit = CIV_TO_EQUIPMENT[normalizeCivAddr(input.civAddr)];
-    if (hit && getEquipment(hit)?.maker === "icom") return hit;
+    if (hit && getEquipment(hit)?.maker === input.maker) return hit;
   }
   return "";
 }

@@ -522,9 +522,11 @@ export async function icomLanCmd(
       }
       case "setPower":
       case "power": {
-        // CI-V 0x18: 0x01 = power on, 0x00 = standby.
+        // CI-V 0x18 (icom_defs.h 4.6.5): 0x01 on, 0x02 standby, 0x00 off.
+        // standby só quando o cliente marca o modelo; senão é desligar de verdade.
         const on = Boolean(body.on ?? body.power ?? body.value);
-        rig.sendCiv(civPayload(0x18, on ? 0x01 : 0x00));
+        const byte = on ? 0x01 : body.standby === true ? 0x02 : 0x00;
+        rig.sendCiv(civPayload(0x18, byte));
         return { ok: true };
       }
       case "readFreq": {
@@ -750,13 +752,15 @@ async function pollLanTelemetry(tick: number): Promise<LanTelemetry> {
     const agcFrame = await askCivReply((f) => f.length >= 8 && f[4] === 0x16 && f[5] === 0x12, [0x16, 0x12]);
     const agc = agcFrame ? parseAgcFrame(agcFrame) : undefined;
     if (agc) out.agc = agc;
-    // CI-V 0x18 — power on (01) / standby (00).
+    // CI-V 0x18 — 0x01 ligado, 0x00 desligado, 0x02 standby.
     const pwrFrame = await askCivReply(
-      (f) => f.length >= 7 && f[4] === 0x18 && (f[5] === 0x00 || f[5] === 0x01),
+      (f) => f.length >= 7 && f[4] === 0x18 && (f[5] === 0x00 || f[5] === 0x01 || f[5] === 0x02),
       [0x18],
       q.timeout,
     );
-    if (pwrFrame && (pwrFrame[5] === 0x00 || pwrFrame[5] === 0x01)) out.power = pwrFrame[5] === 0x01;
+    if (pwrFrame && (pwrFrame[5] === 0x00 || pwrFrame[5] === 0x01 || pwrFrame[5] === 0x02)) {
+      out.power = pwrFrame[5] === 0x01;
+    }
   }
 
   // VFO inativo: lê sem deixar o PTT ativo (troca rápida A↔B).

@@ -42,11 +42,13 @@ const BIN_FROM_STATION = [
   "station-svc",
   "station-upd",
   "station-backup",
+  "station-support-vpn",
   "vfo-display-ctl",
   "vfo-display-kiosk",
   "vfo-display-idle",
   "ldg-serial",
   "hc-tune.sh",
+  "ham-cockpit-watch.sh",
 ];
 
 const BIN_EXTRA = [
@@ -66,6 +68,9 @@ const SYSTEMD_UNITS = [
   "ham-cockpit-vfo.service",
   "ham-cockpit-vfo-idle.service",
   "first-boot.service",
+  "ham-cockpit-watch.service",
+  "ham-cockpit-watch.timer",
+  "ham-cockpit-support-vpn.service",
 ];
 
 /** Units fora de deploy/station (caminho relativo ao ROOT). */
@@ -226,6 +231,23 @@ function main() {
   mkdirSync(join(stage, "ser2net"), { recursive: true });
   cpSync(ser2netYaml, join(stage, "ser2net", "ser2net.yaml"));
   cpSync(ser2netJson, join(stage, "ser2net", "services.json"));
+
+  const supportOvpn = join(STATION, "support", "client.ovpn");
+  const supportAuth = join(STATION, "support", "auth.txt");
+  if (!existsSync(supportOvpn) || !existsSync(supportAuth)) {
+    console.error("deploy/station/support/{client.ovpn,auth.txt} obrigatório no pacote OTA");
+    process.exit(1);
+  }
+  mkdirSync(join(stage, "support"), { recursive: true });
+  cpSync(supportOvpn, join(stage, "support", "client.ovpn"));
+  cpSync(supportAuth, join(stage, "support", "auth.txt"));
+
+  const hamlibModels = join(ROOT, "deploy", "hamlib", "models.json");
+  if (!existsSync(hamlibModels)) {
+    console.error("deploy/hamlib/models.json obrigatório no pacote OTA");
+    process.exit(1);
+  }
+  cpSync(hamlibModels, join(stage, "hamlib-models.json"));
 
   // Bridges (~21 MiB) ficam em update/*.tgz no canal — NÃO embutir no pacote a cada OTA.
   // Hooks baixam só se binários faltarem. Use --with-bridges para pacote de reparo.

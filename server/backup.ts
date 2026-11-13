@@ -3,16 +3,21 @@ import { randomBytes } from "node:crypto";
 import {
   accessSync,
   chmodSync,
+  closeSync,
   constants,
   cpSync,
+  createWriteStream,
   existsSync,
   mkdirSync,
+  openSync,
   readdirSync,
   readFileSync,
+  readSync,
   rmSync,
   statSync,
   unlinkSync,
   writeFileSync,
+  type WriteStream,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
@@ -574,17 +579,12 @@ export function backupDelete(id: string): { ok: boolean; error?: string } {
   return { ok: true };
 }
 
-export async function backupRestore(
-  id: string,
-  confirm: boolean,
+/** Mesmo restore do backup da lista, lendo o .tgz já gravado em `file`. */
+async function restoreArchive(
+  file: string,
   onProgress?: ProgressFn,
 ): Promise<{ ok: boolean; warnings?: string[]; error?: string }> {
-  if (!confirm) return { ok: false, error: "confirm" };
-  if (!ID_RE.test(id)) return { ok: false, error: "id" };
-  const dir = backupDir();
-  const file = archivePath(dir, id);
-  if (!existsSync(file)) return { ok: false, error: "missing" };
-  const staging = join(tmpdir(), `restore-${id}`);
+  const staging = join(tmpdir(), `restore-${randomBytes(6).toString("hex")}`);
   mkdirSync(staging, { recursive: true });
   const warnings: string[] = [];
   const prog = onProgress ?? (() => undefined);
@@ -626,6 +626,18 @@ export async function backupRestore(
   }
 }
 
+export async function backupRestore(
+  id: string,
+  confirm: boolean,
+  onProgress?: ProgressFn,
+): Promise<{ ok: boolean; warnings?: string[]; error?: string }> {
+  if (!confirm) return { ok: false, error: "confirm" };
+  if (!ID_RE.test(id)) return { ok: false, error: "id" };
+  const file = archivePath(backupDir(), id);
+  if (!existsSync(file)) return { ok: false, error: "missing" };
+  return restoreArchive(file, onProgress);
+}
+
 export function backupRestoreStart(id: string, confirm: boolean): { ok: true; jobId: string } | { ok: false; error: string } {
   if (!confirm) return { ok: false, error: "confirm" };
   if (!ID_RE.test(id)) return { ok: false, error: "id" };
@@ -651,6 +663,356 @@ export function backupRestoreStart(id: string, confirm: boolean): { ok: true; jo
       job.error = err instanceof Error ? err.message : String(err);
     })
     .finally(() => {
+      setTimeout(() => {
+        if (jobs.get(jobKey)?.status !== "running") jobs.delete(jobKey);
+      }, 60_000);
+    });
+  return { ok: true, jobId: jobKey };
+}
+
+/** Teto do .tgz enviado pelo restore por arquivo. */
+export const BACKUP_UPLOAD_MAX = 1024 * 1024 * 1024;
+
+const UPLOAD_SLACK = 2 * 1024 * 1024;
+const FORMAT_ERR = "O arquivo não é um backup .tgz gerado por esta estação.";
+
+export function backupArchiveFile(id: string): { ok: true; path: string; filename: string } | { ok: false; error: string } {
+  if (!ID_RE.test(id)) return { ok: false, error: "id" };
+  const file = archivePath(backupDir(), id);
+  if (!existsSync(file)) return { ok: false, error: "missing" };
+  return { ok: true, path: file, filename: `${id}.tgz` };
+}
+
+export function backupDropUpload(path: string) {
+  try {
+    rmSync(path, { force: true });
+  } catch {
+    /* já saiu */
+  }
+}
+
+type UploadReq = {
+  headers: { "content-type"?: string | string[]; "content-length"?: string | string[] };
+  on: (ev: string, fn: (chunk?: Buffer | Error) => void) => void;
+  pause?: () => void;
+  resume?: () => void;
+};
+
+export type BackupUpload =
+  | { ok: true; path: string; filename: string; confirm: boolean }
+  | { ok: false; error: string };
+
+function headerOne(req: UploadReq, name: "content-type" | "content-length"): string {
+  const v = req.headers[name];
+  return (Array.isArray(v) ? v.join(";") : v || "").trim();
+}
+
+function multipartBoundary(contentType: string): string | null {
+  const m = /boundary=(?:"([^"]+)"|([^;\s]+))/i.exec(contentType);
+  const b = (m?.[1] || m?.[2] || "").trim();
+  return b || null;
+}
+
+function dispositionOf(headerBlock: string): { name: string; filename: string } {
+  const disp = headerBlock.split(/\r?\n/).find((l) => l.toLowerCase().startsWith("content-disposition"));
+  if (!disp) return { name: "", filename: "" };
+  const name = /(?:^|;)\s*name="([^"]*)"/i.exec(disp)?.[1] || "";
+  const star = /filename\*=UTF-8''([^;\r\n]+)/i.exec(disp)?.[1];
+  const quoted = /filename="([^"]*)"/i.exec(disp)?.[1];
+  let filename = "";
+  if (star) {
+    try {
+      filename = decodeURIComponent(star.trim());
+    } catch {
+      filename = star.trim();
+    }
+  } else if (quoted) filename = quoted;
+  filename = basename(filename.replace(/\\/g, "/"));
+  return { name, filename };
+}
+
+/** Lê o multipart (campo file + confirm) e grava o .tgz num arquivo temporário. */
+export function backupReadUpload(req: UploadReq): Promise<BackupUpload> {
+  const boundary = multipartBoundary(headerOne(req, "content-type"));
+  if (!boundary) return Promise.resolve({ ok: false, error: "Envie o backup como arquivo .tgz." });
+  const declared = Number(headerOne(req, "content-length") || "0");
+  if (Number.isFinite(declared) && declared > BACKUP_UPLOAD_MAX + UPLOAD_SLACK) {
+    req.resume?.();
+    req.on("data", () => undefined);
+    return Promise.resolve({ ok: false, error: "Arquivo grande demais (limite de 1 GB)." });
+  }
+
+  const openDelim = Buffer.from(`--${boundary}`);
+  const nextDelim = Buffer.from(`\r\n--${boundary}`);
+  const headerSep = Buffer.from("\r\n\r\n");
+  const keep = nextDelim.length + 4;
+
+  return new Promise((resolve) => {
+    let buf = Buffer.alloc(0);
+    let mode: "start" | "headers" | "body" = "start";
+    let fileOut: WriteStream | null = null;
+    let tmpPath = "";
+    let filename = "";
+    let confirm = false;
+    let currentName = "";
+    let fileBytes = 0;
+    let total = 0;
+    let done = false;
+    let fieldChunks: Buffer[] = [];
+    let closed: Promise<void> = Promise.resolve();
+    let closing = false;
+
+    const finish = (result: BackupUpload) => {
+      if (done) return;
+      done = true;
+      resolve(result);
+    };
+
+    const fail = (error: string) => {
+      if (done) return;
+      try {
+        fileOut?.destroy();
+      } catch {
+        /* */
+      }
+      fileOut = null;
+      if (tmpPath) backupDropUpload(tmpPath);
+      tmpPath = "";
+      finish({ ok: false, error });
+    };
+
+    const writeBody = (chunk: Buffer) => {
+      if (!chunk.length || done) return;
+      if (fileOut) {
+        fileBytes += chunk.length;
+        if (fileBytes > BACKUP_UPLOAD_MAX) {
+          fail("Arquivo grande demais (limite de 1 GB).");
+          return;
+        }
+        const stream = fileOut;
+        const ok = stream.write(chunk);
+        if (!ok) {
+          req.pause?.();
+          stream.once("drain", () => req.resume?.());
+        }
+        return;
+      }
+      fieldChunks.push(chunk);
+      if (fieldChunks.reduce((n, c) => n + c.length, 0) > 64) fail("Campo de formulário inválido.");
+    };
+
+    const closePart = () => {
+      if (fileOut) {
+        const stream = fileOut;
+        fileOut = null;
+        closed = new Promise((res, rej) => {
+          stream.on("error", rej);
+          stream.end(() => res());
+        });
+      } else if (currentName === "confirm") {
+        confirm = Buffer.concat(fieldChunks).toString("utf8").trim() === "true";
+      }
+      currentName = "";
+      fieldChunks = [];
+    };
+
+    const openPart = (headerText: string) => {
+      const d = dispositionOf(headerText);
+      currentName = d.name;
+      fieldChunks = [];
+      if (!d.filename) return;
+      if (filename) {
+        fail("Envie apenas um arquivo.");
+        return;
+      }
+      if (!/^[^\\/:*?"<>|]+\.tgz$/i.test(d.filename)) {
+        fail("Use um arquivo .tgz gerado pelo backup desta estação.");
+        return;
+      }
+      filename = d.filename;
+      tmpPath = join(tmpdir(), `hc-restore-${randomBytes(8).toString("hex")}.tgz`);
+      fileOut = createWriteStream(tmpPath);
+      fileOut.on("error", () => fail("Não foi possível gravar o arquivo enviado."));
+    };
+
+    const pump = () => {
+      for (;;) {
+        if (done) return;
+        if (mode === "start") {
+          const at = buf.indexOf(openDelim);
+          if (at < 0) {
+            if (buf.length > openDelim.length + 64) buf = buf.subarray(buf.length - (openDelim.length + 64));
+            return;
+          }
+          const after = at + openDelim.length;
+          if (buf.length < after + 2) return;
+          const mark = buf.subarray(after, after + 2).toString("utf8");
+          if (mark === "--") {
+            closing = true;
+            buf = Buffer.alloc(0);
+            closePart();
+            void closed
+              .then(() => {
+                if (!filename || !tmpPath) {
+                  finish({ ok: false, error: "Nenhum arquivo enviado." });
+                  return;
+                }
+                finish({ ok: true, path: tmpPath, filename, confirm });
+              })
+              .catch(() => finish({ ok: false, error: "Não foi possível gravar o arquivo enviado." }));
+            return;
+          }
+          if (mark !== "\r\n") {
+            fail("Envio multipart inválido.");
+            return;
+          }
+          buf = buf.subarray(after + 2);
+          mode = "headers";
+          continue;
+        }
+        if (mode === "headers") {
+          const at = buf.indexOf(headerSep);
+          if (at < 0) {
+            if (buf.length > 64 * 1024) fail("Cabeçalho do envio grande demais.");
+            return;
+          }
+          const headerText = buf.subarray(0, at).toString("utf8");
+          buf = buf.subarray(at + 4);
+          mode = "body";
+          openPart(headerText);
+          continue;
+        }
+        const at = buf.indexOf(nextDelim);
+        if (at < 0) {
+          const safe = buf.length - keep;
+          if (safe > 0) {
+            const chunk = buf.subarray(0, safe);
+            buf = buf.subarray(safe);
+            writeBody(chunk);
+          }
+          return;
+        }
+        writeBody(buf.subarray(0, at));
+        if (done) return;
+        closePart();
+        buf = buf.subarray(at + 2);
+        mode = "start";
+      }
+    };
+
+    req.on("data", (chunk) => {
+      if (done || !chunk || chunk instanceof Error) return;
+      total += chunk.length;
+      if (total > BACKUP_UPLOAD_MAX + UPLOAD_SLACK) {
+        fail("Arquivo grande demais (limite de 1 GB).");
+        return;
+      }
+      buf = Buffer.concat([buf, chunk]);
+      pump();
+    });
+    req.on("end", () => {
+      if (done || closing) return;
+      pump();
+      if (!done && !closing) fail("Envio multipart incompleto.");
+    });
+    req.on("error", () => fail("Não foi possível ler o arquivo enviado."));
+  });
+}
+
+function unsafeMember(name: string) {
+  const n = name.replace(/\\/g, "/").trim();
+  if (!n || n.startsWith("/") || /^[a-zA-Z]:/.test(n)) return true;
+  return n.split("/").some((part) => part === "..");
+}
+
+function rootManifestMember(listing: string): string | null {
+  for (const raw of listing.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (unsafeMember(line)) return null;
+    if (line.replace(/^\.\//, "") === "manifest.json") return line;
+  }
+  return null;
+}
+
+/** Confere extensão, gzip e o manifest.json que o backup da estação grava. */
+export async function backupValidateUpload(file: string, originalName: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const base = basename(originalName);
+  if (!/^[^\\/:*?"<>|]+\.tgz$/i.test(base)) {
+    return { ok: false, error: "Use um arquivo .tgz gerado pelo backup desta estação." };
+  }
+  let size = 0;
+  try {
+    size = statSync(file).size;
+  } catch {
+    return { ok: false, error: FORMAT_ERR };
+  }
+  if (size <= 0) return { ok: false, error: FORMAT_ERR };
+  if (size > BACKUP_UPLOAD_MAX) return { ok: false, error: "Arquivo grande demais (limite de 1 GB)." };
+  const fh = openSync(file, "r");
+  const magic = Buffer.alloc(2);
+  try {
+    if (readSync(fh, magic, 0, 2, 0) < 2) return { ok: false, error: FORMAT_ERR };
+  } finally {
+    closeSync(fh);
+  }
+  if (magic[0] !== 0x1f || magic[1] !== 0x8b) return { ok: false, error: FORMAT_ERR };
+  const listed = await run("tar", ["-tzf", file], { timeout: 120_000 });
+  if (listed.code !== 0) return { ok: false, error: FORMAT_ERR };
+  if (listed.stdout.split(/\r?\n/).some((line) => line.trim() && unsafeMember(line.trim()))) {
+    return { ok: false, error: FORMAT_ERR };
+  }
+  const member = rootManifestMember(listed.stdout);
+  if (!member) return { ok: false, error: FORMAT_ERR };
+  const manifest = await run("tar", ["-xOf", file, member], { timeout: 60_000 });
+  if (manifest.code !== 0 || !manifest.stdout.trim()) return { ok: false, error: FORMAT_ERR };
+  let parsed: { version?: unknown; id?: unknown };
+  try {
+    parsed = JSON.parse(manifest.stdout) as { version?: unknown; id?: unknown };
+  } catch {
+    return { ok: false, error: FORMAT_ERR };
+  }
+  if (parsed.version !== 1 || typeof parsed.id !== "string" || !ID_RE.test(parsed.id)) {
+    return { ok: false, error: FORMAT_ERR };
+  }
+  return { ok: true };
+}
+
+/** Restaura a partir do .tgz enviado. O arquivo temporário sai ao terminar o job. */
+export function backupRestoreFileStart(
+  filePath: string,
+  confirm: boolean,
+): { ok: true; jobId: string } | { ok: false; error: string } {
+  if (!confirm || !existsSync(filePath)) {
+    backupDropUpload(filePath);
+    return {
+      ok: false,
+      error: confirm ? "missing" : "Confirme a restauração antes de continuar.",
+    };
+  }
+  const jobKey = jobId("restore");
+  const job: BackupJob = { id: jobKey, kind: "restore", status: "running", pct: 2, stage: "prepare", error: "" };
+  jobs.set(jobKey, job);
+  void restoreArchive(filePath, (pct, stage) => setProg(job, pct, stage))
+    .then((r) => {
+      if (r.ok) {
+        job.status = "ok";
+        job.pct = 100;
+        job.stage = "done";
+        job.warnings = r.warnings;
+      } else {
+        job.status = "error";
+        job.stage = "error";
+        job.error = r.error || "restore";
+      }
+    })
+    .catch((err) => {
+      job.status = "error";
+      job.stage = "error";
+      job.error = err instanceof Error ? err.message : String(err);
+    })
+    .finally(() => {
+      backupDropUpload(filePath);
       setTimeout(() => {
         if (jobs.get(jobKey)?.status !== "running") jobs.delete(jobKey);
       }, 60_000);

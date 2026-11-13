@@ -107,7 +107,7 @@ export type WifiNet = { ssid: string; rssi: number; open: boolean };
 export type NetLink = "wifi" | "ethernet";
 export type LogKind = "BLE" | "CIV" | "IC705" | "RADIO" | "WiFi" | "SYS" | "WLOG" | "S2N" | "ACOM" | "LEXTEL" | "LDG" | "LP100A" | "SPE" | "MMDVM" | "ERRO";
 export type SpePhase = "idle" | "connecting" | "ready" | "error";
-export type RadioMaker = "icom" | "kenwood" | "yaesu" | "flex" | "tentec" | "xiegu" | "hermes" | "anan";
+export type RadioMaker = "icom" | "kenwood" | "elecraft" | "yaesu" | "flex" | "tentec" | "xiegu" | "hermes" | "anan";
 export type RadioLink = "usb" | "bluetooth" | "network";
 export type RadioProto = "cat" | "civ";
 export type StationRadio = {
@@ -144,21 +144,21 @@ export type StationRadio = {
   hasNetPassword?: boolean;
 };
 
-/** Modelos CI-V conhecidos — fallback de nome quando o usuário não preenche. */
+/**
+ * Nome só quando o endereço CI-V do Hamlib 4.6.5 pertence a um único modelo.
+ * 0xA4 é IC-705 e vários Xiegu — não casa sozinho.
+ */
 export const CIV_MODEL_NAMES: Record<string, string> = {
-  "0xA4": "IC-705",
   "0x94": "IC-7300",
-  "0x18": "IC-7100",
-  "0x76": "IC-7610",
-  "0x98": "IC-705",
-  "0x88": "IC-9700",
-  "0x70": "IC-7000",
-  "0x48": "IC-706",
+  "0x88": "IC-7100",
+  "0x98": "IC-7610",
+  "0xA2": "IC-9700",
 };
 
 const MAKER_BRAND: Record<RadioMaker, string> = {
   icom: "Icom",
   kenwood: "Kenwood",
+  elecraft: "Elecraft",
   yaesu: "Yaesu",
   flex: "Flex",
   tentec: "Ten-Tec",
@@ -246,6 +246,8 @@ export type Station = {
     ble: boolean;
     bleName: string;
     civ: boolean;
+    /** CI-V serial (USB) respondeu de fato, não só BLE/LAN. */
+    serialCiv: boolean;
     paired: boolean;
     cat: boolean;
     addr: string;
@@ -504,6 +506,7 @@ function initial(): Station {
       ble: false,
       bleName: "",
       civ: false,
+      serialCiv: false,
       paired: false,
       cat: true,
       addr: "0xA4",
@@ -708,7 +711,7 @@ function initial(): Station {
       { ts: "14:03:02", kind: "LEXTEL", msg: "MS-2000 · Bluetooth Classic SPP (não BLE)" },
     ],
     users: [{ name: "admin" }, { name: "op" }],
-    services: SERVICE_IDS.map((id) => ({ id, autostart: true, running: id === "web" })),
+    services: SERVICE_IDS.map((id) => ({ id, autostart: true, running: false })),
     updates: {
       pending: 0,
       os: "Ubuntu Server 24.04 LTS",
@@ -1555,18 +1558,40 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
     let stopped = false;
     let busy = false;
     let tick = 0;
+    let miss = 0;
+    let serialOn = false;
     const loop = async () => {
       if (stopped || busy) return;
       busy = true;
       try {
         const bleReady = Boolean(ic705Ble.connected);
+        const route = resolvePrimaryRoute(radiosRef.current, { bleReady });
         const patch = await pollPrimaryTelemetry(radiosRef.current, {
           bleReady,
           hamlibPort: 4532,
           tick: tick++,
         });
-        if (patch && Object.keys(patch).length) {
-          setS((prev) => applyCivPatchToStation(prev, patch));
+        const usbCiv = Boolean(route.radio && route.radio.link === "usb" && route.radio.proto === "civ");
+        const alive = Boolean(
+          route.transport === "hamlib" &&
+            route.live &&
+            patch &&
+            (patch.freq != null || patch.mode || patch.ptt != null || patch.smeter != null || patch.power != null),
+        );
+        let nextSerial: boolean | null = null;
+        if (usbCiv) {
+          if (alive) {
+            miss = 0;
+            serialOn = true;
+          } else if (++miss >= 3) serialOn = false;
+          nextSerial = serialOn;
+        }
+        if ((patch && Object.keys(patch).length) || nextSerial != null) {
+          setS((prev) => {
+            const base = patch && Object.keys(patch).length ? applyCivPatchToStation(prev, patch) : prev;
+            if (nextSerial == null || base.ic705.serialCiv === nextSerial) return base;
+            return { ...base, ic705: { ...base.ic705, serialCiv: nextSerial } };
+          });
         }
       } catch {
         /* transporte offline */

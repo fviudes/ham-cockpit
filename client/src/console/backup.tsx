@@ -1,5 +1,5 @@
-import { Archive, RotateCcw, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Archive, Download, RotateCcw, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { currentLayoutUser } from "./panel-layout";
 import { useConsole } from "./state";
@@ -42,6 +42,13 @@ const STAGE_KEY: Record<string, I18nKey> = {
   error: "backupFail",
 };
 
+const UPLOAD_MAX = 1024 * 1024 * 1024;
+
+function shownError(error: string | undefined, fallback: string) {
+  if (!error || error === "confirm" || error === "id" || error === "missing" || error === "job") return fallback;
+  return error;
+}
+
 function fmtSize(n: number) {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
@@ -69,7 +76,8 @@ export function BackupPage({ embedded = false }: { embedded?: boolean }) {
   const { tx, pushLog } = useConsole();
   const [folder, setFolder] = useState("/backup");
   const [items, setItems] = useState<BackupItem[]>([]);
-  const [busy, setBusy] = useState<"create" | "restore" | "delete" | null>(null);
+  const [busy, setBusy] = useState<"create" | "restore" | "delete" | "download" | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [progress, setProgress] = useState(0);
   const [stage, setStage] = useState("");
   const [target, setTarget] = useState<BackupItem | null>(null);
@@ -210,6 +218,83 @@ export function BackupPage({ embedded = false }: { embedded?: boolean }) {
     setTarget(row);
   };
 
+  const download = async (row: BackupItem) => {
+    setBusy("download");
+    try {
+      const r = await fetch(`/api/backup/${encodeURIComponent(row.id)}/file`, { credentials: "same-origin" });
+      if (!r.ok) {
+        let message = "";
+        try {
+          const j = (await r.json()) as { error?: string };
+          message = j.error || "";
+        } catch {
+          message = "";
+        }
+        toast.error(shownError(message, tx("backupDownloadFail")));
+        return;
+      }
+      const blob = await r.blob();
+      const cd = r.headers.get("Content-Disposition") || "";
+      const name = /filename="([^"]+)"/.exec(cd)?.[1] || `${row.id}.tgz`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error(tx("backupDownloadFail"));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const restoreFromFile = async (file: File) => {
+    if (!file.name.toLowerCase().endsWith(".tgz")) {
+      toast.error(tx("backupFileBad"));
+      return;
+    }
+    if (file.size <= 0 || file.size > UPLOAD_MAX) {
+      toast.error(tx("backupFileBig"));
+      return;
+    }
+    if (!window.confirm(tx("backupFileConfirm"))) return;
+    setBusy("restore");
+    setProgress(2);
+    setStage("prepare");
+    try {
+      const fd = new FormData();
+      fd.append("file", file, file.name);
+      fd.append("confirm", "true");
+      const r = await fetch("/api/backup/restore-file", { method: "POST", body: fd, credentials: "same-origin" });
+      const started = (await r.json()) as { ok?: boolean; jobId?: string; error?: string };
+      if (!r.ok || !started.ok || !started.jobId) {
+        toast.error(shownError(started.error, tx("backupRestoreFail")));
+        return;
+      }
+      const job = await trackJob(started.jobId);
+      if (job.status !== "ok") {
+        toast.error(shownError(job.error, tx("backupRestoreFail")));
+        return;
+      }
+      setProgress(100);
+      setStage("done");
+      toast.success(tx("backupRestoreOk"));
+      pushLog("SYS", `restore arquivo ${file.name}`);
+      if (job.warnings?.length) toast.message(job.warnings.slice(0, 3).join(" · "));
+      await new Promise((resolve) => window.setTimeout(resolve, 450));
+      await load();
+    } catch {
+      toast.error(tx("backupRestoreFail"));
+    } finally {
+      setBusy(null);
+      setProgress(0);
+      setStage("");
+    }
+  };
+
   const barLabel = stage && STAGE_KEY[stage] ? tx(STAGE_KEY[stage]) : tx("updProgress");
 
   return (
@@ -232,8 +317,24 @@ export function BackupPage({ embedded = false }: { embedded?: boolean }) {
             <GhostBtn disabled={busy !== null || items.length === 0} onClick={() => openRestore(items[0])}>
               {tx("backupRestore")}
             </GhostBtn>
+            <GhostBtn disabled={busy !== null} onClick={() => fileRef.current?.click()}>
+              {busy === "restore" && !target ? tx("backupRestoring") : tx("backupRestoreFile")}
+            </GhostBtn>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".tgz,application/gzip"
+              className="hidden"
+              tabIndex={-1}
+              aria-hidden="true"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) void restoreFromFile(file);
+              }}
+            />
           </div>
-          <ActionProgress active={busy === "create"} value={progress} label={barLabel} />
+          <ActionProgress active={busy === "create" || (busy === "restore" && !target)} value={progress} label={barLabel} />
         </div>
         {items.length === 0 ? (
           <p className="text-sm text-[#8ea0b3]">{tx("backupEmpty")}</p>
@@ -262,6 +363,16 @@ export function BackupPage({ embedded = false }: { embedded?: boolean }) {
                       <td className="py-2.5 pr-3 text-xs text-[#8ea0b3]">{row.parts.join(", ") || "—"}</td>
                       <td className="py-2.5">
                         <div className="flex justify-end gap-1">
+                          <button
+                            type="button"
+                            title={tx("backupDownload")}
+                            aria-label={tx("backupDownload")}
+                            disabled={busy !== null}
+                            className="grid h-9 w-9 place-items-center rounded-md text-[#4fc3f7] hover:bg-[#4fc3f7]/10 disabled:opacity-40"
+                            onClick={() => void download(row)}
+                          >
+                            <Download size={16} />
+                          </button>
                           <button
                             type="button"
                             title={tx("backupRestore")}

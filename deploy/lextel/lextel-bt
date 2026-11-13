@@ -1,67 +1,158 @@
 #!/bin/bash
-# Privileged BlueZ / RFCOMM helper for the Lextel MS-2000 (Classic SPP).
+# BlueZ / RFCOMM do Lextel MS-2000 (SPP Classic).
+# O adaptador é compartilhado: Lextel SPP e, no mesmo rádio, o BLE do IC-705
+# ou um segundo SPP. Este helper nunca dá rfkill, power off, hciconfig ou
+# disconnect fora do MAC pedido — isso derrubaria a outra sessão.
+#
 # Usage: lextel-bt scan|pair|bind|release|disconnect|devices|channel <args>
 set -euo pipefail
+
+# Sessão própria. O Node mata o grupo do sudo; este processo fica nesse grupo
+# e encerra só a sessão nova. systemd-run --pipe não serve: a unit transiente
+# sobrevive ao SIGTERM do sudo e empilha bluetoothctl no adaptador compartilhado.
+if [[ "${1:-}" != "--in-session" ]]; then
+  exec </dev/null
+  if command -v setsid >/dev/null 2>&1; then
+    out="$(mktemp)"
+    err="$(mktemp)"
+    setsid "$0" --in-session "$@" </dev/null >"$out" 2>"$err" &
+    inner=$!
+    cleanup() {
+      trap - TERM INT HUP
+      kill -TERM -- "-$inner" 2>/dev/null || kill -TERM -- "$inner" 2>/dev/null || true
+      wait "$inner" 2>/dev/null || true
+      cat "$out" 2>/dev/null || true
+      cat "$err" >&2 2>/dev/null || true
+      rm -f "$out" "$err"
+      exit 143
+    }
+    trap cleanup TERM INT HUP
+    set +e
+    wait "$inner"
+    rc=$?
+    set -e
+    trap - TERM INT HUP
+    cat "$out" 2>/dev/null || true
+    cat "$err" >&2 2>/dev/null || true
+    rm -f "$out" "$err"
+    exit "$rc"
+  fi
+  exec "$0" --in-session "$@"
+fi
+shift
+# O rfcomm não pode virar o terminal de controle desta sessão (SIGHUP no console).
+exec </dev/null
+cd /
+trap '' HUP
+
+lockdir=/run/lock
+[[ -d "$lockdir" && -w "$lockdir" ]] || lockdir=/tmp
+exec 9>"$lockdir/lextel-bt.lock"
+if ! flock -n 9; then
+  echo "ERR lextel-bt ocupado" >&2
+  exit 75
+fi
 
 cmd="${1:-}"
 mac="$(echo "${2:-}" | tr 'a-f' 'A-F')"
 pin="${3:-1234}"
 channel="${4:-1}"
+rebind="${5:-}"
 RFCOMM_DEV="${LEXTEL_RFCOMM:-/dev/rfcomm0}"
 RFCOMM_N="${RFCOMM_DEV##*rfcomm}"
+[[ "$RFCOMM_N" =~ ^[0-9]+$ ]] || RFCOMM_N=0
+NO_CTL="ERR sem controlador Bluetooth (onboard desligado ou dongle USB ausente)"
 
-bt() {
-  bluetoothctl -- "$@" 2>/dev/null || bluetoothctl "$@" 2>/dev/null || true
+have_controller() {
+  bluetoothctl list 2>/dev/null | grep -q '^Controller '
 }
 
-unblock() {
-  rfkill unblock bluetooth 2>/dev/null || true
-  bt power on >/dev/null || true
-  bt pairable on >/dev/null || true
-  hciconfig hci0 up 2>/dev/null || true
+# Liga o rádio só se ele está desligado. power on com o adaptador já no ar
+# (e qualquer rfkill / hciconfig) derruba o BLE e o outro SPP.
+ensure_adapter() {
+  if ! have_controller; then
+    echo "$NO_CTL" >&2
+    exit 1
+  fi
+  if bluetoothctl show 2>/dev/null | grep -q 'No default controller'; then
+    local pick
+    pick="$(bluetoothctl list 2>/dev/null | awk '/^Controller / { print $2; exit }')"
+    if [[ -n "${pick:-}" ]]; then
+      bluetoothctl select "$pick" >/dev/null 2>&1 || true
+    fi
+  fi
+  if bluetoothctl show 2>/dev/null | grep -q 'Powered: no'; then
+    bluetoothctl power on >/dev/null 2>&1 || true
+  fi
+}
+
+valid_mac() {
+  [[ "$mac" =~ ^([0-9A-F]{2}:){5}[0-9A-F]{2}$ ]]
+}
+
+rfcomm_line() {
+  rfcomm 2>/dev/null | grep -E "^rfcomm${RFCOMM_N}:" || true
+}
+
+fix_perms() {
+  if [[ -e "$RFCOMM_DEV" ]]; then
+    chgrp dialout "$RFCOMM_DEV" 2>/dev/null || true
+    chmod 0660 "$RFCOMM_DEV" 2>/dev/null || true
+  fi
 }
 
 print_devices() {
-  local paired_list
-  paired_list="$(bt devices Paired || true)"
-  bt devices | while IFS= read -r line; do
+  local paired_list line addr name paired
+  paired_list="$(bluetoothctl devices Paired 2>/dev/null || true)"
+  bluetoothctl devices 2>/dev/null | while IFS= read -r line; do
     [[ "$line" == Device* ]] || continue
     addr="$(echo "$line" | awk '{print $2}')"
     name="$(echo "$line" | cut -d' ' -f3-)"
     paired=0
-    echo "$paired_list" | grep -qi "$addr" && paired=1
+    if echo "$paired_list" | grep -qi "$addr"; then
+      paired=1
+    fi
     printf 'DEV %s %s %s\n' "$addr" "$paired" "${name:-unknown}"
-  done
+  done || true
 }
 
 case "$cmd" in
   scan)
-    unblock
+    ensure_adapter
     secs="${2:-12}"
+    case "$secs" in
+      ''|*[!0-9]*) secs=12 ;;
+    esac
+    if (( secs < 5 )); then secs=5; fi
+    if (( secs > 20 )); then secs=20; fi
     timeout "$secs" bluetoothctl --timeout "$secs" scan on >/dev/null 2>&1 || true
+    bluetoothctl scan off >/dev/null 2>&1 || true
     print_devices
     ;;
   devices)
-    unblock
+    ensure_adapter
     print_devices
     ;;
   pair)
-    [[ -n "$mac" ]] || { echo "ERR missing MAC"; exit 1; }
-    unblock
-    bt agent KeyboardOnly >/dev/null || bt agent on >/dev/null || true
-    bt default-agent >/dev/null || true
-    bt scan on >/dev/null || true
+    valid_mac || { echo "ERR missing MAC" >&2; exit 1; }
+    ensure_adapter
+    if bluetoothctl info "$mac" 2>/dev/null | grep -q 'Paired: yes'; then
+      bluetoothctl trust "$mac" >/dev/null 2>&1 || true
+      echo "OK pair $mac already"
+      exit 0
+    fi
+    bluetoothctl scan on >/dev/null 2>&1 || true
     coproc BT { bluetoothctl; }
-    echo "agent KeyboardOnly" >&"${BT[1]}"
-    echo "default-agent" >&"${BT[1]}"
-    echo "pair $mac" >&"${BT[1]}"
-    end=$((SECONDS + 25))
+    echo "agent KeyboardOnly" >&"${BT[1]}" || true
+    echo "default-agent" >&"${BT[1]}" || true
+    echo "pair $mac" >&"${BT[1]}" || true
+    end=$((SECONDS + 20))
     set +e
     while (( SECONDS < end )); do
       IFS= read -r -t 1 line <&"${BT[0]}"
       [[ $? -eq 0 ]] || continue
       if echo "$line" | grep -qiE 'PIN code|Passkey|passkey'; then
-        echo "$pin" >&"${BT[1]}"
+        echo "$pin" >&"${BT[1]}" || true
       fi
       if echo "$line" | grep -qiE 'Pairing successful|Failed to pair|Authentication Failed|AlreadyExists'; then
         echo "$line"
@@ -69,31 +160,51 @@ case "$cmd" in
       fi
     done
     set -e
-    echo "trust $mac" >&"${BT[1]}"
-    echo "quit" >&"${BT[1]}"
+    echo "trust $mac" >&"${BT[1]}" || true
+    echo "scan off" >&"${BT[1]}" || true
+    echo "quit" >&"${BT[1]}" || true
     wait "$BT_PID" 2>/dev/null || true
-    bt trust "$mac" >/dev/null || true
+    bluetoothctl trust "$mac" >/dev/null 2>&1 || true
+    bluetoothctl scan off >/dev/null 2>&1 || true
     echo "OK pair $mac"
     ;;
   channel)
-    [[ -n "$mac" ]] || { echo "1"; exit 0; }
-    if command -v sdptool >/dev/null 2>&1; then
-      ch="$(sdptool browse "$mac" 2>/dev/null | awk '/Serial Port/{f=1} f && /Channel/{print $2; exit}')"
-      echo "${ch:-1}"
-    else
-      echo 1
+    if ! valid_mac || ! have_controller; then
+      echo "${channel:-1}"
+      exit 0
     fi
+    ch=""
+    if command -v sdptool >/dev/null 2>&1; then
+      ch="$(timeout 3 sdptool browse "$mac" 2>/dev/null | awk '/Serial Port/{f=1} f && /Channel/{print $2; exit}')" || true
+    fi
+    echo "${ch:-${channel:-1}}"
     ;;
   bind)
-    [[ -n "$mac" ]] || { echo "ERR missing MAC"; exit 1; }
-    unblock
-    bt trust "$mac" >/dev/null || true
-    rfcomm release "$RFCOMM_N" 2>/dev/null || true
-    rfcomm bind 0 "$mac" "$channel"
-    if [[ -e "$RFCOMM_DEV" ]]; then
-      chgrp dialout "$RFCOMM_DEV" 2>/dev/null || true
-      chmod 0660 "$RFCOMM_DEV" 2>/dev/null || true
+    valid_mac || { echo "ERR missing MAC" >&2; exit 1; }
+    case "$channel" in
+      ''|*[!0-9]*) channel=1 ;;
+    esac
+    ensure_adapter
+    bluetoothctl trust "$mac" >/dev/null 2>&1 || true
+    line="$(rfcomm_line)"
+    same=0
+    if echo "$line" | grep -qi "$mac" && echo "$line" | grep -q "channel ${channel}"; then
+      same=1
     fi
+    # Conectado: não solta. Soltar o rfcomm derruba o SPP que já está no ar.
+    if [[ "$same" -eq 1 ]] && echo "$line" | grep -qi 'connected'; then
+      fix_perms
+      echo "OK $RFCOMM_DEV $mac $channel live"
+      exit 0
+    fi
+    if [[ "$same" -eq 1 && "$rebind" != "rebind" ]]; then
+      fix_perms
+      echo "OK $RFCOMM_DEV $mac $channel"
+      exit 0
+    fi
+    rfcomm release "$RFCOMM_N" 2>/dev/null || true
+    rfcomm bind "$RFCOMM_N" "$mac" "$channel"
+    fix_perms
     echo "OK $RFCOMM_DEV $mac $channel"
     ;;
   release)
@@ -101,9 +212,9 @@ case "$cmd" in
     echo "OK release"
     ;;
   disconnect)
-    [[ -n "$mac" ]] || { echo "ERR missing MAC"; exit 1; }
+    valid_mac || { echo "ERR missing MAC" >&2; exit 1; }
     rfcomm release "$RFCOMM_N" 2>/dev/null || true
-    bt disconnect "$mac" >/dev/null || true
+    bluetoothctl disconnect "$mac" >/dev/null 2>&1 || true
     echo "OK disconnect $mac"
     ;;
   *)

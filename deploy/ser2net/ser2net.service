@@ -10,7 +10,8 @@ StartLimitBurst=20
 [Service]
 Type=simple
 ExecStart=/usr/sbin/ser2net -n -c /opt/ser2net/ser2net.yaml
-Restart=on-failure
+# Saída 0 e SIGHUP também voltam. O limite acima corta laço se o YAML estiver inválido.
+Restart=always
 RestartSec=5
 
 [Install]

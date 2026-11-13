@@ -203,3 +203,115 @@
   background: rgba(79, 195, 247, 0.28);
   border-radius: 8px;
 }
+
+/* DSEG (keshikan), SIL OFL 1.1 — ver client/src/fonts/DSEG-LICENSE.txt */
+@font-face {
+  font-family: "DSEG7-Classic";
+  src: url("./fonts/DSEG7Classic-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "DSEG14-Classic-MINI";
+  src: url("./fonts/DSEG14ClassicMini-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+.lcd-bezel {
+  border-radius: 4px;
+  border: 1px solid #6a4514;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 176, 40, 0.16), transparent 58%),
+    linear-gradient(180deg, #2a1c08 0%, #120c04 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 190, 80, 0.22),
+    inset 0 -2px 5px rgba(0, 0, 0, 0.55);
+}
+
+.lcd-7 {
+  font-family: "DSEG7-Classic", ui-monospace, monospace;
+  font-size: 16px;
+  font-weight: 400;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.lcd-14 {
+  font-family: "DSEG14-Classic-MINI", ui-monospace, monospace;
+  font-weight: 400;
+  font-style: normal;
+  line-height: 1;
+}
+
+.lcd-on {
+  color: #ff9a1a;
+  text-shadow:
+    0 0 1px rgba(255, 214, 140, 0.95),
+    0 0 6px rgba(255, 130, 0, 0.55);
+}
+
+.lcd-ghost {
+  color: rgba(255, 150, 30, 0.12);
+  text-shadow: none;
+}
+
+.lcd-dp {
+  width: 3px;
+  height: 3px;
+  margin: 0 2px 1px;
+  border-radius: 1px;
+  background: #ff9a1a;
+  box-shadow:
+    0 0 1px rgba(255, 214, 140, 0.95),
+    0 0 4px rgba(255, 130, 0, 0.7);
+}
+
+.lcd-unit {
+  font-size: 12px;
+  color: #ff9a1a;
+  text-shadow:
+    0 0 1px rgba(255, 214, 140, 0.9),
+    0 0 5px rgba(255, 130, 0, 0.4);
+}
+
+.lcd-lamp {
+  box-sizing: border-box;
+  height: 26px;
+  width: 26px;
+  min-width: 26px;
+  padding: 0 1px;
+  font-size: 8px;
+  letter-spacing: 0;
+}
+
+.lcd-lamp-amber {
+  border-color: rgba(255, 160, 40, 0.75);
+  background: radial-gradient(circle at 50% 38%, #4a320c, #1a1004 72%);
+  color: #ffb020;
+  box-shadow:
+    inset 0 0 5px rgba(255, 150, 0, 0.35),
+    0 0 4px rgba(255, 140, 0, 0.22);
+}
+
+.lcd-lamp-rx {
+  border-color: rgba(52, 211, 120, 0.9);
+  background: radial-gradient(circle at 50% 38%, #14663a, #04160d 74%);
+  color: #8dffb8;
+  box-shadow:
+    inset 0 0 6px rgba(40, 220, 110, 0.5),
+    0 0 6px rgba(30, 200, 90, 0.35);
+}
+
+.lcd-lamp-tx {
+  border-color: rgba(248, 80, 80, 0.92);
+  background: radial-gradient(circle at 50% 38%, #8a1c1c, #1a0606 74%);
+  color: #ffc0c0;
+  box-shadow:
+    inset 0 0 6px rgba(255, 60, 60, 0.55),
+    0 0 6px rgba(255, 40, 40, 0.4);
+}

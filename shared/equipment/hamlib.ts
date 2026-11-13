@@ -181,10 +181,8 @@ export function planHamlib(binding: EquipmentBinding): HamlibPlan | null {
   }
 
   const argv = ["-m", String(model), "-r", rigDevice, "-t", String(listenPort)];
-  if (backend === "icom-lan" && civAddr && eq.protocol === "civ") {
-    const formatted = normalizeCivAddr(civAddr);
-    if (formatted) argv.push("-c", formatted);
-  } else if (backend === "ser2net") {
+  // Sem -s: o baud fica no ser2net. -c só se o CI-V da estação divergir do padrão do -m.
+  if (backend === "ser2net" || backend === "icom-lan") {
     const civ = rigctldCivOverride(eq, civAddr);
     if (civ) argv.push("-c", civ);
   }

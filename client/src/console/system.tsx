@@ -13,6 +13,7 @@ import { TermPage } from "./term";
 import { BackupPage } from "./backup";
 import { LicensePage } from "./license";
 import { ProcessesPage } from "./processes";
+import { SupportVpnPage } from "./support-vpn";
 import { ActionProgress, Chip, ConsoleInput, Field, GhostBtn, PageHead, Panel, PanelTitle, PrimaryBtn, progressHint, stageLabel } from "./widgets";
 
 type LinuxUser = { name: string; sudo: boolean };
@@ -112,7 +113,8 @@ export function AdminPage() {
     path === "processes" ||
     path === "updates" ||
     path === "backup" ||
-    path === "license"
+    path === "license" ||
+    path === "support"
       ? path
       : "admin";
   const menusOpen = licenseMenusOpen(license?.gate ?? licenseGateOf(license?.state));
@@ -203,7 +205,9 @@ export function AdminPage() {
                     ? tx("backupTitle")
                     : tab === "license"
                       ? tx("licTab")
-                      : tx("adminTitle")
+                      : tab === "support"
+                        ? tx("supportTitle")
+                        : tx("adminTitle")
         }
       />
       <div className="mb-5 flex flex-wrap gap-2">
@@ -231,6 +235,9 @@ export function AdminPage() {
         <Chip active={tab === "term"} disabled={!menusOpen} onClick={() => navigate("/console/term")}>
           {tx("term")}
         </Chip>
+        <Chip active={tab === "support"} disabled={!menusOpen} onClick={() => navigate("/console/support")}>
+          {tx("supportTab")}
+        </Chip>
       </div>
       {tab === "services" ? <ServicesPage embedded /> : null}
       {tab === "processes" ? <ProcessesPage embedded /> : null}
@@ -239,6 +246,7 @@ export function AdminPage() {
       {tab === "license" ? <LicensePage embedded /> : null}
       {tab === "logs" ? <LogsPage embedded /> : null}
       {tab === "term" ? <TermPage embedded /> : null}
+      {tab === "support" ? <SupportVpnPage /> : null}
       {tab !== "admin" ? null : (
         <>
       <p className="mb-4 max-w-3xl text-sm leading-relaxed text-[#8ea0b3]">{tx("sudoHint")}</p>
@@ -965,7 +973,7 @@ export function StatusPage() {
               (s.ic705.phase === "ready" ? s.ic705.bleName || tx("connected") : tx("disconnected"))
             }
           />
-          <Mini k="CI-V" v={s.ic705.civ ? s.ic705.addr : "—"} />
+          <Mini k="CI-V" v={s.ic705.civ || s.ic705.serialCiv ? s.ic705.addr : "—"} />
           <Mini k="Wavelog" v={s.wavelog.running ? `:${s.wavelog.port}` : tx("disconnected")} />
           <Mini
             k={tx("wlDbTitle")}

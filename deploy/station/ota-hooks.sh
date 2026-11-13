@@ -7,7 +7,7 @@
 # - Backup mmdvmhost.ini.ota-bak ANTES de qualquer escrita.
 # - Merge conservador: só chaves de display/LCD/PTY se faltarem.
 #   NUNCA resetar [General] Callsign/Id, [DMR] Id, frequências, senhas, redes, [Modem].
-# - Dual Hat = ttyAMA0 / disable-bt. NÃO ttyACM0. NÃO systemctl restart mmdvmhost
+# - Dual Hat = ttyAMA0 / miniuart-bt (Bluetooth na mini-UART; no Pi 4 core_freq_min=500 e arm_boost=1, sem core_freq fixo). NÃO ttyACM0. NÃO ttyS0 no modem. NÃO systemctl restart mmdvmhost
 #   (ciclo PartOf DMR/YSF). Host inativo: start UMA vez. Host já up: não parar.
 #   stop+start do Host derruba filhos PartOf e apaga indicativo/ID no Nextion.
 #
@@ -268,7 +268,7 @@ if [[ -d "$ROOT/systemd" ]]; then
   # Unmask + sempre instalar a unit Nextion real. NUNCA rm do arquivo
   # (0.1.05.01 apagava a unit viva porque o grep batia em comentário).
   systemctl unmask nextiondriver.service 2>/dev/null || true
-  for unit in "$ROOT"/systemd/*.service "$ROOT"/systemd/*.target; do
+  for unit in "$ROOT"/systemd/*.service "$ROOT"/systemd/*.target "$ROOT"/systemd/*.timer; do
     base="$(basename "$unit")"
     if [[ "$base" == "nextiondriver.service" ]] && nextion_unit_is_stub "$unit"; then
       echo "ota-hooks: AVISO — pacote trouxe nextiondriver stub; ignorando esse arquivo" >&2
@@ -291,6 +291,14 @@ if [[ -d "$ROOT/systemd" ]]; then
   systemctl daemon-reload 2>/dev/null || true
   if [[ -f /etc/systemd/system/nextiondriver.service ]]; then
     systemctl enable nextiondriver.service 2>/dev/null || true
+  fi
+  if [[ -f "$ROOT/bin/ham-cockpit-watch.sh" ]]; then
+    sed -i 's/\r$//' "$ROOT/bin/ham-cockpit-watch.sh" 2>/dev/null || true
+    safe_install -m 0755 "$ROOT/bin/ham-cockpit-watch.sh" /opt/ham-cockpit/bin/ham-cockpit-watch.sh
+  fi
+  if [[ -f /etc/systemd/system/ham-cockpit-watch.timer ]]; then
+    systemctl enable ham-cockpit-watch.timer 2>/dev/null || true
+    systemctl start ham-cockpit-watch.timer 2>/dev/null || true
   fi
 fi
 
@@ -402,7 +410,9 @@ fi
 ensure_mmdvm_bins || true
 ensure_mmdvm_runtime_pkgs || true
 
-# Hamlib ≥4.6 (SPE Expert 401) em prefixo privado — não sobrescreve apt 4.5.5.
+# Hamlib ≥4.6 no prefixo privado — não sobrescreve o apt 4.5.5.
+# O rigctld do rádio precisa deste prefixo: o 4.5.5 abre Icom host:port em UDP
+# e o ser2net TCP do CI-V não devolve o quadro. O ampctld da SPE usa o mesmo prefixo.
 HC_HAMLIB=/opt/ham-cockpit/hamlib
 install_hamlib_tgz() {
   local tgz="$1" tmp
@@ -421,6 +431,11 @@ install_hamlib_tgz() {
     find "$HC_HAMLIB/lib" -name '*.la' -delete 2>/dev/null || true
   fi
   rm -rf "$tmp"
+  if [[ -r "$HC_HAMLIB/lib/libhamlib.so.4" ]] \
+    && grep -a -q -F 'Icom rig UDP network enabled' "$HC_HAMLIB/lib/libhamlib.so.4"; then
+    echo "ota-hooks: ERRO — tarball ainda abre Icom host:port em UDP" >&2
+    return 1
+  fi
   if LD_LIBRARY_PATH="$HC_HAMLIB/lib" "$HC_HAMLIB/bin/ampctl" -l 2>/dev/null \
     | awk '$1+0==401 {found=1} END{exit !found}'; then
     return 0
@@ -432,9 +447,17 @@ install_hamlib_tgz() {
 ensure_hamlib_spe() {
   local tgz="" need=0 dl="" rig_changed=0 restart_u=0
   # Só reinstala o tarball se faltar ampctl/401. Nunca rebuilda Hamlib no OTA.
+  # rigctld ausente deixa o rádio no apt 4.5.5 (UDP). Reinstala o tarball.
   if [[ ! -x "$HC_HAMLIB/bin/ampctld" ]] \
+    || [[ ! -x "$HC_HAMLIB/bin/rigctld" ]] \
     || ! LD_LIBRARY_PATH="$HC_HAMLIB/lib" "$HC_HAMLIB/bin/ampctl" -l 2>/dev/null \
       | awk '$1+0==401 {found=1} END{exit !found}'; then
+    need=1
+  fi
+  # Prefixo com a string do 4.5.5 ainda manda SOCK_DGRAM no Icom. Troca pelo tarball.
+  if [[ -r "$HC_HAMLIB/lib/libhamlib.so.4" ]] \
+    && grep -a -q -F 'Icom rig UDP network enabled' "$HC_HAMLIB/lib/libhamlib.so.4"; then
+    echo "ota-hooks: prefixo abre Icom host:port em UDP — reinstalando" >&2
     need=1
   fi
   if [[ -f "$ROOT/hamlib-arm64.tgz" ]]; then
@@ -483,6 +506,18 @@ ensure_hamlib_spe() {
   if [[ -f "$ROOT/bin/ser2net-ctl" ]]; then
     safe_install -m 0755 "$ROOT/bin/ser2net-ctl" /opt/ham-cockpit/bin/ser2net-ctl
     sed -i 's/\r$//' /opt/ham-cockpit/bin/ser2net-ctl 2>/dev/null || true
+  fi
+  # Só o helper. /opt/lextel/config.json do aparelho não entra no pacote e não é reescrito.
+  if [[ -f "$ROOT/bin/lextel-bt" ]]; then
+    safe_install -m 0755 "$ROOT/bin/lextel-bt" /opt/ham-cockpit/bin/lextel-bt
+    sed -i 's/\r$//' /opt/ham-cockpit/bin/lextel-bt 2>/dev/null || true
+  fi
+  if [[ -f "$ROOT/bin/station-support-vpn" ]]; then
+    safe_install -o root -g root -m 0755 "$ROOT/bin/station-support-vpn" /opt/ham-cockpit/bin/station-support-vpn
+    sed -i 's/\r$//' /opt/ham-cockpit/bin/station-support-vpn 2>/dev/null || true
+  fi
+  if [[ -f "$ROOT/hamlib-models.json" ]]; then
+    install -m 0644 "$ROOT/hamlib-models.json" /opt/ham-cockpit/hamlib-models.json
   fi
   systemctl daemon-reload 2>/dev/null || true
   # ampctld não sobe: o console usa o protocolo nativo na porta da SPE.
@@ -570,6 +605,26 @@ if [[ -f "$ROOT/sudoers-hamcockpit" ]]; then
     fi
   else
     install -o root -g root -m 0440 "$ROOT/sudoers-hamcockpit" /etc/sudoers.d/ham-cockpit
+  fi
+fi
+
+# VPN de suporte. Não apaga /opt/ham-cockpit/support-vpn.json (escolha ligado/desligado).
+# Não mexe em services.json, rádios, INI nem /opt/lextel/config.json.
+if [[ -f "$ROOT/support/client.ovpn" ]]; then
+  install -d -o root -g root -m 0755 /opt/ham-cockpit/support
+  safe_install -o root -g root -m 0600 "$ROOT/support/client.ovpn" /opt/ham-cockpit/support/client.ovpn
+  if [[ -f "$ROOT/support/auth.txt" ]]; then
+    safe_install -o root -g root -m 0600 "$ROOT/support/auth.txt" /opt/ham-cockpit/support/auth.txt
+  fi
+fi
+if [[ -f /etc/systemd/system/ham-cockpit-support-vpn.service && -f /opt/ham-cockpit/support-vpn.json ]]; then
+  if grep -q '"enabled"[[:space:]]*:[[:space:]]*true' /opt/ham-cockpit/support-vpn.json; then
+    systemctl enable ham-cockpit-support-vpn.service 2>/dev/null || true
+    if ! systemctl is-active --quiet ham-cockpit-support-vpn.service; then
+      systemctl start ham-cockpit-support-vpn.service 2>/dev/null || true
+    fi
+  else
+    systemctl disable --now ham-cockpit-support-vpn.service 2>/dev/null || true
   fi
 fi
 

@@ -1,4 +1,5 @@
 import express from "express";
+import { createReadStream } from "node:fs";
 import { createServer } from "http";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -29,11 +30,16 @@ import { ldgCmd, ldgConnect, ldgDisconnect, ldgPeek, ldgSave, ldgStatus } from "
 import { lp100aCmd, lp100aConnect, lp100aDisconnect, lp100aPeek, lp100aSave, lp100aStatus } from "./lp100a";
 import { speCmd, speConnect, speDisconnect, spePeek, spePowerOn, speSave, speStatus } from "./spe";
 import {
+  backupArchiveFile,
   backupCreateStart,
   backupDelete,
+  backupDropUpload,
   backupJobGet,
   backupList,
+  backupReadUpload,
+  backupRestoreFileStart,
   backupRestoreStart,
+  backupValidateUpload,
 } from "./backup";
 import { hostStatus } from "./host-status";
 import {
@@ -57,6 +63,8 @@ import {
 } from "./hamlib-hub";
 import { icomLanCmd, icomLanStatus } from "./icom-lan";
 import { registerLicenseRoutes } from "./license";
+import { consoleSessionCookie, consoleSessionOk, consoleSessionToken } from "./console-session";
+import { supportVpnSet, supportVpnStatus } from "./support-vpn";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -745,6 +753,43 @@ async function startServer() {
     }
   });
 
+  app.post("/api/console/session", (req, res) => {
+    const token = consoleSessionToken(String(req.body?.user ?? ""), String(req.body?.password ?? ""));
+    if (!token) {
+      res.status(401).json({ ok: false, error: "auth" });
+      return;
+    }
+    res.setHeader("Set-Cookie", consoleSessionCookie(token));
+    res.json({ ok: true });
+  });
+
+  const supportDenied = (req: { headers: { cookie?: string } }, res: { status: (code: number) => { json: (body: unknown) => void } }) => {
+    if (consoleSessionOk(req.headers.cookie)) return false;
+    res.status(401).json({ ok: false, error: "auth" });
+    return true;
+  };
+
+  app.get("/api/support/vpn", async (req, res) => {
+    if (supportDenied(req, res)) return;
+    try {
+      res.json(await supportVpnStatus(String(req.headers.host || "")));
+    } catch {
+      res.status(500).json({ ok: false, state: "error", error: "Falha ao falar com a VPN de suporte." });
+    }
+  });
+  app.post("/api/support/vpn", async (req, res) => {
+    if (supportDenied(req, res)) return;
+    if (typeof req.body?.enabled !== "boolean") {
+      res.status(400).json({ ok: false, state: "error", error: "enabled" });
+      return;
+    }
+    try {
+      res.json(await supportVpnSet(req.body.enabled, String(req.headers.host || "")));
+    } catch {
+      res.status(500).json({ ok: false, state: "error", error: "Falha ao falar com a VPN de suporte." });
+    }
+  });
+
   app.get("/api/users", async (_req, res) => {
     try {
       const [users, ssh] = await Promise.all([listUsers(), sshStatus()]);
@@ -816,6 +861,53 @@ async function startServer() {
       return;
     }
     res.json({ ok: true, job });
+  });
+  app.get("/api/backup/:id/file", (req, res) => {
+    if (!consoleSessionOk(req.headers.cookie)) {
+      res.status(401).json({ ok: false, error: "Sessão expirada. Entre de novo." });
+      return;
+    }
+    try {
+      const found = backupArchiveFile(req.params.id);
+      if (!found.ok) {
+        res.status(found.error === "missing" ? 404 : 400).json(found);
+        return;
+      }
+      res.setHeader("Content-Type", "application/gzip");
+      res.setHeader("Content-Disposition", `attachment; filename="${found.filename}"`);
+      res.setHeader("Cache-Control", "no-store");
+      createReadStream(found.path).pipe(res);
+    } catch (err) {
+      if (!res.headersSent) res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/backup/restore-file", async (req, res) => {
+    if (!consoleSessionOk(req.headers.cookie)) {
+      res.status(401).json({ ok: false, error: "Sessão expirada. Entre de novo." });
+      return;
+    }
+    let uploaded = "";
+    try {
+      const upload = await backupReadUpload(req);
+      if (!upload.ok) {
+        res.status(400).json(upload);
+        return;
+      }
+      uploaded = upload.path;
+      const valid = await backupValidateUpload(upload.path, upload.filename);
+      if (!valid.ok) {
+        backupDropUpload(uploaded);
+        uploaded = "";
+        res.status(400).json(valid);
+        return;
+      }
+      const started = backupRestoreFileStart(upload.path, upload.confirm);
+      uploaded = "";
+      res.status(started.ok ? 200 : 400).json(started);
+    } catch (err) {
+      if (uploaded) backupDropUpload(uploaded);
+      if (!res.headersSent) res.status(500).json({ ok: false, error: String(err) });
+    }
   });
   app.post("/api/backup", (req, res) => {
     try {

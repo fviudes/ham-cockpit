@@ -1,5 +1,19 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { appendFileSync, createReadStream, existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync, type ReadStream } from "node:fs";
+import {
+  appendFileSync,
+  close,
+  constants as fsConstants,
+  createReadStream,
+  existsSync,
+  mkdirSync,
+  open as openFd,
+  read,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+  type ReadStream,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -76,12 +90,17 @@ let reading: LextelReading | null = null;
 let devices: LextelDevice[] = [];
 let bytes = 0;
 let updatedAt = 0;
-let autoTried = false;
 let inspect: LextelInspect = inspectCapture(Buffer.alloc(0));
 let captureWatch: ReturnType<typeof setInterval> | null = null;
 let captureOff = 0;
 let wantOpen = false;
+let autoRunning = false;
 let recoverBusy = false;
+/** pair/bind (ou o connect inteiro) já está no helper. O clique seguinte fica na fila. */
+let connectBusy = false;
+let pendingConnect: { addr?: string; pin?: string; name?: string; channel?: number } | null = null;
+/** O bind atual não corresponde a um open que tenha funcionado. */
+let rfcommStale = true;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectDelay = 600;
 let sppPortsAt = 0;
@@ -155,36 +174,175 @@ function loadSaved(): Saved {
 let saved = loadSaved();
 decoder = new LextelDecoder(saved.layout);
 
-function persist() {
+function diskAddr(): string {
+  try {
+    const raw = JSON.parse(readFileSync(jsonPath(), "utf8")) as { addr?: unknown };
+    return typeof raw.addr === "string" ? raw.addr.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
+function persist(opts?: { allowEmpty?: boolean }) {
+  // Uma falha de bind/scan não pode apagar o MAC que já está no disco.
+  if (!opts?.allowEmpty && !saved.addr.trim()) {
+    const disk = diskAddr().toUpperCase();
+    if (/^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/.test(disk)) saved.addr = disk;
+  }
   const tmp = `${jsonPath()}.${process.pid}.tmp`;
   writeFileSync(tmp, JSON.stringify(saved, null, 2), "utf8");
   renameSync(tmp, jsonPath());
 }
 
-try {
-  // Regrava config se limpamos /DEV/RFCOMM0 legado na carga
-  const disk = existsSync(jsonPath()) ? readFileSync(jsonPath(), "utf8") : "";
-  if (/\/DEV\/RFCOMM/i.test(disk) || /"addr"\s*:\s*"\/dev\/rfcomm/i.test(disk)) persist();
-} catch {
-  /* */
+function parsePairedMac(text: string, nameHint: string): string {
+  const hint = nameHint.trim().toLowerCase();
+  const rows: { mac: string; paired: boolean; name: string }[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^DEV\s+([0-9A-Fa-f:]{17})\s+([01])\s+(.*)$/.exec(line.trim());
+    if (!m) continue;
+    const mac = m[1]!.toUpperCase();
+    if (SKIP_SPP_MAC.has(mac.replace(/:/g, ""))) continue;
+    rows.push({ mac, paired: m[2] === "1", name: (m[3] || "").trim() });
+  }
+  const paired = rows.filter((r) => r.paired);
+  const pool = paired.length ? paired : rows;
+  const byHint = hint
+    ? pool.find((r) => {
+        const n = r.name.toLowerCase();
+        return Boolean(n) && (n === hint || n.includes(hint) || hint.includes(n));
+      })
+    : undefined;
+  if (byHint) return byHint.mac;
+  const byName = pool.find((r) => NAME_RE.test(r.name));
+  if (byName) return byName.mac;
+  if (pool.length === 1) return pool[0]!.mac;
+  return "";
 }
+
+/** MAC já gravado, ou o aparelho pareado quando a config antiga só tinha /dev/rfcomm. */
+async function ensureSavedMac(): Promise<boolean> {
+  if (/^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$/.test(saved.addr)) {
+    saved.addr = saved.addr.toUpperCase();
+    return true;
+  }
+  if (process.platform !== "linux" || !helperExists()) return false;
+  for (let i = 0; i < 6; i++) {
+    try {
+      const out = await runHelper(["devices"], 8_000);
+      const mac = parsePairedMac(out, saved.name);
+      if (mac) {
+        saved.addr = mac;
+        if (!saved.name) saved.name = "Monitor Station";
+        persist();
+        return true;
+      }
+    } catch (err) {
+      if (noController(helperText(err))) return false;
+      /* bluetoothd ainda subindo */
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  return false;
+}
+
+function helperText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function noController(msg: string): boolean {
+  return /sem controlador|no default controller|no controller available/i.test(msg);
+}
+
+function helperBusy(msg: string): boolean {
+  return /lextel-bt ocupado/i.test(msg);
+}
+
+const NO_CONTROLLER_MSG =
+  "Sem controlador Bluetooth. O Dual Hat segue em ttyAMA0. O MAC salvo continua; a conexão tenta de novo quando aparecer um adaptador.";
 
 function helperExists() {
   return existsSync(HELPER);
 }
 
-async function runHelper(args: string[], timeout = 30_000): Promise<string> {
+function openNoctty(
+  path: string,
+  _flags: string | number,
+  mode: number,
+  cb: (err: NodeJS.ErrnoException | null, fd: number) => void,
+) {
+  // O_NOCTTY: abrir /dev/rfcomm0 não pode instalar o tty como terminal de controle
+  // do Node (session leader do systemd). Sem isso o hangup manda SIGHUP e mata o console.
+  const flags = fsConstants.O_RDONLY | (fsConstants.O_NOCTTY || 0);
+  openFd(path, flags, mode, cb);
+}
+
+function killHelper(child: ChildProcess) {
+  const pid = child.pid;
+  if (!pid) return;
+  try {
+    if (process.platform !== "win32") {
+      process.kill(-pid, "SIGTERM");
+      return;
+    }
+  } catch {
+    /* grupo já saiu */
+  }
+  try {
+    child.kill("SIGTERM");
+  } catch {
+    /* */
+  }
+}
+
+function runHelper(args: string[], timeout = 30_000): Promise<string> {
   if (!helperExists()) {
     const err = new Error("BlueZ helper ausente — o SPP Classic roda no Raspberry Pi");
     (err as Error & { code?: string }).code = "NO_BLUEZ";
-    throw err;
+    return Promise.reject(err);
   }
-  const { stdout, stderr } = await execFileAsync("sudo", ["-n", HELPER, ...args], {
-    timeout,
-    windowsHide: true,
-    maxBuffer: 1024 * 1024,
+  // detached = setsid: o sudo/lextel-bt não fica no mesmo session do console.
+  // O helper ainda reexecuta em systemd-run/setsid. O await é só o child_process;
+  // o event loop segue atendendo serviços e o resto da API.
+  return new Promise((resolve, reject) => {
+    const child = spawn("sudo", ["-n", HELPER, ...args], {
+      detached: process.platform !== "win32",
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const finish = (err: Error | null, out?: string) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      if (err) reject(err);
+      else resolve(out ?? "");
+    };
+    timer = setTimeout(() => {
+      finish(new Error(`lextel-bt ${args[0] || "?"} excedeu ${timeout} ms`));
+      killHelper(child);
+    }, timeout);
+    child.stdout?.setEncoding("utf8");
+    child.stderr?.setEncoding("utf8");
+    child.stdout?.on("data", (chunk: string) => {
+      stdout = (stdout + chunk).slice(-1024 * 1024);
+    });
+    child.stderr?.on("data", (chunk: string) => {
+      stderr = (stderr + chunk).slice(-256 * 1024);
+    });
+    child.on("error", (err) => finish(err));
+    child.on("close", (code, signal) => {
+      const text = `${stdout}\n${stderr}`.trim();
+      if (signal) {
+        finish(new Error(text || `lextel-bt encerrou (${signal})`));
+        return;
+      }
+      if (code === 0) finish(null, stdout.trim());
+      else finish(new Error(text || `lextel-bt saiu com código ${code}`));
+    });
   });
-  return `${stdout}\n${stderr}`.trim();
 }
 
 const BT_MAC = /^(?:[0-9A-F]{2}:){5}[0-9A-F]{2}$/;
@@ -568,7 +726,7 @@ function clearReconnect() {
 }
 
 function scheduleReconnect() {
-  if (!wantOpen || recoverBusy || reconnectTimer) return;
+  if (!wantOpen || reconnectTimer) return;
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     void recoverLink();
@@ -577,7 +735,7 @@ function scheduleReconnect() {
 }
 
 async function remapIfWrongCom() {
-  if (process.platform !== "win32" || !wantOpen || recoverBusy) return;
+  if (process.platform !== "win32" || !wantOpen || recoverBusy || connectBusy) return;
   const now = Date.now();
   if (now - lastRemapAt < 8000) return;
   lastRemapAt = now;
@@ -596,7 +754,11 @@ async function remapIfWrongCom() {
 }
 
 async function recoverLink() {
-  if (!wantOpen || recoverBusy) return;
+  if (!wantOpen) return;
+  if (recoverBusy || connectBusy) {
+    scheduleReconnect();
+    return;
+  }
   if (linkAlive()) {
     if (process.platform === "win32" && bytes === 0 && attachedAt && Date.now() - attachedAt > 5000) {
       await remapIfWrongCom();
@@ -604,18 +766,32 @@ async function recoverLink() {
     reconnectDelay = 600;
     return;
   }
-  if (!saved.addr) return;
   recoverBusy = true;
   if (phase !== "scanning" && phase !== "pairing") phase = "connecting";
-  error = "";
   try {
-    await lextelConnect({ addr: saved.addr, pin: saved.pin, name: saved.name, channel: saved.channel });
+    if (!bluetoothMac(saved.addr)) {
+      const ready = await ensureSavedMac();
+      if (!wantOpen) return;
+      if (!ready || !bluetoothMac(saved.addr)) {
+        if (!error) error = "Aguardando o MAC do MS-2000. O endereço salvo não foi apagado.";
+        reconnectDelay = 10_000;
+        return;
+      }
+    }
+    await lextelConnectBody({ addr: saved.addr, pin: saved.pin, name: saved.name, channel: saved.channel });
   } catch {
-    /* */
+    /* o corpo já agenda a próxima tentativa */
   } finally {
     recoverBusy = false;
+    if (pendingConnect && wantOpen) {
+      const next = pendingConnect;
+      pendingConnect = null;
+      clearReconnect();
+      void lextelConnect(next);
+      return;
+    }
     if (wantOpen && !linkAlive()) scheduleReconnect();
-    else reconnectDelay = 600;
+    else if (linkAlive()) reconnectDelay = 600;
   }
 }
 
@@ -652,17 +828,24 @@ function closeStream() {
 }
 
 function attachFd(path: string) {
-  const rs = createReadStream(path, { flags: "r", highWaterMark: 256 });
+  const rs = createReadStream(path, {
+    flags: "r",
+    highWaterMark: 256,
+    ...(process.platform === "linux" ? { fs: { open: openNoctty, read, close } } : {}),
+  });
   stream = rs;
   rs.on("open", () => {
     phase = "streaming";
     reconnectDelay = 600;
+    rfcommStale = false;
+    error = "";
   });
   rs.on("data", (chunk: string | Buffer) => {
     ingest(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   });
   rs.on("error", (err) => {
     error = err.message;
+    rfcommStale = true;
     if (wantOpen) {
       phase = "connecting";
       closeStream();
@@ -677,6 +860,7 @@ function attachFd(path: string) {
       stream = null;
       pathOpen = "";
       if (wantOpen) {
+        rfcommStale = true;
         scheduleReconnect();
         return;
       }
@@ -794,7 +978,7 @@ export function lextelStatus(): LextelSnapshot {
     folder: dataDir(),
     sppUuid: SPP_UUID,
     phase,
-    connected: linkAlive() || (wantOpen && (phase === "connecting" || phase === "streaming")),
+    connected: phase === "streaming" && linkAlive(),
     decoded: Boolean(r) || Boolean(decoder.layout && bytes > 0),
     addr: saved.addr,
     name: saved.name,
@@ -835,12 +1019,15 @@ export async function lextelScan(seconds = 12): Promise<LextelSnapshot> {
       const out = await runHelper(["scan", String(Math.min(20, Math.max(5, seconds)))], 25_000);
       classic = parseDevLines(out);
     } catch (err) {
-      error = err instanceof Error ? err.message : String(err);
-      try {
-        const out = await runHelper(["devices"], 8_000);
-        classic = parseDevLines(out);
-      } catch {
-        /* helper missing */
+      const msg = helperText(err);
+      error = noController(msg) ? NO_CONTROLLER_MSG : msg;
+      if (!noController(msg)) {
+        try {
+          const out = await runHelper(["devices"], 8_000);
+          classic = parseDevLines(out);
+        } catch {
+          /* helper missing */
+        }
       }
     }
   }
@@ -860,13 +1047,14 @@ export async function lextelScan(seconds = 12): Promise<LextelSnapshot> {
 export async function lextelSave(body: Partial<Saved>): Promise<LextelSnapshot> {
   if (typeof body.addr === "string") {
     const next = body.addr.trim();
-    saved.addr = isRfcommPath(next) ? "" : normalizeSerialPath(next) || next;
+    // /dev/rfcommN é o tty do bind, não o endereço do aparelho.
+    if (!isRfcommPath(next)) saved.addr = normalizeSerialPath(next) || next;
   }
   if (typeof body.name === "string") saved.name = body.name.trim();
   if (typeof body.pin === "string" && /^\d{4,6}$/.test(body.pin.trim())) saved.pin = body.pin.trim();
   if (typeof body.channel === "number" && body.channel >= 1 && body.channel <= 30) saved.channel = Math.round(body.channel);
   if (typeof body.autoConnect === "boolean") saved.autoConnect = body.autoConnect;
-  persist();
+  persist({ allowEmpty: typeof body.addr === "string" });
   return lextelStatus();
 }
 
@@ -874,20 +1062,34 @@ function isSerialPath(addr: string) {
   return /^(COM\d+|\\\\\.\\COM\d+|\/dev\/)/i.test(addr);
 }
 
-export async function lextelConnect(body: { addr?: string; pin?: string; name?: string; channel?: number } = {}): Promise<LextelSnapshot> {
+export async function lextelConnect(
+  body: { addr?: string; pin?: string; name?: string; channel?: number } = {},
+): Promise<LextelSnapshot & { skipped?: boolean; queued?: boolean }> {
+  if (connectBusy || recoverBusy) {
+    pendingConnect = { ...body };
+    wantOpen = true;
+    return { ...lextelStatus(), queued: true };
+  }
+  connectBusy = true;
+  try {
+    return await lextelConnectBody(body);
+  } finally {
+    connectBusy = false;
+    const next = pendingConnect;
+    pendingConnect = null;
+    if (next && wantOpen) {
+      clearReconnect();
+      void lextelConnect(next);
+    }
+  }
+}
+
+async function lextelConnectBody(body: { addr?: string; pin?: string; name?: string; channel?: number }): Promise<LextelSnapshot> {
   let addr = String(body.addr || saved.addr).trim();
   // Config/UI com /DEV/RFCOMM0: no Linux o SPP Classic exige MAC + bind, não open() no path uppercased
   if (process.platform === "linux" && isRfcommPath(addr)) {
-    if (!devices.length) {
-      try {
-        await lextelScan(6);
-      } catch {
-        /* */
-      }
-    }
-    const mac = preferBtMac();
-    if (mac) addr = mac;
-    else addr = normalizeSerialPath(addr);
+    const kept = bluetoothMac(saved.addr) || preferBtMac();
+    if (kept) addr = kept;
   } else if (isSerialPath(addr)) {
     addr = normalizeSerialPath(addr);
   }
@@ -902,7 +1104,7 @@ export async function lextelConnect(body: { addr?: string; pin?: string; name?: 
   if (typeof body.channel === "number" && body.channel >= 1) saved.channel = Math.round(body.channel);
   error = "";
 
-  if (isSerialPath(addr) && !(process.platform === "linux" && isRfcommPath(addr) && !existsSync(normalizeSerialPath(addr)))) {
+  if (isSerialPath(addr) && !(process.platform === "linux" && isRfcommPath(addr))) {
     const serial =
       process.platform === "win32" ? await winPreferOutgoingCom(addr) : normalizeSerialPath(addr);
     if (linkAlive() && samePort(pathOpen, serial) && (bytes > 0 || Date.now() - attachedAt < 8000)) {
@@ -948,13 +1150,10 @@ export async function lextelConnect(body: { addr?: string; pin?: string; name?: 
   }
 
   if (isRfcommPath(addr) || isSerialPath(addr)) {
-    phase = "error";
+    phase = "connecting";
     error =
-      "Endereço SPP inválido (ex.: /DEV/RFCOMM0). Toque em Procurar MS-2000 e conecte pelo MAC do Monitor Station.";
-    if (isRfcommPath(saved.addr)) {
-      saved.addr = "";
-      persist();
-    }
+      "Endereço SPP inválido (ex.: /DEV/RFCOMM0). O MAC salvo foi mantido. Procure o MS-2000 e conecte pelo endereço Bluetooth.";
+    if (wantOpen) scheduleReconnect();
     return lextelStatus();
   }
 
@@ -965,7 +1164,9 @@ export async function lextelConnect(body: { addr?: string; pin?: string; name?: 
       try {
         await runHelper(["pair", addr, saved.pin], 30_000);
       } catch (err) {
-        error = `Pareamento: ${err instanceof Error ? err.message : String(err)}`;
+        const msg = helperText(err);
+        if (noController(msg) || helperBusy(msg)) throw err;
+        error = `Pareamento: ${msg}`;
       }
     }
     phase = "connecting";
@@ -974,17 +1175,26 @@ export async function lextelConnect(body: { addr?: string; pin?: string; name?: 
       const out = await runHelper(["channel", addr], 8_000);
       const n = Number((out.match(/\d+/) || [])[0]);
       if (n >= 1 && n <= 30) ch = n;
-    } catch {
-      /* default 1 */
+    } catch (err) {
+      if (noController(helperText(err))) throw err;
     }
     saved.channel = ch;
     saved.addr = addr.toUpperCase();
     saved.name = saved.name || listed?.name || "Monitor Station";
     persist();
-    await runHelper(["bind", addr, saved.pin, String(ch)], 12_000);
+    await runHelper(["bind", addr, saved.pin, String(ch), rfcommStale ? "rebind" : ""], 12_000);
     attach(RFCOMM);
   } catch (err) {
-    error = err instanceof Error ? err.message : String(err);
+    const msg = helperText(err);
+    if (noController(msg)) {
+      error = NO_CONTROLLER_MSG;
+      reconnectDelay = 10_000;
+    } else if (helperBusy(msg)) {
+      error = "Bluetooth do Lextel ocupado — nova tentativa em seguida, sem derrubar a outra sessão.";
+    } else {
+      error = msg;
+    }
+    rfcommStale = true;
     closeStream();
     if (wantOpen) {
       phase = "connecting";
@@ -997,7 +1207,7 @@ export async function lextelConnect(body: { addr?: string; pin?: string; name?: 
 }
 
 export async function lextelKeepalive(): Promise<LextelSnapshot> {
-  if (wantOpen && saved.addr && !linkAlive()) {
+  if (!connectBusy && !recoverBusy && !autoRunning && wantOpen && !linkAlive()) {
     reconnectDelay = 400;
     clearReconnect();
     void recoverLink();
@@ -1007,6 +1217,8 @@ export async function lextelKeepalive(): Promise<LextelSnapshot> {
 
 export async function lextelDisconnect(): Promise<LextelSnapshot> {
   wantOpen = false;
+  pendingConnect = null;
+  rfcommStale = true;
   clearReconnect();
   closeStream();
   if (process.platform === "linux" && helperExists()) {
@@ -1024,22 +1236,35 @@ export async function lextelDisconnect(): Promise<LextelSnapshot> {
 }
 
 export async function lextelAutoConnect(): Promise<void> {
-  if (autoTried) return;
-  autoTried = true;
   const { isServiceAutostart } = await import("./services");
   if (!isServiceAutostart("lextel")) return;
-  if (!saved.autoConnect || !saved.addr) return;
-  if (process.platform !== "linux" && !isSerialPath(saved.addr)) return;
-  await new Promise((r) => setTimeout(r, 1500));
+  if (!saved.autoConnect) return;
+  if (autoRunning || linkAlive() || connectBusy || recoverBusy || wantOpen) return;
+  if (process.platform !== "linux" && !isSerialPath(saved.addr) && !bluetoothMac(saved.addr)) return;
+  autoRunning = true;
+  // Quer o link mesmo com o adaptador ainda ausente. O recover não desiste.
+  wantOpen = true;
   try {
+    if (process.platform === "linux") {
+      const ready = await ensureSavedMac();
+      if (!wantOpen) return;
+      if (!ready || !bluetoothMac(saved.addr)) {
+        phase = "connecting";
+        if (!error) error = "Aguardando o MS-2000 no Bluetooth. O MAC salvo não foi apagado.";
+        scheduleReconnect();
+        return;
+      }
+    }
     await lextelConnect({ addr: saved.addr, pin: saved.pin, name: saved.name, channel: saved.channel });
   } catch {
-    /* leave idle */
+    if (wantOpen && !linkAlive()) scheduleReconnect();
+  } finally {
+    autoRunning = false;
   }
 }
 
 const recoverWatch = setInterval(() => {
-  if (!wantOpen || recoverBusy) return;
+  if (!wantOpen || recoverBusy || connectBusy || autoRunning) return;
   if (phase === "scanning" || phase === "pairing") return;
   if (linkAlive()) {
     if (process.platform === "win32" && bytes === 0 && attachedAt && Date.now() - attachedAt > 5000) {

@@ -2,6 +2,8 @@
  * Roteia comandos do Painel/VFO para o rádio marcado como Principal:
  * BLE CI-V (navegador), Icom LAN UDP (POST /api/radios/civ) ou Hamlib NET.
  */
+import { getEquipment, normalizeCivAddr } from "@shared/equipment";
+import { HAMLIB_LEVELS, type HamlibLevels } from "@shared/equipment/hamlib-rigs";
 import { hamlibStrengthToUiSMeter } from "@shared/smeter";
 import { ic705Ble } from "./ic705-ble";
 import type { StationRadio } from "./state";
@@ -112,8 +114,8 @@ export async function pollPrimaryTelemetry(
     if (tick % 5 === 2) {
       try {
         const p = await postHamlibReply("\\get_powerstat", port);
-        if (p === "1" || /on/i.test(p)) patch.power = true;
-        else if (p === "0" || /off|standby/i.test(p)) patch.power = false;
+        if (p === "1" || /^on$/i.test(p)) patch.power = true;
+        else if (p === "0" || p === "2" || /off|standby/i.test(p)) patch.power = false;
       } catch {
         /* */
       }
@@ -159,6 +161,37 @@ function hamlibMode(mode: string) {
   return m || "USB";
 }
 
+function levelsOf(radio?: StationRadio): HamlibLevels | undefined {
+  const eq = radio?.equipmentId ? getEquipment(radio.equipmentId) : undefined;
+  const model = radio?.hamlibModel || eq?.hamlibModel || 0;
+  return model ? HAMLIB_LEVELS[model] : undefined;
+}
+
+function standbyOf(radio?: StationRadio): boolean {
+  if (!radio?.equipmentId) return false;
+  return Boolean(getEquipment(radio.equipmentId)?.standby);
+}
+
+/** Quadro CI-V 0x18 0x02. O set_powerstat do Icom 4.6.5 não emite esse byte. */
+function civStandbyCmd(radio?: StationRadio): string {
+  const eq = radio?.equipmentId ? getEquipment(radio.equipmentId) : undefined;
+  const addr = normalizeCivAddr(radio?.civAddr) || normalizeCivAddr(eq?.civAddr) || "0xA4";
+  const b = addr.slice(2).toLowerCase();
+  return `w \\0xfe\\0xfe\\0x${b}\\0xe0\\0x18\\0x02\\0xfd`;
+}
+
+async function hamlibPower(on: boolean, port: number, radio?: StationRadio) {
+  if (on) {
+    await postHamlib("\\set_powerstat 1", port);
+    return;
+  }
+  if (standbyOf(radio)) {
+    await postHamlib(civStandbyCmd(radio), port);
+    return;
+  }
+  await postHamlib("\\set_powerstat 0", port);
+}
+
 /** Envia ação do painel ao Principal; falhas são engolidas (UI já atualizou). */
 export async function sendPrimaryCmd(
   items: StationRadio[],
@@ -183,9 +216,9 @@ export async function sendPrimaryCmd(
       if (route.transport === "ble" || ic705Ble.connected) {
         await ic705Ble.setPower(action.on);
       } else if (route.transport === "lan" || (route.radio && isIcomLan(route.radio))) {
-        await postCiv("setPower", { on: action.on });
+        await postCiv("setPower", { on: action.on, standby: !action.on && standbyOf(route.radio) });
       } else if (route.transport === "hamlib" || route.radio) {
-        await postHamlib(`\\set_powerstat ${action.on ? 1 : 0}`, opts?.hamlibPort ?? 4532);
+        await hamlibPower(action.on, opts?.hamlibPort ?? 4532, route.radio);
       }
     } catch {
       /* */
@@ -260,7 +293,7 @@ export async function sendPrimaryCmd(
           await postCiv("setAgc", { agc: action.agc });
           break;
         case "setPower":
-          await postCiv("setPower", { on: action.on });
+          await postCiv("setPower", { on: action.on, standby: !action.on && standbyOf(route.radio) });
           break;
       }
       return;
@@ -268,6 +301,7 @@ export async function sendPrimaryCmd(
 
     if (route.transport === "hamlib") {
       const port = opts?.hamlibPort ?? 4532;
+      const lv = levelsOf(route.radio);
       switch (action.type) {
         case "setFreq":
           await postHamlib(`F ${Math.round(action.hz)}`, port);
@@ -281,10 +315,33 @@ export async function sendPrimaryCmd(
         case "setVfo":
           await postHamlib(`V VFO${action.vfo}`, port);
           break;
-        case "setPower":
-          await postHamlib(`\\set_powerstat ${action.on ? 1 : 0}`, port);
+        case "setNr":
+          if (!lv?.nr) break;
+          await postHamlib(`\\set_func NR ${action.on ? 1 : 0}`, port);
           break;
-        default:
+        case "setNb":
+          if (!lv?.nb) break;
+          await postHamlib(`\\set_func NB ${action.on ? 1 : 0}`, port);
+          break;
+        case "setPre": {
+          const pre = lv?.preamp ?? [];
+          if (!pre.length) break;
+          const value = action.pre === "OFF" ? 0 : action.pre === "ON2" ? (pre[1] ?? pre[0]) : pre[0];
+          await postHamlib(`\\set_level PREAMP ${value}`, port);
+          break;
+        }
+        case "setAtt":
+          if (!lv?.att.length) break;
+          await postHamlib(`\\set_level ATT ${action.on ? lv.att[0] : 0}`, port);
+          break;
+        case "setAgc": {
+          const n = lv?.agc[action.agc];
+          if (n == null) break;
+          await postHamlib(`\\set_level AGC ${n}`, port);
+          break;
+        }
+        case "setPower":
+          await hamlibPower(action.on, port, route.radio);
           break;
       }
     }

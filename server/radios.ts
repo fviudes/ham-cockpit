@@ -143,18 +143,17 @@ function isIcomLan(row: StationRadio): boolean {
 }
 
 function hamlibModelFor(row: StationRadio): number {
-  if (row.hamlibModel && row.hamlibModel > 0) return row.hamlibModel;
   if (row.equipmentId) {
     const eq = getEquipment(row.equipmentId);
-    if (eq?.hamlibModel) return eq.hamlibModel;
+    // Catálogo manda. null (IC-7300MK2) não herda o 3073 nem um -m gravado antigo.
+    if (eq) return eq.hamlibModel ?? 0;
   }
+  if (row.hamlibModel && row.hamlibModel > 0) return row.hamlibModel;
   const model = resolveIcomLanModel(row.equipmentId, `${row.name} ${row.deviceName} ${row.model || ""}`);
   if (model === "IC-705") return 3085;
   if (model === "IC-9700") return 3081;
   if (model === "IC-7610") return 3078;
-  if (model === "IC-7300" || model === "IC-7300MK2") return 3073;
-  // LAN Icom sem modelo identificado continua no 3085 (caminho próprio, não a serial).
-  if (row.maker === "icom") return 3085;
+  if (model === "IC-7300") return 3073;
   return 0;
 }
 
@@ -203,27 +202,24 @@ function asBaud(v: unknown, fallback: number) {
 
 function defaultBaud(maker: RadioMaker, link: RadioLink) {
   if (link === "bluetooth" && maker !== "icom") return 9600;
-  if (maker === "kenwood" || maker === "yaesu") return 38400;
+  if (maker === "kenwood" || maker === "yaesu" || maker === "elecraft") return 38400;
   if (maker === "tentec") return 57600;
   if (maker === "xiegu") return 19200;
   return 115200;
 }
 
 const CIV_MODEL_NAMES: Record<string, string> = {
-  "0xA4": "IC-705",
   "0x94": "IC-7300",
-  "0x18": "IC-7100",
-  "0x76": "IC-7610",
-  "0x98": "IC-705",
-  "0x88": "IC-9700",
-  "0x70": "IC-7000",
-  "0x48": "IC-706",
+  "0x88": "IC-7100",
+  "0x98": "IC-7610",
+  "0xA2": "IC-9700",
 };
 
 function defaultName(maker: RadioMaker, deviceName: string, civAddr?: string, proto?: RadioProto) {
   const brand: Record<RadioMaker, string> = {
     icom: "Icom",
     kenwood: "Kenwood",
+    elecraft: "Elecraft",
     yaesu: "Yaesu",
     flex: "Flex",
     tentec: "Ten-Tec",

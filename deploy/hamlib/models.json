@@ -1,0 +1,1076 @@
+{
+  "source": "Hamlib 4.6.5 riglist.h + rig_register (rigctl -l dessa versão)",
+  "models": {
+    "elecraft-k2": {
+      "m": 2021,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Elecraft K2"
+    },
+    "elecraft-k3": {
+      "m": 2029,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Elecraft K3"
+    },
+    "elecraft-k3s": {
+      "m": 2043,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Elecraft K3S"
+    },
+    "elecraft-k4": {
+      "m": 2047,
+      "baud": 115200,
+      "civ": "",
+      "standby": false,
+      "label": "Elecraft K4"
+    },
+    "elecraft-kx2": {
+      "m": 2044,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Elecraft KX2"
+    },
+    "elecraft-kx3": {
+      "m": 2045,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Elecraft KX3"
+    },
+    "icom-ic-id-1": {
+      "m": 3054,
+      "baud": 19200,
+      "civ": "0x01",
+      "standby": false,
+      "label": "Icom IC ID-1"
+    },
+    "icom-ic-1275": {
+      "m": 3002,
+      "baud": 9600,
+      "civ": "0x18",
+      "standby": false,
+      "label": "Icom IC-1275"
+    },
+    "icom-ic-271": {
+      "m": 3003,
+      "baud": 9600,
+      "civ": "0x20",
+      "standby": false,
+      "label": "Icom IC-271"
+    },
+    "icom-ic-2730": {
+      "m": 3072,
+      "baud": 19200,
+      "civ": "0x90",
+      "standby": false,
+      "label": "Icom IC-2730"
+    },
+    "icom-ic-275": {
+      "m": 3004,
+      "baud": 9600,
+      "civ": "0x10",
+      "standby": false,
+      "label": "Icom IC-275"
+    },
+    "icom-ic-375": {
+      "m": 3005,
+      "baud": 9600,
+      "civ": "0x12",
+      "standby": false,
+      "label": "Icom IC-375"
+    },
+    "icom-ic-471": {
+      "m": 3006,
+      "baud": 9600,
+      "civ": "0x22",
+      "standby": false,
+      "label": "Icom IC-471"
+    },
+    "icom-ic-475": {
+      "m": 3007,
+      "baud": 9600,
+      "civ": "0x14",
+      "standby": false,
+      "label": "Icom IC-475"
+    },
+    "icom-ic-575": {
+      "m": 3008,
+      "baud": 9600,
+      "civ": "0x16",
+      "standby": false,
+      "label": "Icom IC-575"
+    },
+    "icom-ic-7000": {
+      "m": 3060,
+      "baud": 19200,
+      "civ": "0x70",
+      "standby": false,
+      "label": "Icom IC-7000"
+    },
+    "icom-ic-703": {
+      "m": 3055,
+      "baud": 19200,
+      "civ": "0x68",
+      "standby": false,
+      "label": "Icom IC-703"
+    },
+    "icom-ic-705": {
+      "m": 3085,
+      "baud": 115200,
+      "civ": "0xA4",
+      "standby": true,
+      "label": "Icom IC-705"
+    },
+    "icom-ic-706": {
+      "m": 3009,
+      "baud": 19200,
+      "civ": "0x48",
+      "standby": false,
+      "label": "Icom IC-706"
+    },
+    "icom-ic-706mkii": {
+      "m": 3010,
+      "baud": 19200,
+      "civ": "0x4E",
+      "standby": false,
+      "label": "Icom IC-706MkII"
+    },
+    "icom-ic-706mkiig": {
+      "m": 3011,
+      "baud": 19200,
+      "civ": "0x58",
+      "standby": false,
+      "label": "Icom IC-706MkIIG"
+    },
+    "icom-ic-707": {
+      "m": 3012,
+      "baud": 9600,
+      "civ": "0x3E",
+      "standby": false,
+      "label": "Icom IC-707"
+    },
+    "icom-ic-7100": {
+      "m": 3070,
+      "baud": 19200,
+      "civ": "0x88",
+      "standby": true,
+      "label": "Icom IC-7100"
+    },
+    "icom-ic-718": {
+      "m": 3013,
+      "baud": 19200,
+      "civ": "0x5E",
+      "standby": false,
+      "label": "Icom IC-718"
+    },
+    "icom-ic-7200": {
+      "m": 3061,
+      "baud": 19200,
+      "civ": "0x76",
+      "standby": false,
+      "label": "Icom IC-7200"
+    },
+    "icom-ic-725": {
+      "m": 3014,
+      "baud": 9600,
+      "civ": "0x28",
+      "standby": false,
+      "label": "Icom IC-725"
+    },
+    "icom-ic-726": {
+      "m": 3015,
+      "baud": 1200,
+      "civ": "0x30",
+      "standby": false,
+      "label": "Icom IC-726"
+    },
+    "icom-ic-728": {
+      "m": 3016,
+      "baud": 9600,
+      "civ": "0x38",
+      "standby": false,
+      "label": "Icom IC-728"
+    },
+    "icom-ic-729": {
+      "m": 3017,
+      "baud": 9600,
+      "civ": "0x3A",
+      "standby": false,
+      "label": "Icom IC-729"
+    },
+    "icom-ic-7300": {
+      "m": 3073,
+      "baud": 115200,
+      "civ": "0x94",
+      "standby": false,
+      "label": "Icom IC-7300"
+    },
+    "icom-ic-735": {
+      "m": 3019,
+      "baud": 9600,
+      "civ": "0x04",
+      "standby": false,
+      "label": "Icom IC-735"
+    },
+    "icom-ic-736": {
+      "m": 3020,
+      "baud": 19200,
+      "civ": "0x40",
+      "standby": false,
+      "label": "Icom IC-736"
+    },
+    "icom-ic-737": {
+      "m": 3021,
+      "baud": 19200,
+      "civ": "0x3C",
+      "standby": false,
+      "label": "Icom IC-737"
+    },
+    "icom-ic-738": {
+      "m": 3022,
+      "baud": 19200,
+      "civ": "0x44",
+      "standby": false,
+      "label": "Icom IC-738"
+    },
+    "icom-ic-7410": {
+      "m": 3067,
+      "baud": 19200,
+      "civ": "0x80",
+      "standby": false,
+      "label": "Icom IC-7410"
+    },
+    "icom-ic-746": {
+      "m": 3023,
+      "baud": 19200,
+      "civ": "0x56",
+      "standby": false,
+      "label": "Icom IC-746"
+    },
+    "icom-ic-746pro": {
+      "m": 3046,
+      "baud": 19200,
+      "civ": "0x66",
+      "standby": false,
+      "label": "Icom IC-746PRO"
+    },
+    "icom-ic-751": {
+      "m": 3024,
+      "baud": 9600,
+      "civ": "0x1C",
+      "standby": false,
+      "label": "Icom IC-751"
+    },
+    "icom-ic-756": {
+      "m": 3026,
+      "baud": 19200,
+      "civ": "0x50",
+      "standby": false,
+      "label": "Icom IC-756"
+    },
+    "icom-ic-756pro": {
+      "m": 3027,
+      "baud": 19200,
+      "civ": "0x5C",
+      "standby": false,
+      "label": "Icom IC-756PRO"
+    },
+    "icom-ic-756proii": {
+      "m": 3047,
+      "baud": 19200,
+      "civ": "0x64",
+      "standby": false,
+      "label": "Icom IC-756PROII"
+    },
+    "icom-ic-756proiii": {
+      "m": 3057,
+      "baud": 19200,
+      "civ": "0x6E",
+      "standby": false,
+      "label": "Icom IC-756PROIII"
+    },
+    "icom-ic-7600": {
+      "m": 3063,
+      "baud": 19200,
+      "civ": "0x7A",
+      "standby": false,
+      "label": "Icom IC-7600"
+    },
+    "icom-ic-761": {
+      "m": 3028,
+      "baud": 9600,
+      "civ": "0x1E",
+      "standby": false,
+      "label": "Icom IC-761"
+    },
+    "icom-ic-7610": {
+      "m": 3078,
+      "baud": 115200,
+      "civ": "0x98",
+      "standby": false,
+      "label": "Icom IC-7610"
+    },
+    "icom-ic-765": {
+      "m": 3029,
+      "baud": 9600,
+      "civ": "0x2C",
+      "standby": false,
+      "label": "Icom IC-765"
+    },
+    "icom-ic-7700": {
+      "m": 3062,
+      "baud": 19200,
+      "civ": "0x74",
+      "standby": false,
+      "label": "Icom IC-7700"
+    },
+    "icom-ic-775": {
+      "m": 3030,
+      "baud": 19200,
+      "civ": "0x46",
+      "standby": false,
+      "label": "Icom IC-775"
+    },
+    "icom-ic-7760": {
+      "m": 3092,
+      "baud": 19200,
+      "civ": "0xB2",
+      "standby": false,
+      "label": "Icom IC-7760"
+    },
+    "icom-ic-78": {
+      "m": 3045,
+      "baud": 19200,
+      "civ": "0x62",
+      "standby": false,
+      "label": "Icom IC-78"
+    },
+    "icom-ic-7800": {
+      "m": 3056,
+      "baud": 19200,
+      "civ": "0x6A",
+      "standby": false,
+      "label": "Icom IC-7800"
+    },
+    "icom-ic-781": {
+      "m": 3031,
+      "baud": 9600,
+      "civ": "0x26",
+      "standby": false,
+      "label": "Icom IC-781"
+    },
+    "icom-ic-820h": {
+      "m": 3032,
+      "baud": 19200,
+      "civ": "0x42",
+      "standby": false,
+      "label": "Icom IC-820H"
+    },
+    "icom-ic-821h": {
+      "m": 3034,
+      "baud": 19200,
+      "civ": "0x4C",
+      "standby": false,
+      "label": "Icom IC-821H"
+    },
+    "icom-ic-905": {
+      "m": 3090,
+      "baud": 230400,
+      "civ": "0xAC",
+      "standby": false,
+      "label": "Icom IC-905"
+    },
+    "icom-ic-910": {
+      "m": 3044,
+      "baud": 19200,
+      "civ": "",
+      "standby": false,
+      "label": "Icom IC-910"
+    },
+    "icom-ic-9100": {
+      "m": 3068,
+      "baud": 19200,
+      "civ": "0x7C",
+      "standby": false,
+      "label": "Icom IC-9100"
+    },
+    "icom-ic-92d": {
+      "m": 3065,
+      "baud": 38400,
+      "civ": "0x01",
+      "standby": false,
+      "label": "Icom IC-92D"
+    },
+    "icom-ic-970": {
+      "m": 3035,
+      "baud": 19200,
+      "civ": "0x2E",
+      "standby": false,
+      "label": "Icom IC-970"
+    },
+    "icom-ic-9700": {
+      "m": 3081,
+      "baud": 38400,
+      "civ": "0xA2",
+      "standby": false,
+      "label": "Icom IC-9700"
+    },
+    "icom-id-31": {
+      "m": 3083,
+      "baud": 19200,
+      "civ": "0xA0",
+      "standby": false,
+      "label": "Icom ID-31"
+    },
+    "icom-id-4100": {
+      "m": 3082,
+      "baud": 19200,
+      "civ": "0x9A",
+      "standby": false,
+      "label": "Icom ID-4100"
+    },
+    "icom-id-51": {
+      "m": 3084,
+      "baud": 19200,
+      "civ": "0x86",
+      "standby": false,
+      "label": "Icom ID-51"
+    },
+    "icom-id-5100": {
+      "m": 3071,
+      "baud": 19200,
+      "civ": "0x8C",
+      "standby": false,
+      "label": "Icom ID-5100"
+    },
+    "kenwood-th-d72a": {
+      "m": 2033,
+      "baud": 9600,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TH-D72A"
+    },
+    "kenwood-th-d74": {
+      "m": 2042,
+      "baud": 9600,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TH-D74"
+    },
+    "kenwood-th-d7a": {
+      "m": 2017,
+      "baud": 9600,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TH-D7A"
+    },
+    "kenwood-th-f6a": {
+      "m": 2019,
+      "baud": 9600,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TH-F6A"
+    },
+    "kenwood-th-f7e": {
+      "m": 2020,
+      "baud": 9600,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TH-F7E"
+    },
+    "kenwood-th-g71": {
+      "m": 2023,
+      "baud": 9600,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TH-G71"
+    },
+    "kenwood-tm-d700": {
+      "m": 2026,
+      "baud": 57600,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TM-D700"
+    },
+    "kenwood-tm-d710-g": {
+      "m": 2034,
+      "baud": 57600,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TM-D710(G)"
+    },
+    "kenwood-tm-v7": {
+      "m": 2027,
+      "baud": 9600,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TM-V7"
+    },
+    "kenwood-tm-v71-a": {
+      "m": 2035,
+      "baud": 57600,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TM-V71(A)"
+    },
+    "kenwood-trc-80": {
+      "m": 2030,
+      "baud": 9600,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TRC-80"
+    },
+    "kenwood-ts-140s": {
+      "m": 2025,
+      "baud": 9600,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-140S"
+    },
+    "kenwood-ts-2000": {
+      "m": 2014,
+      "baud": 115200,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-2000"
+    },
+    "kenwood-ts-440s": {
+      "m": 2002,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-440S"
+    },
+    "kenwood-ts-450s": {
+      "m": 2003,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-450S"
+    },
+    "kenwood-ts-480": {
+      "m": 2028,
+      "baud": 115200,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-480"
+    },
+    "kenwood-ts-50s": {
+      "m": 2001,
+      "baud": 57600,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-50S"
+    },
+    "kenwood-ts-570d": {
+      "m": 2004,
+      "baud": 57600,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-570D"
+    },
+    "kenwood-ts-570s": {
+      "m": 2016,
+      "baud": 57600,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-570S"
+    },
+    "kenwood-ts-590s": {
+      "m": 2031,
+      "baud": 115200,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-590S"
+    },
+    "kenwood-ts-590sg": {
+      "m": 2037,
+      "baud": 115200,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-590SG"
+    },
+    "kenwood-ts-680s": {
+      "m": 2024,
+      "baud": 9600,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-680S"
+    },
+    "kenwood-ts-690s": {
+      "m": 2005,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-690S"
+    },
+    "kenwood-ts-711": {
+      "m": 2006,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-711"
+    },
+    "kenwood-ts-790": {
+      "m": 2007,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-790"
+    },
+    "kenwood-ts-811": {
+      "m": 2008,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-811"
+    },
+    "kenwood-ts-850": {
+      "m": 2009,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-850"
+    },
+    "kenwood-ts-870s": {
+      "m": 2010,
+      "baud": 57600,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-870S"
+    },
+    "kenwood-ts-890s": {
+      "m": 2041,
+      "baud": 115200,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-890S"
+    },
+    "kenwood-ts-930": {
+      "m": 2022,
+      "baud": 57600,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-930"
+    },
+    "kenwood-ts-940s": {
+      "m": 2011,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-940S"
+    },
+    "kenwood-ts-950s": {
+      "m": 2012,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-950S"
+    },
+    "kenwood-ts-950sdx": {
+      "m": 2013,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-950SDX"
+    },
+    "kenwood-ts-990s": {
+      "m": 2039,
+      "baud": 115200,
+      "civ": "",
+      "standby": false,
+      "label": "Kenwood TS-990S"
+    },
+    "tentec-delta-ii": {
+      "m": 3064,
+      "baud": 1200,
+      "civ": "0x01",
+      "standby": false,
+      "label": "Ten-Tec Delta II"
+    },
+    "tentec-omni-vi-plus": {
+      "m": 3051,
+      "baud": 19200,
+      "civ": "0x04",
+      "standby": false,
+      "label": "Ten-Tec Omni VI Plus"
+    },
+    "tentec-tt-516-argonaut-v": {
+      "m": 16007,
+      "baud": 1200,
+      "civ": "",
+      "standby": false,
+      "label": "Ten-Tec TT-516 Argonaut V"
+    },
+    "tentec-tt-538-jupiter": {
+      "m": 16002,
+      "baud": 57600,
+      "civ": "",
+      "standby": false,
+      "label": "Ten-Tec TT-538 Jupiter"
+    },
+    "tentec-tt-550": {
+      "m": 16001,
+      "baud": 57600,
+      "civ": "",
+      "standby": false,
+      "label": "Ten-Tec TT-550"
+    },
+    "tentec-tt-565-566-orion-i-ii": {
+      "m": 16008,
+      "baud": 57600,
+      "civ": "",
+      "standby": false,
+      "label": "Ten-Tec TT-565/566 Orion I/II"
+    },
+    "tentec-tt-585-paragon": {
+      "m": 16009,
+      "baud": 1200,
+      "civ": "",
+      "standby": false,
+      "label": "Ten-Tec TT-585 Paragon"
+    },
+    "tentec-omniiii": {
+      "m": 16011,
+      "baud": 57600,
+      "civ": "",
+      "standby": false,
+      "label": "Ten-Tec TT-588 Omni VII"
+    },
+    "tentec-eagle": {
+      "m": 16013,
+      "baud": 57600,
+      "civ": "",
+      "standby": false,
+      "label": "Ten-Tec TT-599 Eagle"
+    },
+    "xiegu-g90": {
+      "m": 3088,
+      "baud": 19200,
+      "civ": "0xA4",
+      "standby": false,
+      "label": "Xiegu G90"
+    },
+    "xiegu-x108g": {
+      "m": 3076,
+      "baud": 19200,
+      "civ": "0x70",
+      "standby": false,
+      "label": "Xiegu X108G"
+    },
+    "xiegu-x5105": {
+      "m": 3089,
+      "baud": 19200,
+      "civ": "0x70",
+      "standby": false,
+      "label": "Xiegu X5105"
+    },
+    "xiegu-x6100": {
+      "m": 3087,
+      "baud": 19200,
+      "civ": "0xA4",
+      "standby": false,
+      "label": "Xiegu X6100"
+    },
+    "xiegu-x6200": {
+      "m": 3091,
+      "baud": 19200,
+      "civ": "0xA4",
+      "standby": false,
+      "label": "Xiegu X6200"
+    },
+    "yaesu-ft-100": {
+      "m": 1021,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-100"
+    },
+    "yaesu-ft-1000": {
+      "m": 1002,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-1000"
+    },
+    "yaesu-ft-1000d": {
+      "m": 1003,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-1000D"
+    },
+    "yaesu-ft-1000mp": {
+      "m": 1024,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-1000MP"
+    },
+    "yaesu-ft-2000": {
+      "m": 1029,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-2000"
+    },
+    "yaesu-ft-450": {
+      "m": 1027,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-450"
+    },
+    "yaesu-ft-600": {
+      "m": 1039,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-600"
+    },
+    "yaesu-ft-650": {
+      "m": 1047,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-650"
+    },
+    "yaesu-ft-710": {
+      "m": 1049,
+      "baud": 115200,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-710"
+    },
+    "yaesu-ft-736r": {
+      "m": 1010,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-736R"
+    },
+    "yaesu-ft-747gx": {
+      "m": 1005,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-747GX"
+    },
+    "yaesu-ft-757gx": {
+      "m": 1006,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-757GX"
+    },
+    "yaesu-ft-757gxii": {
+      "m": 1007,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-757GXII"
+    },
+    "yaesu-ft-767gx": {
+      "m": 1009,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-767GX"
+    },
+    "yaesu-ft-817": {
+      "m": 1020,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-817"
+    },
+    "yaesu-ft-818": {
+      "m": 1041,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-818"
+    },
+    "yaesu-ft-840": {
+      "m": 1011,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-840"
+    },
+    "yaesu-ft-847": {
+      "m": 1001,
+      "baud": 57600,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-847"
+    },
+    "yaesu-ft-847uni": {
+      "m": 1038,
+      "baud": 57600,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-847UNI"
+    },
+    "yaesu-ft-857": {
+      "m": 1022,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-857"
+    },
+    "yaesu-ft-890": {
+      "m": 1015,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-890"
+    },
+    "yaesu-ft-891": {
+      "m": 1036,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-891"
+    },
+    "yaesu-ft-897": {
+      "m": 1023,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-897"
+    },
+    "yaesu-ft-897d": {
+      "m": 1043,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-897D"
+    },
+    "yaesu-ft-900": {
+      "m": 1013,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-900"
+    },
+    "yaesu-ft-920": {
+      "m": 1014,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-920"
+    },
+    "yaesu-ft-950": {
+      "m": 1028,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-950"
+    },
+    "yaesu-ft-980": {
+      "m": 1031,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-980"
+    },
+    "yaesu-ft-990": {
+      "m": 1016,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-990"
+    },
+    "yaesu-ft-990-old-rom": {
+      "m": 1048,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-990 Old Rom"
+    },
+    "yaesu-ft-991a": {
+      "m": 1035,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FT-991"
+    },
+    "yaesu-ftdx10": {
+      "m": 1042,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FTDX-10"
+    },
+    "yaesu-ftdx101d": {
+      "m": 1040,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FTDX-101D"
+    },
+    "yaesu-ftdx-101mp": {
+      "m": 1044,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FTDX-101MP"
+    },
+    "yaesu-ftdx-1200": {
+      "m": 1034,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FTDX-1200"
+    },
+    "yaesu-ftdx-3000": {
+      "m": 1037,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FTDX-3000"
+    },
+    "yaesu-ftdx-5000": {
+      "m": 1032,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FTDX-5000"
+    },
+    "yaesu-ftdx-9000": {
+      "m": 1030,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FTDX-9000"
+    },
+    "yaesu-ftdx-9000-old": {
+      "m": 1050,
+      "baud": 38400,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu FTDX-9000 Old"
+    },
+    "yaesu-mark-v-ft-1000mp": {
+      "m": 1004,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu MARK-V FT-1000MP"
+    },
+    "yaesu-mark-v-field-ft-1000mp": {
+      "m": 1025,
+      "baud": 4800,
+      "civ": "",
+      "standby": false,
+      "label": "Yaesu MARK-V Field FT-1000MP"
+    }
+  }
+}

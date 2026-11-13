@@ -8,6 +8,7 @@
 export const EQUIPMENT_MAKERS = [
   "icom",
   "kenwood",
+  "elecraft",
   "yaesu",
   "flex",
   "tentec",
@@ -127,6 +128,12 @@ export type EquipmentRadio = {
   hamlibPassCiv?: boolean;
   civAddr?: string;
   defaultBaud?: number;
+  /**
+   * true só quando o protocolo confirma standby (não é chute).
+   * Icom: CI-V 0x18 0x02 (S_PWR_STDBY no Hamlib 4.6.5). O `\set_powerstat` do
+   * backend Icom dessa versão não distingue: qualquer valor ≠ ligado manda 0x00.
+   */
+  standby?: boolean;
   connections: EquipmentConnection[];
   capabilities: EquipmentCapabilities;
   notes?: string;

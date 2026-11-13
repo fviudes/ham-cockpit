@@ -5,6 +5,7 @@ export type LocPair = { pt: string; en: string };
 export const MAKER_LABEL: Record<EquipmentMaker, LocPair> = {
   icom: { pt: "Icom", en: "Icom" },
   kenwood: { pt: "Kenwood", en: "Kenwood" },
+  elecraft: { pt: "Elecraft", en: "Elecraft" },
   yaesu: { pt: "Yaesu", en: "Yaesu" },
   flex: { pt: "FlexRadio", en: "FlexRadio" },
   tentec: { pt: "Ten-Tec", en: "Ten-Tec" },
@@ -21,6 +22,10 @@ export const MAKER_BLURB: Record<EquipmentMaker, LocPair> = {
   kenwood: {
     pt: "CAT serial ASCII via USB → ser2net → Hamlib.",
     en: "ASCII serial CAT via USB → ser2net → Hamlib.",
+  },
+  elecraft: {
+    pt: "CAT serial (K2, K3, KX2, KX3, K4) via USB → ser2net → Hamlib.",
+    en: "Serial CAT (K2, K3, KX2, KX3, K4) via USB → ser2net → Hamlib.",
   },
   yaesu: {
     pt: "CAT serial via USB → ser2net → Hamlib (FT-991A, FTDX, FT-710…).",

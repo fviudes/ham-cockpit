@@ -13,6 +13,8 @@ import { hubRigctl } from "./server/hamlib-hub";
 import { loadSer2net, saveSer2net } from "./server/ser2net-store";
 import { attachTerminal } from "./server/term";
 import { createUser, deleteUser, listUsers, sshStatus } from "./server/users";
+import { consoleSessionCookie, consoleSessionOk, consoleSessionToken } from "./server/console-session";
+import { supportVpnSet, supportVpnStatus } from "./server/support-vpn";
 import { wavelogDatabase, wavelogDbUpdate, wavelogDown, wavelogStatus, wavelogUp } from "./server/wavelog-status";
 import { wlgDown, wlgStatus, wlgUp } from "./server/wlg-status";
 import { netConnect, netForget, netSave, netScan, netSetAp, netSetHostname, netSetIp, netSetLink, netStatus } from "./server/net";
@@ -21,7 +23,18 @@ import { servicesApplyBoot, servicesSetAutostart, servicesStatus } from "./serve
 import { updatesApply, updatesRefresh, updatesStatus } from "./server/updates";
 import { layoutGet, layoutSave } from "./server/layouts";
 import { ldgCmd, ldgConnect, ldgDisconnect, ldgPeek, ldgSave } from "./server/ldg";
-import { backupCreate, backupDelete, backupList, backupRestore } from "./server/backup";
+import {
+  backupArchiveFile,
+  backupCreate,
+  backupDelete,
+  backupDropUpload,
+  backupJobGet,
+  backupList,
+  backupReadUpload,
+  backupRestore,
+  backupRestoreFileStart,
+  backupValidateUpload,
+} from "./server/backup";
 import { hostStatus } from "./server/host-status";
 // mmdvm/lp100a: import dinâmico nos handlers — evita restart do Vite a cada edição.
 
@@ -222,9 +235,50 @@ function vitePluginStorageProxy(): Plugin {
   };
 }
 
-function sendJson(res: { writeHead: (code: number, headers: Record<string, string>) => void; end: (body: string) => void }, code: number, body: unknown) {
-  res.writeHead(code, { "Content-Type": "application/json" });
+function sendJson(
+  res: { writeHead: (code: number, headers: Record<string, string>) => void; end: (body: string) => void },
+  code: number,
+  body: unknown,
+  extra?: Record<string, string>,
+) {
+  res.writeHead(code, { "Content-Type": "application/json", ...extra });
   res.end(JSON.stringify(body));
+}
+
+function vitePluginSupportVpn(): Plugin {
+  return {
+    name: "support-vpn-api",
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use(async (req, res, next) => {
+        const url = req.url?.split("?")[0] ?? "";
+        if (url !== "/api/support/vpn" && url !== "/api/console/session") return next();
+        try {
+          if (req.method === "POST" && url === "/api/console/session") {
+            const raw = await readBody(req);
+            const body = raw ? (JSON.parse(raw) as { user?: string; password?: string }) : {};
+            const token = consoleSessionToken(String(body.user || ""), String(body.password || ""));
+            if (!token) return sendJson(res, 401, { ok: false, error: "auth" });
+            return sendJson(res, 200, { ok: true }, { "Set-Cookie": consoleSessionCookie(token) });
+          }
+          const cookie = Array.isArray(req.headers.cookie) ? req.headers.cookie.join(";") : req.headers.cookie;
+          if (!consoleSessionOk(cookie)) return sendJson(res, 401, { ok: false, error: "auth" });
+          const host = String(req.headers.host || "");
+          if (req.method === "GET" && url === "/api/support/vpn") {
+            return sendJson(res, 200, await supportVpnStatus(host));
+          }
+          if (req.method === "POST" && url === "/api/support/vpn") {
+            const raw = await readBody(req);
+            const body = raw ? (JSON.parse(raw) as { enabled?: boolean }) : {};
+            if (typeof body.enabled !== "boolean") return sendJson(res, 400, { ok: false, state: "error", error: "enabled" });
+            return sendJson(res, 200, await supportVpnSet(body.enabled, host));
+          }
+        } catch {
+          return sendJson(res, 500, { ok: false, state: "error", error: "Falha ao falar com a VPN de suporte." });
+        }
+        next();
+      });
+    },
+  };
 }
 
 function vitePluginSerials(): Plugin {
@@ -735,15 +789,58 @@ function vitePluginBackup(): Plugin {
       server.middlewares.use(async (req, res, next) => {
         const url = req.url?.split("?")[0] ?? "";
         if (!url.startsWith("/api/backup")) return next();
+        const cookie = Array.isArray(req.headers.cookie) ? req.headers.cookie.join(";") : req.headers.cookie;
+        const authed = () => consoleSessionOk(cookie);
         try {
           if (req.method === "GET" && url === "/api/backup") {
             return sendJson(res, 200, backupList());
+          }
+          const job = url.match(/^\/api\/backup\/jobs\/([^/]+)$/);
+          if (req.method === "GET" && job) {
+            const found = backupJobGet(decodeURIComponent(job[1]));
+            if (!found) return sendJson(res, 404, { ok: false, error: "job_not_found" });
+            return sendJson(res, 200, { ok: true, job: found });
+          }
+          const file = url.match(/^\/api\/backup\/([^/]+)\/file$/);
+          if (req.method === "GET" && file) {
+            if (!authed()) return sendJson(res, 401, { ok: false, error: "Sessão expirada. Entre de novo." });
+            const found = backupArchiveFile(decodeURIComponent(file[1]));
+            if (!found.ok) return sendJson(res, found.error === "missing" ? 404 : 400, found);
+            const st = fs.statSync(found.path);
+            res.writeHead(200, {
+              "Content-Type": "application/gzip",
+              "Content-Length": String(st.size),
+              "Content-Disposition": `attachment; filename="${found.filename}"`,
+              "Cache-Control": "no-store",
+            });
+            fs.createReadStream(found.path).pipe(res);
+            return;
           }
           if (req.method === "POST" && url === "/api/backup") {
             const raw = await readBody(req);
             const body = raw ? (JSON.parse(raw) as { user?: string }) : {};
             const result = await backupCreate(String(body.user ?? "admin"));
             return sendJson(res, result.ok ? 200 : 500, result);
+          }
+          if (req.method === "POST" && url === "/api/backup/restore-file") {
+            if (!authed()) return sendJson(res, 401, { ok: false, error: "Sessão expirada. Entre de novo." });
+            let uploaded = "";
+            try {
+              const upload = await backupReadUpload(req);
+              if (!upload.ok) return sendJson(res, 400, upload);
+              uploaded = upload.path;
+              const valid = await backupValidateUpload(upload.path, upload.filename);
+              if (!valid.ok) {
+                backupDropUpload(uploaded);
+                return sendJson(res, 400, valid);
+              }
+              const started = backupRestoreFileStart(upload.path, upload.confirm);
+              uploaded = "";
+              return sendJson(res, started.ok ? 200 : 400, started);
+            } catch (err) {
+              if (uploaded) backupDropUpload(uploaded);
+              return sendJson(res, 500, { ok: false, error: String(err) });
+            }
           }
           const del = url.match(/^\/api\/backup\/([^/]+)$/);
           if (req.method === "DELETE" && del) {
@@ -933,6 +1030,7 @@ export default defineConfig(({ command }) => ({
           vitePluginBackup(),
           vitePluginHost(),
           vitePluginUsers(),
+          vitePluginSupportVpn(),
           vitePluginTerm(),
         ]),
   ],

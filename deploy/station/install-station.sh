@@ -63,8 +63,10 @@ install -o root -g root -m 0755 "$HERE/station-user" /opt/ham-cockpit/bin/statio
 install -o root -g root -m 0755 "$HERE/ser2net-ctl" /opt/ham-cockpit/bin/ser2net-ctl
 install -o root -g root -m 0755 "$HERE/station-net" /opt/ham-cockpit/bin/station-net
 install -o root -g root -m 0755 "$HERE/station-svc" /opt/ham-cockpit/bin/station-svc
+install -o root -g root -m 0755 "$HERE/ham-cockpit-watch.sh" /opt/ham-cockpit/bin/ham-cockpit-watch.sh
 install -o root -g root -m 0755 "$HERE/station-upd" /opt/ham-cockpit/bin/station-upd
 install -o root -g root -m 0755 "$HERE/station-backup" /opt/ham-cockpit/bin/station-backup
+install -o root -g root -m 0755 "$HERE/station-support-vpn" /opt/ham-cockpit/bin/station-support-vpn
 install -o root -g root -m 0755 "$HERE/vfo-display-ctl" /opt/ham-cockpit/bin/vfo-display-ctl
 install -o root -g root -m 0755 "$HERE/vfo-display-kiosk" /opt/ham-cockpit/bin/vfo-display-kiosk
 install -o root -g root -m 0755 "$HERE/vfo-display-idle" /opt/ham-cockpit/bin/vfo-display-idle
@@ -72,10 +74,13 @@ install -o root -g root -m 0755 "$HERE/ldg-serial" /opt/ham-cockpit/bin/ldg-seri
 install -o root -g root -m 0755 "$ROOT/deploy/mmdvm/mmdvm-ctl" /opt/ham-cockpit/bin/mmdvm-ctl
 install -o root -g root -m 0755 "$ROOT/deploy/hamlib/ampctld-spe" /opt/ham-cockpit/bin/ampctld-spe
 install -o root -g root -m 0755 "$ROOT/deploy/hamlib/rigctld-ic705" /opt/ham-cockpit/bin/rigctld-ic705
+install -o root -g root -m 0644 "$ROOT/deploy/hamlib/models.json" /opt/ham-cockpit/hamlib-models.json
 # Shebang CRLF (checkout Windows) → `sudo: unable to execute … mmdvm-ctl`.
 sed -i 's/\r$//' /opt/ham-cockpit/bin/mmdvm-ctl /opt/ham-cockpit/bin/ampctld-spe /opt/ham-cockpit/bin/rigctld-ic705 /opt/ham-cockpit/bin/ser2net-ctl
 install -m 0644 "$HERE/versions.json" /opt/ham-cockpit/versions.json
+# Helper do SPP. Não grava /opt/lextel/config.json (MAC, PIN, canal, autoConnect).
 install -o root -g root -m 0755 "$ROOT/deploy/lextel/lextel-bt" /opt/ham-cockpit/bin/lextel-bt
+sed -i 's/\r$//' /opt/ham-cockpit/bin/lextel-bt
 install -m 0644 "$ROOT/deploy/lextel/99-lextel-rfcomm.rules" /etc/udev/rules.d/99-lextel-rfcomm.rules
 udevadm control --reload-rules 2>/dev/null || true
 install -o root -g root -m 0440 "$HERE/sudoers-hamcockpit" /etc/sudoers.d/ham-cockpit
@@ -108,8 +113,57 @@ else
   (cd /opt/ham-cockpit && npm install --omit=dev)
 fi
 chown -R hamcockpit:hamcockpit /opt/ham-cockpit
-chown root:root /opt/ham-cockpit/bin/root-login /opt/ham-cockpit/bin/station-user /opt/ham-cockpit/bin/ser2net-ctl /opt/ham-cockpit/bin/station-net /opt/ham-cockpit/bin/station-svc /opt/ham-cockpit/bin/station-upd /opt/ham-cockpit/bin/station-backup /opt/ham-cockpit/bin/lextel-bt /opt/ham-cockpit/bin/vfo-display-ctl /opt/ham-cockpit/bin/vfo-display-kiosk /opt/ham-cockpit/bin/vfo-display-idle /opt/ham-cockpit/bin/ldg-serial /opt/ham-cockpit/bin/mmdvm-ctl /opt/ham-cockpit/bin/ampctld-spe /opt/ham-cockpit/bin/rigctld-ic705
-chmod 0755 /opt/ham-cockpit/bin/root-login /opt/ham-cockpit/bin/station-user /opt/ham-cockpit/bin/ser2net-ctl /opt/ham-cockpit/bin/station-net /opt/ham-cockpit/bin/station-svc /opt/ham-cockpit/bin/station-upd /opt/ham-cockpit/bin/station-backup /opt/ham-cockpit/bin/lextel-bt /opt/ham-cockpit/bin/vfo-display-ctl /opt/ham-cockpit/bin/vfo-display-kiosk /opt/ham-cockpit/bin/vfo-display-idle /opt/ham-cockpit/bin/ldg-serial /opt/ham-cockpit/bin/mmdvm-ctl /opt/ham-cockpit/bin/ampctld-spe /opt/ham-cockpit/bin/rigctld-ic705
+chown root:root /opt/ham-cockpit/bin/root-login /opt/ham-cockpit/bin/station-user /opt/ham-cockpit/bin/ser2net-ctl /opt/ham-cockpit/bin/station-net /opt/ham-cockpit/bin/station-svc /opt/ham-cockpit/bin/station-upd /opt/ham-cockpit/bin/station-backup /opt/ham-cockpit/bin/station-support-vpn /opt/ham-cockpit/bin/lextel-bt /opt/ham-cockpit/bin/vfo-display-ctl /opt/ham-cockpit/bin/vfo-display-kiosk /opt/ham-cockpit/bin/vfo-display-idle /opt/ham-cockpit/bin/ldg-serial /opt/ham-cockpit/bin/mmdvm-ctl /opt/ham-cockpit/bin/ampctld-spe /opt/ham-cockpit/bin/rigctld-ic705
+chmod 0755 /opt/ham-cockpit/bin/root-login /opt/ham-cockpit/bin/station-user /opt/ham-cockpit/bin/ser2net-ctl /opt/ham-cockpit/bin/station-net /opt/ham-cockpit/bin/station-svc /opt/ham-cockpit/bin/station-upd /opt/ham-cockpit/bin/station-backup /opt/ham-cockpit/bin/station-support-vpn /opt/ham-cockpit/bin/lextel-bt /opt/ham-cockpit/bin/vfo-display-ctl /opt/ham-cockpit/bin/vfo-display-kiosk /opt/ham-cockpit/bin/vfo-display-idle /opt/ham-cockpit/bin/ldg-serial /opt/ham-cockpit/bin/mmdvm-ctl /opt/ham-cockpit/bin/ampctld-spe /opt/ham-cockpit/bin/rigctld-ic705
+
+# Hamlib do rádio: prefixo 4.6+ (TCP no Icom). O apt 4.5.5 abre host:port em UDP.
+# Não mexe em services.json — a porta 4002 viva fica como está.
+install_hamlib_prefix() {
+  local dest=/opt/ham-cockpit/hamlib
+  local lib="$dest/lib/libhamlib.so.4"
+  local tgz="" c arch
+  if [[ -x "$dest/bin/rigctld" && -r "$lib" ]] \
+    && ! grep -a -q -F 'Icom rig UDP network enabled' "$lib"; then
+    echo "install-station: Hamlib em $dest já abre Icom em TCP"
+    return 0
+  fi
+  for c in \
+    "$ROOT/update/hamlib-arm64.tgz" \
+    "$ROOT/hamlib-arm64.tgz" \
+    /opt/ham-cockpit/hamlib-arm64.tgz
+  do
+    if [[ -f "$c" ]]; then
+      tgz="$c"
+      break
+    fi
+  done
+  arch="$(uname -m)"
+  if [[ -z "$tgz" && "$arch" == aarch64 && -x "$ROOT/deploy/hamlib/build-hamlib.sh" ]]; then
+    echo "install-station: compilando Hamlib 4.6 (Icom em TCP)…"
+    OUT=/tmp/hamlib-arm64.tgz bash "$ROOT/deploy/hamlib/build-hamlib.sh"
+    tgz=/tmp/hamlib-arm64.tgz
+  fi
+  if [[ -z "$tgz" || ! -f "$tgz" ]]; then
+    echo "install-station: ERRO — sem Hamlib 4.6; o apt 4.5.5 abre Icom host:port em UDP" >&2
+    return 1
+  fi
+  rm -rf "$dest"
+  mkdir -p "$dest"
+  tar -xzf "$tgz" -C "$dest"
+  cp -a "$tgz" /opt/ham-cockpit/hamlib-arm64.tgz
+  chown -R root:root "$dest" /opt/ham-cockpit/hamlib-arm64.tgz
+  if [[ ! -x "$dest/bin/rigctld" || ! -r "$lib" ]]; then
+    echo "install-station: ERRO — prefixo sem rigctld" >&2
+    return 1
+  fi
+  if grep -a -q -F 'Icom rig UDP network enabled' "$lib"; then
+    echo "install-station: ERRO — prefixo ainda abre Icom host:port em UDP" >&2
+    return 1
+  fi
+  echo "install-station: Hamlib TCP em $dest"
+}
+install_hamlib_prefix
+
 chown -R hamcockpit:hamcockpit /opt/lextel
 chmod 0775 /opt/lextel
 
@@ -144,6 +198,8 @@ chown -R hamcockpit:hamcockpit /opt/wavelog-gate
 
 install -m 0644 "$HERE/ham-cockpit.target" /etc/systemd/system/ham-cockpit.target
 install -m 0644 "$HERE/ham-cockpit.service" /etc/systemd/system/ham-cockpit.service
+install -m 0644 "$HERE/ham-cockpit-watch.service" /etc/systemd/system/ham-cockpit-watch.service
+install -m 0644 "$HERE/ham-cockpit-watch.timer" /etc/systemd/system/ham-cockpit-watch.timer
 install -m 0644 "$HERE/ham-cockpit-ap.service" /etc/systemd/system/ham-cockpit-ap.service
 install -m 0644 "$HERE/first-boot.service" /etc/systemd/system/first-boot.service
 install -m 0644 "$ROOT/deploy/ser2net/ser2net.service" /etc/systemd/system/ser2net.service
@@ -207,11 +263,15 @@ if [[ -d "$ROOT/deploy/mmdvm/patches" ]]; then
   cp -a "$ROOT/deploy/mmdvm/patches/." /opt/ham-cockpit/bin/patches/
 fi
 
-# UART GPIO do HAT MMDVM (Pi 3/4): PL011 livre em /dev/ttyAMA0.
-# disable-bt libera o UART principal nos pinos GPIO (Bluetooth off).
-# Sem console serial/getty ocupando a porta (padrão WPSD / Pi-Star).
+# UART GPIO do Dual Hat: PL011 em /dev/ttyAMA0. Não mover o modem para ttyS0 nem USB.
+# Bluetooth na mini-UART (ttyS0); o chip onboard continua ligado (miniuart-bt).
+# No Pi 4: core_freq_min=500 só impede o VPU de cair (baud da mini-UART estável).
+# Sem core_freq= fixo — teto explícito faz o firmware largar o turbo do ARM.
+# arm_boost=1 devolve o turbo de fábrica (1,8 GHz no Rev 1.4+). Não usar core_freq=250.
+# Dongle USB é o caminho definitivo depois.
+# Sem console serial/getty ocupando ttyAMA0 (padrão WPSD / Pi-Star).
 configure_mmdvm_uart() {
-  local cfg cmd model
+  local cfg cmd model tmp uart_note
   model=""
   if [[ -r /proc/device-tree/model ]]; then
     model="$(tr -d '\0' </proc/device-tree/model 2>/dev/null || true)"
@@ -220,11 +280,51 @@ configure_mmdvm_uart() {
   for cfg in /boot/firmware/config.txt /boot/config.txt; do
     [[ -f "$cfg" ]] || continue
     grep -qE '^[[:space:]]*enable_uart=1' "$cfg" || echo 'enable_uart=1' >>"$cfg"
-    # Preferir disable-bt; normaliza overlays antigos (miniuart-bt / pi3-*).
-    if grep -qE '^[[:space:]]*dtoverlay=(miniuart-bt|pi3-miniuart-bt|pi3-disable-bt|disable-bt)' "$cfg"; then
-      sed -i -E 's/^[[:space:]]*dtoverlay=(miniuart-bt|pi3-miniuart-bt|pi3-disable-bt|disable-bt).*/dtoverlay=disable-bt/' "$cfg"
+    # Uma linha ativa. disable-bt / pi3-* saem; comentário antigo não conta.
+    sed -i -E '/^[[:space:]]*dtoverlay=(miniuart-bt|pi3-miniuart-bt|pi3-disable-bt|disable-bt)([[:space:]]|$)/d' "$cfg"
+    uart_note='# Bluetooth na mini-UART; ttyAMA0 no Dual Hat; core_freq_min=500 só impede o VPU de cair (baud estável); arm_boost devolve o turbo da CPU.'
+    if grep -qF 'Bluetooth na mini-UART' "$cfg"; then
+      sed -i -E "s|^[[:space:]]*# Bluetooth na mini-UART.*|${uart_note}|" "$cfg"
     else
-      echo 'dtoverlay=disable-bt' >>"$cfg"
+      echo "$uart_note" >>"$cfg"
+    fi
+    echo 'dtoverlay=miniuart-bt' >>"$cfg"
+    # Piso do VPU só no [pi4]. core_freq= explícito larga o turbo do ARM. Sem teto fixo.
+    if grep -qE '^\[pi4\][[:space:]]*$' "$cfg"; then
+      tmp="$(mktemp)"
+      awk '
+        function emit() {
+          if (!seen_m) print "core_freq_min=500"
+          if (!seen_b) print "arm_boost=1"
+          seen_m = 1
+          seen_b = 1
+        }
+        /^\[/ {
+          if (in4) emit()
+          in4 = ($0 ~ /^\[pi4\][[:space:]]*$/)
+          inall = ($0 ~ /^\[all\][[:space:]]*$/)
+          print
+          next
+        }
+        (in4 || inall) && /^[[:space:]]*core_freq_min=/ {
+          if (in4) { print "core_freq_min=500"; seen_m=1 }
+          next
+        }
+        (in4 || inall) && /^[[:space:]]*core_freq=/ { next }
+        in4 && /^[[:space:]]*arm_boost=/ { print "arm_boost=1"; seen_b=1; next }
+        { print }
+        END { if (in4) emit() }
+      ' "$cfg" >"$tmp" && cat "$tmp" >"$cfg"
+      rm -f "$tmp"
+    elif [[ "$model" == *"Pi 4"* || "$model" == *"Pi 400"* || "$model" == *"Compute Module 4"* ]]; then
+      sed -i -E '/^[[:space:]]*core_freq=/d' "$cfg"
+      sed -i -E '/^[[:space:]]*core_freq_min=/d' "$cfg"
+      echo 'core_freq_min=500' >>"$cfg"
+      if grep -qE '^[[:space:]]*arm_boost=' "$cfg"; then
+        sed -i -E 's/^[[:space:]]*arm_boost=.*/arm_boost=1/' "$cfg"
+      else
+        echo 'arm_boost=1' >>"$cfg"
+      fi
     fi
     break
   done
@@ -289,10 +389,20 @@ if [[ "${MMDVM_BUILD_BINARIES:-auto}" != "0" ]]; then
 fi
 install -m 0644 "$HERE/ham-cockpit-vfo.service" /etc/systemd/system/ham-cockpit-vfo.service
 install -m 0644 "$HERE/ham-cockpit-vfo-idle.service" /etc/systemd/system/ham-cockpit-vfo-idle.service
+# VPN de suporte: unit instalada, mas não habilitada. O botão do console é quem liga.
+install -m 0644 "$HERE/ham-cockpit-support-vpn.service" /etc/systemd/system/ham-cockpit-support-vpn.service
+install -d -o root -g root -m 0755 /opt/ham-cockpit/support
+if [[ -f "$HERE/support/client.ovpn" ]]; then
+  install -o root -g root -m 0600 "$HERE/support/client.ovpn" /opt/ham-cockpit/support/client.ovpn
+fi
+if [[ -f "$HERE/support/auth.txt" ]]; then
+  install -o root -g root -m 0600 "$HERE/support/auth.txt" /opt/ham-cockpit/support/auth.txt
+fi
 # Cópia das units da estação no tree do console (mesmo layout do pacote OTA).
 install -d /opt/ham-cockpit/systemd
 for u in ham-cockpit.service ham-cockpit-ap.service ham-cockpit.target first-boot.service \
-  ham-cockpit-vfo.service ham-cockpit-vfo-idle.service wavelog.service; do
+  ham-cockpit-watch.service ham-cockpit-watch.timer \
+  ham-cockpit-vfo.service ham-cockpit-vfo-idle.service ham-cockpit-support-vpn.service wavelog.service; do
   if [[ -f "/etc/systemd/system/$u" ]]; then
     install -m 0644 "/etc/systemd/system/$u" "/opt/ham-cockpit/systemd/$u"
   fi
@@ -346,6 +456,7 @@ enable_units ssh.service
 enable_units sshd.service
 enable_units docker.service docker.socket nginx.service NetworkManager.service avahi-daemon.service
 enable_units ham-cockpit.target ham-cockpit.service ham-cockpit-ap.service first-boot.service
+enable_units ham-cockpit-watch.timer
 enable_units ser2net.service 'rigctld@ic705.service' wavelog.service waveloggate.service
 # SPE: protocolo nativo em ser2net (rfc2217, 115200). Hamlib é o rigctld do rádio. ampctld não sobe.
 systemctl disable --now ampctld@spe.service >/dev/null 2>&1 || true

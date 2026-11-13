@@ -1,0 +1,2432 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-11-11",
+  "locale": "pt-BR",
+  "scope": "Acessórios de radioamador controláveis via serial CAT, Ethernet/Wi-Fi ou Bluetooth. Exclui transceptores HF/VHF/UHF, HT, mobile e base radios.",
+  "relevanceRankingMethod": "Ordem subjetiva por proxies (não há market share público): presença contínua em catálogo DX Engineering/HRO, reviews eHam, backend Hamlib rotctld/ampctld, menções em software de contestação/remotos (PstRotator, N1MM, AetherSDR, DDUtil) e linha de produto ainda fabricada. NÃO é participação de mercado.",
+  "hamlibWikiRotators": "https://github.com/Hamlib/Hamlib/wiki/Supported-Rotators",
+  "hamlibWikiAmps": "https://github.com/Hamlib/Hamlib/wiki/Supported-Amplifiers",
+  "hamlibReleaseCited": "4.7.1",
+  "items": [
+    {
+      "id": "yaesu-gs232b",
+      "rank": 1,
+      "maker": "Yaesu",
+      "model": "GS-232B (controla G-800/G-1000/G-2800 DXA/DXC e G-5400/G-5500 Az/El)",
+      "category": "rotor_controller",
+      "relevanceNotes": "Interface RS-232 de facto para rotors Yaesu; G-1000DXC/G-2800DXC ainda em produção e muito citados em DX. Hamlib estável (601–612). Proxy: linha contínua + rotctl + HRD/PstRotator.",
+      "physicalDisplay": "O GS-232B em si não tem display. O controlador Yaesu nativo mostra azimute analógico 0–450°, LED de alimentação e, nos DXC, preset e indicador de sentido. Az/El (G-5500) tem dois medidores.",
+      "software": {
+        "name": "Hamlib rotctld, PstRotator, Ham Radio Deluxe Rotor, Gpredict, N1MM Rotor",
+        "platforms": [
+          "Windows",
+          "Linux",
+          "macOS (via Hamlib)"
+        ],
+        "uiPresents": [
+          "azimute/elevação",
+          "goto",
+          "stop",
+          "velocidade (GS-232B níveis 1–4)",
+          "rastreio satélite"
+        ]
+      },
+      "protocol": {
+        "family": "Yaesu GS-232B ASCII",
+        "notes": "Comandos ASCII. C → AZ=aaa; C2 → AZ=aaa EL=eee; B → EL=eee (GS-232B). GS-232A responde +0aaa / +0aaa+0eee. Não misturar backends A e B.",
+        "public": true
+      },
+      "link": {
+        "transport": [
+          "serial_rs232"
+        ],
+        "baud": [
+          1200,
+          2400,
+          4800,
+          9600
+        ],
+        "defaultBaud": 4800,
+        "framing": "8N1",
+        "connector": "DB-9 macho no GS-232B; cabo straight para o PC",
+        "pinoutPublic": "DB-9: 2 TX, 3 RX, 5 GND, 7 RTS, 8 CTS. Mini-DIN 5 pinos AZ/EL no controlador Yaesu (EXT CONTROL). Autobaud: Enter nos primeiros 15 s após ligar."
+      },
+      "hamlib": {
+        "daemon": "rotctld",
+        "model": 603,
+        "macro": "ROT_MODEL_GS232B",
+        "status": "Stable",
+        "relatedModels": [
+          601,
+          602,
+          606,
+          609,
+          610,
+          611,
+          612
+        ]
+      },
+      "cockpitPriority": "P0",
+      "cockpitNotes": "Primeiro rotor: rotctld :4533, mesmo padrão do hub CAT. Distinguir GS-232A vs B nas respostas.",
+      "sources": [
+        "https://github.com/Hamlib/Hamlib/wiki/Supported-Rotators",
+        "https://github.com/Hamlib/Hamlib/blob/master/rotators/gs232a/gs232b.c",
+        "Manual GS-232B (Passion Radio / Yaesu): 1200–9600 8N1, pinout DB-9",
+        "https://www.eham.net/reviews/view-product/4030"
+      ],
+      "gaps": [
+        "Pinout exato do mini-DIN EXT CONTROL do G-1000DXC não foi recitado linha a linha neste levantamento."
+      ]
+    },
+    {
+      "id": "hygain-dcu",
+      "rank": 2,
+      "maker": "Hy-Gain (MFJ/Ameritron lineage)",
+      "model": "DCU-1 Pathfinder / DCU-3 / YRC-1 + HAM-IV / T2X",
+      "category": "rotor_controller",
+      "relevanceNotes": "HAM-IV/T2X é a base instalada clássica na América do Norte. DCU-1 definiu o protocolo AP1/AM1 copiado pelo RT-21. YRC-1 é o sucessor USB.",
+      "physicalDisplay": "DCU-3/YRC-1: display digital de azimute, memórias, LEDs de sentido. Controlador analógico original: medidor 0–360 e chave L/R.",
+      "software": {
+        "name": "Hamlib rotctld (DCU / YRC1), HRD, DX4WIN (perfil DCU-1)",
+        "platforms": [
+          "Windows",
+          "Linux"
+        ],
+        "uiPresents": [
+          "azimute alvo",
+          "goto",
+          "em DCU-2/3/YRC-1 leitura de heading"
+        ]
+      },
+      "protocol": {
+        "family": "Hy-Gain DCU-1 ASCII (estilo Kenwood ;)",
+        "notes": "AP1nnn; define rumo 000–359; AM1; inicia rotação. 4800 8N1. DCU-1 original NÃO devolve heading. DCU-2/3/YRC-1 adicionam leitura (Hamlib YRC1 406).",
+        "public": true
+      },
+      "link": {
+        "transport": [
+          "serial_rs232",
+          "usb_cdc"
+        ],
+        "baud": [
+          4800
+        ],
+        "defaultBaud": 4800,
+        "framing": "8N1 ASCII",
+        "connector": "DCU-3: RS-232 DB-9 e USB (jumper interno U vs R, um de cada vez). Rotor: cabo 8 fios para HAM-IV/T2X.",
+        "pinoutPublic": "Rotor 8 fios: pino 1 a pino 1 (manual Hy-Gain). RS-232 típico 2/3/5. USB alimentado pelo host."
+      },
+      "hamlib": {
+        "daemon": "rotctld",
+        "model": 403,
+        "macro": "ROT_MODEL_DCU",
+        "status": "Stable",
+        "relatedModels": [
+          406
+        ]
+      },
+      "cockpitPriority": "P0",
+      "cockpitNotes": "Usar 403 para DCU-1 (sem feedback) e 406 para DCU-2/3/YRC-1. Não usar em rotors não Hy-Gain.",
+      "sources": [
+        "http://www.radiomanual.info/schemi/ACC_rotator/Hy-gain_DCU-1_X_user.pdf",
+        "https://w4nnx.com/files/Manuals/Hygain%20Products/DCU-3/DCU-3%20Manual%20v2.pdf",
+        "https://github.com/Hamlib/Hamlib/wiki/Supported-Rotators",
+        "https://www.eham.net/reviews/view-product/13343"
+      ],
+      "gaps": [
+        "Conjunto exato de comandos de leitura de heading no YRC-1 não foi extraído do PDF neste ciclo."
+      ]
+    },
+    {
+      "id": "greenheron-rt21",
+      "rank": 3,
+      "maker": "Green Heron Engineering",
+      "model": "RT-21",
+      "category": "rotor_controller",
+      "relevanceNotes": "Controlador digital de contestação/DX; substitui caixas Yaesu/Hy-Gain/Create/Prosistel/SPID. Hamlib 405. GH Everyware para TCP.",
+      "physicalDisplay": "LCD retroiluminado amarelo-verde: heading com até 0,1°, rampa PWM, limites, modo Az/El/EME. Botões CCW/CW e knob point-and-shoot.",
+      "software": {
+        "name": "RT-21 SETUP Utility, GH Everyware, GH Tracker, Hamlib, PstRotator",
+        "platforms": [
+          "Windows (oficial)",
+          "Linux via Hamlib"
+        ],
+        "uiPresents": [
+          "heading 0.1°",
+          "offsets",
+          "master/slave",
+          "rastreio satélite",
+          "rede TCP"
+        ]
+      },
+      "protocol": {
+        "family": "DCU-1 superset",
+        "notes": "Compatível com DCU-1 (AP1/AM1) a 4800 8N1; comandos extras Green Heron (heading com décimos). USB suprime saída RS-232 salvo M/S. Az/El = dois USB (issue Hamlib #747).",
+        "public": true
+      },
+      "link": {
+        "transport": [
+          "serial_rs232",
+          "usb_cdc",
+          "tcp_via_gh_everyware"
+        ],
+        "baud": [
+          4800,
+          9600
+        ],
+        "defaultBaud": 4800,
+        "framing": "8N1",
+        "connector": "USB-B + DB-9 RS-232. Cabo straight 2-2, 3-3, 5-5.",
+        "pinoutPublic": "DB-9 mínimo TX/RX/GND. Firmware update: DB-9 (v2) ou USB (v3)."
+      },
+      "hamlib": {
+        "daemon": "rotctld",
+        "model": 405,
+        "macro": "ROT_MODEL_RT21",
+        "status": "Stable"
+      },
+      "cockpitPriority": "P0",
+      "cockpitNotes": "Az/El precisa de dois rotctld. Preferir rotctld nativo a emular DCU-1.",
+      "sources": [
+        "https://www.greenheronengineering.com/product/rotator-controller-rt-21/",
+        "https://www.greenheronengineering.com/wp-content/uploads/2019/04/RT-21_Manual_current.pdf",
+        "https://github.com/Hamlib/Hamlib/issues/747"
+      ],
+      "gaps": [
+        "Lista completa dos comandos extras (não DCU) não foi transcrita; consultar manual §5.2."
+      ]
+    },
+    {
+      "id": "spe-expert-fa",
+      "rank": 4,
+      "maker": "SPE (Expert)",
+      "model": "1.3K-FA / 1.5K-FA / 2K-FA",
+      "category": "amplifier",
+      "relevanceNotes": "PA estado sólido mais citado em estações DX/contest com ATU e 2–6 antenas. Hamlib ampctld 401–403 (4.7.1). Software Term_* oficial.",
+      "physicalDisplay": "LCD: banda, OPERATE/STANDBY, potência L/M/H, Pout, SWR ATU, SWR ant, V/I PA, temperatura, alarmes, entrada 1/2, antena.",
+      "software": {
+        "name": "Term_1.5K_USB / Term_1.5K_232 (e equivalentes 1.3K/2K); Hamlib ampctl",
+        "platforms": [
+          "Windows (Term_*)",
+          "Linux (Hamlib)"
+        ],
+        "uiPresents": [
+          "espelho do painel",
+          "operate/standby",
+          "potência",
+          "SWR",
+          "firmware"
+        ]
+      },
+      "protocol": {
+        "family": "SPE proprietary binary (Application Programmers Guide rev 1.1)",
+        "notes": "Host→amp: 0x55 0x55 0x55 | CNT | DATA | CHK. Amp→host status: 0xAA 0xAA 0xAA | LEN | CSV | chk | CR LF. CAT do rádio é separado (CI-V/Kenwood/Yaesu/Band Data) no conector CAT do PA — não é o protocolo PC.",
+        "public": true
+      },
+      "link": {
+        "transport": [
+          "usb_cdc",
+          "serial_rs232",
+          "tcp_via_serial_bridge"
+        ],
+        "baud": [
+          9600,
+          14400,
+          19200,
+          28800,
+          38400,
+          57600,
+          115200
+        ],
+        "defaultBaud": 115200,
+        "framing": "8N1",
+        "connector": "USB (recomendado local) OU RS-232 (remoto/Internet). Não usar os dois ao mesmo tempo. CAT do rádio: DE-15 no PA.",
+        "pinoutPublic": "PC USB/RS-232: Term_* define 8N1; amp sincroniza baud pelo padrão. CAT rádio: ver manual CONNECTIONS (Icom CI-V ~9600, Kenwood ~9600, Yaesu ~4800)."
+      },
+      "hamlib": {
+        "daemon": "ampctld",
+        "model": 402,
+        "macro": "AMP_MODEL_EXPERT_15K_FA",
+        "status": "Beta",
+        "relatedModels": [
+          401,
+          403
+        ]
+      },
+      "cockpitPriority": "P1",
+      "cockpitNotes": "ampctld além de rigctld. Não reutilizar a porta CAT do rádio. Guia SPE: https://www.spetlc.com/images/download/SPE_Application_Programmers_Guide.pdf",
+      "sources": [
+        "https://github.com/Hamlib/Hamlib/wiki/Supported-Amplifiers",
+        "https://www.spetlc.com/images/download/1.5K-FA/User.Manual.EXPERT.1.5K-FA-EN-rev.3.2.Third.Series.pdf",
+        "https://www.spetlc.com/images/download/SPE_Application_Programmers_Guide.pdf",
+        "https://github.com/vu2cpl/spe-remote"
+      ],
+      "gaps": [
+        "Tabela completa de códigos de tecla além de 0x0D (OPERATE) e 0x90 (STATUS) deve vir só do APG oficial, não de reverse engineering incompleto."
+      ]
+    },
+    {
+      "id": "elecraft-kpa1500",
+      "rank": 5,
+      "maker": "Elecraft",
+      "model": "KPA1500",
+      "category": "amplifier",
+      "relevanceNotes": "PA estado sólido 1500 W com ATU integrado (2 antenas), padrão contest/DX Elecraft. Único PA Elecraft no ampctld (201). Ethernet TCP/UDP 1500 documentado. Utility Win/Mac/Linux. Não confundir com o KPA500 (500 W, sem Ethernet, Hamlib comentado).",
+      "physicalDisplay": "LCD alfanumérico 2 linhas + bargraphs LED: OPERATE/STBY, banda, Pout, SWR, temperatura, estado do ATU (IN/BYP/TUNE), antena 1/2, alarmes. Comando ^DS; devolve as duas linhas do LCD.",
+      "software": {
+        "name": "KPA1500 Utility; KPA1500 Remote (client/server, default TCP 4526)",
+        "platforms": [
+          "Windows",
+          "macOS",
+          "Linux x86"
+        ],
+        "uiPresents": [
+          "espelho do painel",
+          "OPERATE/STBY",
+          "ATU IN/BYP/TUNE",
+          "ANT 1/2",
+          "firmware USB-only",
+          "Command Tester",
+          "IP/porta",
+          "mini views"
+        ]
+      },
+      "protocol": {
+        "family": "Elecraft ASCII ^cmd;",
+        "notes": "Mesmo conjunto ASCII ^cmd; em USB Host, XCVR SERIAL (se HOST) e TCP/UDP porta 1500 (alterável ^CP). Wake-on-LAN a partir do FW 01.67. CAT do rádio no XCVR SERIAL é separado do command server Ethernet. Não inventar opcodes: só Programming Reference V3.",
+        "public": true
+      },
+      "link": {
+        "transport": [
+          "usb_cdc",
+          "serial_rs232",
+          "ethernet_tcp",
+          "ethernet_udp"
+        ],
+        "baud": [
+          4800,
+          9600,
+          19200,
+          38400,
+          57600,
+          115200,
+          230400
+        ],
+        "defaultBaud": null,
+        "framing": "8N1 sem flow control; pacing por resposta",
+        "connector": "USB-B Host PC (FTDI); Ethernet RJ45; XCVR SERIAL para o rádio.",
+        "pinoutPublic": "TCP/UDP 1500 no IP DHCP. Firmware só via USB Host, nunca Ethernet."
+      },
+      "hamlib": {
+        "daemon": "ampctld",
+        "model": 201,
+        "macro": "AMP_MODEL_ELECRAFT_KPA1500",
+        "status": "Beta"
+      },
+      "cockpitPriority": "P1",
+      "cockpitNotes": "Ethernet nativo evita ser2net. ampctld -m 201. Utility Remote usa 4526 — não confundir com 1500 do command server.",
+      "sources": [
+        "https://ftp.elecraft.com/KPA1500/Manuals%20Downloads/KPA1500ProgrammingReferenceV3.pdf",
+        "https://elecraft.com/pages/kpa1500-owners-manual",
+        "https://elecraft.com/pages/kpa1500-kpa500-kat500-remote-software"
+      ],
+      "gaps": [
+        "Baud padrão de fábrica do Host USB não foi confirmado neste ciclo (Utility faz autodetect com ';')."
+      ]
+    },
+    {
+      "id": "elecraft-kpa500",
+      "rank": 6,
+      "maker": "Elecraft",
+      "model": "KPA500",
+      "category": "amplifier",
+      "relevanceNotes": "500 W extremamente difundido (PowerCombo com KAT500). Protocolo público. Hamlib AMP_MODEL_ELECRAFT_KPA500 está comentado — não suportado no ampctld atual.",
+      "physicalDisplay": "Display alfanumérico + bargraphs LED de potência/SWR; botões de banda; OPERATE/STBY.",
+      "software": {
+        "name": "KPA500 Utility; KPA500 Remote (contribuído); AetherSDR",
+        "platforms": [
+          "Windows",
+          "macOS",
+          "Linux"
+        ],
+        "uiPresents": [
+          "OPERATE",
+          "banda",
+          "Pout/SWR",
+          "fan",
+          "firmware"
+        ]
+      },
+      "protocol": {
+        "family": "Elecraft ASCII ^cmd;",
+        "notes": "Programmers Ref oficial. Sem Ethernet nativo (diferente do KPA1500). AetherSDR: 38400 8N1 ou ser2net raw.",
+        "public": true
+      },
+      "link": {
+        "transport": [
+          "usb_cdc",
+          "serial_rs232",
+          "tcp_via_ser2net"
+        ],
+        "baud": [
+          4800,
+          9600,
+          19200,
+          38400
+        ],
+        "defaultBaud": 38400,
+        "framing": "8N1",
+        "connector": "USB/RS-232 PC DATA. KEY IN RCA. Band data/BCD opcional — WARC Icom band-voltage é ambíguo.",
+        "pinoutPublic": "Níveis RS-232 no PC DATA. Não usar tensão de banda Icom em 17/12 m."
+      },
+      "hamlib": {
+        "daemon": "ampctld",
+        "model": null,
+        "macro": "AMP_MODEL_ELECRAFT_KPA500 (comentado em amplist.h)",
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P1",
+      "cockpitNotes": "Driver nativo ASCII ou contribuir Hamlib. Não esperar -m KPA500 hoje.",
+      "sources": [
+        "https://ftp.elecraft.com/KPA/Manuals%20Downloads/KPA500%20Programmers%20Ref.pdf",
+        "https://hamlib.sourceforge.net/manuals/4.3/amplist_8h_source.html",
+        "https://docs.aethersdr.com/amplifiers"
+      ],
+      "gaps": [
+        "Confirmar baud de fábrica no menu SERIAL SPEED do aparelho em cada unidade."
+      ]
+    },
+    {
+      "id": "flex-pgxl",
+      "rank": 7,
+      "maker": "FlexRadio / 4O3A",
+      "model": "Power Genius XL (PGXL)",
+      "category": "amplifier",
+      "relevanceNotes": "PA LDMOS 1500 W ICAS 100% duty cycle (todas as modalidades, headroom ~2000 W; 220 VAC para potência plena; ~750 W se ≤180 VAC). SO2R nativo (70 dB entre entradas). Integração LAN com FLEX-6000/8000 (PTT LAN, banda/freq via Ethernet). API TCP 9008 publicada (wiki SmartSDR). Sem ampctld. Alta prioridade em estação Flex; fora do ecossistema Flex usa CAT/CI-V/BCD no próprio PA.",
+      "physicalDisplay": "LCD touch: splash + POST na subida; IP na tela. OPERATE/STANDBY (botão STBY/OPER). Em TX: potência pico/média (atualiza ~100 ms; faixa vermelha acima de 1500 W), SWR, tensão/corrente de dreno LDMOS, PTT, banda, fonte de band data (FLEX/CAT/CI-V/BCD/P2B/SENSE; AUTO marca *), classe, indicador MEffA. Configuração FLEX/CAT/CI-V também no touch.",
+      "software": {
+        "name": "Power Genius XL Utility (Windows); SmartSDR Win/Mac / Maestro (medidores via rádio); AetherSDR applet PGXL; FRStack/Node-RED via TCP 9008",
+        "platforms": [
+          "Windows",
+          "macOS (SmartSDR)",
+          "Maestro"
+        ],
+        "uiPresents": [
+          "espelho do painel",
+          "OPERATE/STBY",
+          "Pout/SWR/temp",
+          "MEffA on/off",
+          "SO2R portas A/B",
+          "pareamento serial Flex",
+          "PTT LAN",
+          "firmware",
+          "WAN + auth code (TCP 9008)"
+        ]
+      },
+      "protocol": {
+        "family": "4O3A/Flex Genius ASCII (TCP) + CAT do rádio (DB-9 / CI-V / BCD) separado",
+        "notes": "Controle do PA: TCP 9008. Banner V<a.b.c> [AUTH]. Comando C<seq>|comando CR; resposta R<seq>|<hex>|<msg>; status assíncrono S0|<msg>. Discovery UDP 9008 no subnet local (não 255.255.255.255). WAN: auth code (mesmo mecanismo Genius). Comandos documentados no wiki: status, setup read, ifconf read/set, catradio read/set, flexradio read/set, save (reboot). Paired Flex: PGXL abre discovery do rádio, registra Amplifier API, meters FWD/RL/DRV/ID/TEMP, PTT/banda via slice — não habilita PTT LAN se o PTT for fio. CAT do rádio (não é o protocolo PC): dialetos Elecraft, Kenwood, Icom, Yaesu_1/2/3; cabo DB-9 fêmea-fêmea straight; só VFO A no CAT clássico. Não misturar CAT/CI-V/BCD na mesma porta A/B já pareada com Flex. Não inventar o restante dos opcodes: wiki PowerGenius-Ethernet-API + user guide.",
+        "public": true
+      },
+      "link": {
+        "transport": [
+          "ethernet_tcp",
+          "ethernet_udp",
+          "serial_rs232_radio_cat",
+          "civ_bus",
+          "bcd"
+        ],
+        "baud": [],
+        "defaultBaud": null,
+        "framing": "TCP ASCII 9008; CAT do rádio conforme dialeto (baud no Utility/touch)",
+        "connector": "LAN RJ45. Drive A/B e Out A/B SO-239. CAT A/B DB-9 macho opto. CI-V A/B 3,5 mm. BCD/PTB A/B DE-15. PTT IN/OUT RCA A/B. Sample -60 dBc BNC A/B.",
+        "pinoutPublic": "TCP/UDP 9008. Kenwood CAT: DB-9 straight F-F. Flex: PTT = LAN (não RCA). Limite de stack: até 10 TCP + 10 UDP simultâneos (Harmony); rádio pareado usa 1 TCP in + 1 TCP out + 1 UDP meters."
+      },
+      "hamlib": {
+        "daemon": "ampctld",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P1",
+      "cockpitNotes": "P1 em estação Flex: cliente TCP 9008 (status / flexradio / meters via rádio 4992). Não usar ampctld. Não reutilizar a porta CAT do rádio se o PA já estiver em LAN. Acoplador companheiro: Tuner Genius XL (TCP 9010), item flex-tgxl.",
+      "sources": [
+        "https://www.flexradio.com/products/powergenius-xl/",
+        "https://4o3a.com/images/downloads/pgxl/Power-Genius-XL-User-Guide.pdf",
+        "https://github.com/flexradio/smartsdr-api-docs/wiki/PowerGenius-Ethernet-API",
+        "https://helpdesk.flexradio.com/hc/en-us/articles/12181101391899-Configuring-PGXL-and-TGXL-for-Remote-Operation-with-the-latest-versions-of-firmware",
+        "https://github.com/Hamlib/Hamlib/wiki/Supported-Amplifiers",
+        "https://docs.aethersdr.com/amplifiers"
+      ],
+      "gaps": [
+        "Lista completa de hex_response de falha e de todos os campos do `status` deve vir só do wiki/PDF 4O3A, não de captura incompleta.",
+        "Formato exato do datagrama UDP de discovery além do regex name=value do wiki."
+      ]
+    },
+    {
+      "id": "flex-tgxl",
+      "rank": 8,
+      "maker": "FlexRadio / 4O3A",
+      "model": "Tuner Genius XL (TGXL) — 1×3 ou SO2R",
+      "category": "tuner",
+      "relevanceNotes": "Acoplador 1500 W ICAS / pico 2000 W, 1,8–54 MHz, até 10:1, memória <20 ms. LAN nativa com PGXL e Flex 6000/8000. API TCP 9010 no mesmo estilo Genius (publicada). Sem Hamlib. Par natural do PGXL; não é o KAT500.",
+      "physicalDisplay": "LCD colorido touch 4,5\" (110 mm): potência de entrada, SWR, PTT, porta A/B, fonte de frequência (LAN/CAT/CI-V/BCD/PTB/RF SENSE), solução C-L-C, IP e versão de firmware, alarmes (SWR>10:1, high power, wrong band).",
+      "software": {
+        "name": "Tuner Genius XL Utility (Windows); SmartSDR; AetherSDR (DIRECT 9010 ou relay do rádio)",
+        "platforms": [
+          "Windows",
+          "macOS (SmartSDR)"
+        ],
+        "uiPresents": [
+          "espelho do painel",
+          "TUNE",
+          "C/L/C manual",
+          "antenas 1×3 ou SO2R",
+          "SWR/Pout",
+          "WAN auth code (TCP 9010)"
+        ]
+      },
+      "protocol": {
+        "family": "4O3A Genius ASCII (TCP), mesmo envelope do PGXL",
+        "notes": "TCP 9010 (também UDP discovery 9010). Banner V… ou V… AUTH. C<id>|comando; R<id>|<code>|<msg>; S0|state …. WAN: C1|auth <code> antes de qualquer outro comando. AetherSDR documenta tune relay=0|1|2 move=±1 (C1/L/C2). Integração Flex também via relay do rádio (sem 9010 direto). CAT/CI-V/BCD do rádio são entradas de banda, não o protocolo PC. Não transcrever o PDF proprietário TG_XL_API_Commands além do que está no wiki/AetherSDR/user guide.",
+        "public": true
+      },
+      "link": {
+        "transport": [
+          "ethernet_tcp",
+          "ethernet_udp",
+          "serial_rs232_radio_cat",
+          "civ_bus",
+          "bcd"
+        ],
+        "baud": [],
+        "defaultBaud": null,
+        "framing": "TCP ASCII 9010",
+        "connector": "LAN RJ45; RF SO-239 (1×3 ou 2×2 SO2R); CAT/CI-V/BCD/PTB; PTT IN/OUT; DC 12–16 V ~2 A",
+        "pinoutPublic": "TCP/UDP 9010. Flex: PTT LAN. WAN: forward 9010 + auth code."
+      },
+      "hamlib": {
+        "daemon": "nenhum",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P1",
+      "cockpitNotes": "Cliente TCP 9010 paralelo ao PGXL 9008. Não ampctld. Não assumir os mesmos comandos `status` do PA.",
+      "sources": [
+        "https://www.flexradio.com/products/tuner-genius-xl/",
+        "https://static.dxengineering.com/global/images/instructions/o3a-tgxl-1x3_fv.pdf",
+        "https://helpdesk.flexradio.com/hc/en-us/articles/12181101391899-Configuring-PGXL-and-TGXL-for-Remote-Operation-with-the-latest-versions-of-firmware",
+        "https://docs.aethersdr.com/tgxl-tuner-control",
+        "https://docs.aethersdr.com/peripherals"
+      ],
+      "gaps": [
+        "Vocabulário completo do PDF 4O3A TG_XL_API_Commands não foi transcrito aqui — só envelope + auth + tune relay citados por AetherSDR."
+      ]
+    },
+    {
+      "id": "steppir-sda",
+      "rank": 9,
+      "maker": "SteppIR",
+      "model": "SDA-100 / SDA-2000",
+      "category": "yagi_controller",
+      "relevanceNotes": "Padrão de Yagi motorizada HF. PstRotator, N8LP VCP, AA5SH SteppirController. Protocolo de comando: SteppIR pede contato a support@steppir.com — não republicar bytes.",
+      "physicalDisplay": "SDA-100: LCD frequência, direção Normal/180/Bi, motores ativos, AutoUpdate. SDA-2000: painel maior/touch na linha atual (confirmar SKU).",
+      "software": {
+        "name": "N8LP SteppIR VCP; PstRotatorAz SteppIR window; AA5SH SteppirController; LP-StepLink (emula Kenwood FA)",
+        "platforms": [
+          "Windows",
+          "macOS/Linux (AA5SH)"
+        ],
+        "uiPresents": [
+          "frequência",
+          "Norm/180/Bi/3/4",
+          "Home",
+          "Calibrate",
+          "AutoTrack",
+          "status do motor"
+        ]
+      },
+      "protocol": {
+        "family": "SteppIR serial proprietário (Data Out) + escuta CAT Kenwood/Icom/Yaesu no Data In",
+        "notes": "Data In = rádio (pinout não padrão por cabo). Data Out = PC, cabo null-modem 3 fios F-F. Baud 4800–19200 (Data In até 57600). Modo Amateur no controlador deve estar OFF para PstRotator. Bytes de comando: obter do fabricante.",
+        "public": false
+      },
+      "link": {
+        "transport": [
+          "serial_rs232",
+          "tcp_serial_adapter"
+        ],
+        "baud": [
+          4800,
+          9600,
+          19200
+        ],
+        "defaultBaud": null,
+        "framing": "8N1 (assumido pelos apps; não recitar tabela de comandos)",
+        "connector": "Dois DB-9: Data In (rádio) e Data Out (PC).",
+        "pinoutPublic": "Data Out: 3 fios null modem apenas. Data In: cabos específicos por marca de rádio (doc SteppIR 2021)."
+      },
+      "hamlib": {
+        "daemon": "nenhum",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P2",
+      "cockpitNotes": "Integrar via PstRotator (Hamlib rot 3) como ponte, ou NDA/protocolo SteppIR. Não inventar opcodes.",
+      "sources": [
+        "https://consumer.steppir.com/wp-content/uploads/2021/05/Updated-Serial-Interface-Document-2021.pdf",
+        "https://pstrotator.com/",
+        "http://www.telepostinc.com/steppir.html",
+        "https://www.aa5sh.com/?page_id=416"
+      ],
+      "gaps": [
+        "Especificação de bytes Data Out não é pública no PDF de 2021.",
+        "Diferenças SDA-2000 vs SDA-100 no protocolo não confirmadas."
+      ]
+    },
+    {
+      "id": "elecraft-kat500",
+      "rank": 10,
+      "maker": "Elecraft",
+      "model": "KAT500",
+      "category": "tuner",
+      "relevanceNotes": "ATU de 500 W mais documentado (Serial Command Reference). Combo com KPA500. Sem backend Hamlib de tuner.",
+      "physicalDisplay": "LCD: antena 1/2/3, AUTO/MAN, SWR, L/C, banda, BYPASS.",
+      "software": {
+        "name": "KAT500 Utility; AetherSDR (em progresso)",
+        "platforms": [
+          "Windows",
+          "macOS",
+          "Linux"
+        ],
+        "uiPresents": [
+          "SWR",
+          "antena",
+          "tune/bypass",
+          "memórias",
+          "baud BR"
+        ]
+      },
+      "protocol": {
+        "family": "Elecraft ASCII ; terminated",
+        "notes": "PC DATA 4800/9600/19200/38400 8N1. Utility descobre velocidade com ';'. Sem flow control.",
+        "public": true
+      },
+      "link": {
+        "transport": [
+          "serial_rs232",
+          "usb_via_adapter",
+          "tcp_via_ser2net"
+        ],
+        "baud": [
+          4800,
+          9600,
+          19200,
+          38400
+        ],
+        "defaultBaud": 38400,
+        "framing": "8N1",
+        "connector": "PC DATA serial. Jack Icom tuner 3,5 mm (START/KEY). KEY OUT para o PA.",
+        "pinoutPublic": "PC DATA RS-232. Handshake Icom no jack dedicado, não no PC DATA."
+      },
+      "hamlib": {
+        "daemon": "nenhum",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P2",
+      "cockpitNotes": "Driver ASCII paralelo ao KPA500. Hamlib não tem ampctld-equivalent para ATU.",
+      "sources": [
+        "https://ftp.elecraft.com/KAT500/Manuals%20Downloads/KAT500%20Automatic%20Antenna%20Tuner%20Serial%20Command%20Reference.pdf"
+      ],
+      "gaps": []
+    },
+    {
+      "id": "palstar-hf-auto",
+      "rank": 11,
+      "maker": "Palstar",
+      "model": "AT-AUTO (legado) / HF-AUTO",
+      "category": "tuner",
+      "relevanceNotes": "ATU high-power com motor L/C, comum em estações QRO. Protocolo AT-AUTO já arquivado no repo. HF-AUTO usa app W1TR + UDP XML. Palstar posiciona o LA-1K como par do HF-AUTO (PA separado, id palstar-la1k).",
+      "physicalDisplay": "AT-AUTO: LCD L, C, SWR, modo Auto/Manual/Smart, frequência se CAT. HF-AUTO: display similar com encoder.",
+      "software": {
+        "name": "W1TR HF-AUTO; DDUtil; firmware loader Palstar",
+        "platforms": [
+          "Windows"
+        ],
+        "uiPresents": [
+          "L/C",
+          "SWR",
+          "antena",
+          "tune",
+          "tracking de frequência via XML/UDP"
+        ]
+      },
+      "protocol": {
+        "family": "AT-AUTO: CI-V-like 0xFE 0xFE … 0xFD (addr padrão 0xE0) + escuta Kenwood/Yaesu. HF-AUTO: app W1TR, RS-232 principalmente firmware (relatos Flex: controle remoto limitado sem W1TR).",
+        "notes": "AT-AUTO: 1200–57600, default 9600 8N1. RS-232 NÃO é TTL. Pin 7 DB-9 = reset do processador — não ligar. Repo: docs/protocolos/atauto_protocol.txt",
+        "public": true
+      },
+      "link": {
+        "transport": [
+          "serial_rs232",
+          "civ_bus"
+        ],
+        "baud": [
+          1200,
+          2400,
+          4800,
+          9600,
+          19200,
+          38400,
+          57600
+        ],
+        "defaultBaud": 9600,
+        "framing": "8N1 ou 8N2 (alguns Yaesu)",
+        "connector": "DB-9 RS-232; DIN transceiver data (CI-V pino 5 OC); handshake tuner Icom/Kenwood.",
+        "pinoutPublic": "DB-9: 2 TX from tuner, 3 RX to tuner, 5 GND, 7 RESET. CI-V no conector Transceiver Data pino 5."
+      },
+      "hamlib": {
+        "daemon": "nenhum",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P2",
+      "cockpitNotes": "AT-AUTO: parser CI-V no gateway. HF-AUTO: tratar como produto distinto; não assumir os mesmos opcodes.",
+      "sources": [
+        "https://www.randl.com/man2/palstar/atauto.pdf",
+        "docs/protocolos/atauto_protocol.txt",
+        "https://k5fr.com/binary/Palstar%20HF%20Auto%20Setup.pdf"
+      ],
+      "gaps": [
+        "Protocolo binário/XML completo do HF-AUTO (W1TR) não está no PDF AT-AUTO.",
+        "Não confirmar que HF-AUTO fala o mesmo 0xFE do AT-AUTO."
+      ]
+    },
+    {
+      "id": "telepost-lp100a",
+      "rank": 12,
+      "maker": "Telepost (N8LP)",
+      "model": "LP-100A",
+      "category": "wattmeter",
+      "relevanceNotes": "Wattímetro vetorial com RS-232 e VCP Windows; DDUtil, AetherSDR. Sem Hamlib.",
+      "physicalDisplay": "GVFD: potência (bar + numérico), SWR, modos Normal/Vector (Z, θ, R, X)/dBm/FS/compressão; callsign screensaver.",
+      "software": {
+        "name": "LP-100A Virtual Control Panel; Plot; PolarPlot; DDUtil; AetherSDR",
+        "platforms": [
+          "Windows (oficial)",
+          "rede via serial server"
+        ],
+        "uiPresents": [
+          "Pfwd/Pref/SWR",
+          "Z/fase",
+          "dBm",
+          "alarme SWR",
+          "callsign"
+        ]
+      },
+      "protocol": {
+        "family": "Telepost ASCII poll",
+        "notes": "115200 8N1 (FW ≥1.2.0.0; antes 38400/19200). Poll 'P' maiúsculo → 43 bytes começando com ';' campos CSV: power, Z, phase, alarm, call, range, mode, dBm, SWR. Ex.: ;1457.00,49.3,005.0,2,N8LP ,0,2,61.6,1.02",
+        "public": true
+      },
+      "link": {
+        "transport": [
+          "serial_rs232",
+          "tcp_via_lantronix_digi"
+        ],
+        "baud": [
+          115200
+        ],
+        "defaultBaud": 115200,
+        "framing": "8N1",
+        "connector": "DB-9 RS-232 straight M-F. PTT loop RCA. Coupler RF separado.",
+        "pinoutPublic": "Cabo straight, não null-modem. Sem handshake necessário."
+      },
+      "hamlib": {
+        "daemon": "nenhum",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P2",
+      "cockpitNotes": "Poll simples; card de wattímetro independente do rádio. Checar firmware para baud.",
+      "sources": [
+        "http://telepostinc.com/LP-100A-Op_Manual.pdf",
+        "https://www.k5fr.com/DDUtilV3wiki/index.php/WattMtrs",
+        "https://docs.aethersdr.com/amplifiers"
+      ],
+      "gaps": [
+        "Lista completa de comandos além de P (set alarm, mode) não foi extraída do manual neste ciclo."
+      ]
+    },
+    {
+      "id": "ompower-auto-pa",
+      "rank": 13,
+      "maker": "OM Power",
+      "model": "OM2000A+ / OM2501A / OM3501A / OM4001A (auto); irmãos OM2000+ / OM2501HF / OM4001HF (manual); legado OM2500A / OM3500A / OM4000A + caixa remota",
+      "category": "amplifier",
+      "relevanceNotes": "PA a tetrodo QRO eslovaco ainda fabricado; DX Engineering + Array Solutions (EUA). eHam: OM2000+ ~29 reviews (5.0), OM2000A+ 11 (4.9), OM2500HF 25 (4.9). Sem ampctld (wiki 4.7.1 só Dummy/NET/KPA1500/Gemini/SPE). LAN oficial + HF_PA_Manager; protocolo 10001 não público. Ranking PA: abaixo de SPE/KPA1500/KPA500/PGXL (Hamlib ou API LAN publicada); acima da ACOM S e do Palstar LA-1K (utility oficial + Ethernet nativo).",
+      "physicalDisplay": "Modelos A+/A atuais: TFT colorido touch 4,3\". Home: família CAT, frequência, banda/segmento, STBY/OPER, countdown de aquecimento (~180 s), callsign. MEAS: valores instantâneos + até 3 bargraphs (8 parâmetros selecionáveis; nomes dos 8 não recitados do PDF — imagens no manual). INFO: SN, versão de software, time ON, SN do tubo, tensão de rede. FAULTS: últimas 20. OM2000+ manual: OLED 4×20, 3 linhas editáveis; LEDs ON AIR / STBY / FAULT / ON. OM4001C comercial: mesmo tipo de touch 4,3\" (cobertura contínua 5–25 ou 10–30 MHz, não ham bands).",
+      "software": {
+        "name": "HF_PA_Manager / Remote control software 3.40–3.41 (Windows .exe no site); firmware loader 3.7 + MX460L.exe; RCU legado 1.49/1.51 nos OM2500A/3500A/4000A; OpsLog (terceiros, TCP 10001)",
+        "platforms": [
+          "Windows (oficial)",
+          "terceiros no PC que fale TCP 10001"
+        ],
+        "uiPresents": [
+          "ON/OFF",
+          "STBY/OPERATE",
+          "antenas pré-programadas",
+          "últimos 20 faults/warnings",
+          "fine tune remoto",
+          "parâmetros de operação",
+          "vistas Minimal/Normal/Advanced"
+        ]
+      },
+      "protocol": {
+        "family": "OM Power sobre Lantronix XPort (TCP) — não publicado pelo fabricante",
+        "notes": "Controle do PA é LAN, não USB e não o DB-9 PC. XPort XP1001000-05R: GUI HTTP; TCP de dados default 10001; Telnet de setup 9999 (site OM Power exige as duas portas no software 3.41). IP default OM2000A+ 192.168.1.211, OM4001A 192.168.1.222, máscara 255.255.255.0, GW 192.168.1.1. Bytes do protocolo 10001: OM Power não publica; NÃO inventar nem copiar reverse engineering. CAT do rádio é outro caminho (TCVR DB-9 / CI-V / BCD). DB-9 PC no manual é CAT pass-through para o computador, não ampctld. OpsLog: no OM4000A o DB-9 não emitiu byte de telemetria do PA. Firmware: cabo null-modem no TCVR, 115200, MX460L — só upgrade, não runtime.",
+        "public": false
+      },
+      "link": {
+        "transport": [
+          "ethernet_tcp",
+          "serial_rs232_radio_cat",
+          "civ_bus",
+          "bcd"
+        ],
+        "baud": [
+          9600,
+          115200
+        ],
+        "defaultBaud": null,
+        "framing": "CAT do rádio conforme família (ex. Flex 9600 no menu FLEXRADIO). XPort: TCP, não baud de usuário no Cockpit.",
+        "connector": "LAN RJ45 (XPort). TCVR DB-9 macho: CAT RS-232 pino 2 RX-D, 3 TX-D, 5 GND. CI-V 3,5 mm (ponta = CI-V). PC DB-9 fêmea: pass-through CAT 2 TX-D, 3 RX-D, 5 GND. CONTROL DB-15: PTT, CI-V, BCD Yaesu in, Icom band data, INHIBIT. ANT/BPF DB-15: BCD antena (até 10) + BCD banda para OM6BPF. KEY IN/OUT RCA.",
+        "pinoutPublic": "LAN: TCP 10001 + HTTP/Telnet 9999. OM2500A/OM4000A: XPort fica na caixa remota (OM-2500AREM / OM-4000AREM); o RJ45 no chassi do PA liga à caixa e NÃO é Ethernet — não plugar em switch/PC. USB nativo do PA: não; Flex usa adaptador USB-serial + null-modem no TCVR."
+      },
+      "hamlib": {
+        "daemon": "ampctld",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P2",
+      "cockpitNotes": "P2 junto com ACOM: Ethernet nativo é atraente, mas sem spec OM Power não implementar 10001. Não usar ampctld. Não reutilizar a porta CAT do rádio. Distinguir geração A+ (XPort no PA) vs 2500A/4000A (XPort na caixa remota).",
+      "sources": [
+        "https://www.om-power.com/products/om2000aplus",
+        "https://www.om-power.com/products/om2501a",
+        "https://www.om-power.com/downloads",
+        "https://www.py2kp.com/files/om2000Aplus_18_03_10.pdf",
+        "https://www.om-power.com/pdf/om2000_plus_manual.pdf",
+        "https://github.com/Hamlib/Hamlib/wiki/Supported-Amplifiers",
+        "https://www.eham.net/reviews/view-product/13273",
+        "https://www.dxengineering.com/search/brand/om-power",
+        "https://github.com/GregTroar/OpsLog/wiki/Amplifiers-and-Switches"
+      ],
+      "gaps": [
+        "Vocabulário/frames TCP 10001 não publicados pela OM Power — não implementar.",
+        "Lista dos 8 parâmetros dos bargraphs MEAS só nas figuras do manual.",
+        "Baud CAT Icom/Kenwood/Yaesu: escolher no touch SETTINGS; não há um único default recitado aqui."
+      ]
+    },
+    {
+      "id": "acom-s-series",
+      "rank": 14,
+      "maker": "ACOM",
+      "model": "500S / 600S / 700S / 1200S / 2020S",
+      "category": "amplifier",
+      "relevanceNotes": "Linha SS europeia muito presente em DX. Sem ampctld. AetherSDR e projetos comunitários documentam frames 72 bytes.",
+      "physicalDisplay": "LCD: STANDBY/OPERATE/TX, banda, Pout, Pref, SWR, temperatura, códigos de erro.",
+      "software": {
+        "name": "AetherSDR; ACOM-Controller comunitário; sem utility ampctld",
+        "platforms": [
+          "Windows/Linux via apps de terceiros"
+        ],
+        "uiPresents": [
+          "Pout",
+          "SWR",
+          "temp",
+          "banda",
+          "operate/stby",
+          "erros"
+        ]
+      },
+      "protocol": {
+        "family": "ACOM S-series binary (comunitário)",
+        "notes": "RS-232 9600 8N1. Telemetria: frames 72 bytes sync 0x55 0x2F, checksum soma mod 256. Enable telemetry 0x55 0x92 0x04 0x15 (recovered por AetherSDR/OpsLog — tratar como comunitário até manual ACOM). CAT do rádio no PA é separado.",
+        "public": "parcial"
+      },
+      "link": {
+        "transport": [
+          "serial_rs232",
+          "tcp_via_ser2net"
+        ],
+        "baud": [
+          9600
+        ],
+        "defaultBaud": 9600,
+        "framing": "8N1",
+        "connector": "RS-232 no PA. DTR/RTS: cuidado — alguns relatos de power-on por linha de modem.",
+        "pinoutPublic": "9600 8N1. Pinout DB-9 padrão de DCE não recitado do manual oficial neste ciclo."
+      },
+      "hamlib": {
+        "daemon": "ampctld",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P2",
+      "cockpitNotes": "Não implementar opcodes só com reverse engineering. Pedir manual CAT ACOM ou usar Hamlib se/quando existir.",
+      "sources": [
+        "https://docs.aethersdr.com/amplifiers",
+        "https://github.com/aethersdr/AetherSerialBridge",
+        "https://iw7dmh.jimdofree.com/sunsdr2-pages/configuring-sunsdr2-for-acom-600s-pa/"
+      ],
+      "gaps": [
+        "Manual oficial do protocolo PC ACOM S-series não foi obtido.",
+        "Offsets de temperatura diferem por modelo (comunitário)."
+      ]
+    },
+    {
+      "id": "palstar-la1k",
+      "rank": 15,
+      "maker": "Palstar",
+      "model": "LA-1K",
+      "category": "amplifier",
+      "relevanceNotes": "PA LDMOS 1000 W PEP / 1000 W CW ICAS (160–6 m; FM/RTTY 500 W, AM ~250–275 W). Ainda fabricado (EUA), combo natural com HF-AUTO já no catálogo. TFT + RF-sense (banda sem cabo). RS-232 para PC documentado pelo firmware Palstar (comando AM1;). TRX-Manager (FW ≥1.03H) e Node-RED comunitário. Sem ampctld. Abaixo de SPE/Elecraft/PGXL/OM/ACOM (Hamlib ou LAN/spec mais completa); acima de Alpha (produção encerrada) e Ameritron (sem telemetria PC publicada).",
+      "physicalDisplay": "TFT colorido touch: MODE STANDBY/OPR, BAND (160/80/40/20–15/12–10/6), ANT 1/2/3 (seta amarela), barra de potência (vermelha só em TX), TX quando PTT aterra, SWR, temperatura (vermelha >70 °C), ALC, Vd, Id, frequência (só ~20 ms após PTT no FW recente). Faults piscando: BYPASS SWR, BYPASS TEMP (>100 °C), TX OVERDRIVE (~60 W drive), BYPASS +Vd, BYPASS FQ (2.002/4.502/9.002/22.002 MHz), TX WAIT. MENU: power-up STANDBY/LAST USED/OPERATE, NORMAL vs DIRECT KEYING, backlight, ALC base. USB frontal só firmware.",
+      "software": {
+        "name": "TRX-Manager (espelho do painel, FW ≥1.03H); Node-RED Palstar Flows (groups.io, WO2X/Alan); loader USB de firmware Palstar",
+        "platforms": [
+          "Windows (TRX-Manager, firmware)",
+          "Node-RED"
+        ],
+        "uiPresents": [
+          "OPR/STBY",
+          "Pout",
+          "temperatura",
+          "Id",
+          "espelho TFT (TRX-Manager)"
+        ]
+      },
+      "protocol": {
+        "family": "Palstar LA-1K RS-232 ASCII (estilo Kenwood ;) no conector Band Control — lista completa não está no user manual",
+        "notes": "Conector 'RS-232 Band Control (Kenwood)': também controla o PA a partir do PC. Palstar (changelog FW 1.08S) documenta AM1; para OPERATE (enviar duas vezes se o filtro de banda estiver errado). FW 1.05H: mensagem de status RS-232 inclui keying (3=overdrive, 5=fault Id, 9=fault +Vd) e versão de firmware no fim. Baud: o PDF de usuário NÃO publica — não inventar; comunidade pede cabo straight DB-9 M-F + FTDI e 'conferir baud' (Kenwood no rádio: null-modem no manual). USB frontal = só update de firmware, não CAT. CAT/banda do rádio é outro caminho: Radio Interface (BCD Yaesu/Elecraft, tensão Icom, Amp-Key) ou RF-sense (padrão; cabo de banda normalmente desnecessário). Sem Ethernet. Sem Hamlib. Não recitar AM0/AP1 sem spec Palstar.",
+        "public": "parcial"
+      },
+      "link": {
+        "transport": [
+          "serial_rs232",
+          "usb_firmware_only",
+          "bcd",
+          "icom_band_voltage",
+          "ptt_rca"
+        ],
+        "baud": [],
+        "defaultBaud": null,
+        "framing": "ASCII com ; (AM1; documentado Palstar). Baud não recitado no manual.",
+        "connector": "RF IN + 3× SO-239 (ou N) ANT. PTT RCA obrigatório. Radio Interface DB-9 (BCD/Icom/Kenwood custom/Amp-Key). RS-232 Band Control DB-9 (Kenwood/PC). USB painel frontal (firmware). Sample +10 dBm @ 1 kW.",
+        "pinoutPublic": "Radio Interface: 1 BCD B, 2 BCD A, 3 Kenwood RX IN (cabo custom), 4 Kenwood TX OUT (custom), 5 Icom band voltage, 6 GND, 7 Amp-Key IN, 8 BCD D, 9 BCD C. BCD: 60 m 0000 … 6 m 1010 (DBCA). Icom pin 5: 160 m 7,5 V … 6 m 1,5 V (17/15 e 12/10 compartilham). RS-232 Band Control: 2 TX, 3 RX, 5 GND, 7 RTS, 8 pull-up 1 kΩ a +12 V (Kenwood)."
+      },
+      "hamlib": {
+        "daemon": "ampctld",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P2",
+      "cockpitNotes": "Driver ASCII mínimo: AM1; no Band Control, depois status — só depois de obter a tabela Palstar/TRX-Manager. Não ampctld. USB não é runtime. Distinguir do HF-AUTO (UDP/W1TR).",
+      "sources": [
+        "https://www.palstar.com/en/product-manuals/manual_la-1k.pdf",
+        "https://www.palstar.com/en/la1k/",
+        "https://groups.io/g/la1k/topic/remoting_the_la_1k_easy/28811551",
+        "https://community.flexradio.com/discussion/8024426/palstar-and-6600m",
+        "https://github.com/Hamlib/Hamlib/wiki/Supported-Amplifiers"
+      ],
+      "gaps": [
+        "Baud de fábrica e lista completa de comandos/status RS-232 não estão no user manual — não implementar o restante."
+      ]
+    },
+    {
+      "id": "alpha-rf",
+      "rank": 16,
+      "maker": "Alpha (ETO / Alpha Radio Products / Alpha RF Systems); suporte Dishtronix / Ten-Tec",
+      "model": "87A (auto); 9500 (auto, 3CX1500/8877); 8410 (manual, 100% duty); 8406 (6 m)",
+      "category": "amplifier",
+      "relevanceNotes": "Padrão ouro USA de PA valvulados (legal limit, QSK, contest/DX). Produção de unidades novas essencialmente encerrada (mudança CO→OH 2021–22; loja de peças online fechada em 2023; fabricação limitada/incerta). Dishtronix lista suporte a 9500/9510/8410/8406/2100/2000 (peças dos últimos ~10 anos); 87A: microprocessador obsoleto, peças difíceis. Sem ampctld. Protocolos PC documentados pelo fabricante (87A ASCII; 9500/8410 sentenças $APA).",
+      "physicalDisplay": "87A: botões BAND 1,8–28 MHz + 5 SEGMENT com LED; OPER/STBY; HI/LO; medidor analógico (HV/Ip/TUNE) + potência. 9500: painel com LEDs de estado, motores de TUNE/LOAD, medição via placa master. 8410: sintonia manual; medidores de potência/Ip; LEDs de grade; telemetria no Monitor AE9K.",
+      "software": {
+        "name": "87A: AlphaRemote (Windows, exige ROM AlphaMax); 9500: interface USB/RS-232 (manual Remote Operation); 8410/8406: Alpha 8410 Monitor (AE9K) + bootloader Colt",
+        "platforms": [
+          "Windows"
+        ],
+        "uiPresents": [
+          "OPERATE/STBY",
+          "banda/segmento (87A)",
+          "TUNE/LOAD",
+          "Pout/Pref",
+          "HV/Ip/grid",
+          "faults",
+          "firmware (8410 USB)"
+        ]
+      },
+      "protocol": {
+        "family": "Alpha serial ASCII — três gerações, não misturar",
+        "notes": "87A: RS-232 DB-25F, default 4800 8N1 sem fluxo; pinos 9/12/22 no amp selecionam baud (não ligar ao PC). Comandos texto + Enter: VER, STAT, OPER ON/OFF, BAND, FREQ kHz, PWR, REFL, TUNE, LOAD, SF, HF, AC ON/OFF, AUTOTUNE ON/OFF (AlphaMax). 9500: USB FTDI (recomendado) ou RS-232 DB-9, 115200 8N1; habilitar com +++ ; sentenças $APAnn,…*FCS estilo NMEA + Fletcher 4 dígitos. USB e RS-232 mutuamente exclusivos (USB ganha se plugado). 8410/8406: só USB VCP FTDI 115200 8N1; login #1,123456; parser #,0,cmd (20–26 devolvem $APA20–26); FW ≥2.02e adiciona OPER/STBY remoto para o Monitor AE9K. CAT do rádio (banda) é outro caminho quando existir — não confundir com o porto PC. Sem Ethernet nativo. Sem Hamlib.",
+        "public": true
+      },
+      "link": {
+        "transport": [
+          "serial_rs232",
+          "usb_cdc"
+        ],
+        "baud": [
+          150,
+          300,
+          600,
+          1200,
+          2400,
+          4800,
+          9600,
+          115200
+        ],
+        "defaultBaud": 4800,
+        "framing": "87A: 8N1 4800 (default). 9500/8410: 8N1 115200",
+        "connector": "87A DB-25F. 9500 DB-9 + USB. 8410 USB.",
+        "pinoutPublic": "87A DB-25F → PC: 2 TXD, 3 RXD, 4 RTS, 5 CTS, 7 GND. Não ligar 9, 12, 13, 14, 22 (baud/diagnóstico). 9500: um cabo de cada vez (USB ou RS-232)."
+      },
+      "hamlib": {
+        "daemon": "ampctld",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P2",
+      "cockpitNotes": "Driver ASCII por geração (87A ≠ 9500 ≠ 8410). Não ampctld. 87A pode responder com amp só na tomada (micro ligado). Não implementar 8410 sem o PDF de comandos/AE9K à mão para OPER/STBY.",
+      "sources": [
+        "https://www.alpharfsystems.com/wp-content/uploads/2016/05/87A_Manual_2016.pdf",
+        "https://www.alpharfsystems.com/wp-content/uploads/2016/05/Alpha-9500-Remote-Operation.pdf",
+        "https://www.alpharfsystems.com/wp-content/uploads/2017/03/Alpha9500_R1.3_121916_manual.pdf",
+        "https://www.alpharfsystems.com/wp-content/uploads/2016/05/8410_Commands_and_Strings.pdf",
+        "https://www.tentec.com/support/",
+        "https://github.com/Hamlib/Hamlib/wiki/Supported-Amplifiers"
+      ],
+      "gaps": [
+        "Tabela completa $APA do 9500: só o PDF Remote Operation (não recitada linha a linha aqui).",
+        "Status comercial 2025–26: suporte Dishtronix confirmado; calendário de unidades novas não é catálogo aberto."
+      ]
+    },
+    {
+      "id": "ameritron-pa",
+      "rank": 17,
+      "maker": "Ameritron (MFJ Enterprises → ITU Corporation, Linton IN, anúncio 2026-06-09)",
+      "model": "ALS-1306 / ALS-1406 / ALS-606 (SS); ALS-600 + ARI-500; AL-80B; AL-811 / AL-811H; AL-1500; RCS-12 (switch, band data)",
+      "category": "amplifier",
+      "relevanceNotes": "Maior base instalada de PA de shack nos EUA (valvulados AL-80B/AL-811 e SS ALS). MFJ encerrou Starkville em 2024-05-17; ITU adquiriu Ameritron+Mirage em 2026-06 e consolida produção em Linton até o fim de 2026 (acompanhar Hy-Gain.com). Sem ampctld. CAT no sentido PC↔PA quase inexistente: o que existe é band data do rádio (BCD/tensão Icom/Kenwood RS-232) e cabeçote remoto analógico. RCS-4/8V são tensão no coax, sem serial (já no excludedOrGaps).",
+      "physicalDisplay": "ALS-1306: dois medidores analógicos iluminados (PEP fwd/ref, HV, ALC, balance dos módulos), LEDs de banda, TX, ALC, chave OPERATE/STANDBY, banda REM (segue o rádio). AL-80B/AL-811: medidores cruzados clássicos, Tune/Load, OPERATE. ARI-500/ALS-500RC: caixa remota com LEDs de banda, não LCD CAT.",
+      "software": {
+        "name": "Nenhum utility PC oficial de telemetria do PA. ARI-500 / ALS-500RC (hardware). Cabos band-data Ameritron (DB-9 rádio).",
+        "platforms": [
+          "N/A (hardware)"
+        ],
+        "uiPresents": [
+          "banda automática (ALS-1306/606/1406, ARI-500)",
+          "OPERATE no painel ou cabeçote remoto",
+          "RCS-12: antena por banda (LEDs 1–8)"
+        ]
+      },
+      "protocol": {
+        "family": "Band data do rádio + cabeçote remoto Ameritron — não há protocolo PC publicado do PA",
+        "notes": "ALS-1306: RADIO INTERFACE (cabo específico) lê tensão de banda Icom (17/12 m ambíguos), BCD Elecraft/Yaesu, ou RS-232 Kenwood só para seguir banda — não é ampctld nem CAT bidirecional. QST 2016: Kenwood RS-232 do ALS-1306 conflita com logger na mesma UART. REMOTE A/B = RJ45 para cabeçote Ameritron / 'interface box' (controles e medição); o manual não publica o vocabulário serial desses RJ45. ALS-600 (SN ≥14378): RJ45 frontais para ALS-500RC e/ou ARI-500 (CAT-5). AL-80B / AL-811 / AL-1500: RELAY + ALC, sem CAT. RCS-12: band decoder + interlock de PTT; não é Ethernet. Não inventar opcodes dos RJ45 REMOTE.",
+        "public": false
+      },
+      "link": {
+        "transport": [
+          "band_data",
+          "serial_rs232_radio_cat",
+          "rj45_remote_head",
+          "ptt_rca"
+        ],
+        "baud": [],
+        "defaultBaud": null,
+        "framing": "Band data conforme rádio; RJ45 remoto não documentado no PDF de usuário",
+        "connector": "ALS-1306: RF IN/OUT SO-239, RELAY, ALC, KEY LOOP, RADIO INTERFACE, REMOTE RJ45 A/B, fonte separada. AL-80B: RELAY/ALC clássicos.",
+        "pinoutPublic": "RELAY ALS-1306: ~12 V aberto, <20 mA, T/R ~12 ms (Lab ARRL). Cabos band-data: DB-9F no PA (DX Engineering AME-DB-*). Pinout RJ45 REMOTE: não recitado no manual — não implementar."
+      },
+      "hamlib": {
+        "daemon": "ampctld",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P3",
+      "cockpitNotes": "Sem telemetria PC. No Cockpit: no máximo GPIO/PTT e, se um dia houver spec do RJ45, o cabeçote. Não tratar band data Kenwood do ALS como CAT do rádio.",
+      "sources": [
+        "https://www.randl.com/man2/ameritron/als1306.pdf",
+        "https://www.arrl.org/files/file/ProductReviewsForDeb/2016/pr012016.pdf",
+        "https://www.lintonnews.com/itu-corporation-acquires-ameritron-and-mirage-rf-amplifier-brands-from-mfj-enterprises-free-article/",
+        "https://www.dxengineering.com/parts/ame-db-8dy",
+        "https://github.com/Hamlib/Hamlib/wiki/Supported-Amplifiers"
+      ],
+      "gaps": [
+        "Protocolo dos RJ45 REMOTE A/B do ALS-1306 não está no manual de usuário.",
+        "Produção ITU em Linton: SKUs e firmware 2027+ ainda não verificados em bancada."
+      ]
+    },
+    {
+      "id": "qro-hf",
+      "rank": 18,
+      "maker": "QRO Technologies (Ray Connin KB8VU, EUA)",
+      "model": "HF-2000 (2× 3-500ZG); HF-2500 / HF-2500DX (tetrodo)",
+      "category": "amplifier",
+      "relevanceNotes": "PA valvulados USA de manutenção simples (fábrica direta, 3-500ZG fáceis de achar no HF-2000). Manuais: só RF IN/OUT, KEY XMT, +15 V XMT, ALC — nenhum porto serial/Ethernet/CAT. Exceção consciente ao recorte 'só CAT/LAN': incluído a pedido; irrelevante para ampctld.",
+      "physicalDisplay": "HF-2500DX: dois medidores analógicos — esquerdo sempre Ig tela 0–150 mA; direito (multímetro) HV, Ip 0–2,8 A, tensão de tela, etc.; wattímetro de saída no painel; OPERATE/STANDBY; Tune/Load 6:1. HF-2000: wattímetro + ALC no painel, dual meters, instant-on (triodo, sem aquecimento de tetrodo).",
+      "software": {
+        "name": "Nenhum",
+        "platforms": [],
+        "uiPresents": []
+      },
+      "protocol": {
+        "family": "nenhum (PTT/ALC analógico)",
+        "notes": "KEY XMT: contato NA em RX, fecha em TX; sink 12 VDC @ 80 mA. Alternativa +15 V XMT se o rádio tiver. ALC 0 a −20 V. Sem RS-232, USB, CI-V, BCD ou LAN nos manuais HF-2000 / HF-2500DX. Não inventar CAT.",
+        "public": false
+      },
+      "link": {
+        "transport": [
+          "ptt_rca",
+          "alc"
+        ],
+        "baud": [],
+        "defaultBaud": null,
+        "framing": "N/A",
+        "connector": "SO-239 RF IN/OUT; RCA KEY XMT / +15 V XMT / ALC; terra",
+        "pinoutPublic": "KEY XMT = T/R do rádio. Sem DB-9."
+      },
+      "hamlib": {
+        "daemon": "nenhum",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P4",
+      "cockpitNotes": "Só card informativo / PTT. Sem driver.",
+      "sources": [
+        "https://www.qrotec.com/Documents/HF2500man.PDF",
+        "https://qrotec.com/Documents/HF-2000/Owner's%20Manual/OWNMAN%20HF-2000.pdf",
+        "http://www.qrotec.com/Features2k.html",
+        "https://github.com/Hamlib/Hamlib/wiki/Supported-Amplifiers"
+      ],
+      "gaps": [
+        "Estado atual da fábrica QRO (ainda vende?) não auditado além do site qrotec.com."
+      ]
+    },
+    {
+      "id": "rm-italy-pa",
+      "rank": 19,
+      "maker": "RM Italy (RM Costruzioni Elettroniche)",
+      "model": "BLA600 (HF+6 m 500 W AC); BLA350 Plus (~300 W AC); HLA 150/300 (12 V HF); LA-250 V (VHF); linha KL 10 m/12 V",
+      "category": "amplifier",
+      "relevanceNotes": "PAs SS italianos de shack/QRP-drive ainda no catálogo (DX Engineering/WiMo). BLA600 é o desktop 500 W com LCD e 3 antenas; manual: CAT não é necessário (RF-sense + PTT). Sem ampctld. Sem protocolo PC publicado. Abaixo de Ameritron/LA-1K/Alpha (estes têm pelo menos band data ou RS-232). KL*/HLA 12 V = móvel/QRP, não legal-limit.",
+      "physicalDisplay": "BLA600: LCD 2×16 iluminado + wattímetro; STANDBY/OPERATE; teclas de banda; ANT 1/2/3; LED PTT/proteção; RX: Pin/T1/T2; TX: Pin, Vd, Id, T1/T2 (não em QSK full). BLA350 Plus: LCD 2×16 (Standby/Auto, T °C, filtro B:10-12m) + medidor analógico Pout; LEDs ON/TX/Warning. HLA 300: LEDs de filtro, bargraph Pout, ATT, TX, warning; seletor AUT/MAN. KL: LEDs/HI-LO, sem CAT.",
+      "software": {
+        "name": "Nenhum utility PC oficial de telemetria",
+        "platforms": [],
+        "uiPresents": []
+      },
+      "protocol": {
+        "family": "nenhum CAT/LAN publicado nos manuais BLA/HLA; KL506V = cabeçote analógico RJ45",
+        "notes": "BLA600 user manual: 'a CAT interface connection is not required for automatic band change'. Ligações: RTX SO-239, PTT RCA (obrigatório no BLA600), 3× ANT, AC 115/230/240. Sem RS-232/USB/Ethernet de controle. BLA350 Plus: PTT RCA + ALC RCA; AUT/MAN; VOX interno opcional. KL506V: RJ45 para painel remoto (diagrama no manual, cabeçote não vendido; cabo ≤3 m) — GPIO/chaves, não CAT. Não inventar opcodes.",
+        "public": false
+      },
+      "link": {
+        "transport": [
+          "ptt_rca",
+          "alc",
+          "rj45_remote_head"
+        ],
+        "baud": [],
+        "defaultBaud": null,
+        "framing": "N/A",
+        "connector": "BLA600/350: SO-239 RTX/ANT, PTT RCA. HLA/KL: 13,8 V DC, RTX/ANT, PTT. KL506V: RJ45 remoto.",
+        "pinoutPublic": "PTT active-low. RJ45 KL506V: só o diagrama do manual do modelo — não recitado aqui."
+      },
+      "hamlib": {
+        "daemon": "ampctld",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P4",
+      "cockpitNotes": "Como QRO: no máximo PTT. Sem driver serial.",
+      "sources": [
+        "https://www.rmitaly.com/wp-content/uploads/2023/02/BLA600-User-Maual-Eng.pdf",
+        "https://www.rmitaly.com/en/product/bla-600/",
+        "https://www.rmitaly.com/wp-content/uploads/2023/02/Manual-BLA350-Plus.pdf",
+        "https://www.rmitaly.com/wp-content/uploads/2023/02/HLA300-Black-English-Manual.pdf",
+        "https://www.onallbands.com/guide-to-amateur-radio-amplifiers-2026-part-5-rm-italy/",
+        "https://github.com/Hamlib/Hamlib/wiki/Supported-Amplifiers"
+      ],
+      "gaps": [
+        "Nenhum PDF RM Italy obtido descreve UART/Ethernet de controle do BLA/HLA.",
+        "Pinout RJ45 KL506V só no diagrama do manual daquele SKU."
+      ]
+    },
+    {
+      "id": "spid-rot2prog",
+      "rank": 20,
+      "maker": "SPID / AlfaSpid",
+      "model": "Rot1Prog / Rot2Prog / MD-01 / MD-02",
+      "category": "rotor_controller",
+      "relevanceNotes": "Rotors Az/El populares em VHF/UHF/EME/satélite na Europa. Hamlib 901–903. MD-01 tem Ethernet (Rot2 em TCP).",
+      "physicalDisplay": "LCD heading Az/El, modo SP/EC, Auto. MD-01/02: display digital + ETH.",
+      "software": {
+        "name": "Hamlib, PstRotator, Gpredict, OscarWatch",
+        "platforms": [
+          "Windows",
+          "Linux",
+          "macOS"
+        ],
+        "uiPresents": [
+          "Az/El",
+          "goto",
+          "stop",
+          "sat tracking"
+        ]
+      },
+      "protocol": {
+        "family": "Rot2Prog binário (e Rot1Prog; Easycomm emulação)",
+        "notes": "Rot2Prog: 600 8N1, pacotes 13 bytes inicia 0x57 termina 0x20; respostas 12 bytes. Rot1Prog: 1200 bps, pacotes menores. MD-01 ETH: TCP (muitas vezes :23) modo ROT2. Easycomm se configurado no painel.",
+        "public": true
+      },
+      "link": {
+        "transport": [
+          "serial_rs232",
+          "ethernet_tcp"
+        ],
+        "baud": [
+          600,
+          1200,
+          115200
+        ],
+        "defaultBaud": 600,
+        "framing": "8N1",
+        "connector": "RS-232 no Rot2Prog; MD-01 USB/ETH.",
+        "pinoutPublic": "Rot2Prog RS-232 600 baud. MD-01: confirmar MOTOR CONFIG ETH + protocol SPID ROT2."
+      },
+      "hamlib": {
+        "daemon": "rotctld",
+        "model": 901,
+        "macro": "ROT_MODEL_SPID_ROT2PROG",
+        "status": "Stable",
+        "relatedModels": [
+          902,
+          903
+        ]
+      },
+      "cockpitPriority": "P0",
+      "cockpitNotes": "Sat/EME: 901 ou 903. Não usar 4800 (Yaesu) neste hardware.",
+      "sources": [
+        "https://github.com/Hamlib/Hamlib/wiki/Supported-Rotators",
+        "https://ryeng.name/blog/3",
+        "https://www.oscarwatch.org/docs/rotators"
+      ],
+      "gaps": [
+        "Tabela oficial de opcodes 0x0F/0x1F/0x2F conferir com manual SPID, não só blogs."
+      ]
+    },
+    {
+      "id": "4o3a-antenna-genius",
+      "rank": 21,
+      "maker": "4O3A",
+      "model": "Antenna Genius",
+      "category": "antenna_switch",
+      "relevanceNotes": "Switch Ethernet de contestação/SO2R. API pública GitHub. Sem Hamlib.",
+      "physicalDisplay": "LEDs de porta/antena no chassi; nome na rede. Operação principal é software.",
+      "software": {
+        "name": "4O3A Genius software; N1MM; FRStack; clientes TCP 9007",
+        "platforms": [
+          "Windows"
+        ],
+        "uiPresents": [
+          "matriz rádio×antena",
+          "lockouts",
+          "master/slave stack",
+          "firmware"
+        ]
+      },
+      "protocol": {
+        "family": "4O3A Genius Ethernet",
+        "notes": "Discovery UDP 9007 broadcast 1 Hz: AG ip=… port=… v=… serial=… name=… ports=… antennas=… mode=master|slave uptime=… Comando TCP 9007. Vocabulário TCP: ver wiki (fetch desta sessão só cobriu discovery).",
+        "public": true
+      },
+      "link": {
+        "transport": [
+          "ethernet_tcp",
+          "ethernet_udp"
+        ],
+        "baud": [],
+        "defaultBaud": null,
+        "framing": "TCP texto na 9007",
+        "connector": "RJ45",
+        "pinoutPublic": "UDP/TCP 9007. Sem serial CAT."
+      },
+      "hamlib": {
+        "daemon": "nenhum",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P2",
+      "cockpitNotes": "Cliente TCP próprio. Não passar por rotctld.",
+      "sources": [
+        "https://github.com/4o3a/genius-api-docs/wiki/Antenna-Genius-API",
+        "https://github.com/4o3a/genius-api-docs/wiki/Antenna-Genius-Discovery-protocol"
+      ],
+      "gaps": [
+        "Lista de comandos TCP (set antenna, get status) não veio no fetch da wiki nesta sessão — reler a wiki completa antes de implementar."
+      ]
+    },
+    {
+      "id": "ldg-at1000proii",
+      "rank": 22,
+      "maker": "LDG Electronics",
+      "model": "AT-1000ProII / AT-600ProII (+ M-1000/M-600)",
+      "category": "tuner",
+      "relevanceNotes": "ATU switched-L de massa. Protocolo de medidor TTL documentado pela LDG. Sem Hamlib.",
+      "physicalDisplay": "LEDs de status no tuner; wattímetro opcional M-1000: Fwd/Ref/SWR analógico/digital conforme modelo.",
+      "software": {
+        "name": "LDGCtl; ldgtunerctl; NeoLDG; apps comunitários",
+        "platforms": [
+          "Windows",
+          "Linux",
+          "macOS"
+        ],
+        "uiPresents": [
+          "Fwd/Ref/SWR",
+          "tune F/T",
+          "bypass P",
+          "antena A",
+          "auto/manual"
+        ]
+      },
+      "protocol": {
+        "family": "LDG External Meter TTL serial",
+        "notes": "38400 8N1 TTL 0–5 V (NÃO RS-232). Wake 0x20, depois comando 1 byte: F full tune, T memory, A ant, P bypass, C auto, M manual, S meter stream, X control. Telemetria: 6 bytes + ';;'. Cabo S-video barato pode curto-circuitar GND.",
+        "public": true
+      },
+      "link": {
+        "transport": [
+          "serial_ttl"
+        ],
+        "baud": [
+          38400
+        ],
+        "defaultBaud": 38400,
+        "framing": "8N1 TTL",
+        "connector": "mini-DIN 4 no painel traseiro (jack do medidor)",
+        "pinoutPublic": "1 +12V meter, 2 GND, 3 METERRX, 4 METERTX. Converter USB-TTL (FTDI), nunca RS-232 ±9 V direto."
+      },
+      "hamlib": {
+        "daemon": "nenhum",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P3",
+      "cockpitNotes": "Nível TTL — risco de hardware. Isolar no Pi com USB-TTL.",
+      "sources": [
+        "LDG External Meter Serial Communications Protocol Specification",
+        "https://github.com/Efpophis/LDGCtl",
+        "https://github.com/aethersdr/AetherSDR/issues/2092"
+      ],
+      "gaps": [
+        "LDG encerrou operações em alguns relatos de 2023–24; suporte de firmware incerto.",
+        "Calibração watt por modelo não unificada."
+      ]
+    },
+    {
+      "id": "arraysolutions-powermaster-ii",
+      "rank": 23,
+      "maker": "Array Solutions",
+      "model": "PowerMaster II",
+      "category": "wattmeter",
+      "relevanceNotes": "Padrão de wattímetro de contestação (couplers 3/10 kW, VHF). USB+RS-232. Software do fabricante. Sem Hamlib.",
+      "physicalDisplay": "LED/VFD: potência, SWR, bargraph, callsign, alarmes P e SWR, coupler 1/2.",
+      "software": {
+        "name": "PowerMaster application (Array Solutions); DDUtil (Power Master); PowerSDR calibração (PM1)",
+        "platforms": [
+          "Windows"
+        ],
+        "uiPresents": [
+          "Pfwd/Pref/SWR",
+          "alarmes",
+          "callsign",
+          "trim do coupler"
+        ]
+      },
+      "protocol": {
+        "family": "Array Solutions PowerMaster serial",
+        "notes": "Baud menu 9600/19200/38400 (usar 38400). USB e RS-232 mutuamente exclusivos. Frames PM1 documentados por KE9NS (STX D, watts… ETX CRC) — NÃO assumir que PM II é idêntico.",
+        "public": "parcial"
+      },
+      "link": {
+        "transport": [
+          "serial_rs232",
+          "usb_cdc"
+        ],
+        "baud": [
+          9600,
+          19200,
+          38400
+        ],
+        "defaultBaud": 38400,
+        "framing": "8N1 (PM1); PM II não detalhado no trecho do manual",
+        "connector": "RS-232 + USB Mini-B. Coupler RF, PTT IN/OUT, alarme.",
+        "pinoutPublic": "Não usar USB e RS-232 juntos."
+      },
+      "hamlib": {
+        "daemon": "nenhum",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P3",
+      "cockpitNotes": "Obter protocolo PM II oficial antes de driver. LP-100A é mais documentado para um MVP.",
+      "sources": [
+        "https://www.arraysolutions.com/pdfs/PowerMaster_Manual.pdf",
+        "https://ke9ns.com/phpBB3/viewtopic.php?t=132"
+      ],
+      "gaps": [
+        "Comandos/frames do PowerMaster II não estão no manual de usuário (só baud)."
+      ]
+    },
+    {
+      "id": "hamlib-easycomm",
+      "rank": 24,
+      "maker": "Hamlib / AMSAT ecosystem",
+      "model": "Easycomm I / II / III (controladores satélite genéricos)",
+      "category": "rotor_controller",
+      "relevanceNotes": "Protocolo texto de satélite mais implementado (Arduino, SPID emulação, FoxDelta). Hamlib 201/202/204.",
+      "physicalDisplay": "Depende do hardware (LCD Az/El típico).",
+      "software": {
+        "name": "Gpredict, rotctld, OscarWatch, PstRotator",
+        "platforms": [
+          "qualquer com Hamlib"
+        ],
+        "uiPresents": [
+          "Az/El tracking"
+        ]
+      },
+      "protocol": {
+        "family": "Easycomm ASCII",
+        "notes": "Easycomm II comum: AZ, EL, UP, DN, etc. Baud típico 9600 (alguns 1200). Confirmado como família Hamlib, não um SKU único.",
+        "public": true
+      },
+      "link": {
+        "transport": [
+          "serial_rs232",
+          "usb_cdc"
+        ],
+        "baud": [
+          1200,
+          9600
+        ],
+        "defaultBaud": 9600,
+        "framing": "8N1",
+        "connector": "varia",
+        "pinoutPublic": "N/A (protocolo, não produto)"
+      },
+      "hamlib": {
+        "daemon": "rotctld",
+        "model": 202,
+        "macro": "ROT_MODEL_EASYCOMM2",
+        "status": "Stable",
+        "relatedModels": [
+          201,
+          204
+        ]
+      },
+      "cockpitPriority": "P1",
+      "cockpitNotes": "Perfil genérico para satélite DIY no Cockpit.",
+      "sources": [
+        "https://github.com/Hamlib/Hamlib/wiki/Supported-Rotators"
+      ],
+      "gaps": [
+        "Não padronizar um único pinout."
+      ]
+    },
+    {
+      "id": "pstrotator",
+      "rank": 25,
+      "maker": "YO3DMU",
+      "model": "PstRotator / PstRotatorAz",
+      "category": "software_gateway",
+      "relevanceNotes": "Hub Windows que fala dezenas de rotors, SteppIR, UltraBeam. Hamlib ROT_MODEL_PSTROTATOR = 3 (TCP para o PstRotator).",
+      "physicalDisplay": "N/A (software). Janelas: mapa, heading, SteppIR.",
+      "software": {
+        "name": "PstRotatorAz",
+        "platforms": [
+          "Windows"
+        ],
+        "uiPresents": [
+          "rotors múltiplos",
+          "SteppIR",
+          "trackers",
+          "UDP/TCP clients"
+        ]
+      },
+      "protocol": {
+        "family": "PstRotator TCP (Hamlib model 3)",
+        "notes": "rotctld -m 3 fala com instância PstRotator. Útil como ponte para dispositivos sem backend Hamlib.",
+        "public": true
+      },
+      "link": {
+        "transport": [
+          "ethernet_tcp"
+        ],
+        "baud": [],
+        "defaultBaud": null,
+        "framing": "TCP PstRotator",
+        "connector": "N/A",
+        "pinoutPublic": "N/A"
+      },
+      "hamlib": {
+        "daemon": "rotctld",
+        "model": 3,
+        "macro": "ROT_MODEL_PSTROTATOR",
+        "status": "Stable"
+      },
+      "cockpitPriority": "P1",
+      "cockpitNotes": "Atalho de integração: Cockpit → rotctld -m 3 → PstRotator → hardware.",
+      "sources": [
+        "https://pstrotator.com/",
+        "https://github.com/Hamlib/Hamlib/wiki/Supported-Rotators"
+      ],
+      "gaps": [
+        "Porta TCP default do PstRotator conferir no manual da versão instalada."
+      ]
+    },
+    {
+      "id": "arraysolutions-8pak",
+      "rank": 26,
+      "maker": "Array Solutions",
+      "model": "Eight Pak + Bandmaster III / RatPak",
+      "category": "antenna_switch",
+      "relevanceNotes": "Switch 8 antenas × 2 rádios (3 kW) padrão US contest. PC via RS-232/USB; Bandmaster como decoder. RatPak 1×6 é mais simples (relé 12 V, sem CAT).",
+      "physicalDisplay": "LEDs 1–8 por rádio no controlador; rotary; conflito = LED piscando.",
+      "software": {
+        "name": "Array Solutions 8-Pak control software; Bandmaster config",
+        "platforms": [
+          "Windows"
+        ],
+        "uiPresents": [
+          "antena por banda",
+          "lockout 2 rádios"
+        ]
+      },
+      "protocol": {
+        "family": "Array Solutions 8-Pak serial (não extraído)",
+        "notes": "Manual confirma RS-232 ou USB e software no site. Comandos não estavam no PDF de instalação. RatPak: tensão 12 V por porta, sem protocolo serial.",
+        "public": false
+      },
+      "link": {
+        "transport": [
+          "serial_rs232",
+          "usb_cdc",
+          "band_decoder_parallel"
+        ],
+        "baud": [],
+        "defaultBaud": null,
+        "framing": "desconhecido",
+        "connector": "USB/RS-232 no controlador; 4 fios (+12, A, B, GND) CAT-5 até a caixa de relés.",
+        "pinoutPublic": "Relé: +12 / B / A / GND. Isolação grupos 1–4 vs 5–8."
+      },
+      "hamlib": {
+        "daemon": "nenhum",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P3",
+      "cockpitNotes": "Sem protocolo público no PDF — não implementar. Bandmaster: BCD/CI-V lado rádio.",
+      "sources": [
+        "https://www.arraysolutions.com/pdfs/EightPak%20Manual.pdf",
+        "https://www.arraysolutions.com/pdfs/RATPak%20User's%20guide%20-v4.pdf"
+      ],
+      "gaps": [
+        "Baud e opcode 8-Pak não publicados no manual de usuário obtido."
+      ]
+    },
+    {
+      "id": "hamation-md12",
+      "rank": 27,
+      "maker": "Hamation",
+      "model": "MD-12 (e Bandmaster V lineage)",
+      "category": "band_decoder",
+      "relevanceNotes": "Traduz CI-V ↔ Kenwood/Yaesu FA/IF ↔ BCD e aciona RatPak/SixPak/ShackLAN. Pequeno, USB, comum em automação.",
+      "physicalDisplay": "Sem display relevante; LEDs de status.",
+      "software": {
+        "name": "ShackLAN Control Center",
+        "platforms": [
+          "Windows"
+        ],
+        "uiPresents": [
+          "número do rádio",
+          "baud",
+          "CI-V addr",
+          "antena por banda",
+          "target switch"
+        ]
+      },
+      "protocol": {
+        "family": "passthrough CI-V / Kenwood FA / Yaesu + ShackLAN",
+        "notes": "USB CDC; baud igual ao rádio. Gera CI-V a partir de não-Icom e vice-versa. BCD A/B/C/D. Flex via USB.",
+        "public": "parcial"
+      },
+      "link": {
+        "transport": [
+          "usb_cdc",
+          "serial_rs232",
+          "civ_bus",
+          "bcd"
+        ],
+        "baud": [],
+        "defaultBaud": null,
+        "framing": "conforme rádio",
+        "connector": "USB, RS-232 rádio, CI-V, band data.",
+        "pinoutPublic": "Band data A/B/C/D no conector rádio (ver diagrama Hamation)."
+      },
+      "hamlib": {
+        "daemon": "nenhum",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P3",
+      "cockpitNotes": "Pode alimentar o hub CAT (CI-V bridge) mais do que ser um 'card' próprio.",
+      "sources": [
+        "https://hamation.com/MD12.html",
+        "https://hamation.com/md12_configuration.html"
+      ],
+      "gaps": [
+        "Protocolo ShackLAN (rede) não documentado publicamente nesta pesquisa."
+      ]
+    },
+    {
+      "id": "m2-rc2800",
+      "rank": 28,
+      "maker": "M2 Antenna Systems",
+      "model": "RC2800 (Orion 2800)",
+      "category": "rotor_controller",
+      "relevanceNotes": "Rotors pesados EME/HF big-gun. Hamlib 1001–1003. Base menor que Yaesu/Hy-Gain, alta penetração em estações grandes.",
+      "physicalDisplay": "Display digital de heading; teclado.",
+      "software": {
+        "name": "Hamlib rotctld; PstRotator",
+        "platforms": [
+          "Windows",
+          "Linux"
+        ],
+        "uiPresents": [
+          "Az",
+          "El em versões AzEl"
+        ]
+      },
+      "protocol": {
+        "family": "M2 RC2800 serial",
+        "notes": "Hamlib backend RC2800. Baud frequentemente citado 9600 em guias de terceiros — confirmar manual M2 antes de fixar no app.",
+        "public": "parcial"
+      },
+      "link": {
+        "transport": [
+          "serial_rs232"
+        ],
+        "baud": [
+          9600
+        ],
+        "defaultBaud": 9600,
+        "framing": "8N1 (não confirmado no manual oficial nesta sessão)",
+        "connector": "RS-232 no controlador",
+        "pinoutPublic": "Não recitado."
+      },
+      "hamlib": {
+        "daemon": "rotctld",
+        "model": 1001,
+        "macro": "ROT_MODEL_RC2800",
+        "status": "Stable",
+        "relatedModels": [
+          1002,
+          1003
+        ]
+      },
+      "cockpitPriority": "P2",
+      "cockpitNotes": "rotctld -m 1001. Confirmar baud no manual da revisão do controlador.",
+      "sources": [
+        "https://github.com/Hamlib/Hamlib/wiki/Supported-Rotators"
+      ],
+      "gaps": [
+        "Manual M2 RC2800 (baud/pinout) não baixado nesta sessão."
+      ]
+    },
+    {
+      "id": "prosistel-d",
+      "rank": 29,
+      "maker": "Prosistel",
+      "model": "D azimuth / D elevation / Combi-Track",
+      "category": "rotor_controller",
+      "relevanceNotes": "Rotors worm-drive europeus; Hamlib 1701–1704. Comum com RT-21 também.",
+      "physicalDisplay": "Controlador digital heading; Combi-Track Az+El.",
+      "software": {
+        "name": "Hamlib; PstRotator",
+        "platforms": [
+          "Windows",
+          "Linux"
+        ],
+        "uiPresents": [
+          "Az",
+          "El"
+        ]
+      },
+      "protocol": {
+        "family": "Prosistel serial (Hamlib)",
+        "notes": "Guias de terceiros citam 9600. Usar caps Hamlib (-L) no dispositivo real.",
+        "public": "parcial"
+      },
+      "link": {
+        "transport": [
+          "serial_rs232"
+        ],
+        "baud": [
+          9600
+        ],
+        "defaultBaud": 9600,
+        "framing": "não confirmado aqui",
+        "connector": "RS-232",
+        "pinoutPublic": "não recitado"
+      },
+      "hamlib": {
+        "daemon": "rotctld",
+        "model": 1701,
+        "macro": "ROT_MODEL_PROSISTEL_D_AZ",
+        "status": "Stable",
+        "relatedModels": [
+          1702,
+          1703,
+          1704
+        ]
+      },
+      "cockpitPriority": "P2",
+      "cockpitNotes": "rotctld. Muitos usuários põem RT-21 na frente — detectar o controlador real.",
+      "sources": [
+        "https://github.com/Hamlib/Hamlib/wiki/Supported-Rotators"
+      ],
+      "gaps": [
+        "Manual Prosistel (baud/comandos) não obtido."
+      ]
+    },
+    {
+      "id": "icom-civ-boxes",
+      "rank": 30,
+      "maker": "Icom / terceiros",
+      "model": "CT-17 (legado), USB CI-V, RemoteRig, microHAM USB Interface III, UCI-3",
+      "category": "civ_interface",
+      "relevanceNotes": "Acessório de barramento CI-V (não é rádio). Crítico para SPE/Palstar/band decoders no mesmo bus. CT-17 é RS-232 clássico; rádios novos têm USB CI-V nativo.",
+      "physicalDisplay": "CT-17: LEDs TX/RX. Caixas USB: LED de enumeração.",
+      "software": {
+        "name": "qualquer CAT Icom (Hamlib, WSJT-X); RS-BA1 é do rádio, não da caixa",
+        "platforms": [
+          "Windows",
+          "Linux",
+          "macOS"
+        ],
+        "uiPresents": [
+          "transparente — não tem UI própria além do COM"
+        ]
+      },
+      "protocol": {
+        "family": "Icom CI-V",
+        "notes": "Barramento open-collector 1200–19200 (rádios novos até 115200/USB). Níveis TTL CI-V ≠ RS-232. CT-17 faz o level shift.",
+        "public": true
+      },
+      "link": {
+        "transport": [
+          "serial_rs232",
+          "usb_cdc",
+          "civ_bus"
+        ],
+        "baud": [
+          1200,
+          9600,
+          19200
+        ],
+        "defaultBaud": 19200,
+        "framing": "8N1 CI-V 0xFE 0xFE",
+        "connector": "3,5 mm CI-V; CT-17 DB-9 PC.",
+        "pinoutPublic": "Ponta do P2 = CI-V data, sleeve GND (padrão Icom). CT-17: vários jacks CI-V em paralelo."
+      },
+      "hamlib": {
+        "daemon": "rigctld (rádio atrás da caixa)",
+        "model": null,
+        "macro": null,
+        "status": "nao_e_rig"
+      },
+      "cockpitPriority": "P1",
+      "cockpitNotes": "Infraestrutura, não card. Documentar topologia CI-V compartilhada (amp+tuner+PC).",
+      "sources": [
+        "Manuais Icom CI-V; prática de estação"
+      ],
+      "gaps": [
+        "CT-17 fora de linha; pinout DB-9 do CT-17 não recitado de um PDF nesta sessão.",
+        "BLE UUID não se aplica."
+      ]
+    },
+    {
+      "id": "microham-station-master",
+      "rank": 31,
+      "maker": "microHAM",
+      "model": "Station Master / Station Master Deluxe / USB Interface III / MK2R+",
+      "category": "station_controller",
+      "relevanceNotes": "Automação SO2R/antenas de alto nível. Protocolo microHAM proprietário + emulação CAT. Sem Hamlib rotator/amp.",
+      "physicalDisplay": "SMD: LCD/LEDs de antena, rádio, PTT, sequenciador.",
+      "software": {
+        "name": "microHAM Router; USB Device Router",
+        "platforms": [
+          "Windows"
+        ],
+        "uiPresents": [
+          "portas virtuais COM",
+          "antenas",
+          "FSH",
+          "sequencer",
+          "SO2R"
+        ]
+      },
+      "protocol": {
+        "family": "microHAM Router + CAT passthrough",
+        "notes": "O PC fala com o Router (USB). Dispositivos veem COMs virtuais. Sequencer/PTT são GPIO internos. Não há API aberta estável comparável ao Genius.",
+        "public": false
+      },
+      "link": {
+        "transport": [
+          "usb"
+        ],
+        "baud": [],
+        "defaultBaud": null,
+        "framing": "USB vendor + COMs virtuais",
+        "connector": "USB, ACC rádio, band data, relés antena",
+        "pinoutPublic": "Relés/BCD conforme manual do modelo — não recitado aqui."
+      },
+      "hamlib": {
+        "daemon": "nenhum",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P4",
+      "cockpitNotes": "Integração pesada/proprietária. Baixa prioridade vs rotctld/ampctld.",
+      "sources": [
+        "conhecimento de produto microHAM; sem PDF de API nesta sessão"
+      ],
+      "gaps": [
+        "API/protocolo Router não obtido. Não implementar no escuro."
+      ]
+    },
+    {
+      "id": "elgato-streamdeck-hamdeck",
+      "rank": 32,
+      "maker": "Elgato + comunidade (HamDeck/VA3MW, Node-RED)",
+      "model": "Stream Deck (6/15/32 teclas)",
+      "category": "macro_pad",
+      "relevanceNotes": "Popular em shacks Flex/remoto como painel de macros (antenas, tune, apps). USB HID, não CAT. Sem Hamlib.",
+      "physicalDisplay": "LCD por tecla (ícones). Sem RF.",
+      "software": {
+        "name": "Elgato Stream Deck; HamDeck; Node-RED palettes; FRStack REST",
+        "platforms": [
+          "Windows",
+          "macOS"
+        ],
+        "uiPresents": [
+          "botões de perfil",
+          "lançar apps",
+          "REST/macros"
+        ]
+      },
+      "protocol": {
+        "family": "USB HID Elgato (proprietário) + plugins",
+        "notes": "Não há CAT. Integração via software host. BLE UUID: Stream Deck pedals/mobile usam ecossistema Elgato — não documentar UUID sem spec.",
+        "public": false
+      },
+      "link": {
+        "transport": [
+          "usb_hid"
+        ],
+        "baud": [],
+        "defaultBaud": null,
+        "framing": "HID",
+        "connector": "USB-C/USB",
+        "pinoutPublic": "N/A"
+      },
+      "hamlib": {
+        "daemon": "nenhum",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P3",
+      "cockpitNotes": "O Cockpit já é o painel; Stream Deck seria cliente de ações HTTP do console, não um device RF.",
+      "sources": [
+        "http://sdxa.blogspot.com/2021/12/how-i-use-stream-deck-and-node-red.html",
+        "https://www.bay-net.org/uploads/1/2/2/7/122774721/baycon_2021_station_automation_va3mw_kj6vu.pdf"
+      ],
+      "gaps": [
+        "SDK Elgato e UUIDs BLE não pesquisados em profundidade."
+      ]
+    },
+    {
+      "id": "leo-bodnar-gpsdo",
+      "rank": 33,
+      "maker": "Leo Bodnar",
+      "model": "Mini Precision GPSDO / GPS-referenced clocks",
+      "category": "gps_ntp",
+      "relevanceNotes": "Referência 10 MHz de shack (transverters, SDR, analistas). NTP de estação costuma ser Pi + GPS NMEA/PPS, não o GPSDO Bodnar.",
+      "physicalDisplay": "LED lock/satélites. Sem UI rica.",
+      "software": {
+        "name": "Leo Bodnar GPSDO config (Windows); gpsd/chrony para NMEA genérico",
+        "platforms": [
+          "Windows (Bodnar)",
+          "Linux (NMEA/PPS)"
+        ],
+        "uiPresents": [
+          "lock",
+          "frequência de saída",
+          "sat count (se aplicável)"
+        ]
+      },
+      "protocol": {
+        "family": "USB config Bodnar (proprietário) / NMEA 0183 em GPS comuns",
+        "notes": "Saída principal é 10 MHz analógico. Não CAT. GPS USB genérico: NMEA 4800 8N1 ($GPRMC…). Não misturar os dois produtos.",
+        "public": "parcial"
+      },
+      "link": {
+        "transport": [
+          "usb",
+          "nmea_serial",
+          "pps"
+        ],
+        "baud": [
+          4800
+        ],
+        "defaultBaud": 4800,
+        "framing": "NMEA 8N1 quando for GPS serial",
+        "connector": "USB + SMA 10 MHz (Bodnar); DB-9/USB GPS + PPS GPIO (Pi)",
+        "pinoutPublic": "NMEA TX/RX/GND; PPS em pino dedicado. UUID BLE: não aplicável ao GPSDO Bodnar típico."
+      },
+      "hamlib": {
+        "daemon": "nenhum",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P4",
+      "cockpitNotes": "Card de relógio/lock, não CAT. chrony no Pi para NTP da estação.",
+      "sources": [
+        "produto Leo Bodnar; prática gpsd/chrony"
+      ],
+      "gaps": [
+        "Protocolo USB de configuração Bodnar não obtido.",
+        "Qual modelo Bodnar tem NMEA vs só 10 MHz — confirmar SKU."
+      ]
+    },
+    {
+      "id": "ea4tx-ars",
+      "rank": 34,
+      "maker": "EA4TX",
+      "model": "ARS RCI / ARS-USB",
+      "category": "rotor_controller",
+      "relevanceNotes": "Interface Az/El espanhola muito usada em satélite. Hamlib 1101–1102.",
+      "physicalDisplay": "Depende da caixa (LED/LCD); software Windows ARS.",
+      "software": {
+        "name": "EA4TX ARS; Hamlib; SatPC32",
+        "platforms": [
+          "Windows",
+          "Linux via Hamlib"
+        ],
+        "uiPresents": [
+          "Az/El",
+          "tracking"
+        ]
+      },
+      "protocol": {
+        "family": "EA4TX ARS serial/USB",
+        "notes": "Hamlib RCI AZ e AZEL. Detalhe de baud: caps Hamlib.",
+        "public": "parcial"
+      },
+      "link": {
+        "transport": [
+          "serial_rs232",
+          "usb_cdc"
+        ],
+        "baud": [],
+        "defaultBaud": null,
+        "framing": "ver Hamlib -L",
+        "connector": "USB/RS-232",
+        "pinoutPublic": "não recitado"
+      },
+      "hamlib": {
+        "daemon": "rotctld",
+        "model": 1101,
+        "macro": "ROT_MODEL_RCI_AZEL",
+        "status": "Stable",
+        "relatedModels": [
+          1102
+        ]
+      },
+      "cockpitPriority": "P2",
+      "cockpitNotes": "Sat: -m 1101.",
+      "sources": [
+        "https://github.com/Hamlib/Hamlib/wiki/Supported-Rotators"
+      ],
+      "gaps": [
+        "Manual ARS-USB (baud) não baixado."
+      ]
+    },
+    {
+      "id": "gemini-dx1200",
+      "rank": 35,
+      "maker": "Gemini",
+      "model": "DX1200 / HF-1K",
+      "category": "amplifier",
+      "relevanceNotes": "Único PA não-Elecraft/SPE no ampctld 4.7.1 (301, Stable). Base de usuários menor.",
+      "physicalDisplay": "Não confirmado neste ciclo (provável LCD Pout/SWR).",
+      "software": {
+        "name": "Hamlib ampctl",
+        "platforms": [
+          "Linux",
+          "Windows"
+        ],
+        "uiPresents": [
+          "níveis Hamlib amp"
+        ]
+      },
+      "protocol": {
+        "family": "Gemini (Hamlib backend)",
+        "notes": "Suporte existe no Hamlib; detalhes de baud no código amplifiers/gemini.",
+        "public": "parcial"
+      },
+      "link": {
+        "transport": [
+          "serial_rs232"
+        ],
+        "baud": [],
+        "defaultBaud": null,
+        "framing": "ver Hamlib",
+        "connector": "não confirmado",
+        "pinoutPublic": "não recitado"
+      },
+      "hamlib": {
+        "daemon": "ampctld",
+        "model": 301,
+        "macro": "AMP_MODEL_GEMINI_DX1200",
+        "status": "Stable"
+      },
+      "cockpitPriority": "P4",
+      "cockpitNotes": "Baixa prioridade comercial; fácil se já houver ampctld genérico.",
+      "sources": [
+        "https://github.com/Hamlib/Hamlib/wiki/Supported-Amplifiers"
+      ],
+      "gaps": [
+        "Manual Gemini e display/baud não obtidos."
+      ]
+    },
+    {
+      "id": "ompower-om10c",
+      "rank": 36,
+      "maker": "OM Power",
+      "model": "OM10C",
+      "category": "amplifier_combiner",
+      "relevanceNotes": "Combiner 10 kW PEP para dois PAs (DX Engineering). Base pequena (big-gun). LAN XPort como os PAs auto; software remoto 1.04 (não o HF_PA_Manager 3.41). Sem Hamlib.",
+      "physicalDisplay": "TFT colorido touch 4,3\" (site: Indications). Detalhe dos medidores não extraído do PDF nesta sessão.",
+      "software": {
+        "name": "Remote control software version 1.04 (Windows, downloads OM Power)",
+        "platforms": [
+          "Windows"
+        ],
+        "uiPresents": [
+          "monitoramento/controle remoto via LAN (site; UI não transcrita)"
+        ]
+      },
+      "protocol": {
+        "family": "OM Power XPort TCP (não publicado)",
+        "notes": "Mesmo aviso dos PAs: portas 9999 e 10001. IP default 192.168.1.233. Não assumir que o payload 10001 é idêntico ao HF_PA_Manager 3.41. Sem opcodes aqui.",
+        "public": false
+      },
+      "link": {
+        "transport": [
+          "ethernet_tcp"
+        ],
+        "baud": [],
+        "defaultBaud": null,
+        "framing": "TCP 10001 / Telnet 9999",
+        "connector": "LAN RJ45; RF: entradas SO-239, saída 7/16\".",
+        "pinoutPublic": "IP default 192.168.1.233 /24, GW 192.168.1.1. XPort XP1001000-05R."
+      },
+      "hamlib": {
+        "daemon": "nenhum",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P4",
+      "cockpitNotes": "Só faz sentido se o Cockpit já falar os dois PAs OM no combiner. Sem spec, não implementar.",
+      "sources": [
+        "https://www.om-power.com/products/om10c",
+        "https://www.dxengineering.com/search/brand/om-power",
+        "https://www.om-power.com/downloads"
+      ],
+      "gaps": [
+        "Manual OM10C (o que o touch mostra e se o protocolo 10001 difere do PA) não baixado nesta sessão."
+      ]
+    },
+    {
+      "id": "rflinear-ldmos-boards",
+      "rank": 41,
+      "maker": "RF Linear Amplifiers (EUA)",
+      "model": "Paletes 1500 W / 3000 W PEP HF (BLF188XR) e 1000 W 6 m / 2 m / 1,25 m",
+      "category": "amplifier",
+      "relevanceNotes": "Kits de palete LDMOS, não PA de shack. Sem MCU/rede. Incluído porque o usuário perguntou rflinear-amplifiers.com. Não compatível em software com OH8LQ nem VK-AMPS.",
+      "physicalDisplay": "Nenhum. Bias por potenciômetros na placa. Relé de keying é kit separado.",
+      "software": {
+        "name": "Nenhum (esquemático/instruções por e-mail)",
+        "platforms": [],
+        "uiPresents": []
+      },
+      "protocol": {
+        "family": "nenhum (RF + PTT analógico)",
+        "notes": "Sem serial, Ethernet, HTTP, MQTT, Bluetooth. LPF e atenuador não inclusos.",
+        "public": false
+      },
+      "link": {
+        "transport": ["ptt_rca"],
+        "baud": [],
+        "defaultBaud": null,
+        "framing": "N/A",
+        "connector": "Palete HF; Keying Relay Circuit Kit à parte",
+        "pinoutPublic": "Não há CAT."
+      },
+      "hamlib": {
+        "daemon": "nenhum",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P4",
+      "cockpitNotes": "Sem telemetria. Se o construtor acrescentar OH8LQ/S21RC/W6PQL, tratar o controlador, não a palete.",
+      "sources": [
+        "https://www.rflinear-amplifiers.com/",
+        "https://www.rflinear-amplifiers.com/product-page/1500-watt-pep-ldmos-rf-amplifier",
+        "https://www.rflinear-amplifiers.com/product-page/3000-watt-pep-ldmpos-amplifier"
+      ],
+      "gaps": [
+        "Nenhum manual de protocolo PC existe neste produto."
+      ]
+    },
+    {
+      "id": "oh8lq-ldmos-control",
+      "rank": 38,
+      "maker": "OH8LQ (Jari Ojala)",
+      "model": "3 kW LDMOS (4× ART1K6) + control board v5.2 Arduino DUE/Giga + Nextion 5/7\"",
+      "category": "amplifier",
+      "relevanceNotes": "Homebrew contest; placas em lote. Nextion + web no Giga. Firmware OTA do servidor OH8LQ, não GitHub do controlador. Visual Nextion parecido com S21RC/VK-AMPS — binário diferente.",
+      "physicalDisplay": "Nextion NX8048P050-011R ou NX8048P070-011R: PWR até 3 kW, SWR 1–5, Vds, temp FET pares, Ids A–D, alarmes HiPWR/HiSWR/OVCx/HiIN/HiVds/Temp/LPF, STBY/OPER, RX/TX, FAN, AUTO/MANUAL, bandas 160–10. UI web espelha as barras.",
+      "software": {
+        "name": "Firmware Arduino OTA + .tft Nextion; painel web (descrito como Java) no navegador; loader_LDMOS_control_v1.2.zip",
+        "platforms": [
+          "navegador (Giga Wi-Fi)",
+          "Arduino IDE (loader)"
+        ],
+        "uiPresents": [
+          "Pout/SWR/Vds/Ids/temp",
+          "STBY/OPER",
+          "alarmes e RESET",
+          "banda AUTO/MANUAL",
+          "Wi-Fi IP/hostname",
+          "OTA FW e Nextion"
+        ]
+      },
+      "protocol": {
+        "family": "UI web OH8LQ não publicada + CAT do rádio (Yaesu band data / Icom CI-V / Kenwood)",
+        "notes": "IP no menu Nextion (DHCP ou estático). Porta HTTP/WebSocket default NÃO publicada — não inventar. CAT: CI-V ex. rádio 0x94, controlador 0xE0, 38400; Kenwood 19200 8N1. PDF J29 ESP32 UART no caminho DUE. Sem Hamlib. Sem Bluetooth publicado.",
+        "public": false
+      },
+      "link": {
+        "transport": [
+          "wifi_http",
+          "serial_rs232_radio_cat",
+          "civ_bus",
+          "bcd"
+        ],
+        "baud": [19200, 38400, 115200],
+        "defaultBaud": null,
+        "framing": "CAT do rádio conforme menu. Web: não documentado.",
+        "connector": "Nextion UART 5 V; Yaesu linear; CI-V; WaveNode MiniDIN; LPF OC; fan PWM",
+        "pinoutPublic": "PDF LDMOS control card connectors and calibration. IP: tela Current IP. Sem porta default citada."
+      },
+      "hamlib": {
+        "daemon": "ampctld",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P3",
+      "cockpitNotes": "Não poll sem spec. Usuário pode abrir o IP do Nextion no navegador. Não tratar como S21RC nem VK3AMP 5005.",
+      "sources": [
+        "https://www.oh8lq.com/index.php/3-kw-ldmos-linear-amplifier",
+        "https://www.oh8lq.com/index.php/ldmos-control-board",
+        "https://www.oh8lq.com/LDMOS%20control/index.html",
+        "https://www.oh8lq.com/LDMOS%20control/LDMOS%20control%20card%20connectors%20and%20calibration.pdf"
+      ],
+      "gaps": [
+        "Porta e vocabulário da UI web (Java) não publicados.",
+        "Fonte do firmware do controlador não está no GitHub."
+      ]
+    },
+    {
+      "id": "vk-amps-ldmos",
+      "rank": 39,
+      "maker": "VK-AMPS (VK3AMP, Austrália)",
+      "model": "Kit 1 kW HF/6 m (Nextion 7\"); linha AetherSDR 600/1000/2000 W LAN; DX Master Pro USB",
+      "category": "amplifier",
+      "relevanceNotes": "Três SKUs. Kit loja: Nextion + decoder Icom/Yaesu, sem Ethernet na página. AetherSDR: TCP 5005 / UDP 5010. DX Master Pro: USB + app Remote. NÃO é o REST RF-KIT 8080. NÃO é firmware OH8LQ/S21RC.",
+      "physicalDisplay": "Kit: Nextion 7\" (OV/OC/OT/Pmax/SWR/filtro, V/I/FWD/REF). DX Master Pro: LCD 7\" Cortex M7. LAN 600/1000/2000: display próprio não recitado além do applet AetherSDR.",
+      "software": {
+        "name": "AetherSDR applet VK3AMP (LAN); VK-Amps Remote (USB, DX Master Pro); sem app único para o kit",
+        "platforms": ["Windows (Remote/AetherSDR)", "rede LAN"],
+        "uiPresents": [
+          "PWR/REF/SWR",
+          "temp/V/I/banda/antena",
+          "fault numérico",
+          "BYPASS/AMP ON",
+          "ANT 1–3",
+          "rail LOW/HIGH (LAN)"
+        ]
+      },
+      "protocol": {
+        "family": "VK3AMP TCP/UDP (AetherSDR) — framing não publicado; kit = CAT banda Icom/Yaesu",
+        "notes": "LAN: TCP 5005 controle, UDP 5010 telemetria; sem serial. Bytes NÃO públicos — não implementar. Kit 1 kW: DB-9 EXT, sem IP na página do produto. Sem Hamlib. Sem BLE.",
+        "public": false
+      },
+      "link": {
+        "transport": ["ethernet_tcp", "ethernet_udp", "usb_cdc", "serial_rs232_radio_cat"],
+        "baud": [],
+        "defaultBaud": null,
+        "framing": "TCP 5005 + UDP 5010 (LAN). USB Remote (DX Master). Kit: CAT banda.",
+        "connector": "Kit: IDC, DB-9 EXT, SO-239. LAN: RJ45 no SKU de rede.",
+        "pinoutPublic": "Portas 5005/5010 no AetherSDR. IP: DHCP; ARP broadcast na 1ª conexão Windows."
+      },
+      "hamlib": {
+        "daemon": "ampctld",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P3",
+      "cockpitNotes": "Não misturar com RF-KIT. Sem framing 5005/5010, sem card. Kit Nextion = local.",
+      "sources": [
+        "https://www.vk-amps.com/",
+        "https://www.vk-amps.com/products/a-1kw-hf-6m-amplifier-kit",
+        "https://docs.aethersdr.com/amplifiers",
+        "https://docs.aethersdr.com/peripherals",
+        "https://www.vk-amps.com/blogs/support-files/15103-documents"
+      ],
+      "gaps": [
+        "Vocabulário TCP 5005 / UDP 5010 não publicado.",
+        "User Manual PDF da loja não transcrito linha a linha."
+      ]
+    },
+    {
+      "id": "rf-kit-rf2k",
+      "rank": 37,
+      "maker": "RF-KIT / RF-Power (DH3NAB)",
+      "model": "RF2K-S / RF2K+ (controller upgrade)",
+      "category": "amplifier",
+      "relevanceNotes": "PA LDMOS ~2 kW com REST JSON público. AetherSDR periférico distinto do VK3AMP. Único desta leva com spec HTTP trivial para plano de card. Sem ampctld.",
+      "physicalDisplay": "Touch GUI: STBY/OPER, Pout, SWR, ANT 1–4, freq TRX, interface UNIV/CAT/UDP/TCI, tuner L/C.",
+      "software": {
+        "name": "GUI no PA; REST :8080; Node-RED (JSON NO2X); AetherSDR RF-KIT applet; TCI cliente; UDP N1MM 12060",
+        "platforms": ["navegador/HTTP", "Windows (AetherSDR)", "Node-RED"],
+        "uiPresents": [
+          "Pout/Pref/SWR",
+          "temp/V/I/banda/freq",
+          "OPERATE/STANDBY",
+          "ANT 1–4",
+          "tuner L/C (leitura)",
+          "RESET ERR"
+        ]
+      },
+      "protocol": {
+        "family": "RFKIT REST JSON 0.9.0 HTTP 8080 (sem login) + UDP N1MM 12060 + TCI WS (PA cliente)",
+        "notes": "GET /info /data /power /operate-mode /antennas /antennas/active /tuner /operational-interface. PUT /operate-mode {operate_mode:OPERATE|STANDBY}. PUT /antennas/active. /error/reset. Tuner GET read-only. Sem PTT de rede. UDP 12060 = RadioInfo N1MM (banda), não telemetria. Doc: rf-kit.de/files/RFKIT_api_doc_0_9_0.html. FW API desde G108C132; AetherSDR G200C267.",
+        "public": true
+      },
+      "link": {
+        "transport": ["ethernet_tcp", "wifi", "serial_rs232_radio_cat"],
+        "baud": [],
+        "defaultBaud": null,
+        "framing": "HTTP JSON :8080",
+        "connector": "LAN RJ45; ANT 1–4 SO-239; CAT/UDP/TCI no menu Interface",
+        "pinoutPublic": "Default HTTP 8080. UDP N1MM default 12060. IP DHCP/LAN."
+      },
+      "hamlib": {
+        "daemon": "ampctld",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P3",
+      "cockpitNotes": "Plano: poll GET /info + /data ou /power + /operate-mode. Card Pout/SWR/temp/V/I/banda/STBY. NÃO implementar neste ciclo. Acima dos outros LDMOS/homebrew (REST público); abaixo de SPE/Elecraft/PGXL.",
+      "sources": [
+        "http://www.rf-kit.de/files/RFKIT_api_doc_0_9_0.html",
+        "http://www.rf-kit.de/files/User_Manual_RF2K-S_ENG_V14.pdf",
+        "https://docs.aethersdr.com/amplifiers",
+        "https://rf-kit.de/index.php/docu"
+      ],
+      "gaps": [
+        "Schema JSON completo de GET /data (campos e unidades) está no HTML OpenAPI — reler antes de codar o parser."
+      ]
+    },
+    {
+      "id": "s21rc-ldmos-nextion",
+      "rank": 40,
+      "maker": "S21RC (comunidade; clones visuais)",
+      "model": "Arduino LDMOS SSPA Controller v1.x / v2.0 HEX / v2.1 Lite (Nextion)",
+      "category": "amplifier",
+      "relevanceNotes": "Base open-source mais clonada de PA LDMOS HF caseiro (Nano + Nextion + DXWORLD-E). NÃO é o firmware OH8LQ nem VK-AMPS. V2.0 full = HEX sem C fonte.",
+      "physicalDisplay": "Nextion 3,5/5/7\" Basic/Enhanced/Intelligent: Pout, SWR, temp, banda, FAN, V, I, PTT, callsign.",
+      "software": {
+        "name": "Sketch Arduino + .tft; V2 HEX + XLoader",
+        "platforms": ["Arduino Nano"],
+        "uiPresents": ["Pout/SWR/temp/banda/FAN/V/I/PTT"]
+      },
+      "protocol": {
+        "family": "UART Nextion HMI (não CAT de estação)",
+        "notes": "Sem Ethernet/MQTT/Bluetooth no projeto. Sem Hamlib. Não tratar o serial Nextion como protocolo Cockpit.",
+        "public": true
+      },
+      "link": {
+        "transport": ["serial_ttl"],
+        "baud": [],
+        "defaultBaud": null,
+        "framing": "Nextion HMI no Nano",
+        "connector": "DXWORLD-E (Id, SWR/HiPo/HiI); ponte FWD/REF; PTT bias 12 V",
+        "pinoutPublic": "Gerbers/esquema no GitHub v1.x (PCB S21RC / DF1JM)."
+      },
+      "hamlib": {
+        "daemon": "nenhum",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P4",
+      "cockpitNotes": "Sem rede. Não implementar card. Ver ldmos-homebrew.md.",
+      "sources": [
+        "https://github.com/s21rc/Arduino-LDMOS-SSPA-Controller",
+        "https://github.com/s21rc/ldmos_sspa_controller_v2.1_lite",
+        "https://s21rc.net/s21rc-ldmos-sspa-controller-v2-0/"
+      ],
+      "gaps": [
+        "Baud Nextion e mapa de variáveis HMI: no .ino/.HMI, não recitados aqui."
+      ]
+    },
+    {
+      "id": "w6pql-amp-control",
+      "rank": 42,
+      "maker": "W6PQL (Jim Klitzing) + clones",
+      "model": "Amplifier Control Board v6 / relay sequencer",
+      "category": "amplifier",
+      "relevanceNotes": "Sequencer analógico de facto em SSPA VHF/HF caseiro. ON7EQ/K6JCA citam. Sem telemetria digital.",
+      "physicalDisplay": "LEDs de evento/PTT/SWR/temp no PCB. Display, se houver, é Arduino à parte (ON7EQ LCD 4×40).",
+      "software": {
+        "name": "Nenhum no W6PQL v6. ON7EQ: sketches SSPA_V08/V11 .pde",
+        "platforms": ["Arduino (ON7EQ, opcional)"],
+        "uiPresents": ["Pout/SWR/V/I/temp no LCD ON7EQ"]
+      },
+      "protocol": {
+        "family": "PTT/sequencer GPIO",
+        "notes": "Eventos ~50 ms: relé → bias/Vdd → libera ALC. Sem UART de PA. KiCad: zleffke/kicad_sequencer.",
+        "public": true
+      },
+      "link": {
+        "transport": ["ptt_rca", "gpio"],
+        "baud": [],
+        "defaultBaud": null,
+        "framing": "N/A",
+        "connector": "PTT, relé, bias, ALC hold-off",
+        "pinoutPublic": "Site W6PQL amplifier_control_board.htm"
+      },
+      "hamlib": {
+        "daemon": "nenhum",
+        "model": null,
+        "macro": null,
+        "status": "nao_suportado"
+      },
+      "cockpitPriority": "P4",
+      "cockpitNotes": "Só PTT. Não confundir com Nextion.",
+      "sources": [
+        "https://www.w6pql.com/amplifier_control_board.htm",
+        "https://www.qsl.net/on7eq/projects/arduino_sspa.htm",
+        "https://github.com/zleffke/kicad_sequencer"
+      ],
+      "gaps": []
+    }
+  ],
+  "excludedOrGaps": [
+    {
+      "topic": "Dummy loads inteligentes",
+      "note": "Palstar/MFJ dummy loads típicos são passivos, sem CAT. Não entrou no ranking."
+    },
+    {
+      "topic": "Transverters",
+      "note": "DEM, Kuhne, Transverters-Store: em geral PTT/sequencer analógico. USB/CAT raro e não confirmado por modelo — não listar opcodes."
+    },
+    {
+      "topic": "Sequencers",
+      "note": "Sequenciadores VHF (Down East, SSB Electronic) são GPIO/PTT, não CAT. microHAM cobre parte."
+    },
+    {
+      "topic": "Fontes inteligentes",
+      "note": "Astron, Samlex, Mean Well: controle remoto raro (algumas Mean Well PMBUS). OM Power: só transformadores/fonte internos do PA, sem protocolo ham. Sem protocolo ham padrão encontrado."
+    },
+    {
+      "topic": "Ameritron RCS-4",
+      "note": "Switch por tensão no coax, sem serial. RCS-12/RCS-10 similares. Automação exige relé/GPIO, não CAT."
+    },
+    {
+      "topic": "LP-500/LP-700",
+      "note": "Wattímetro moderno Telepost com plugins; protocolo serial não extraído do user guide nesta sessão."
+    },
+    {
+      "topic": "VK3AMP / RF-Kit RF2K / LDMOS homebrew",
+      "note": "No ranking principal 37–42 (README + amplificadores.md + este JSON): RF-KIT 37 P3, OH8LQ 38 P3, VK-AMPS 39 P3, S21RC 40 P4, RF Linear 41 P4, W6PQL 42 P4. Detalhe em ldmos-homebrew.md. VK3AMP: TCP 5005/UDP 5010 sem framing público. RF-KIT: REST :8080 público (plano de card só). IU4NBB/HamStack/OpenAmp/ExpertAmp clone: nenhum repo LDMOS QRO encontrado nesta busca. DL2MAN = uSDX QRP, não PA. RemoteQTH = switch/rotor. PE1RKI = palete VHF."
+    },
+    {
+      "topic": "UltraBeam",
+      "note": "PstRotator controla; protocolo não público nesta pesquisa."
+    },
+    {
+      "topic": "OM Power — tuners, fontes, OM6BPF, OM4001C",
+      "note": "Não há ATU de shack OM Power: o auto-tune é interno aos modelos A/A+. Loja Tuners & Filters vende OM6BPF (BPF 200 W, BCD Yaesu, sem CAT) e caixas remotas 2500/3500/4000. Fontes: transformadores toroidais de reposição (tipos 1–7) e fonte HV interna do PA — sem PMBUS/CAT. OM4001C é PA comercial contínuo (5–25/10–30 MHz), não rádio; mesma família LAN/touch. VHF OM1002+/OM2002+ existem (VHF PA manager) — fora deste recorte HF."
+    },
+    {
+      "topic": "Ameritron RCS-4/RCS-8V vs RCS-12",
+      "note": "RCS-4/8V: tensão no coax, sem CAT (já citado). RCS-12 tem band decoder e entra no item ameritron-pa como acessório da linha, não como PA."
+    },
+    {
+      "topic": "RM Italy KL móvel / 10 m",
+      "note": "KL 200/300/500/703 etc. são 12 V / 10 m ou wideband; PTT e chaves, sem CAT. Citados no item rm-italy-pa, não ranqueados à parte."
+    }
+  ]
+}

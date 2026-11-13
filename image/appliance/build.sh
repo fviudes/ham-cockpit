@@ -144,6 +144,12 @@ mkdir -p "$SEED/deploy" "$SEED/dist" "$MNT/opt/wavelog-seed-images"
 rsync -a "$ROOT/deploy/" "$SEED/deploy/"
 rsync -a "$ROOT/dist/" "$SEED/dist/"
 cp -a "$ROOT/package.json" "$ROOT/VERSION" "$SEED/"
+if [[ -f "$ROOT/update/hamlib-arm64.tgz" ]]; then
+  mkdir -p "$SEED/update"
+  cp -a "$ROOT/update/hamlib-arm64.tgz" "$SEED/update/hamlib-arm64.tgz"
+else
+  echo "AVISO: update/hamlib-arm64.tgz ausente — o chroot compila com build-hamlib.sh" >&2
+fi
 if ls "$DOCK"/*.tar.gz >/dev/null 2>&1; then
   cp -a "$DOCK/"*.tar.gz "$MNT/opt/wavelog-seed-images/"
   rm -f "$DOCK"/*.tar.gz
@@ -175,6 +181,14 @@ if ! grep -a -q 'HC_FD2_GUARD' "$MNT/usr/local/bin/NextionDriver"; then
 fi
 if [[ ! -f "$MNT/etc/systemd/system/nextiondriver.service" ]]; then
   echo "ERRO: imagem sem nextiondriver.service" >&2
+  exit 1
+fi
+if [[ ! -x "$MNT/opt/ham-cockpit/hamlib/bin/rigctld" ]]; then
+  echo "ERRO: imagem sem /opt/ham-cockpit/hamlib (4.6, Icom em TCP)" >&2
+  exit 1
+fi
+if grep -a -q -F 'Icom rig UDP network enabled' "$MNT/opt/ham-cockpit/hamlib/lib/libhamlib.so.4"; then
+  echo "ERRO: imagem com Hamlib que abre Icom host:port em UDP" >&2
   exit 1
 fi
 if [[ $EMBED_DOCKER -eq 1 ]]; then

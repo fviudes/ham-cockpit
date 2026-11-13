@@ -1,0 +1,16 @@
+[Unit]
+Description=Ham Cockpit VPN de suporte
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/ham-cockpit/support
+ExecStart=/usr/sbin/openvpn --config /opt/ham-cockpit/support/client.ovpn --writepid /run/ham-cockpit-support-vpn.pid
+Restart=on-failure
+RestartSec=5
+KillMode=process
+DeviceAllow=/dev/net/tun rw
+
+[Install]
+WantedBy=multi-user.target

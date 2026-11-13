@@ -34,7 +34,7 @@ export type CivPatch = {
   nb?: boolean;
   split?: boolean;
   vfo?: "A" | "B";
-  /** true = ligado (RF), false = standby CI-V 0x18. */
+  /** true = ligado (RF). 0x00 e 0x02 (standby) contam como desligado na UI. */
   power?: boolean;
 };
 
@@ -439,9 +439,12 @@ class Ic705BleLink {
     await this.ask(0x1c, 0x00, on ? 0x01 : 0x00);
   }
 
-  /** CI-V 0x18: 0x01 = power on, 0x00 = standby. */
+  /**
+   * CI-V 0x18 (Hamlib 4.6.5 icom_defs.h): 0x01 power on, 0x02 standby, 0x00 power off.
+   * O IC-705 aceita standby. O botão power off manda 0x02, não 0x00.
+   */
   async setPower(on: boolean) {
-    await this.ask(0x18, on ? 0x01 : 0x00);
+    await this.ask(0x18, on ? 0x01 : 0x02);
   }
 
   /** 26 00 <mode> <data> <FIL1> — data mode needs cmd 26, DV is 0x17. */
@@ -812,7 +815,7 @@ class Ic705BleLink {
       if (data[0] === 0x00 || data[0] === 0xd0) patch.vfo = "A";
       if (data[0] === 0x01 || data[0] === 0xd1) patch.vfo = "B";
     } else if (cmd === 0x18 && data.length >= 1) {
-      if (data[0] === 0x00 || data[0] === 0x01) patch.power = data[0] === 0x01;
+      if (data[0] === 0x00 || data[0] === 0x01 || data[0] === 0x02) patch.power = data[0] === 0x01;
     }
     if (Object.keys(patch).length) this.listener?.onCiv?.(patch);
   }

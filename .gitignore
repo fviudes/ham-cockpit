@@ -57,6 +57,8 @@ data/radios/
 data/ldg/
 data/lp100a/
 data/mmdvm/
+data/support-vpn.json
+data/console-session.key
 pids
 *.pid
 *.seed

@@ -1,0 +1,31 @@
+#!/bin/bash
+# Liga ou desliga a VPN de suporte. Chamado via sudo -n.
+#   station-support-vpn start|stop|is-active|is-enabled
+# Não imprime perfil, certificado nem credencial.
+set -euo pipefail
+
+UNIT=ham-cockpit-support-vpn.service
+cmd="${1:-}"
+
+case "$cmd" in
+  start)
+    systemctl enable "$UNIT"
+    systemctl reset-failed "$UNIT" >/dev/null 2>&1 || true
+    systemctl start "$UNIT"
+    ;;
+  stop)
+    systemctl disable --now "$UNIT" >/dev/null 2>&1 || true
+    systemctl stop "$UNIT" >/dev/null 2>&1 || true
+    systemctl reset-failed "$UNIT" >/dev/null 2>&1 || true
+    ;;
+  is-active)
+    systemctl is-active "$UNIT" 2>/dev/null || true
+    ;;
+  is-enabled)
+    systemctl is-enabled "$UNIT" 2>/dev/null || true
+    ;;
+  *)
+    echo "uso: start|stop|is-active|is-enabled" >&2
+    exit 2
+    ;;
+esac

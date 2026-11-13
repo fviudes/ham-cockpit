@@ -2,6 +2,9 @@
 Description=Ham Cockpit web console (:3000, nginx :80)
 After=network-online.target
 Wants=network-online.target
+# Binário ausente (203/EXEC) esgota 5 tentativas e para. Queda isolada volta.
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -18,8 +21,11 @@ Environment=PORT=3000
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 NoNewPrivileges=false
 ExecStart=/usr/bin/node /opt/ham-cockpit/index.js
-Restart=on-failure
-RestartSec=3
+# SIGHUP/SIGINT/SIGTERM/SIGPIPE e exit 0 são saída limpa: on-failure não religa
+# (lab 13:46, SIGHUP → success, inactive/dead). always cobre hangup, kill e exit 0.
+# Sem SuccessExitStatus — hangup não pode dispensar o restart.
+Restart=always
+RestartSec=2
 
 [Install]
 WantedBy=ham-cockpit.target

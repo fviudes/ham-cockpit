@@ -27,6 +27,7 @@ bluez
 # Console web + SSH
 nginx
 openssh-server
+openvpn
 sudo
 curl
 ca-certificates

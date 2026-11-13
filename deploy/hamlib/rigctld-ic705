@@ -2,8 +2,12 @@
 # Ponte Hamlib só do rádio serial (device=radio).
 # O -m vem do rádio gravado (radios.json), não de um 3085 fixo.
 # Sem device=radio, ou sem modelo, sai 0 e não ocupa a porta da SPE.
-# IC-705 no laboratório: rigctld -m 3085 -r 127.0.0.1:<porta> -t 4532
-# sem -s e sem -c (o modelo 3085 já usa 0xA4).
+# IC-705: rigctld -m <modelo> -r 127.0.0.1:<porta TCP do ser2net> -t 4532
+# sem -s e sem -c (o 3085 já usa 0xA4; o baud fica no ser2net, 115200).
+# O Hamlib 4.5.5 do apt, ao ver host:port num Icom, abre UDP. O ser2net do
+# rádio é TCP cru: o quadro sai e a resposta não volta. O prefixo
+# /opt/ham-cockpit/hamlib (4.6+) fala TCP. Binário cuja lib ainda tem
+# "Icom rig UDP network enabled" é ignorado.
 set -euo pipefail
 
 JSON="${SER2NET_JSON:-/opt/ser2net/services.json}"
@@ -23,10 +27,30 @@ if [[ -d "$HC_HAMLIB/lib" ]]; then
   export LD_LIBRARY_PATH="$HC_HAMLIB/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
 
+# 1 quando a lib desse binário ainda força Icom host:port em UDP.
+# No prefixo vale o .so ao lado (LD_LIBRARY_PATH / rpath $ORIGIN/../lib).
+# ldd sem isso aponta a lib do apt e o 4.6.5 seria descartado à toa.
+hamlib_forces_icom_udp() {
+  local bin="$1" lib=""
+  case "$bin" in
+    "$HC_HAMLIB"/bin/*)
+      lib="$HC_HAMLIB/lib/libhamlib.so.4"
+      ;;
+  esac
+  if [[ -z "$lib" || ! -r "$lib" ]]; then
+    lib=$(ldd "$bin" 2>/dev/null | awk '/libhamlib\.so/{print $3; exit}')
+  fi
+  [[ -n "$lib" && -r "$lib" ]] && grep -a -q -F 'Icom rig UDP network enabled' "$lib"
+}
+
 pick_rigctld() {
   local c
   for c in "$HC_HAMLIB/bin/rigctld" /usr/local/bin/rigctld /usr/bin/rigctld; do
     [[ -x "$c" ]] || continue
+    if hamlib_forces_icom_udp "$c"; then
+      echo "rigctld-ic705: ignorando $c (Icom em host:port abre UDP; o ser2net do rádio é TCP)" >&2
+      continue
+    fi
     printf '%s\n' "$c"
     return 0
   done
@@ -82,42 +106,35 @@ fi
 
 MODEL=""
 CIV=""
+MODELS_JSON=""
+for c in \
+  "${HAMLIB_MODELS_JSON:-}" \
+  /opt/ham-cockpit/hamlib-models.json \
+  "$(dirname "$0")/../hamlib-models.json"
+do
+  if [[ -n "$c" && -f "$c" ]]; then
+    MODELS_JSON="$c"
+    break
+  fi
+done
 if [[ -f "$RADIOS_JSON" ]]; then
-  read -r MODEL CIV < <(python3 - "$RADIOS_JSON" <<'PY'
+  read -r MODEL CIV < <(python3 - "$RADIOS_JSON" "$MODELS_JSON" <<'PY'
 import json, sys
 
-# Ids já mapeados em shared/equipment/catalog.ts (backend ser2net).
-# Não inventar número. Proxy (Hermes/Anan) fica de fora: não é a serial.
-KNOWN = {
-    "icom-ic-705": 3085,
-    "icom-ic-7300": 3073,
-    "icom-ic-7300mk2": 3073,
-    "icom-ic-7610": 3078,
-    "icom-ic-9700": 3081,
-    "icom-ic-7100": 3070,
-    "kenwood-ts-590sg": 2033,
-    "kenwood-ts-890s": 2036,
-    "kenwood-ts-990s": 2037,
-    "yaesu-ft-991a": 1035,
-    "yaesu-ftdx10": 1042,
-    "yaesu-ftdx101d": 1041,
-    "yaesu-ft-710": 1043,
-    "tentec-omniiii": 1601,
-    "tentec-eagle": 1608,
-    "xiegu-x6100": 3073,
-    "xiegu-x6200": 3073,
-    "xiegu-g90": 3073,
-}
-# Token mais longo primeiro. CI-V padrão do -m (só Icom do catálogo).
-TOKENS = {
-    "icom": (("ic-7300mk2", 3073), ("ic-7300", 3073), ("ic-9700", 3081), ("ic-7610", 3078), ("ic-7100", 3070), ("ic-705", 3085), ("ic705", 3085)),
-    "kenwood": (("ts-590", 2033), ("ts-890", 2036), ("ts-990", 2037)),
-    "yaesu": (("ftdx101", 1041), ("ftdx10", 1042), ("ft-991", 1035), ("ft-710", 1043)),
-    "xiegu": (("x6100", 3073), ("x6200", 3073), ("g90", 3073)),
-    "tentec": (("eagle", 1608), ("omni", 1601)),
-}
-DEFAULT_CIV = {3085: "0xA4", 3073: "0x94", 3070: "0x18", 3078: "0x76", 3081: "0x88"}
-CIV_ICOM = {"0xa4": 3085, "0x98": 3085, "0x94": 3073, "0x18": 3070, "0x76": 3078, "0x88": 3081}
+# deploy/hamlib/models.json — -m e CI-V do Hamlib 4.6.5. Sem chute de token.
+# Modelo ausente (IC-7300MK2) não entra e não herda o 3073.
+MODELS = {}
+path = sys.argv[2] if len(sys.argv) > 2 else ""
+if path:
+    try:
+        MODELS = json.load(open(path, encoding="utf-8")).get("models") or {}
+    except Exception:
+        MODELS = {}
+OFFICIAL = {int(v.get("m") or 0) for v in MODELS.values() if isinstance(v, dict)}
+BY_M = {}
+for entry in MODELS.values():
+    if isinstance(entry, dict) and entry.get("m"):
+        BY_M.setdefault(int(entry["m"]), str(entry.get("civ") or ""))
 
 def norm_civ(value):
     text = str(value or "").strip().lower()
@@ -133,33 +150,25 @@ def resolve(radio):
     if str(radio.get("link") or "") == "network":
         return None
     eid = str(radio.get("equipmentId") or "").strip()
-    model = 0
-    try:
-        model = int(radio.get("hamlibModel") or 0)
-    except Exception:
-        model = 0
-    if eid in KNOWN:
-        model = KNOWN[eid]
-    elif model <= 0:
-        blob = " ".join(str(radio.get(k) or "") for k in ("name", "deviceName", "model")).lower()
-        maker = str(radio.get("maker") or "")
-        for token, num in TOKENS.get(maker, ()):
-            if token in blob:
-                model = num
-                break
-        if model <= 0 and maker == "icom" and str(radio.get("proto") or "") != "cat":
-            model = CIV_ICOM.get(norm_civ(radio.get("civAddr")), 0)
+    entry = MODELS.get(eid) if isinstance(MODELS.get(eid), dict) else None
+    model = int(entry.get("m") or 0) if entry else 0
+    default = str(entry.get("civ") or "") if entry else ""
+    if model <= 0:
+        try:
+            model = int(radio.get("hamlibModel") or 0)
+        except Exception:
+            model = 0
+        if model not in OFFICIAL:
+            model = 0
+        default = BY_M.get(model, "")
     if model <= 0:
         return None
     civ = ""
     cur = norm_civ(radio.get("civAddr"))
-    if str(radio.get("proto") or "") != "cat":
-        if radio.get("hamlibPassCiv") is True and cur:
-            civ = cur
-        elif radio.get("hamlibPassCiv") is not False:
-            default = DEFAULT_CIV.get(model, "")
-            if cur and default and cur != default:
-                civ = cur
+    if str(radio.get("proto") or "") != "cat" and cur and default and cur != default:
+        civ = cur
+    elif radio.get("hamlibPassCiv") is True and cur and str(radio.get("proto") or "") != "cat":
+        civ = cur
     return model, civ
 
 try:

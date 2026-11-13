@@ -11,7 +11,7 @@ No chroot do bake (`image/appliance/chroot-setup.sh` → `deploy/station/install
 1. **Pacotes runtime** em `deploy/station/packages.list`: `libwxbase3.2-1t64` / `libwxgtk3.2-1t64`, `libmosquitto1`, `mosquitto`, `libdlt2` (e `-dev` só para compilar). Inclui `build-essential` (fornece `make`).
 2. **`build-binaries.sh`** com `MMDVM_PURGE_BUILD=1` no bake: remove fontes/`-dev`, depois `ensure_ircddb_runtime` reinsere wx + mosquitto + libdlt2. Aplica `deploy/mmdvm/patches/nextiondriver-fd2-modem.patch` (fallback `sed` se hunks falharem por drift do upstream ON7LDS).
 3. **UART GPIO** (`configure_mmdvm_uart` em `install-station.sh`):
-   - `/boot/firmware/config.txt`: `enable_uart=1` + `dtoverlay=disable-bt` (Pi 3: PL011 livre em `/dev/ttyAMA0`)
+   - `/boot/firmware/config.txt`: `enable_uart=1` + `dtoverlay=miniuart-bt` (Pi 4: PL011 em `/dev/ttyAMA0` no Dual Hat; Bluetooth na mini-UART). No filtro `[pi4]`: `core_freq_min=500` (piso do VPU, baud estável) e `arm_boost=1` (turbo de fábrica). Sem `core_freq` fixo. Não usar 250
    - `/boot/firmware/cmdline.txt`: sem `console=serial0` / `ttyS0` / `ttyAMA0`
    - `serial-getty@ttyS0` e `@ttyAMA0` desabilitados e **masked**
 4. Units em `deploy/mmdvm/*.service` instaladas e habilitadas no `ham-cockpit.target`:
@@ -42,7 +42,7 @@ No chroot do bake (`image/appliance/chroot-setup.sh` → `deploy/station/install
 
 | Item | Valor |
 | --- | --- |
-| UART físico | PL011 em `/dev/ttyAMA0` (Bluetooth off via `disable-bt`) |
+| UART físico | PL011 em `/dev/ttyAMA0` (Dual Hat). Bluetooth onboard na mini-UART (`miniuart-bt`; no Pi 4 `core_freq_min=500` e `arm_boost=1`, sem `core_freq` fixo) |
 | Console serial | Removido do cmdline + getty masked |
 | Modem | Duplex, 115200, TXInvert=1 |
 | Preset UI | `mmdvmhsdualhatgpio` |
@@ -89,7 +89,7 @@ Ciclo ~4 s no lab: **ABRT `FD_SETSIZE`** (~4 s de CPU ao ler `users.csv` + `
 
 | Problema | Correção | Onde no repo |
 | --- | --- | --- |
-| Modem sem UART / getty na serial | `enable_uart=1`, `dtoverlay=disable-bt`; tirar `console=serial*`; mask getty | `deploy/station/install-station.sh` (`configure_mmdvm_uart`); bake monta `/boot/firmware` |
+| Modem sem UART / getty na serial | `enable_uart=1`, `dtoverlay=miniuart-bt`, no Pi 4 `core_freq_min=500` e `arm_boost=1` (sem `core_freq` fixo); tirar `console=serial*`; mask getty. Modem permanece em `ttyAMA0` | `deploy/station/install-station.sh` (`configure_mmdvm_uart`); bake monta `/boot/firmware` |
 | HS Dual tratado como simplex USB | Preset Dual GPIO: Duplex=1, ttyAMA0, 115200, TXInvert=1 | `server/mmdvm.ts` (`MMDVM_BOARD_PRESETS`); `deploy/mmdvm/mmdvmhost.ini` |
 | `ircddbgatewayd` sem wx após purge `-dev` | Runtime `libwxbase3.2*` / `libwxgtk3.2*` no apt + pós-PURGE | `deploy/station/packages.list`; `deploy/mmdvm/build-binaries.sh` (`ensure_ircddb_runtime`); OTA `ota-hooks.sh` |
 | MQTT Connection refused / mosquitto exit 127 | Pacotes `mosquitto` + `libdlt2`; unit habilitada | `packages.list`; `install-station.sh`; `image/appliance/user-data`; `ota-hooks.sh` |
@@ -123,7 +123,7 @@ Ciclo ~4 s no lab: **ABRT `FD_SETSIZE`** (~4 s de CPU ao ler `users.csv` + `
   - Template `deploy/mmdvm/*.ini` só se o arquivo vivo **não existir** (`install-station.sh`). OTA **não** faz `cp` do template em `/opt/ham-cockpit/mmdvm/mmdvmhost.ini`.
   - Antes de qualquer escrita: backup `mmdvmhost.ini.ota-bak` (`station-upd apply app` + merge no hook).
   - Merge conservador: só chaves de display/LCD/PTY **se faltarem** (`Display=None` / `ScreenLayout` vazio). **Nunca** resetar `[General] Callsign`, `Id`, `[DMR] Id`, frequências, senhas, redes, `[Modem]` se já houver valor de operador.
-  - Dual Hat = `/dev/ttyAMA0` + `dtoverlay=disable-bt`. **Não** `ttyACM0`. **Não** `systemctl restart mmdvmhost` (ciclo PartOf). Host já ativo: não parar. Host inativo: `start` **uma** vez (`ignore-dependencies`). Depois `start` dos gateways se inativos (filhos `PartOf` não voltam sozinhos).
+  - Dual Hat = `/dev/ttyAMA0` + `dtoverlay=miniuart-bt`. **Não** `ttyACM0`. **Não** `ttyS0` no modem. **Não** `systemctl restart mmdvmhost` (ciclo PartOf). Host já ativo: não parar. Host inativo: `start` **uma** vez (`ignore-dependencies`). Depois `start` dos gateways se inativos (filhos `PartOf` não voltam sozinhos).
 - Lab **0.1.05.02 (11/Nov ~20:45):** OTA **não** sobrescreveu o INI (`Callsign=PY2MED` `Id=7242679` mtime 19:09). `stop`+`start` do Host no hook (reabrir PTY) derrubou `dmrgateway` (`PartOf=mmdvmhost`) e o Nextion ficou sem indicativo/ID — terceira vez que o operador viu a config “apagada”. Correção: não parar Host se já estiver up; reabrir Host só se o Nextion **foi iniciado neste OTA**; subir DMR/YSF/ircDDB se inativos. `Restart=on-failure` do DMR após crash também falha com *Transaction order is cyclic* — start com `--job-mode=ignore-dependencies`.
 - DPlus `localAddress=127.0.0.1` ainda precisa salvar de novo no console.
 
@@ -157,7 +157,7 @@ strings /usr/local/bin/NextionDriver | grep HC_FD2_GUARD && echo NEXTION_PATCHED
 | Stub só em diretivas ativas | `nextion_unit_is_stub` / grep com `grep -vE` comentários; unit **sem** palavras-gatilho no comentário |
 | `HC_FD2_GUARD` | `build-binaries.sh`; install reinstala do `mmdvm-arm64.tgz` se o bin existir sem a marca; bake aborta sem a marca |
 | PTY 660 dialout + Host espera PTY | `nextiondriver.service` `ExecStartPost`; `mmdvmhost.service` `ExecStartPre` — **sem** `systemctl restart mmdvmhost` |
-| Dual `ttyAMA0` + `disable-bt` | `configure_mmdvm_uart` no install **e** no first-boot; INI de fábrica `Port=/dev/ttyAMA0` (nunca `ttyACM0`/`dvmpis` neste preset) |
+| Dual `ttyAMA0` + `miniuart-bt` (`core_freq_min=500` e `arm_boost=1` no Pi 4, sem `core_freq` fixo) | `configure_mmdvm_uart` no install **e** no first-boot; INI de fábrica `Port=/dev/ttyAMA0` (nunca `ttyACM0`/`ttyS0`/`dvmpis` neste preset) |
 | Display Nextion layout 4 / `Port=modem` / `WaitForLan=0` / `SendFrameType=1` | `deploy/mmdvm/mmdvmhost.ini` (install limpo); OTA `merge_nextion_ini` **só se a chave faltar** + backup `.ota-bak` |
 | ircDDB sem `.conf` + `localAddress=0.0.0.0` | symlink `ircddbgateway`; template + `applyConfig` + `sed` no OTA se ainda for `127.0.0.1` |
 | `mmdvm-ctl` LF | `.gitattributes` + `sed` no install, first-boot e ota-hooks |

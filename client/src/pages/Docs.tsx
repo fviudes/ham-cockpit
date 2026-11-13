@@ -398,8 +398,8 @@ export default function Docs() {
               />
               <ul>
                 <Li
-                  pt="Icom por USB: CI-V com o endereço do rádio (7300: 0x94, 7610: 0x76, 9700: 0x88, 7100: 0x18)."
-                  en="Icom USB: CI-V, radio address (7300 0x94, 7610 0x76, 9700 0x88, 7100 0x18)."
+                  pt="Icom por USB: CI-V com o endereço padrão do modelo no Hamlib 4.6.5 (7300: 0x94, 7100: 0x88, 7610: 0x98, 9700: 0xA2, 705: 0xA4)."
+                  en="Icom USB: CI-V at the model's Hamlib 4.6.5 default (7300 0x94, 7100 0x88, 7610 0x98, 9700 0xA2, 705 0xA4)."
                 />
                 <Li
                   pt="Kenwood e Yaesu: CAT, normalmente a 38400. Flex e Ten-Tec: use a velocidade do manual do rádio."
