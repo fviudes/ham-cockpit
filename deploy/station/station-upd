@@ -402,6 +402,9 @@ apply_app() {
   if [[ -f "$src/mmdvm-arm64.tgz" ]]; then
     cp -a "$src/mmdvm-arm64.tgz" "$APP_HOME/mmdvm-arm64.tgz"
   fi
+  if [[ -f "$src/hamlib-arm64.tgz" ]]; then
+    cp -a "$src/hamlib-arm64.tgz" "$APP_HOME/hamlib-arm64.tgz"
+  fi
   if [[ -d "$src/bin" ]]; then
     # Não sobrescreve o station-upd em execução: bash relê o arquivo e pode
     # executar fragmentos (ex. "opt/wavelog-gate") como comando.
@@ -549,6 +552,23 @@ check_pkg() {
   emit_item "$id" "$cur" "$cand" "$upd" ""
 }
 
+# Preferência: /opt/ham-cockpit/hamlib (tarball SPE 401) sobre apt 4.5.5.
+check_hamlib() {
+  local cur cand shipped note="" hl=/opt/ham-cockpit/hamlib
+  shipped="$(python3 -c 'import json; print(json.load(open("/opt/ham-cockpit/versions.json")).get("hamlib",""))' 2>/dev/null || true)"
+  if [[ -x "$hl/bin/ampctl" ]] \
+    && LD_LIBRARY_PATH="$hl/lib" "$hl/bin/ampctl" -l 2>/dev/null \
+      | awk '$1+0==401 {found=1} END{exit !found}'; then
+    cur="$(LD_LIBRARY_PATH="$hl/lib" "$hl/bin/ampctl" -V 2>/dev/null | head -1 | sed -n 's/.*Hamlib \([0-9.]*\).*/\1/p')"
+    [[ -z "$cur" ]] && cur="${shipped:-4.6.5}"
+    cand="$cur"
+    note="prefixo privado (SPE 401)"
+    emit_item hamlib "$cur" "$cand" "false" "$note"
+    return 0
+  fi
+  check_pkg hamlib libhamlib-utils hamlib-utils
+}
+
 check_wavelog() {
   local cur cand upd="false"
   cur="$(docker_wavelog_ver)"
@@ -567,7 +587,7 @@ check_all() {
   check_app >"$tmp/app" &
   check_os >"$tmp/os" &
   check_pkg ser2net ser2net >"$tmp/ser2net" &
-  check_pkg hamlib libhamlib-utils hamlib-utils >"$tmp/hamlib" &
+  check_hamlib >"$tmp/hamlib" &
   check_wavelog >"$tmp/wavelog" &
   check_wlg >"$tmp/wlg" &
   wait || true
@@ -843,11 +863,27 @@ case "$cmd" in
         emit_progress ser2net 100 done 1
         ;;
       hamlib)
-        apply_pkg hamlib libhamlib-utils hamlib-utils >/dev/null || apply_pkg hamlib libhamlib-utils >/dev/null || apply_pkg hamlib hamlib-utils >/dev/null
-        if [[ "${APT_CHANGED:-0}" == 1 ]]; then
+        # SPE Expert (401) exige Hamlib ≥4.6 — tarball OTA em /usr/local; apt Noble fica em 4.5.5.
+        if [[ -f "$APP_HOME/hamlib-arm64.tgz" ]]; then
+          emit_progress hamlib 40 install 1
+          tmp_hl="$(mktemp -d)"
+          if tar -xzf "$APP_HOME/hamlib-arm64.tgz" -C "$tmp_hl" \
+            && [[ -d "$tmp_hl/bin" ]]; then
+            mkdir -p /opt/ham-cockpit/hamlib/bin /opt/ham-cockpit/hamlib/lib
+            find "$tmp_hl/bin" -maxdepth 1 -type f -exec install -m 0755 {} /opt/ham-cockpit/hamlib/bin/ \;
+            [[ -d "$tmp_hl/lib" ]] && cp -a "$tmp_hl/lib"/. /opt/ham-cockpit/hamlib/lib/
+            find /opt/ham-cockpit/hamlib/lib -name '*.la' -delete 2>/dev/null || true
+          fi
+          rm -rf "$tmp_hl"
           emit_progress hamlib 94 restart 1
-          systemctl restart 'rigctld@*' 2>/dev/null || true
           systemctl restart 'ampctld@*' 2>/dev/null || true
+        else
+          apply_pkg hamlib libhamlib-utils hamlib-utils >/dev/null || apply_pkg hamlib libhamlib-utils >/dev/null || apply_pkg hamlib hamlib-utils >/dev/null
+          if [[ "${APT_CHANGED:-0}" == 1 ]]; then
+            emit_progress hamlib 94 restart 1
+            systemctl restart 'rigctld@*' 2>/dev/null || true
+            systemctl restart 'ampctld@*' 2>/dev/null || true
+          fi
         fi
         emit_progress hamlib 100 done 1
         ;;

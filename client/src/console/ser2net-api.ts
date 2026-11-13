@@ -58,7 +58,7 @@ export async function persistSer2net(opts: {
   bind: string;
   folder: string;
   services: Ser2netSvc[];
-}): Promise<{ bind: string; folder: string; services: Ser2netSvc[]; running: boolean }> {
+}): Promise<{ bind: string; folder: string; services: Ser2netSvc[]; running: boolean; hamlibRunning: boolean }> {
   const res = await fetch("/api/ser2net", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -70,6 +70,7 @@ export async function persistSer2net(opts: {
     folder?: string;
     services?: Ser2netSvc[];
     running?: boolean;
+    hamlibRunning?: boolean;
     error?: string;
   };
   const saved = body.services;
@@ -84,5 +85,17 @@ export async function persistSer2net(opts: {
       device: asSer2netDevice(row.device),
     })),
     running: Boolean(body.running),
+    hamlibRunning: Boolean(body.hamlibRunning),
   };
+}
+
+export async function ctlHamlib(action: "start" | "stop"): Promise<boolean> {
+  const res = await fetch("/api/ser2net/hamlib", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action }),
+  });
+  const body = (await res.json()) as { ok?: boolean; hamlibRunning?: boolean; error?: string };
+  if (!res.ok || body.ok === false) throw new Error(body.error || "hamlib");
+  return Boolean(body.hamlibRunning);
 }

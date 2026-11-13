@@ -421,7 +421,7 @@ function updatesStatus() {
     base("app", upd === "idle" ? "0.1.06.02" : "0.1.06.01", "0.1.06.02", "github.com/fviudes/ham-cockpit/update"),
     base("os", "Ubuntu 24.04.3 LTS", upd === "idle" ? "Ubuntu 24.04.3 LTS" : "Ubuntu 24.04.4 LTS", "Ubuntu Server"),
     base("ser2net", "4.6.1", "4.6.1", "apt ser2net"),
-    base("hamlib", "4.5.5", "4.5.5", "apt libhamlib-utils"),
+    base("hamlib", "4.6.5", "4.6.5", "prefixo privado (SPE 401)"),
     base("wavelog", "2.0.4", upd === "idle" ? "2.0.4" : "2.1.0", "docker ghcr.io/wavelog/wavelog"),
     base("wlg", "1.0.1", "1.0.1", "WaveLogGate headless"),
   ];

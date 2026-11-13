@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { Socket } from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -13,6 +14,7 @@ const HELPER = "/opt/ham-cockpit/bin/ser2net-ctl";
 const GENERATED = "# Ham Cockpit generated — do not edit";
 const BAUDS = new Set([1200, 9600, 19200, 38400, 57600, 115200]);
 const BIND_RE = /^(127\.0\.0\.1|0\.0\.0\.0|localhost|(\d{1,3}\.){3}\d{1,3})$/;
+const HAMLIB_NET_PORT = 4532;
 
 export type Ser2netSvc = {
   id: string;
@@ -31,6 +33,8 @@ export type Ser2netConfig = {
   yamlPath: string;
   jsonPath: string;
   running: boolean;
+  /** rigctld NET :4532 respondendo (daemon up; não exige RF). */
+  hamlibRunning: boolean;
   error?: string;
 };
 
@@ -164,6 +168,40 @@ async function daemonActive(): Promise<boolean> {
   }
 }
 
+/** Probe leve: daemon Hamlib NET escuta e responde (mesmo sem rádio/RF). */
+export async function probeHamlibNet(port = HAMLIB_NET_PORT, host = "127.0.0.1", timeoutMs = 900): Promise<boolean> {
+  return new Promise((resolve) => {
+    const sock = new Socket();
+    let done = false;
+    const finish = (ok: boolean) => {
+      if (done) return;
+      done = true;
+      try {
+        sock.destroy();
+      } catch {
+        /* */
+      }
+      resolve(ok);
+    };
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    sock.connect(port, host, () => {
+      sock.write("f\n");
+    });
+    sock.on("data", () => {
+      clearTimeout(timer);
+      finish(true);
+    });
+    sock.on("error", () => {
+      clearTimeout(timer);
+      finish(false);
+    });
+    sock.on("close", () => {
+      clearTimeout(timer);
+      if (!done) finish(false);
+    });
+  });
+}
+
 async function reloadDaemon(): Promise<boolean> {
   if (process.platform !== "linux") return false;
   try {
@@ -174,6 +212,26 @@ async function reloadDaemon(): Promise<boolean> {
         timeout: 15_000,
         windowsHide: true,
       });
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function hamlibCtl(action: "start" | "stop"): Promise<boolean> {
+  if (process.platform !== "linux") return false;
+  const cmd = action === "start" ? "start-hamlib" : "stop-hamlib";
+  try {
+    if (existsSync(HELPER)) {
+      await execFileAsync("sudo", ["-n", HELPER, cmd], { timeout: 20_000, windowsHide: true });
+    } else {
+      const unit = "rigctld@ic705.service";
+      if (action === "start") {
+        await execFileAsync("systemctl", ["restart", unit], { timeout: 15_000, windowsHide: true });
+      } else {
+        await execFileAsync("systemctl", ["stop", unit], { timeout: 15_000, windowsHide: true });
+      }
     }
     return true;
   } catch {
@@ -203,6 +261,7 @@ export async function loadSer2net(): Promise<Ser2netConfig> {
       /* ignore */
     }
   }
+  const [running, hamlibRunning] = await Promise.all([daemonActive(), probeHamlibNet()]);
   return {
     ok: true,
     folder,
@@ -210,7 +269,8 @@ export async function loadSer2net(): Promise<Ser2netConfig> {
     services,
     yamlPath,
     jsonPath,
-    running: await daemonActive(),
+    running,
+    hamlibRunning,
   };
 }
 
@@ -222,16 +282,16 @@ export async function saveSer2net(input: {
   const current = await loadSer2net();
   const bind = typeof input.bind === "string" && BIND_RE.test(input.bind.trim()) ? input.bind.trim() : current.bind;
   if (!Array.isArray(input.services)) {
-    return { ...current, ok: false, error: "services" };
+    return { ...current, ok: false, error: "services", hamlibRunning: current.hamlibRunning };
   }
   if (input.services.length > 32) {
-    return { ...current, ok: false, error: "limit" };
+    return { ...current, ok: false, error: "limit", hamlibRunning: current.hamlibRunning };
   }
   const seen = { name: new Set<string>(), port: new Set<number>(), serial: new Set<string>() };
   const services: Ser2netSvc[] = [];
   for (const row of input.services) {
     const svc = normalizeSvc(row, seen);
-    if (!svc) return { ...current, ok: false, error: "invalid" };
+    if (!svc) return { ...current, ok: false, error: "invalid", hamlibRunning: current.hamlibRunning };
     services.push(svc);
   }
   const taken = new Set<string>();
@@ -246,6 +306,7 @@ export async function saveSer2net(input: {
   writeAtomic(jsonPath, `${payload}\n`);
   writeAtomic(yamlPath, renderYaml(bind, services));
   await reloadDaemon();
+  const [running, hamlibRunning] = await Promise.all([daemonActive(), probeHamlibNet()]);
   return {
     ok: true,
     folder,
@@ -253,6 +314,7 @@ export async function saveSer2net(input: {
     services,
     yamlPath,
     jsonPath,
-    running: await daemonActive(),
+    running,
+    hamlibRunning,
   };
 }

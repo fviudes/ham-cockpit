@@ -999,21 +999,48 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
   useEffect(() => {
     void fetch("/api/ser2net")
       .then((r) => r.json())
-      .then((j: { ok?: boolean; folder?: string; bind?: string; services?: Ser2netSvc[]; running?: boolean }) => {
-        if (!j || j.ok === false || !Array.isArray(j.services)) return;
-        const services = j.services.map((row) => ({ ...row, device: asSer2netDevice(row.device) }));
-        setS((p) => ({
-          ...p,
-          ser2net: {
-            ...p.ser2net,
-            folder: typeof j.folder === "string" && j.folder ? j.folder : p.ser2net.folder,
-            bind: typeof j.bind === "string" && j.bind ? j.bind : p.ser2net.bind,
-            services,
-            running: Boolean(j.running),
-          },
-        }));
-      })
+      .then(
+        (j: {
+          ok?: boolean;
+          folder?: string;
+          bind?: string;
+          services?: Ser2netSvc[];
+          running?: boolean;
+          hamlibRunning?: boolean;
+        }) => {
+          if (!j || j.ok === false || !Array.isArray(j.services)) return;
+          const services = j.services.map((row) => ({ ...row, device: asSer2netDevice(row.device) }));
+          setS((p) => ({
+            ...p,
+            ser2net: {
+              ...p.ser2net,
+              folder: typeof j.folder === "string" && j.folder ? j.folder : p.ser2net.folder,
+              bind: typeof j.bind === "string" && j.bind ? j.bind : p.ser2net.bind,
+              services,
+              running: Boolean(j.running),
+              hamlibRunning: Boolean(j.hamlibRunning),
+            },
+          }));
+        },
+      )
       .catch(() => undefined);
+    const hamlibPoll = window.setInterval(() => {
+      void fetch("/api/ser2net")
+        .then((r) => r.json())
+        .then((j: { ok?: boolean; running?: boolean; hamlibRunning?: boolean }) => {
+          if (!j || j.ok === false) return;
+          setS((p) => ({
+            ...p,
+            ser2net: {
+              ...p.ser2net,
+              running: typeof j.running === "boolean" ? j.running : p.ser2net.running,
+              hamlibRunning: Boolean(j.hamlibRunning),
+            },
+          }));
+        })
+        .catch(() => undefined);
+    }, 8000);
+    return () => window.clearInterval(hamlibPoll);
   }, []);
 
   useEffect(() => {

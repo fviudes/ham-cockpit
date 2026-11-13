@@ -7,6 +7,7 @@ import {
   SER2NET_ACC_NAME,
   SER2NET_RADIO_ID,
   assignDevice,
+  ctlHamlib,
   persistSer2net,
   s2nDeviceLabelKey,
   type Ser2netDevice,
@@ -108,6 +109,7 @@ export function Ser2netPage() {
         folder: saved.folder,
         services: saved.services,
         running: saved.running,
+        hamlibRunning: saved.hamlibRunning,
       },
     }));
   };
@@ -351,13 +353,18 @@ export function Ser2netPage() {
                 toast.error(tx("noServices"));
                 return;
               }
-              setS((p) => ({ ...p, ser2net: { ...p.ser2net, hamlibRunning: true } }));
-              const first =
-                n.services.find((x) => x.device === SER2NET_RADIO_ID) ||
-                n.services.find((x) => !x.device) ||
-                n.services[0];
-              pushLog("S2N", `rigctld -r ${n.bind}:${first.tcpPort}`);
-              toast.success(tx("hamlibRunning"));
+              void ctlHamlib("start")
+                .then((up) => {
+                  setS((p) => ({ ...p, ser2net: { ...p.ser2net, hamlibRunning: up } }));
+                  const first =
+                    n.services.find((x) => x.device === SER2NET_RADIO_ID) ||
+                    n.services.find((x) => !x.device) ||
+                    n.services[0];
+                  pushLog("S2N", `rigctld -r ${n.bind}:${first?.tcpPort ?? "?"} · ${up ? ":4532" : "falha"}`);
+                  if (up) toast.success(tx("hamlibRunning"));
+                  else toast.error(tx("disconnected"));
+                })
+                .catch((err: unknown) => toast.error(err instanceof Error ? err.message : tx("disconnected")));
             }}
           >
             {tx("startHamlib")}
@@ -365,8 +372,12 @@ export function Ser2netPage() {
           <GhostBtn
             danger
             onClick={() => {
-              setS((p) => ({ ...p, ser2net: { ...p.ser2net, hamlibRunning: false } }));
-              pushLog("S2N", "Hamlib parado");
+              void ctlHamlib("stop")
+                .then(() => {
+                  setS((p) => ({ ...p, ser2net: { ...p.ser2net, hamlibRunning: false } }));
+                  pushLog("S2N", "Hamlib parado");
+                })
+                .catch((err: unknown) => toast.error(err instanceof Error ? err.message : tx("disconnected")));
             }}
           >
             {tx("stopHamlib")}

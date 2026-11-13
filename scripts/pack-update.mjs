@@ -52,6 +52,9 @@ const BIN_EXTRA = [
   [join(ROOT, "deploy", "lextel", "lextel-bt"), "lextel-bt"],
   [join(ROOT, "deploy", "mmdvm", "mmdvm-ctl"), "mmdvm-ctl"],
   [join(ROOT, "deploy", "mmdvm", "build-binaries.sh"), "mmdvm-build-binaries.sh"],
+  [join(ROOT, "deploy", "hamlib", "ampctld-spe"), "ampctld-spe"],
+  [join(ROOT, "deploy", "hamlib", "rigctld-ic705"), "rigctld-ic705"],
+  [join(ROOT, "deploy", "hamlib", "build-hamlib.sh"), "build-hamlib.sh"],
   [join(ROOT, "deploy", "wavelog", "wavelog-ctl.sh"), "wavelog-ctl.sh"],
 ];
 
@@ -222,6 +225,17 @@ function main() {
   } else {
     console.warn(
       "AVISO: update/mmdvm-arm64.tgz ausente — OTA só reparará MMDVM em estações sem bins (download/build); imagem limpa não depende deste arquivo",
+    );
+  }
+
+  // Hamlib ≥4.6 (SPE Expert 401). Ubuntu 24.04 apt fica em 4.5.5 sem modelo SPE.
+  const hamlibTgz = join(UPDATE_DIR, "hamlib-arm64.tgz");
+  if (existsSync(hamlibTgz)) {
+    cpSync(hamlibTgz, join(stage, "hamlib-arm64.tgz"));
+    console.log("incluindo hamlib-arm64.tgz no pacote OTA (ampctld SPE 401)");
+  } else {
+    console.warn(
+      "AVISO: update/hamlib-arm64.tgz ausente — ampctld@spe falha em estações só com apt 4.5.5; rode deploy/hamlib/build-hamlib.sh no Pi",
     );
   }
 

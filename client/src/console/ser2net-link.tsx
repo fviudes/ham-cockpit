@@ -25,6 +25,7 @@ export function Ser2netLink({ acc }: { acc: Ser2netAccId }) {
           folder: saved.folder,
           services: saved.services,
           running: saved.running,
+          hamlibRunning: saved.hamlibRunning,
         },
       }));
     } catch (err) {

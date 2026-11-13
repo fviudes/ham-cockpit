@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.07.09** (`version.json`).
+Versão atual neste canal: **0.1.07.10** (`version.json`).
 
 ## Versionamento
 
@@ -20,10 +20,10 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.07.09",
+  "version": "0.1.07.10",
   "channel": "main",
-  "file": "ham-cockpit-0.1.07.09.tgz",
-  "notes": "Ham Cockpit v0.1.07.09 — calibra S-meter CI-V: BCD 2 bytes (15 02) alinhado ao IC-705; corrige subleitura S5–S6 em sinais S9+; Hamlib STRENGTH em dB re S9."
+  "file": "ham-cockpit-0.1.07.10.tgz",
+  "notes": "Hamlib SPE+IC-705: porta dinâmica via ser2net (device=spe/radio); Hamlib 4.6.5 privado (modelo 401); status Hamlib sonda :4532; corrige Desconectado e rigctld apontando para SPE."
 }
 ```
 

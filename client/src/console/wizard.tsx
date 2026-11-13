@@ -126,6 +126,7 @@ export function WizardPage() {
           folder: saved.folder,
           services: saved.services,
           running: saved.running,
+          hamlibRunning: saved.hamlibRunning,
         },
       }));
       try {

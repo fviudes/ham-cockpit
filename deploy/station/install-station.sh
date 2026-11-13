@@ -70,8 +70,10 @@ install -o root -g root -m 0755 "$HERE/vfo-display-kiosk" /opt/ham-cockpit/bin/v
 install -o root -g root -m 0755 "$HERE/vfo-display-idle" /opt/ham-cockpit/bin/vfo-display-idle
 install -o root -g root -m 0755 "$HERE/ldg-serial" /opt/ham-cockpit/bin/ldg-serial
 install -o root -g root -m 0755 "$ROOT/deploy/mmdvm/mmdvm-ctl" /opt/ham-cockpit/bin/mmdvm-ctl
+install -o root -g root -m 0755 "$ROOT/deploy/hamlib/ampctld-spe" /opt/ham-cockpit/bin/ampctld-spe
+install -o root -g root -m 0755 "$ROOT/deploy/hamlib/rigctld-ic705" /opt/ham-cockpit/bin/rigctld-ic705
 # Shebang CRLF (checkout Windows) → `sudo: unable to execute … mmdvm-ctl`.
-sed -i 's/\r$//' /opt/ham-cockpit/bin/mmdvm-ctl
+sed -i 's/\r$//' /opt/ham-cockpit/bin/mmdvm-ctl /opt/ham-cockpit/bin/ampctld-spe /opt/ham-cockpit/bin/rigctld-ic705 /opt/ham-cockpit/bin/ser2net-ctl
 install -m 0644 "$HERE/versions.json" /opt/ham-cockpit/versions.json
 install -o root -g root -m 0755 "$ROOT/deploy/lextel/lextel-bt" /opt/ham-cockpit/bin/lextel-bt
 install -m 0644 "$ROOT/deploy/lextel/99-lextel-rfcomm.rules" /etc/udev/rules.d/99-lextel-rfcomm.rules
@@ -100,8 +102,8 @@ if [[ -f "$ROOT/VERSION" ]]; then
 fi
 (cd /opt/ham-cockpit && npm install --omit=dev)
 chown -R hamcockpit:hamcockpit /opt/ham-cockpit
-chown root:root /opt/ham-cockpit/bin/root-login /opt/ham-cockpit/bin/station-user /opt/ham-cockpit/bin/ser2net-ctl /opt/ham-cockpit/bin/station-net /opt/ham-cockpit/bin/station-svc /opt/ham-cockpit/bin/station-upd /opt/ham-cockpit/bin/station-backup /opt/ham-cockpit/bin/lextel-bt /opt/ham-cockpit/bin/vfo-display-ctl /opt/ham-cockpit/bin/vfo-display-kiosk /opt/ham-cockpit/bin/vfo-display-idle /opt/ham-cockpit/bin/ldg-serial /opt/ham-cockpit/bin/mmdvm-ctl
-chmod 0755 /opt/ham-cockpit/bin/root-login /opt/ham-cockpit/bin/station-user /opt/ham-cockpit/bin/ser2net-ctl /opt/ham-cockpit/bin/station-net /opt/ham-cockpit/bin/station-svc /opt/ham-cockpit/bin/station-upd /opt/ham-cockpit/bin/station-backup /opt/ham-cockpit/bin/lextel-bt /opt/ham-cockpit/bin/vfo-display-ctl /opt/ham-cockpit/bin/vfo-display-kiosk /opt/ham-cockpit/bin/vfo-display-idle /opt/ham-cockpit/bin/ldg-serial /opt/ham-cockpit/bin/mmdvm-ctl
+chown root:root /opt/ham-cockpit/bin/root-login /opt/ham-cockpit/bin/station-user /opt/ham-cockpit/bin/ser2net-ctl /opt/ham-cockpit/bin/station-net /opt/ham-cockpit/bin/station-svc /opt/ham-cockpit/bin/station-upd /opt/ham-cockpit/bin/station-backup /opt/ham-cockpit/bin/lextel-bt /opt/ham-cockpit/bin/vfo-display-ctl /opt/ham-cockpit/bin/vfo-display-kiosk /opt/ham-cockpit/bin/vfo-display-idle /opt/ham-cockpit/bin/ldg-serial /opt/ham-cockpit/bin/mmdvm-ctl /opt/ham-cockpit/bin/ampctld-spe /opt/ham-cockpit/bin/rigctld-ic705
+chmod 0755 /opt/ham-cockpit/bin/root-login /opt/ham-cockpit/bin/station-user /opt/ham-cockpit/bin/ser2net-ctl /opt/ham-cockpit/bin/station-net /opt/ham-cockpit/bin/station-svc /opt/ham-cockpit/bin/station-upd /opt/ham-cockpit/bin/station-backup /opt/ham-cockpit/bin/lextel-bt /opt/ham-cockpit/bin/vfo-display-ctl /opt/ham-cockpit/bin/vfo-display-kiosk /opt/ham-cockpit/bin/vfo-display-idle /opt/ham-cockpit/bin/ldg-serial /opt/ham-cockpit/bin/mmdvm-ctl /opt/ham-cockpit/bin/ampctld-spe /opt/ham-cockpit/bin/rigctld-ic705
 chown -R hamcockpit:hamcockpit /opt/lextel
 chmod 0775 /opt/lextel
 

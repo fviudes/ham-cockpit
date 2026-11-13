@@ -95,7 +95,7 @@ function loadShipped(): Shipped {
     os: "Ubuntu Server 24.04 LTS",
     osAvailable: "Ubuntu Server 24.04 LTS",
     ser2net: "4.3.13",
-    hamlib: "4.5.5",
+    hamlib: "4.6.5",
     wavelog: "1.9.4",
     wlg: "1.0.0",
   };

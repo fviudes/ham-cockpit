@@ -373,6 +373,74 @@ fi
 ensure_mmdvm_bins || true
 ensure_mmdvm_runtime_pkgs || true
 
+# Hamlib ≥4.6 (SPE Expert 401) em prefixo privado — não sobrescreve apt 4.5.5.
+HC_HAMLIB=/opt/ham-cockpit/hamlib
+install_hamlib_tgz() {
+  local tgz="$1" tmp
+  [[ -f "$tgz" ]] || return 1
+  tmp="$(mktemp -d)"
+  if ! tar -xzf "$tgz" -C "$tmp"; then
+    rm -rf "$tmp"
+    return 1
+  fi
+  mkdir -p "$HC_HAMLIB/bin" "$HC_HAMLIB/lib"
+  if [[ -d "$tmp/bin" ]]; then
+    find "$tmp/bin" -maxdepth 1 -type f -exec install -m 0755 {} "$HC_HAMLIB/bin/" \;
+  fi
+  if [[ -d "$tmp/lib" ]]; then
+    cp -a "$tmp/lib"/. "$HC_HAMLIB/lib/"
+    find "$HC_HAMLIB/lib" -name '*.la' -delete 2>/dev/null || true
+  fi
+  rm -rf "$tmp"
+  if LD_LIBRARY_PATH="$HC_HAMLIB/lib" "$HC_HAMLIB/bin/ampctl" -l 2>/dev/null \
+    | awk '$1+0==401 {found=1} END{exit !found}'; then
+    return 0
+  fi
+  echo "ota-hooks: AVISO — hamlib-arm64.tgz instalado mas ampctl sem modelo 401" >&2
+  return 1
+}
+
+ensure_hamlib_spe() {
+  local tgz="" need=0
+  if [[ ! -x "$HC_HAMLIB/bin/ampctld" ]] \
+    || ! LD_LIBRARY_PATH="$HC_HAMLIB/lib" "$HC_HAMLIB/bin/ampctl" -l 2>/dev/null \
+      | awk '$1+0==401 {found=1} END{exit !found}'; then
+    need=1
+  fi
+  if [[ -f "$ROOT/hamlib-arm64.tgz" ]]; then
+    tgz="$ROOT/hamlib-arm64.tgz"
+    cp -a "$tgz" /opt/ham-cockpit/hamlib-arm64.tgz 2>/dev/null || true
+  elif [[ -f /opt/ham-cockpit/hamlib-arm64.tgz ]]; then
+    tgz=/opt/ham-cockpit/hamlib-arm64.tgz
+  fi
+  if [[ "$need" -eq 1 || -f "$ROOT/hamlib-arm64.tgz" ]]; then
+    if [[ -n "$tgz" ]]; then
+      echo "ota-hooks: instalando Hamlib SPE em $HC_HAMLIB ($tgz)…" >&2
+      install_hamlib_tgz "$tgz" || true
+    elif [[ "$need" -eq 1 ]]; then
+      echo "ota-hooks: AVISO — sem hamlib-arm64.tgz; ampctld@spe precisa Hamlib ≥4.6" >&2
+    fi
+  fi
+  if [[ -f "$ROOT/bin/ampctld-spe" ]]; then
+    safe_install -m 0755 "$ROOT/bin/ampctld-spe" /opt/ham-cockpit/bin/ampctld-spe
+    sed -i 's/\r$//' /opt/ham-cockpit/bin/ampctld-spe 2>/dev/null || true
+  fi
+  if [[ -f "$ROOT/bin/rigctld-ic705" ]]; then
+    safe_install -m 0755 "$ROOT/bin/rigctld-ic705" /opt/ham-cockpit/bin/rigctld-ic705
+    sed -i 's/\r$//' /opt/ham-cockpit/bin/rigctld-ic705 2>/dev/null || true
+  fi
+  systemctl daemon-reload 2>/dev/null || true
+  for u in ampctld@spe.service 'rigctld@ic705.service'; do
+    [[ -f "/etc/systemd/system/$u" ]] || continue
+    systemctl enable "$u" 2>/dev/null || true
+    systemctl reset-failed "$u" 2>/dev/null || true
+    systemctl restart "$u" 2>/dev/null \
+      || systemctl start --job-mode=ignore-dependencies "$u" 2>/dev/null \
+      || true
+  done
+}
+ensure_hamlib_spe || true
+
 # Broker MQTT local (ircddbgatewayd) + units MMDVM no boot após OTA.
 if command -v mosquitto >/dev/null 2>&1 || [[ -x /usr/sbin/mosquitto ]]; then
   systemctl enable mosquitto.service 2>/dev/null || true

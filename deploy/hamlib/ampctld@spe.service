@@ -1,13 +1,14 @@
 [Unit]
-Description=Hamlib ampctld SPE via ser2net :4004
+Description=Hamlib ampctld SPE Expert (porta/baud via ser2net device=spe)
 After=ser2net.service
-Requires=ser2net.service
+Wants=ser2net.service
 StartLimitIntervalSec=300
 StartLimitBurst=20
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/ampctld -m 401 -r 127.0.0.1:4004 -s 9600 -t 4531
+# Wrapper lê /opt/ser2net/services.json (device=spe) e usa ampctld ≥4.6 (modelo 401).
+ExecStart=/opt/ham-cockpit/bin/ampctld-spe
 Restart=on-failure
 RestartSec=5
 

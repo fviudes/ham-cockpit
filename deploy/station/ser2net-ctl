@@ -1,11 +1,51 @@
 #!/bin/bash
+# ser2net + reapply dos daemons Hamlib que leem services.json.
 set -euo pipefail
+
+restart_hamlib_units() {
+  local u
+  for u in ampctld@spe.service rigctld@ic705.service; do
+    [[ -f "/etc/systemd/system/$u" ]] || continue
+    /usr/bin/systemctl reset-failed "$u" >/dev/null 2>&1 || true
+    if /usr/bin/systemctl is-enabled "$u" >/dev/null 2>&1; then
+      /usr/bin/systemctl restart "$u" >/dev/null 2>&1 \
+        || /usr/bin/systemctl start --job-mode=ignore-dependencies "$u" >/dev/null 2>&1 \
+        || true
+    fi
+  done
+}
+
 case "${1:-}" in
   start|stop|restart|reload-or-restart|is-active)
-    exec /usr/bin/systemctl "$1" ser2net.service
+    /usr/bin/systemctl "$1" ser2net.service
+    if [[ "$1" != "stop" && "$1" != "is-active" ]]; then
+      restart_hamlib_units
+    fi
+    ;;
+  sync-spe|sync-hamlib)
+    restart_hamlib_units
+    /usr/bin/systemctl is-active rigctld@ic705.service 2>/dev/null || echo inactive
+    ;;
+  start-hamlib)
+    /usr/bin/systemctl reset-failed rigctld@ic705.service >/dev/null 2>&1 || true
+    /usr/bin/systemctl enable rigctld@ic705.service >/dev/null 2>&1 || true
+    /usr/bin/systemctl restart rigctld@ic705.service >/dev/null 2>&1 \
+      || /usr/bin/systemctl start --job-mode=ignore-dependencies rigctld@ic705.service
+    /usr/bin/systemctl is-active ampctld@spe.service >/dev/null 2>&1 || true
+    /usr/bin/systemctl reset-failed ampctld@spe.service >/dev/null 2>&1 || true
+    /usr/bin/systemctl restart ampctld@spe.service >/dev/null 2>&1 || true
+    /usr/bin/systemctl is-active rigctld@ic705.service 2>/dev/null || echo inactive
+    ;;
+  stop-hamlib)
+    /usr/bin/systemctl stop rigctld@ic705.service >/dev/null 2>&1 || true
+    /usr/bin/systemctl stop ampctld@spe.service >/dev/null 2>&1 || true
+    echo inactive
+    ;;
+  is-hamlib)
+    /usr/bin/systemctl is-active rigctld@ic705.service 2>/dev/null || echo inactive
     ;;
   *)
-    echo "uso: ser2net-ctl start|stop|restart|reload-or-restart|is-active" >&2
+    echo "uso: ser2net-ctl start|stop|restart|reload-or-restart|is-active|sync-spe|sync-hamlib|start-hamlib|stop-hamlib|is-hamlib" >&2
     exit 2
     ;;
 esac

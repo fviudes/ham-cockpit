@@ -1,0 +1,75 @@
+#!/bin/bash
+# Sobe ampctld para o SPE Expert mapeado no ser2net (device=spe).
+# Porta TCP/baud vêm de /opt/ser2net/services.json — não do hardcode :4004.
+# Requer Hamlib ≥4.6 (modelo 401). Prefere /opt/ham-cockpit/hamlib (tarball OTA).
+# LD_LIBRARY_PATH precisa estar no processo pai (não só no $(…)): senão
+# amp_token_foreach some e o binário cai no libhamlib do apt 4.5.5.
+set -euo pipefail
+
+JSON="${SER2NET_JSON:-/opt/ser2net/services.json}"
+LISTEN="${AMPCTLD_LISTEN:-4531}"
+MODEL="${AMPCTLD_SPE_MODEL:-401}"
+HC_HAMLIB="${HC_HAMLIB_PREFIX:-/opt/ham-cockpit/hamlib}"
+
+if [[ -d "$HC_HAMLIB/lib" ]]; then
+  export LD_LIBRARY_PATH="$HC_HAMLIB/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
+
+pick_ampctld() {
+  local c
+  for c in "$HC_HAMLIB/bin/ampctld" /usr/local/bin/ampctld /usr/bin/ampctld; do
+    [[ -x "$c" ]] || continue
+    if "$c" -l 2>/dev/null | awk -v m="$MODEL" '$1+0==m {found=1} END{exit !found}'; then
+      printf '%s\n' "$c"
+      return 0
+    fi
+  done
+  return 1
+}
+
+if ! AMPCTLD="$(pick_ampctld)"; then
+  echo "ampctld-spe: Hamlib sem modelo ${MODEL} (SPE Expert). Instale hamlib-arm64.tgz (≥4.6) em ${HC_HAMLIB}." >&2
+  exit 1
+fi
+
+if [[ ! -f "$JSON" ]]; then
+  echo "ampctld-spe: sem ${JSON} — cadastre o SPE no wizard/ser2net." >&2
+  exit 0
+fi
+
+read -r BIND TCP BAUD < <(python3 - "$JSON" <<'PY'
+import json, sys
+p = sys.argv[1]
+try:
+    raw = json.load(open(p, encoding="utf-8"))
+except Exception as e:
+    print(f"ampctld-spe: JSON inválido: {e}", file=sys.stderr)
+    sys.exit(0)
+bind = str(raw.get("bind") or "127.0.0.1").strip() or "127.0.0.1"
+tcp, baud = 0, 9600
+for s in raw.get("services") or []:
+    if str(s.get("device") or "") == "spe":
+        try:
+            tcp = int(s.get("tcpPort") or 0)
+        except Exception:
+            tcp = 0
+        try:
+            baud = int(s.get("baud") or 9600)
+        except Exception:
+            baud = 9600
+        break
+if not tcp:
+    sys.exit(0)
+print(bind, tcp, baud)
+PY
+) || true
+
+if [[ -z "${TCP:-}" || "${TCP}" == "0" ]]; then
+  echo "ampctld-spe: nenhum serviço ser2net com device=spe — nada a fazer." >&2
+  exit 0
+fi
+
+BAUD="${BAUD:-9600}"
+BIND="${BIND:-127.0.0.1}"
+echo "ampctld-spe: LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-} ${AMPCTLD} -m ${MODEL} -r ${BIND}:${TCP} -s ${BAUD} -t ${LISTEN}"
+exec "$AMPCTLD" -m "$MODEL" -r "${BIND}:${TCP}" -s "$BAUD" -t "$LISTEN"

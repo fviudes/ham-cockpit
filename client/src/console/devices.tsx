@@ -479,6 +479,7 @@ export function Ic705Page() {
             folder: saved.folder,
             services: saved.services,
             running: saved.running,
+            hamlibRunning: saved.hamlibRunning,
           },
         }));
       }

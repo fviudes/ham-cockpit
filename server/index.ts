@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import { lextelConnect, lextelDisconnect, lextelKeepalive, lextelLearn, lextelOpenBluetooth, lextelSave, lextelScan, lextelStatus } from "./lextel";
 import { listSerialDevices } from "./list-serials";
 import { radiosConnect, radiosDisconnect, radiosMarkBle, radiosRemove, radiosResumeIcomLan, radiosSave, radiosSetPrimary, radiosStatus, radiosUpsert } from "./radios";
-import { loadSer2net, saveSer2net } from "./ser2net-store";
+import { hamlibCtl, loadSer2net, probeHamlibNet, saveSer2net } from "./ser2net-store";
 import { attachTerminal } from "./term";
 import { createUser, deleteUser, listUsers, sshStatus } from "./users";
 import {
@@ -85,6 +85,22 @@ async function startServer() {
       res.status(body.ok ? 200 : 400).json(body);
     } catch (err) {
       res.status(500).json({ ok: false, services: [], error: String(err) });
+    }
+  });
+  app.post("/api/ser2net/hamlib", async (req, res) => {
+    try {
+      const action = String(req.body?.action || "").trim();
+      if (action !== "start" && action !== "stop") {
+        res.status(400).json({ ok: false, error: "action start|stop" });
+        return;
+      }
+      const applied = await hamlibCtl(action);
+      // Pequena espera para o socket NET subir antes do probe.
+      if (action === "start") await new Promise((r) => setTimeout(r, 700));
+      const hamlibRunning = action === "stop" ? false : await probeHamlibNet();
+      res.json({ ok: applied || hamlibRunning, hamlibRunning, applied });
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
     }
   });
 
