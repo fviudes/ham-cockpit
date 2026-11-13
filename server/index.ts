@@ -26,7 +26,7 @@ import { layoutGet, layoutSave } from "./layouts";
 import { isLoopback, vfoDisplayExit } from "./vfo-display";
 import { ldgCmd, ldgConnect, ldgDisconnect, ldgPeek, ldgSave, ldgStatus } from "./ldg";
 import { lp100aCmd, lp100aConnect, lp100aDisconnect, lp100aPeek, lp100aSave, lp100aStatus } from "./lp100a";
-import { speCmd, speConnect, speDisconnect, spePeek, speSave, speStatus } from "./spe";
+import { speCmd, speConnect, speDisconnect, spePeek, spePowerOn, speSave, speStatus } from "./spe";
 import {
   backupCreateStart,
   backupDelete,
@@ -211,6 +211,13 @@ async function startServer() {
   app.post("/api/spe/cmd", async (req, res) => {
     try {
       res.json(await speCmd(String(req.body?.cmd || "")));
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/spe/poweron", async (_req, res) => {
+    try {
+      res.json(await spePowerOn());
     } catch (err) {
       res.status(500).json({ ok: false, error: String(err) });
     }

@@ -305,10 +305,13 @@ function SpeViz() {
           pwr: j.pwr === "L" || j.pwr === "M" || j.pwr === "H" ? j.pwr : p.spe.pwr,
           swrAtu: Number.isFinite(Number(j.swrAtu)) ? Number(j.swrAtu) : p.spe.swrAtu,
           swrAnt: Number.isFinite(Number(j.swrAnt)) ? Number(j.swrAnt) : p.spe.swrAnt,
+          vpa: Number.isFinite(Number(j.vpa)) ? Number(j.vpa) : p.spe.vpa,
+          ipa: Number.isFinite(Number(j.ipa)) ? Number(j.ipa) : p.spe.ipa,
           band: typeof j.band === "string" && j.band ? j.band : p.spe.band,
           ant: Number.isFinite(Number(j.ant)) ? Number(j.ant) : p.spe.ant,
           ledOn: Boolean(j.ledOn ?? j.connected),
           lastTxHex: typeof j.lastTxHex === "string" ? j.lastTxHex : p.spe.lastTxHex,
+          lastRx: typeof j.lastRx === "string" ? j.lastRx : p.spe.lastRx,
           error: typeof j.error === "string" ? j.error : p.spe.error,
         },
       }));
@@ -352,26 +355,8 @@ function SpeViz() {
         </div>
       </Lcd>
       <div className="mt-3 grid grid-cols-3 gap-1.5">
-        <Chip
-          tone="ok"
-          active={a.ledOn}
-          onClick={() => {
-            if (a.ledOn) void cmd("off");
-            else void fetch("/api/spe/connect", { method: "POST" }).then((r) => r.json()).then((j) => {
-              setS((p) => ({
-                ...p,
-                spe: {
-                  ...p.spe,
-                  connected: Boolean(j.connected),
-                  hardware: Boolean(j.hardware),
-                  ledOn: Boolean(j.ledOn ?? j.connected),
-                  error: typeof j.error === "string" ? j.error : p.spe.error,
-                },
-              }));
-            });
-          }}
-        >
-          {a.ledOn ? "Power On" : "Power Off"}
+        <Chip tone="ok" active={a.ledOn && a.hardware} onClick={() => void cmd(a.hardware ? "off" : "on")}>
+          {a.hardware ? "Power On" : "Wake"}
         </Chip>
         <Chip onClick={() => void cmd("pwr")}>PWR {SPE_PWR[a.pwr]}</Chip>
         <Chip tone="amber" active={a.operate} onClick={() => void cmd(a.operate ? "op0" : "op1")}>

@@ -1,10 +1,16 @@
 /**
- * SPE Expert 1.3K/1.5K/2K-FA — protocolo nativo (Application Programmer's Guide rev 1.1).
- * Host → amp: 0x55×3 | CNT | DATA… | CHK (sum DATA mod 256)
- * Status ← amp: 0xAA×3 | 0x43 | 67 CSV | chk0 chk1 | CR LF
+ * SPE Expert 1.3K/1.5K/2K-FA — protocolo nativo + ser2net telnet(rfc2217).
  *
- * ampctld -m 401 (Hamlib Beta) falha em get_level/dump_state neste lab; o console
- * fala direto no ser2net device=spe e para o ampctld@spe enquanto estiver conectado.
+ * Host → amp: 0x55×3 | CNT | DATA… | CHK
+ * Status ← amp: 0xAA×3 | 0x43 | 67 CSV | chk0 chk1 | sep | CR LF
+ *
+ * YAML (setup que funciona):
+ *   accepter: telnet(rfc2217),tcp,<bind>,<port>
+ *   connector: serialdev,…,9600n81,local
+ *   kickolduser: true
+ *
+ * Power-on: RFC2217 SET-CONTROL DTR/RTS (pulso low→high).
+ * ampctld -m 401 Beta fica parado — só o caminho nativo usa a porta.
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { execFile } from "node:child_process";
@@ -12,37 +18,19 @@ import net from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { loadSer2net } from "./ser2net-store";
+import { attachRfc2217, type Rfc2217Socket } from "./rfc2217";
+import { loadSer2net, saveSer2net } from "./ser2net-store";
 
 const execFileAsync = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OPT_DIR = "/opt/ham-cockpit/spe";
 const HELPER = "/opt/ham-cockpit/bin/station-svc";
-const POLL_MS = 800;
+const POLL_MS = 700;
 const BAUD = 9600;
+const STATUS_WAIT_MS = 1500;
 
 export type SpePhase = "idle" | "connecting" | "ready" | "error";
 export type SpePwr = "L" | "M" | "H";
-export type SpeCmd =
-  | "input"
-  | "band-"
-  | "band+"
-  | "antenna"
-  | "l-"
-  | "l+"
-  | "c-"
-  | "c+"
-  | "tune"
-  | "off"
-  | "pwr"
-  | "disp"
-  | "op"
-  | "op1"
-  | "op0"
-  | "cat"
-  | "nav"
-  | "set"
-  | "status";
 
 export type SpeSnap = {
   ok: boolean;
@@ -74,6 +62,7 @@ export type SpeSnap = {
   ledOn: boolean;
   lastRx: string;
   lastTxHex: string;
+  transport: "rfc2217";
   folder: string;
 };
 
@@ -86,12 +75,8 @@ const CMD_BYTE: Record<string, number> = {
   antenna: 0x04,
   ant: 0x04,
   "l-": 0x05,
-  "← l": 0x05,
-  "l →": 0x06,
   "l+": 0x06,
   "c-": 0x07,
-  "← c": 0x07,
-  "c →": 0x08,
   "c+": 0x08,
   tune: 0x09,
   tuner: 0x09,
@@ -107,9 +92,7 @@ const CMD_BYTE: Record<string, number> = {
   cat: 0x0e,
   nav: 0x0f,
   left: 0x0f,
-  "← ↑": 0x0f,
   right: 0x10,
-  "↓ →": 0x10,
   set: 0x11,
   status: 0x90,
 };
@@ -168,14 +151,21 @@ function bandLabel(code: string): string {
   return BANDS[n]!;
 }
 
+function numField(s: string | undefined): number {
+  if (s == null) return NaN;
+  return Number.parseFloat(String(s).replace(/^\s+/, "").trim());
+}
+
 function parseStatusCsv(payload: string): boolean {
-  // Guia: ",13K,S,R,A,1,05,1t,0r,L,0000, 0.00, 0.00, 0.0, 0.0, 25,000,000,N,N,"
+  // ",13K,S,R,A,1,05,1t,0r,L,0000, 0.00, 0.00, 0.0, 0.0, 25,000,000,N,N,"
   const parts = payload.split(",");
-  // leading empty from initial comma
   const f = parts[0] === "" ? parts.slice(1) : parts;
   if (f.length < 19) return false;
   const model = (f[0] || "").trim();
   if (!/^\d{2}K$/.test(model) && model !== "15K") return false;
+
+  // 0=ID 1=S/O 2=R/T 3=bank 4=input 5=band 6=txAnt 7=rxAnt
+  // 8=pwr 9=pout 10=swrAtu 11=swrAnt 12=vpa 13=ipa 14=temp 17=warn 18=alarm
   const state = (f[1] || "").trim().toUpperCase();
   const ptt = (f[2] || "").trim().toUpperCase();
   const bankRaw = (f[3] || "A").trim();
@@ -183,14 +173,13 @@ function parseStatusCsv(payload: string): boolean {
   const band = bandLabel((f[5] || "").trim());
   const txAnt = (f[6] || "1").trim();
   const ant = Number.parseInt(txAnt[0] || "1", 10) || 1;
-  // 0=ID 1=S/O 2=R/T 3=bank 4=input 5=band 6=txAnt 7=rxAnt 8=pwr 9=pout …
   const pwrCh = (f[8] || "L").trim().toUpperCase();
-  const pout = Number.parseInt((f[9] || "0").trim(), 10) || 0;
-  const swrAtu = Number.parseFloat((f[10] || "0").trim()) || 0;
-  const swrAnt = Number.parseFloat((f[11] || "0").trim()) || 0;
-  const vpa = Number.parseFloat((f[12] || "0").trim()) || 0;
-  const ipa = Number.parseFloat((f[13] || "0").trim()) || 0;
-  const temp = Number.parseInt((f[14] || "0").trim(), 10) || 0;
+  const pout = Number.parseInt((f[9] || "0").trim(), 10);
+  const swrAtu = numField(f[10]);
+  const swrAnt = numField(f[11]);
+  const vpa = numField(f[12]);
+  const ipa = numField(f[13]);
+  const temp = Number.parseInt((f[14] || "0").trim(), 10);
   const warning = (f[17] || "N").trim().toUpperCase();
   const alarm = (f[18] || "N").trim().toUpperCase();
 
@@ -202,21 +191,22 @@ function parseStatusCsv(payload: string): boolean {
   live.band = band;
   live.ant = ant >= 1 && ant <= 6 ? ant : 1;
   live.pwr = pwrCh === "M" || pwrCh === "H" ? pwrCh : "L";
-  live.pout = pout;
-  live.swrAtu = Math.round(swrAtu * 100) / 100;
-  live.swrAnt = Math.round(swrAnt * 100) / 100;
-  live.vpa = Math.round(vpa * 10) / 10;
-  live.ipa = Math.round(ipa * 10) / 10;
-  live.temp = temp;
+  live.pout = Number.isFinite(pout) && pout >= 0 ? pout : 0;
+  live.swrAtu = Number.isFinite(swrAtu) && swrAtu > 0 ? Math.round(swrAtu * 100) / 100 : 1;
+  live.swrAnt = Number.isFinite(swrAnt) && swrAnt > 0 ? Math.round(swrAnt * 100) / 100 : 1;
+  live.vpa = Number.isFinite(vpa) ? Math.round(vpa * 10) / 10 : 0;
+  live.ipa = Number.isFinite(ipa) ? Math.round(ipa * 10) / 10 : 0;
+  live.temp = Number.isFinite(temp) ? temp : 0;
   live.warning = warning === "N" ? "" : warning;
   live.alarm = alarm === "N" ? "" : alarm;
-  live.ledAl = alarm !== "N" && alarm !== "";
+  live.ledAl = Boolean(live.alarm);
   live.ledTune = /t/i.test(txAnt.slice(1));
   live.ledOn = true;
   live.hardware = true;
   live.phase = "ready";
   live.error = "";
-  live.lastRx = payload.slice(0, 80);
+  live.lastRx = payload.slice(0, 96);
+  statusEpoch += 1;
   return true;
 }
 
@@ -234,21 +224,17 @@ function consumeRx() {
       continue;
     }
     const cnt = rx[3]!;
-    // STATUS: AA×3|0x43|67 CSV|chk0 chk1|sep|CR LF  → 76 bytes
     if (cnt === 0x43) {
       if (rx.length < 76) return;
-      const payload = rx.subarray(4, 4 + 67).toString("latin1");
-      parseStatusCsv(payload);
+      parseStatusCsv(rx.subarray(4, 4 + 67).toString("latin1"));
       rx = rx.subarray(76);
       continue;
     }
-    // ACK de tecla: AA×3|0x01|cmd|chk
     if (cnt === 0x01) {
       if (rx.length < 6) return;
       rx = rx.subarray(6);
       continue;
     }
-    // SCREEN (0x80) / outros: CNT dados + 1 chk (sem CR LF garantido)
     const frameLen = 4 + cnt + 1;
     if (rx.length < frameLen) return;
     rx = rx.subarray(frameLen);
@@ -256,7 +242,7 @@ function consumeRx() {
 }
 
 let saved = loadSaved();
-let live: Omit<SpeSnap, "ok" | "folder" | "baud"> = {
+let live: Omit<SpeSnap, "ok" | "folder" | "baud" | "transport"> = {
   port: "",
   autoConnect: saved.autoConnect,
   connected: false,
@@ -287,9 +273,12 @@ let live: Omit<SpeSnap, "ok" | "folder" | "baud"> = {
 };
 
 let sock: net.Socket | null = null;
+let rfc: Rfc2217Socket | null = null;
 let rx = Buffer.alloc(0);
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 let chain = Promise.resolve();
+let statusEpoch = 0;
+let yamlEnsured = false;
 
 function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   const run = chain.then(fn, fn);
@@ -301,7 +290,7 @@ function enqueue<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 function snap(): SpeSnap {
-  return { ok: true, ...live, baud: BAUD, folder: dataDir() };
+  return { ok: true, ...live, baud: BAUD, transport: "rfc2217", folder: dataDir() };
 }
 
 function stopPoll() {
@@ -314,15 +303,10 @@ function stopPoll() {
 function dropSock() {
   stopPoll();
   rx = Buffer.alloc(0);
-  const s = sock;
+  const r = rfc;
+  rfc = null;
   sock = null;
-  if (!s) return;
-  try {
-    s.removeAllListeners();
-    s.destroy();
-  } catch {
-    /* ignore */
-  }
+  if (r) r.destroy();
 }
 
 async function resolveEndpoint(): Promise<{ host: string; port: number } | null> {
@@ -332,7 +316,17 @@ async function resolveEndpoint(): Promise<{ host: string; port: number } | null>
   return { host: cfg.bind || "127.0.0.1", port: svc.tcpPort };
 }
 
-/** Libera :4001 — ampctld Expert Beta segura a TCP e impede o protocolo nativo. */
+/** Regrava YAML com telnet(rfc2217) na SPE (setup que funcionava no outro servidor). */
+async function ensureSpeRfc2217Yaml(): Promise<void> {
+  if (yamlEnsured) return;
+  const cfg = await loadSer2net();
+  if (!cfg.services.some((s) => s.device === "spe")) return;
+  await saveSer2net({ bind: cfg.bind, services: cfg.services });
+  yamlEnsured = true;
+  // ser2net reload — dá um respiro antes de conectar
+  await new Promise((r) => setTimeout(r, 400));
+}
+
 async function stopAmpctld(): Promise<void> {
   if (process.platform !== "linux" || !existsSync(HELPER)) return;
   try {
@@ -340,25 +334,33 @@ async function stopAmpctld(): Promise<void> {
       timeout: 40_000,
       windowsHide: true,
     });
+    await execFileAsync("sudo", ["-n", HELPER, "disable", "spe"], {
+      timeout: 15_000,
+      windowsHide: true,
+    });
   } catch {
-    /* sem helper / sem permissão — tenta conectar mesmo assim */
+    /* ignore */
   }
 }
 
 function writePacket(data: Buffer): boolean {
-  if (!sock || sock.destroyed) return false;
-  try {
-    const pkt = hostPacket(data);
-    live.lastTxHex = pkt.toString("hex");
-    sock.write(pkt);
-    return true;
-  } catch {
-    return false;
-  }
+  if (!rfc || !sock || sock.destroyed) return false;
+  const pkt = hostPacket(data);
+  live.lastTxHex = pkt.toString("hex");
+  return rfc.writeBinary(pkt);
 }
 
 function requestStatus() {
   writePacket(Buffer.from([0x90]));
+}
+
+async function waitStatus(prevEpoch: number, ms = STATUS_WAIT_MS): Promise<boolean> {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    if (statusEpoch !== prevEpoch && live.hardware) return true;
+    await new Promise((r) => setTimeout(r, 80));
+  }
+  return statusEpoch !== prevEpoch && live.hardware;
 }
 
 function startPoll() {
@@ -382,9 +384,8 @@ function attachSock(s: net.Socket, host: string, port: number) {
   live.phase = "ready";
   live.error = "";
   live.ledOn = true;
-  s.setNoDelay(true);
-  s.on("data", (buf) => {
-    rx = Buffer.concat([rx, buf]);
+  rfc = attachRfc2217(s, (app) => {
+    rx = Buffer.concat([rx, app]);
     consumeRx();
   });
   s.on("error", (err) => {
@@ -397,11 +398,15 @@ function attachSock(s: net.Socket, host: string, port: number) {
   s.on("close", () => {
     if (sock !== s) return;
     sock = null;
+    rfc = null;
     stopPoll();
     live.connected = false;
     live.hardware = false;
     if (live.phase !== "idle") live.phase = "error";
   });
+  // Linhas altas após connect (amp já ligada) + poll STATUS
+  rfc.setRts(true);
+  rfc.setDtr(true);
   startPoll();
 }
 
@@ -426,6 +431,11 @@ export async function speConnect(): Promise<SpeSnap> {
     live.phase = "connecting";
     live.autoConnect = saved.autoConnect;
     await stopAmpctld();
+    try {
+      await ensureSpeRfc2217Yaml();
+    } catch {
+      /* se falhar rewrite, ainda tenta conectar */
+    }
     const ep = await resolveEndpoint();
     if (!ep) {
       live.connected = false;
@@ -457,7 +467,7 @@ export async function speConnect(): Promise<SpeSnap> {
         attachSock(s, ep.host, ep.port);
         resolve(snap());
       };
-      const timer = setTimeout(() => finish(false, "timeout"), 2500);
+      const timer = setTimeout(() => finish(false, "timeout"), 3000);
       s.once("error", (err) => {
         clearTimeout(timer);
         finish(false, err.message);
@@ -479,49 +489,115 @@ export async function speDisconnect(): Promise<SpeSnap> {
   live.tx = false;
   live.pout = 0;
   live.ipa = 0;
+  live.swrAtu = 1;
+  live.swrAnt = 1;
   live.ledOn = false;
   live.lastTxHex = "";
+  live.lastRx = "";
   return snap();
+}
+
+/** Power-on Expert via RFC2217 (DTR/RTS), não via tecla 0x0B. */
+export async function spePowerOn(): Promise<SpeSnap> {
+  return enqueue(async () => {
+    if (!live.connected || !rfc) {
+      const up = await speConnect();
+      if (!up.connected || !rfc) return up;
+    }
+    const prev = statusEpoch;
+    live.error = "";
+    await rfc.pulseWake(1000);
+    live.lastTxHex = "rfc2217:RTS/DTR wake";
+    // Amp reinicia UART — aguarda STATUS
+    for (let i = 0; i < 20; i++) {
+      requestStatus();
+      if (await waitStatus(prev, 500)) break;
+    }
+    live.ledOn = live.hardware;
+    if (!live.hardware) live.error = "nowake";
+    return snap();
+  });
 }
 
 export async function speCmd(cmd: string): Promise<SpeSnap> {
   const key = String(cmd || "")
     .trim()
     .toLowerCase();
+  if (key === "on" || key === "poweron" || key === "wake") return spePowerOn();
+
   return enqueue(async () => {
-    if (!live.connected || !sock) {
+    if (!live.connected || !rfc) {
       const up = await speConnect();
       if (!up.connected) return up;
     }
-    // op1 / op0: só dispara o toggle se o estado alvo for diferente
-    if (key === "op1" && live.operate) return snap();
-    if (key === "op0" && !live.operate) return snap();
+
+    if (key === "op1" && live.operate) {
+      requestStatus();
+      await waitStatus(statusEpoch, 600);
+      return snap();
+    }
+    if (key === "op0" && !live.operate) {
+      requestStatus();
+      await waitStatus(statusEpoch, 600);
+      return snap();
+    }
+
     if (key === "off") {
+      const prev = statusEpoch;
       const ok = writePacket(Buffer.from([0x0a]));
       if (!ok) {
         live.error = "tx";
         live.phase = "error";
         return snap();
       }
-      // amp desliga a UART — marca offline
-      setTimeout(() => {
-        void speDisconnect();
-      }, 200);
+      if (rfc) {
+        rfc.setDtr(false);
+        rfc.setRts(false);
+      }
+      await waitStatus(prev, 400);
+      await speDisconnect();
       return snap();
     }
+
     const code = CMD_BYTE[key];
     if (code == null) {
       live.error = "cmd";
       return snap();
     }
+
+    const prevPwr = live.pwr;
+    const prevOp = live.operate;
+    const prev = statusEpoch;
     const ok = writePacket(Buffer.from([code]));
     if (!ok) {
       live.error = "tx";
       live.phase = "error";
       return snap();
     }
-    // status imediato após comando (além do poll)
-    setTimeout(() => requestStatus(), 120);
+
+    // Espera ACK/STATUS antes de devolver o snap (UI precisa de pwr/swr/operate atualizados)
+    await new Promise((r) => setTimeout(r, 100));
+    requestStatus();
+    await waitStatus(prev, STATUS_WAIT_MS);
+
+    // PWR cicla L→M→H: se ainda igual, mais um poll
+    if (key === "pwr" || key === "power") {
+      for (let i = 0; i < 6 && live.pwr === prevPwr; i++) {
+        await new Promise((r) => setTimeout(r, 150));
+        const e = statusEpoch;
+        requestStatus();
+        await waitStatus(e, 500);
+      }
+    }
+    if (key === "op1" || key === "op0" || key === "op" || key === "operate") {
+      for (let i = 0; i < 4 && live.operate === prevOp; i++) {
+        await new Promise((r) => setTimeout(r, 120));
+        const e = statusEpoch;
+        requestStatus();
+        await waitStatus(e, 400);
+      }
+    }
+
     return snap();
   });
 }

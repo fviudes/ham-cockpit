@@ -1040,6 +1040,7 @@ function applySpe(setS: ReturnType<typeof useConsole>["setS"], j: Record<string,
       ledTune: Boolean(j.ledTune),
       ledOn: Boolean(j.ledOn ?? j.connected),
       lastTxHex: typeof j.lastTxHex === "string" ? j.lastTxHex : p.spe.lastTxHex,
+      lastRx: typeof j.lastRx === "string" ? j.lastRx : p.spe.lastRx,
     },
   }));
 }
@@ -1050,7 +1051,11 @@ export async function speCommand(cmd: string) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cmd }),
   });
-  return (await r.json()) as Record<string, unknown>;
+  const j = (await r.json()) as Record<string, unknown>;
+  if (r.status === 404 || j.error === "API não encontrada") {
+    return { ...j, error: "noapi", ok: false };
+  }
+  return j;
 }
 
 export function SpePage() {
@@ -1066,7 +1071,8 @@ export function SpePage() {
     try {
       const j = await speCommand(k);
       applySpe(setS, j);
-      if (j.error === "noport") toast.error(tx("s2nPick"));
+      if (j.error === "noapi") toast.error(tx("speNeedOta"));
+      else if (j.error === "noport") toast.error(tx("s2nPick"));
       else if (j.error === "tx" || j.error === "timeout") toast.error(String(j.error));
       else if (j.error === "cmd") toast.message(`SPE · ${k}`);
       else {
@@ -1164,17 +1170,17 @@ export function SpePage() {
           <div className="grid grid-cols-3 gap-2">
             <Chip onClick={() => void cmd("left")}>← ↑</Chip>
             <Chip onClick={() => void cmd("right")}>↓ →</Chip>
-            <Chip active={a.operate} tone="ok" onClick={() => void cmd("op1")}>
-              On
+            <Chip tone="ok" active={a.hardware} onClick={() => void cmd(a.hardware ? "off" : "on")}>
+              {a.hardware ? "Sleep" : "Wake"}
             </Chip>
             <Chip onClick={() => void cmd("cat")}>Cat</Chip>
             <Chip onClick={() => void cmd("disp")}>Disp</Chip>
             <Chip active={!a.operate} onClick={() => void cmd("op0")}>
-              Off
+              STBY
             </Chip>
             <Chip onClick={() => void cmd("set")}>Set</Chip>
             <Chip onClick={() => void cmd("pwr")}>PWR</Chip>
-            <Chip active={a.operate} onClick={() => void cmd("op1")}>
+            <Chip active={a.operate} tone="ok" onClick={() => void cmd("op1")}>
               OP
             </Chip>
           </div>

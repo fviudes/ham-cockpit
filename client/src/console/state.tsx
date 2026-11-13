@@ -263,6 +263,7 @@ export type Station = {
     ledTune: boolean;
     ledOn: boolean;
     lastTxHex: string;
+    lastRx: string;
   };
   hamplus: { pwr: boolean; send: boolean; split: boolean; rotor: 1 | 2; deg: number; ant: number; radio: number };
   palstar: {
@@ -520,6 +521,7 @@ function initial(): Station {
       ledTune: false,
       ledOn: false,
       lastTxHex: "",
+      lastRx: "",
     },
     hamplus: { pwr: true, send: false, split: false, rotor: 1, deg: 42, ant: 1, radio: 1 },
     palstar: { mode: "AUTO", ant: "COAX", fwd: 0, ref: 0, swr: 1.1, l: 12, c: 48, tune: false, match: true },
@@ -1260,6 +1262,7 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
           ledTune: Boolean(j.ledTune),
           ledOn: Boolean(j.ledOn ?? j.connected),
           lastTxHex: typeof j.lastTxHex === "string" ? j.lastTxHex : p.spe.lastTxHex,
+          lastRx: typeof j.lastRx === "string" ? j.lastRx : p.spe.lastRx,
         },
       }));
     };
@@ -1276,7 +1279,7 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
         });
     };
     pull();
-    const id = window.setInterval(pull, 700);
+    const id = window.setInterval(pull, 600);
     return () => window.clearInterval(id);
   }, []);
 

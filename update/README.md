@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.07.15** (`version.json`).
+Versão atual neste canal: **0.1.07.16** (`version.json`).
 
 ## Versionamento
 
@@ -20,10 +20,10 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.07.15",
+  "version": "0.1.07.16",
   "channel": "main",
-  "file": "ham-cockpit-0.1.07.15.tgz",
-  "notes": "SPE: corrige campos STATUS (PWR/VPA) e mensagem clara se a API SPE faltar (atualize o OTA)."
+  "file": "ham-cockpit-0.1.07.16.tgz",
+  "notes": "SPE: ser2net telnet(rfc2217)+DTR/RTS wake; STATUS/SWR/Pout/PWR atualizam após cmds; ampctld fora da porta."
 }
 ```
 

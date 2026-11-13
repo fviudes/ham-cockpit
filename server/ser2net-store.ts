@@ -76,6 +76,12 @@ function writeAtomic(file: string, body: string) {
   renameSync(tmp, file);
 }
 
+/** SPE Expert precisa de telnet(rfc2217) para DTR/RTS (power-on). Demais: TCP raw. */
+function accepterLine(bind: string, port: number, device: Ser2netDevice): string {
+  if (device === "spe") return `    accepter: telnet(rfc2217),tcp,${bind},${port}`;
+  return `    accepter: tcp,${bind},${port}`;
+}
+
 function renderYaml(bind: string, services: Ser2netSvc[]): string {
   const used = new Set<string>();
   const blocks = services.map((svc) => {
@@ -83,7 +89,7 @@ function renderYaml(bind: string, services: Ser2netSvc[]): string {
     const baud = BAUDS.has(svc.baud) ? svc.baud : 9600;
     return [
       `connection: &${a}`,
-      `    accepter: tcp,${bind},${svc.tcpPort}`,
+      accepterLine(bind, svc.tcpPort, svc.device),
       `    enable: on`,
       `    options:`,
       `      kickolduser: true`,
@@ -94,7 +100,7 @@ function renderYaml(bind: string, services: Ser2netSvc[]): string {
     "%YAML 1.1",
     "---",
     GENERATED,
-    "# ser2net 4 — único processo na TTY. Rádio CAT/USB e acessórios falam TCP (bind:porta); Hamlib usa -r bind:porta.",
+    "# ser2net 4 — único processo na TTY. SPE usa telnet(rfc2217) (DTR/RTS); demais TCP raw.",
     `# Pasta: ${dataDir()}`,
     "",
     // ser2net 4 recusa documento só com comentários ("Unexpected scalar value") e o
@@ -108,7 +114,7 @@ function parseYaml(text: string): Ser2netSvc[] | null {
   if (!text.includes("Ham Cockpit generated")) return null;
   const out: Ser2netSvc[] = [];
   const re =
-    /connection:\s*&(\S+)\s+accepter:\s*tcp,([^,]+),(\d+)\s+enable:\s*on[\s\S]*?connector:\s*serialdev,([^,]+),(\d+)n81,local/g;
+    /connection:\s*&(\S+)\s+accepter:\s*(?:telnet\(rfc2217\),)?tcp,([^,]+),(\d+)\s+enable:\s*on[\s\S]*?connector:\s*serialdev,([^,]+),(\d+)n81,local/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
     const tcpPort = Number(m[3]);

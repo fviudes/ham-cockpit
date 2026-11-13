@@ -26,12 +26,13 @@ connection: &palstar
       kickolduser: true
     connector: serialdev,/dev/ttyAMA3,9600n81,local
 
+# SPE Expert — telnet(rfc2217) para DTR/RTS (power-on). Console nativo, não ampctld.
 connection: &spe
-    accepter: tcp,127.0.0.1,4004
+    accepter: telnet(rfc2217),tcp,127.0.0.1,4001
     enable: on
     options:
       kickolduser: true
-    connector: serialdev,/dev/serial/by-id/usb-FTDI-SPE,9600n81,local
+    connector: serialdev,/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_AH03EJ3G-if00-port0,9600n81,local
 
 # TelePost LP-100A — wattímetro vetorial: 115200 8N1, cabo reto DB9 (não null-modem).
 # Poll ASCII P; A = alarme ROE; F = Avg/Peak/Tune. Não envie M (muda a tela).
