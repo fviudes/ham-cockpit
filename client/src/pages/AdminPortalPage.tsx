@@ -1,5 +1,18 @@
-import { useCallback, useEffect, useState } from "react";
-import NavBar from "@/components/NavBar";
+import { useCallback, useEffect, useState, type ComponentType } from "react";
+import { useLocation } from "wouter";
+import {
+  CreditCard,
+  KeyRound,
+  LogOut,
+  Menu,
+  RefreshCw,
+  Tags,
+  Users,
+  Wallet,
+  X,
+} from "lucide-react";
+import { APP_LOGO, APP_NAME, APP_VERSION } from "@shared/brand";
+import { useIsMobile } from "@/hooks/useMobile";
 import { useSiteLang } from "./site-lang";
 import { ADM, LIC } from "./license-copy";
 
@@ -107,6 +120,9 @@ async function api<T>(path: string, init?: RequestInit & { csrf?: string }): Pro
 
 export default function AdminPortalPage() {
   const { t } = useSiteLang();
+  const mobile = useIsMobile();
+  const [, navigate] = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("lic");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -209,6 +225,10 @@ export default function AdminPortalPage() {
       if (h.ok) setAdminReady(!!h.body.adminConfigured);
     });
   }, [refresh]);
+
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [tab]);
 
   const login = async () => {
     setErr("");
@@ -439,35 +459,141 @@ export default function AdminPortalPage() {
     }
   };
 
-  const chip = (id: Tab, label: string) => (
-    <button
-      key={id}
-      type="button"
-      onClick={() => setTab(id)}
-      className={`rounded-md px-3 py-1.5 text-sm ${tab === id ? "bg-[#4fc3f7] text-[#0d1b2a]" : "border border-[rgba(79,195,247,0.3)] text-[#4fc3f7]"}`}
-    >
-      {label}
-    </button>
-  );
-
   const inputCls = "w-full rounded-md border border-[rgba(79,195,247,0.25)] bg-[#0d1b2a] px-3 py-2 text-sm text-white";
   const btnPrimary = "rounded-md bg-[#4fc3f7] px-3 py-1.5 text-sm font-semibold text-[#0d1b2a]";
   const btnGhost = "rounded-md border border-[rgba(79,195,247,0.35)] px-2 py-1 text-xs text-[#4fc3f7]";
 
+  const navItems: { id: Tab; label: string; icon: ComponentType<{ size?: number }> }[] = [
+    { id: "lic", label: t(ADM.tabLic), icon: KeyRound },
+    { id: "price", label: t(ADM.tabPrice), icon: Tags },
+    { id: "prov", label: t(ADM.tabProv), icon: Wallet },
+    { id: "pay", label: t(ADM.tabPay), icon: CreditCard },
+    ...(canManageUsers ? [{ id: "users" as const, label: t(ADM.tabUsers), icon: Users }] : []),
+  ];
+
+  const brandBlock = (
+    <div className="border-b border-[rgba(79,195,247,0.12)] px-5 py-6">
+      <div className="flex items-center gap-2">
+        <img src={APP_LOGO} alt={APP_NAME} className="size-[113px] shrink-0 object-contain" />
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 whitespace-nowrap font-['IBM_Plex_Mono'] text-[10px] tracking-[0.22em] text-[#ffb300] uppercase">
+            <span>{t(ADM.station)}</span>
+          </p>
+          <p className="whitespace-nowrap font-['Space_Grotesk'] text-lg font-semibold text-white">{APP_NAME}</p>
+          <p className="whitespace-nowrap text-[11px] text-[#8ea0b3]">
+            v{APP_VERSION} · {t(ADM.brandMeta)}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
+  const nav = (
+    <nav className="flex h-full flex-col">
+      {brandBlock}
+      <div className="console-scroll flex-1 overflow-y-auto px-3 py-4">
+        {authed ? (
+          <div className="mb-5">
+            <p className="mb-1.5 px-2 font-['IBM_Plex_Mono'] text-[10px] tracking-[0.16em] text-[#5d7184] uppercase">
+              {t(ADM.navGroup)}
+            </p>
+            {navItems.map((it) => {
+              const Icon = it.icon;
+              const active = tab === it.id;
+              return (
+                <button
+                  key={it.id}
+                  type="button"
+                  onClick={() => setTab(it.id)}
+                  className={`mb-0.5 flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm ${
+                    active ? "bg-[#4fc3f7]/15 text-[#4fc3f7]" : "text-[#c5d4e0] hover:bg-white/5"
+                  }`}
+                >
+                  <Icon size={16} />
+                  {it.label}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              className="mb-0.5 flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-[#c5d4e0] hover:bg-white/5"
+            >
+              <RefreshCw size={16} />
+              {t(ADM.refresh)}
+            </button>
+          </div>
+        ) : null}
+      </div>
+      <div className="border-t border-[rgba(79,195,247,0.12)] p-3">
+        <button
+          type="button"
+          onClick={() => navigate("/")}
+          className="mb-0.5 flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm text-[#8ea0b3] hover:text-[#4fc3f7]"
+        >
+          {t(ADM.backSite)}
+        </button>
+        {authed ? (
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm text-[#8ea0b3] hover:text-[#f87171]"
+          >
+            <LogOut size={16} />
+            {t(ADM.logout)}
+          </button>
+        ) : null}
+      </div>
+    </nav>
+  );
+
+  const tabTitle =
+    tab === "lic"
+      ? t(ADM.tabLic)
+      : tab === "price"
+        ? t(ADM.tabPrice)
+        : tab === "prov"
+          ? t(ADM.tabProv)
+          : tab === "pay"
+            ? t(ADM.tabPay)
+            : t(ADM.tabUsers);
+
   return (
-    <div className="flex min-h-screen flex-col bg-[#0d1b2a]">
-      <NavBar />
-      <main className="mx-auto w-full max-w-[1600px] flex-1 px-3 pt-24 pb-16 sm:px-4 lg:px-5">
-        <p className="mb-2 font-['IBM_Plex_Mono'] text-xs font-bold tracking-widest text-[#FFB300]">{t(ADM.kicker)}</p>
-        <div className="mb-6 flex items-center justify-between gap-3">
-          <h1 className="font-['Space_Grotesk'] text-3xl font-bold text-white">{t(ADM.title)}</h1>
-          {authed ? (
-            <button type="button" onClick={() => void logout()} className="text-sm text-[#94a3b8] hover:text-white">
-              {t(ADM.logout)}
+    <div className="console flex min-h-screen">
+      {!mobile ? (
+        <aside className="sticky top-0 h-screen w-72 shrink-0 border-r border-[rgba(79,195,247,0.12)] bg-[#08131c]">{nav}</aside>
+      ) : null}
+      {mobile && menuOpen ? (
+        <div className="fixed inset-0 z-50 flex">
+          <div className="h-full w-72 bg-[#08131c]">{nav}</div>
+          <button
+            type="button"
+            className="flex-1 bg-black/50"
+            aria-label={t(ADM.closeMenu)}
+            onClick={() => setMenuOpen(false)}
+          />
+        </div>
+      ) : null}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-20 flex items-center gap-2 border-b border-[rgba(79,195,247,0.12)] bg-[#071018]/95 px-4 py-3 backdrop-blur-sm">
+          {mobile ? (
+            <button
+              type="button"
+              onClick={() => setMenuOpen((v) => !v)}
+              className="grid size-9 shrink-0 place-items-center rounded-md border border-[rgba(79,195,247,0.2)] text-[#4fc3f7]"
+              aria-label={t(ADM.menu)}
+            >
+              {menuOpen ? <X size={18} /> : <Menu size={18} />}
             </button>
           ) : null}
-        </div>
-
+          <div className="min-w-0 flex-1">
+            <p className="font-['IBM_Plex_Mono'] text-[10px] tracking-[0.16em] text-[#ffb300] uppercase">{t(ADM.kicker)}</p>
+            <h1 className="truncate font-['Space_Grotesk'] text-lg font-semibold text-white">
+              {authed ? tabTitle : t(ADM.title)}
+            </h1>
+          </div>
+        </header>
+        <main className="mx-auto w-full max-w-[1600px] flex-1 px-3 py-6 sm:px-4 lg:px-5">
         {err ? <p className="mb-4 text-sm text-red-400">{err}</p> : null}
 
         {!authed ? (
@@ -506,16 +632,6 @@ export default function AdminPortalPage() {
                 {summary.paid ?? 0}
               </p>
             ) : null}
-            <div className="mb-5 flex flex-wrap gap-2">
-              {chip("lic", t(ADM.tabLic))}
-              {chip("price", t(ADM.tabPrice))}
-              {chip("prov", t(ADM.tabProv))}
-              {chip("pay", t(ADM.tabPay))}
-              {canManageUsers ? chip("users", t(ADM.tabUsers)) : null}
-              <button type="button" onClick={() => void refresh()} className="text-sm text-[#94a3b8]">
-                {t(ADM.refresh)}
-              </button>
-            </div>
 
             {tab === "lic" ? (
               <div className="space-y-4">
@@ -913,7 +1029,8 @@ export default function AdminPortalPage() {
             ) : null}
           </>
         )}
-      </main>
+        </main>
+      </div>
     </div>
   );
 }

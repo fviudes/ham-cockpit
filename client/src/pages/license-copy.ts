@@ -73,6 +73,12 @@ export const BUY_RET = {
 
 export const ADM = {
   kicker: { pt: "ADMIN", en: "ADMIN" } satisfies Pair,
+  station: { pt: "Estação", en: "Station" } satisfies Pair,
+  brandMeta: { pt: "Admin", en: "Admin" } satisfies Pair,
+  navGroup: { pt: "Administração", en: "Administration" } satisfies Pair,
+  menu: { pt: "Menu", en: "Menu" } satisfies Pair,
+  closeMenu: { pt: "Fechar menu", en: "Close menu" } satisfies Pair,
+  backSite: { pt: "Voltar ao site", en: "Back to site" } satisfies Pair,
   title: { pt: "Painel de licenças", en: "License admin" } satisfies Pair,
   login: { pt: "Entrar", en: "Sign in" } satisfies Pair,
   logout: { pt: "Sair", en: "Sign out" } satisfies Pair,
