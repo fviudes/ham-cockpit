@@ -35,6 +35,7 @@ const UNITS: Record<ServiceId, string> = {
   wlg: "waveloggate.service",
   mmdvm: "mmdvmhost.service",
   radio: "",
+  hamlib: "rigctld@ic705.service",
   spe: "ampctld@spe.service",
   hamplus: "",
   palstar: "",
@@ -52,7 +53,20 @@ const UNITS: Record<ServiceId, string> = {
 const HELPER_IDS = new Set<ServiceId>(SERVICE_IDS.filter((id) => UNITS[id]));
 
 /** Ligar/Desligar manual (além do início automático). */
-const POWER_IDS = new Set<ServiceId>(["ser2net", "wavelog", "db", "wlg", "mmdvm", "spe", "bluetooth", "radio", "lextel", "ldg", "lp100a"]);
+const POWER_IDS = new Set<ServiceId>([
+  "ser2net",
+  "wavelog",
+  "db",
+  "wlg",
+  "mmdvm",
+  "hamlib",
+  "spe",
+  "bluetooth",
+  "radio",
+  "lextel",
+  "ldg",
+  "lp100a",
+]);
 
 function dataDir(): string {
   if (existsSync("/opt/ham-cockpit")) {
@@ -269,7 +283,7 @@ export async function servicesPower(id: string, on: boolean): Promise<ServicesSn
   return servicesStatus();
 }
 
-const BOOT_UNIT_IDS: ServiceId[] = ["ser2net", "db", "wavelog", "wlg", "mmdvm", "spe", "bluetooth"];
+const BOOT_UNIT_IDS: ServiceId[] = ["ser2net", "db", "wavelog", "wlg", "mmdvm", "hamlib", "spe", "bluetooth"];
 
 /**
  * Reconcilia o que o início automático promete com o estado real (rede de segurança do systemd).

@@ -9,6 +9,7 @@ export const SVC_LABEL: Record<ServiceId, I18nKey> = {
   wlg: "svcWlg",
   mmdvm: "svcMmdvm",
   radio: "svcRadio",
+  hamlib: "svcHamlib",
   spe: "svcSpe",
   hamplus: "svcHamplus",
   palstar: "svcPalstar",
@@ -29,6 +30,7 @@ export const SVC_HINT: Record<ServiceId, I18nKey> = {
   wlg: "svcWlgHint",
   mmdvm: "svcMmdvmHint",
   radio: "svcRadioHint",
+  hamlib: "svcHamlibHint",
   spe: "svcSpeHint",
   hamplus: "svcHamplusHint",
   palstar: "svcPalstarHint",
@@ -49,6 +51,7 @@ export const SVC_POWER = new Set<ServiceId>([
   "db",
   "wlg",
   "mmdvm",
+  "hamlib",
   "spe",
   "bluetooth",
   "radio",
@@ -70,6 +73,7 @@ export function serviceLive(id: ServiceId, s: Station, running: boolean) {
   if (id === "mmdvm") return s.mmdvm.running || running;
   if (id === "bluetooth") return s.ic705.phase === "ready" || s.ble.connected;
   if (id === "ser2net") return s.ser2net.running || running;
+  if (id === "hamlib") return s.ser2net.hamlibRunning || running;
   return running;
 }
 

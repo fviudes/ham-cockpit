@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.07.10** (`version.json`).
+Versão atual neste canal: **0.1.07.11** (`version.json`).
 
 ## Versionamento
 
@@ -20,10 +20,10 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.07.10",
+  "version": "0.1.07.11",
   "channel": "main",
-  "file": "ham-cockpit-0.1.07.10.tgz",
-  "notes": "Hamlib SPE+IC-705: porta dinâmica via ser2net (device=spe/radio); Hamlib 4.6.5 privado (modelo 401); status Hamlib sonda :4532; corrige Desconectado e rigctld apontando para SPE."
+  "file": "ham-cockpit-0.1.07.11.tgz",
+  "notes": "Hamlib na lista Admin/Serviços: Ligar/Desligar e autostart controlam rigctld@ic705 (rádio principal NET :4532). SPE Expert continua separado (ampctld@spe)."
 }
 ```
 

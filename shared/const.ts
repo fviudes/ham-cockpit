@@ -8,6 +8,7 @@ export const SERVICE_IDS = [
   "wlg",
   "mmdvm",
   "radio",
+  "hamlib",
   "spe",
   "hamplus",
   "palstar",

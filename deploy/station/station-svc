@@ -2,8 +2,9 @@
 # Liga/desliga unidades no boot e start/stop sob demanda. Chamado via sudo -n.
 #   station-svc is-active-all            → "id=estado" (um spawn só; usado no polling do console)
 #   station-svc enable|disable|start|stop|is-enabled|is-active ID
-# IDs com unit própria: ser2net wavelog wlg mmdvm spe wifi bluetooth web docker
+# IDs com unit própria: ser2net wavelog wlg mmdvm hamlib spe wifi bluetooth web docker
 # IDs especiais: db (container wavelog-db), mmdvm (pilha Nextion+Host+gateways via mmdvm-ctl)
+# hamlib = rigctld do rádio principal (:4532). SPE fica em ampctld@spe (id spe), separado.
 set -euo pipefail
 
 WAVELOG_CTL=/opt/wavelog/wavelog-ctl.sh
@@ -15,6 +16,7 @@ unit_of() {
     wavelog) echo wavelog.service ;;
     wlg) echo waveloggate.service ;;
     mmdvm) echo mmdvmhost.service ;;
+    hamlib) echo 'rigctld@ic705.service' ;;
     spe) echo 'ampctld@spe.service' ;;
     wifi) echo ham-cockpit-ap.service ;;
     bluetooth) echo bluetooth.service ;;
@@ -58,7 +60,7 @@ unit_start() {
 cmd="${1:-}"
 
 if [[ "$cmd" == "is-active-all" ]]; then
-  ids=(ser2net wavelog wlg mmdvm spe wifi bluetooth web)
+  ids=(ser2net wavelog wlg mmdvm hamlib spe wifi bluetooth web)
   units=()
   for i in "${ids[@]}"; do units+=("$(unit_of "$i")"); done
   mapfile -t st < <(systemctl is-active "${units[@]}" 2>/dev/null || true)
