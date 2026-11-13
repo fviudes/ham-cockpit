@@ -1,16 +1,23 @@
 #!/bin/bash
-# Sobe rigctld para o rádio Cat-USB mapeado no ser2net (device=radio).
-# Porta TCP/baud vêm de /opt/ser2net/services.json — não do hardcode :4001.
-# Clientes (WSJT-X, WaveLogGate, console): modelo 2 em 127.0.0.1:4532.
+# Ponte Hamlib só do rádio serial (device=radio).
+# O -m vem do rádio gravado (radios.json), não de um 3085 fixo.
+# Sem device=radio, ou sem modelo, sai 0 e não ocupa a porta da SPE.
+# IC-705 no laboratório: rigctld -m 3085 -r 127.0.0.1:<porta> -t 4532
+# sem -s e sem -c (o modelo 3085 já usa 0xA4).
 set -euo pipefail
 
 JSON="${SER2NET_JSON:-/opt/ser2net/services.json}"
 LISTEN="${RIGCTLD_LISTEN:-4532}"
-MODEL="${RIGCTLD_IC705_MODEL:-3085}"
-CIV="${RIGCTLD_IC705_CIV:-0xA4}"
-FALLBACK_TCP="${RIGCTLD_FALLBACK_TCP:-4001}"
-FALLBACK_BAUD="${RIGCTLD_FALLBACK_BAUD:-115200}"
 HC_HAMLIB="${HC_HAMLIB_PREFIX:-/opt/ham-cockpit/hamlib}"
+if [[ -z "${RADIOS_JSON:-}" ]]; then
+  if [[ -f /opt/ham-cockpit/radios/radios.json ]]; then
+    RADIOS_JSON=/opt/ham-cockpit/radios/radios.json
+  elif [[ -f /opt/radios/radios.json ]]; then
+    RADIOS_JSON=/opt/radios/radios.json
+  else
+    RADIOS_JSON=/opt/ham-cockpit/radios/radios.json
+  fi
+fi
 
 if [[ -d "$HC_HAMLIB/lib" ]]; then
   export LD_LIBRARY_PATH="$HC_HAMLIB/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
@@ -32,58 +39,163 @@ if ! RIGCTLD="$(pick_rigctld)"; then
 fi
 
 BIND="127.0.0.1"
-TCP="$FALLBACK_TCP"
-BAUD="$FALLBACK_BAUD"
+TCP=""
 
 if [[ -f "$JSON" ]]; then
-  read -r BIND TCP BAUD < <(python3 - "$JSON" "$FALLBACK_TCP" "$FALLBACK_BAUD" <<'PY'
+  read -r BIND TCP < <(python3 - "$JSON" <<'PY'
 import json, sys
-p, fb_tcp, fb_baud = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
 try:
-    raw = json.load(open(p, encoding="utf-8"))
+    raw = json.load(open(sys.argv[1], encoding="utf-8"))
 except Exception:
-    print("127.0.0.1", fb_tcp, fb_baud)
+    print("NONE", 0)
     raise SystemExit(0)
 bind = str(raw.get("bind") or "127.0.0.1").strip() or "127.0.0.1"
-tcp, baud = 0, fb_baud
-# Preferência: device=radio; senão linha cujo nome parece IC-705 CI-V.
+tcp = 0
+taken = set()
 for s in raw.get("services") or []:
-    if str(s.get("device") or "") == "radio":
+    dev = str(s.get("device") or "")
+    if dev and dev != "radio":
         try:
-            tcp = int(s.get("tcpPort") or 0)
+            taken.add(int(s.get("tcpPort") or 0))
         except Exception:
-            tcp = 0
+            pass
+for s in raw.get("services") or []:
+    if str(s.get("device") or "") != "radio":
+        continue
+    try:
+        tcp = int(s.get("tcpPort") or 0)
+    except Exception:
+        tcp = 0
+    break
+if not tcp or tcp in taken:
+    print("NONE", 0)
+else:
+    print(bind, tcp)
+PY
+) || true
+fi
+
+if [[ "${BIND:-NONE}" == "NONE" || -z "${TCP:-}" || "$TCP" == "0" ]]; then
+  echo "rigctld-ic705: sem ser2net device=radio — não ocupa a porta da SPE" >&2
+  exit 0
+fi
+
+MODEL=""
+CIV=""
+if [[ -f "$RADIOS_JSON" ]]; then
+  read -r MODEL CIV < <(python3 - "$RADIOS_JSON" <<'PY'
+import json, sys
+
+# Ids já mapeados em shared/equipment/catalog.ts (backend ser2net).
+# Não inventar número. Proxy (Hermes/Anan) fica de fora: não é a serial.
+KNOWN = {
+    "icom-ic-705": 3085,
+    "icom-ic-7300": 3073,
+    "icom-ic-7300mk2": 3073,
+    "icom-ic-7610": 3078,
+    "icom-ic-9700": 3081,
+    "icom-ic-7100": 3070,
+    "kenwood-ts-590sg": 2033,
+    "kenwood-ts-890s": 2036,
+    "kenwood-ts-990s": 2037,
+    "yaesu-ft-991a": 1035,
+    "yaesu-ftdx10": 1042,
+    "yaesu-ftdx101d": 1041,
+    "yaesu-ft-710": 1043,
+    "tentec-omniiii": 1601,
+    "tentec-eagle": 1608,
+    "xiegu-x6100": 3073,
+    "xiegu-x6200": 3073,
+    "xiegu-g90": 3073,
+}
+# Token mais longo primeiro. CI-V padrão do -m (só Icom do catálogo).
+TOKENS = {
+    "icom": (("ic-7300mk2", 3073), ("ic-7300", 3073), ("ic-9700", 3081), ("ic-7610", 3078), ("ic-7100", 3070), ("ic-705", 3085), ("ic705", 3085)),
+    "kenwood": (("ts-590", 2033), ("ts-890", 2036), ("ts-990", 2037)),
+    "yaesu": (("ftdx101", 1041), ("ftdx10", 1042), ("ft-991", 1035), ("ft-710", 1043)),
+    "xiegu": (("x6100", 3073), ("x6200", 3073), ("g90", 3073)),
+    "tentec": (("eagle", 1608), ("omni", 1601)),
+}
+DEFAULT_CIV = {3085: "0xA4", 3073: "0x94", 3070: "0x18", 3078: "0x76", 3081: "0x88"}
+CIV_ICOM = {"0xa4": 3085, "0x98": 3085, "0x94": 3073, "0x18": 3070, "0x76": 3078, "0x88": 3081}
+
+def norm_civ(value):
+    text = str(value or "").strip().lower()
+    if len(text) == 4 and text.startswith("0x"):
         try:
-            baud = int(s.get("baud") or fb_baud)
+            int(text[2:], 16)
         except Exception:
-            baud = fb_baud
-        break
-if not tcp:
-    for s in raw.get("services") or []:
-        name = str(s.get("name") or "").lower()
-        serial = str(s.get("serial") or "").lower()
-        if "ic-705" in name or "ic705" in name or "ci-v" in name or "ttyacm0" in serial or "ic-705" in serial:
-            if "gps" in name:
-                continue
-            try:
-                tcp = int(s.get("tcpPort") or 0)
-            except Exception:
-                tcp = 0
-            try:
-                baud = int(s.get("baud") or fb_baud)
-            except Exception:
-                baud = fb_baud
-            if tcp:
+            return ""
+        return "0x" + text[2:].upper()
+    return ""
+
+def resolve(radio):
+    if str(radio.get("link") or "") == "network":
+        return None
+    eid = str(radio.get("equipmentId") or "").strip()
+    model = 0
+    try:
+        model = int(radio.get("hamlibModel") or 0)
+    except Exception:
+        model = 0
+    if eid in KNOWN:
+        model = KNOWN[eid]
+    elif model <= 0:
+        blob = " ".join(str(radio.get(k) or "") for k in ("name", "deviceName", "model")).lower()
+        maker = str(radio.get("maker") or "")
+        for token, num in TOKENS.get(maker, ()):
+            if token in blob:
+                model = num
                 break
-if not tcp:
-    tcp, baud = fb_tcp, fb_baud
-print(bind, tcp, baud)
+        if model <= 0 and maker == "icom" and str(radio.get("proto") or "") != "cat":
+            model = CIV_ICOM.get(norm_civ(radio.get("civAddr")), 0)
+    if model <= 0:
+        return None
+    civ = ""
+    cur = norm_civ(radio.get("civAddr"))
+    if str(radio.get("proto") or "") != "cat":
+        if radio.get("hamlibPassCiv") is True and cur:
+            civ = cur
+        elif radio.get("hamlibPassCiv") is not False:
+            default = DEFAULT_CIV.get(model, "")
+            if cur and default and cur != default:
+                civ = cur
+    return model, civ
+
+try:
+    raw = json.load(open(sys.argv[1], encoding="utf-8"))
+except Exception:
+    print(0, "-")
+    raise SystemExit(0)
+radios = [r for r in (raw.get("radios") or []) if isinstance(r, dict)]
+picked = None
+for radio in radios:
+    if radio.get("primary") and resolve(radio):
+        picked = radio
+        break
+if picked is None:
+    for radio in radios:
+        if resolve(radio):
+            picked = radio
+            break
+if picked is None:
+    print(0, "-")
+else:
+    model, civ = resolve(picked)
+    print(model, civ or "-")
 PY
 ) || true
 fi
 
 BIND="${BIND:-127.0.0.1}"
-TCP="${TCP:-$FALLBACK_TCP}"
-BAUD="${BAUD:-$FALLBACK_BAUD}"
-echo "rigctld-ic705: ${RIGCTLD} -m ${MODEL} -r ${BIND}:${TCP} -s ${BAUD} -t ${LISTEN} -c ${CIV}"
-exec "$RIGCTLD" -m "$MODEL" -r "${BIND}:${TCP}" -s "$BAUD" -t "$LISTEN" -c "$CIV"
+if [[ -z "${MODEL:-}" || "$MODEL" == "0" ]]; then
+  echo "rigctld-ic705: sem modelo Hamlib no rádio serial — não assume -m 3085 nem a porta da SPE" >&2
+  exit 0
+fi
+
+ARGS=(-m "$MODEL" -r "${BIND}:${TCP}" -t "$LISTEN")
+if [[ -n "${CIV:-}" && "$CIV" != "-" ]]; then
+  ARGS+=(-c "$CIV")
+fi
+echo "rigctld-ic705: ${RIGCTLD} ${ARGS[*]}"
+exec "$RIGCTLD" "${ARGS[@]}"

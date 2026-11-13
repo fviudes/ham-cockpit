@@ -17,6 +17,8 @@ const DO = 253;
 const DONT = 254;
 const SB = 250;
 const SE = 240;
+const BINARY = 0;
+const SGA = 3;
 const COM_PORT_OPTION = 44;
 const SET_CONTROL = 5;
 /** RFC2217 SET-CONTROL values */
@@ -93,11 +95,13 @@ export function feedTelnet(sock: net.Socket, chunk: Buffer, state: { buf: Buffer
     if (cmd === WILL || cmd === WONT || cmd === DO || cmd === DONT) {
       if (i + 2 >= b.length) break;
       const opt = b[i + 2]!;
+      // ser2net telnet(rfc2217) só entrega o UART depois de BINARY + COM-PORT-OPTION.
+      // Recusar BINARY (WONT) deixa o socket mudo: o status 0x55 sai e o 0xAA não volta.
+      const accept = opt === BINARY || opt === SGA || opt === COM_PORT_OPTION;
       if (cmd === WILL) {
-        // Aceita COM-PORT-OPTION; recusa o resto
-        sock.write(Buffer.from([IAC, opt === COM_PORT_OPTION ? DO : DONT, opt]));
+        sock.write(Buffer.from([IAC, accept ? DO : DONT, opt]));
       } else if (cmd === DO) {
-        sock.write(Buffer.from([IAC, opt === COM_PORT_OPTION ? WILL : WONT, opt]));
+        sock.write(Buffer.from([IAC, accept ? WILL : WONT, opt]));
       }
       i += 3;
       continue;
@@ -116,9 +120,10 @@ export function attachRfc2217(
   const state = { buf: Buffer.alloc(0) };
   sock.setNoDelay(true);
 
-  // Oferece / pede COM-PORT-OPTION
-  sock.write(Buffer.from([IAC, WILL, COM_PORT_OPTION]));
-  sock.write(Buffer.from([IAC, DO, COM_PORT_OPTION]));
+  // Igual a um cliente que funciona no ser2net do 166: binário + COM-PORT-OPTION.
+  sock.write(Buffer.from([IAC, WILL, BINARY, IAC, DO, BINARY]));
+  sock.write(Buffer.from([IAC, WILL, SGA, IAC, DO, SGA]));
+  sock.write(Buffer.from([IAC, WILL, COM_PORT_OPTION, IAC, DO, COM_PORT_OPTION]));
 
   sock.on("data", (chunk) => {
     const app = feedTelnet(sock, chunk, state);

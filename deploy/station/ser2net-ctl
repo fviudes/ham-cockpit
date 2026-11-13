@@ -4,7 +4,8 @@ set -euo pipefail
 
 restart_hamlib_units() {
   local u
-  for u in ampctld@spe.service rigctld@ic705.service; do
+  # ampctld@spe não entra: a SPE não usa Hamlib.
+  for u in rigctld@ic705.service; do
     [[ -f "/etc/systemd/system/$u" ]] || continue
     /usr/bin/systemctl reset-failed "$u" >/dev/null 2>&1 || true
     if /usr/bin/systemctl is-enabled "$u" >/dev/null 2>&1; then
@@ -27,13 +28,12 @@ case "${1:-}" in
     /usr/bin/systemctl is-active rigctld@ic705.service 2>/dev/null || echo inactive
     ;;
   start-hamlib)
+    # Só o rádio. ampctld@spe fica desligado: a SPE usa o protocolo nativo.
     /usr/bin/systemctl reset-failed rigctld@ic705.service >/dev/null 2>&1 || true
     /usr/bin/systemctl enable rigctld@ic705.service >/dev/null 2>&1 || true
     /usr/bin/systemctl restart rigctld@ic705.service >/dev/null 2>&1 \
       || /usr/bin/systemctl start --job-mode=ignore-dependencies rigctld@ic705.service
-    /usr/bin/systemctl is-active ampctld@spe.service >/dev/null 2>&1 || true
-    /usr/bin/systemctl reset-failed ampctld@spe.service >/dev/null 2>&1 || true
-    /usr/bin/systemctl restart ampctld@spe.service >/dev/null 2>&1 || true
+    /usr/bin/systemctl disable --now ampctld@spe.service >/dev/null 2>&1 || true
     /usr/bin/systemctl is-active rigctld@ic705.service 2>/dev/null || echo inactive
     ;;
   stop-hamlib)

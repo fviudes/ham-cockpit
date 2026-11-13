@@ -34,7 +34,7 @@ export type Ser2netAccId = (typeof SER2NET_ACC_IDS)[number];
 export type Ser2netDevice = Ser2netAccId | typeof SER2NET_RADIO_ID | "";
 
 export const SER2NET_ACC_BAUD: Record<Ser2netAccId, number> = {
-  spe: 9600,
+  spe: 115200,
   hamplus: 9600,
   palstar: 9600,
   ldg: 38400,

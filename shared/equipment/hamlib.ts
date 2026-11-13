@@ -1,4 +1,4 @@
-import { getEquipment } from "./catalog";
+import { getEquipment, normalizeCivAddr } from "./catalog";
 import type {
   ConnectionKind,
   EquipmentBinding,
@@ -93,8 +93,23 @@ function buildRigDevice(
 }
 
 /**
+ * Endereço `-c` da serial. Vazio quando o `-m` já traz o CI-V padrão
+ * (IC-705 / 3085 / 0xA4 não manda `-c`).
+ */
+export function rigctldCivOverride(eq: EquipmentRadio, civAddr?: string, proto?: string): string | null {
+  if (eq.protocol !== "civ" || proto === "cat") return null;
+  const cur = normalizeCivAddr(civAddr);
+  if (!cur) return null;
+  if (eq.hamlibPassCiv) return cur;
+  const def = normalizeCivAddr(eq.civAddr);
+  if (def && cur !== def) return cur;
+  return null;
+}
+
+/**
  * Monta o plano de `rigctld` a partir do catálogo + binding da estação.
  * Não inicia processo — só resolve argv / readiness.
+ * Serial: sem `-s` (o baud fica no ser2net) e sem `-c` no CI-V padrão do modelo.
  */
 export function planHamlib(binding: EquipmentBinding): HamlibPlan | null {
   const eq = getEquipment(binding.equipmentId);
@@ -166,10 +181,12 @@ export function planHamlib(binding: EquipmentBinding): HamlibPlan | null {
   }
 
   const argv = ["-m", String(model), "-r", rigDevice, "-t", String(listenPort)];
-  if (baud > 0 && backend === "ser2net") argv.push("-s", String(baud));
-  if (civAddr && eq.protocol === "civ" && (backend === "ser2net" || backend === "icom-lan")) {
-    const n = Number.parseInt(civAddr, 16);
-    if (Number.isFinite(n)) argv.push("-c", `0x${n.toString(16).toUpperCase()}`);
+  if (backend === "icom-lan" && civAddr && eq.protocol === "civ") {
+    const formatted = normalizeCivAddr(civAddr);
+    if (formatted) argv.push("-c", formatted);
+  } else if (backend === "ser2net") {
+    const civ = rigctldCivOverride(eq, civAddr);
+    if (civ) argv.push("-c", civ);
   }
 
   return {

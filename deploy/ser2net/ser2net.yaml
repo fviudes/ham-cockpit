@@ -1,20 +1,23 @@
 %YAML 1.1
 ---
 # ser2net 4 — único processo na TTY. Acessórios (SPE, Palstar, ACOM, …)
-# conectam em tcp,127.0.0.1,porta. O rádio CAT usa Hamlib, nunca o cabo.
-# LAN usa rigctld/ampctld, nunca estas portas cruas.
+# conectam em tcp,127.0.0.1,porta. O rádio CAT usa o rigctld, nunca o cabo da SPE.
+# ampctld não entra: a SPE é só telnet(rfc2217).
 # Instalar em: /opt/ser2net/ser2net.yaml
 
+# IC-705 CAT — TCP cru, igual ao ic705_cat do servidor que funciona.
+# Porta 4002 no appliance (o 166 usa 3002). O rigctld só abre se device=radio.
 connection: &ic705
-    accepter: tcp,127.0.0.1,4001
+    accepter: tcp,127.0.0.1,4002
     enable: on
     options:
       kickolduser: true
-    connector: serialdev,/dev/serial/by-id/usb-IC-705-if00,115200n81,local
+    connector: serialdev,/dev/serial/by-id/usb-Icom_Inc._IC-705_IC-705_43001885-if00,115200n81,local
 
+# CAT2 genérico fora da 4002 para não disputar o IC-705. Desligado no modelo.
 connection: &cat2
-    accepter: tcp,127.0.0.1,4002
-    enable: on
+    accepter: tcp,127.0.0.1,4007
+    enable: off
     options:
       kickolduser: true
     connector: serialdev,/dev/ttyAMA2,38400n81,local
@@ -26,13 +29,22 @@ connection: &palstar
       kickolduser: true
     connector: serialdev,/dev/ttyAMA3,9600n81,local
 
-# SPE Expert — telnet(rfc2217) para DTR/RTS (power-on). Console nativo, não ampctld.
+# SPE Expert — igual ao ser2net que funciona: telnet(rfc2217), 115200 8N1, kickolduser.
+# O Hamlib do rádio (rigctld, -m do modelo) fica na porta device=radio, nunca nesta. Sem ampctld.
 connection: &spe
     accepter: telnet(rfc2217),tcp,127.0.0.1,4001
     enable: on
     options:
       kickolduser: true
-    connector: serialdev,/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_AH03EJ3G-if00-port0,9600n81,local
+    connector: serialdev,/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_AH03EJ3G-if00-port0,115200n81,local
+
+# Hamplus RC-603 — o FT231X D30K055K NÃO é a SPE. TCP cru, 9600, como no 166.
+connection: &hamplus
+    accepter: tcp,127.0.0.1,4004
+    enable: on
+    options:
+      kickolduser: true
+    connector: serialdev,/dev/serial/by-id/usb-FTDI_FT231X_USB_UART_D30K055K-if00-port0,9600n81,local
 
 # TelePost LP-100A — wattímetro vetorial: 115200 8N1, cabo reto DB9 (não null-modem).
 # Poll ASCII P; A = alarme ROE; F = Avg/Peak/Tune. Não envie M (muda a tela).

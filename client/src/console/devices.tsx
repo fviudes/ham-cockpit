@@ -3,9 +3,13 @@ import { toast } from "sonner";
 import { useLocation } from "wouter";
 import {
   defaultNetworkProfile,
+  getEquipment,
+  inferEquipmentId,
+  listEquipmentByMaker,
   makerLinkOptions,
   makerNetworkProfiles,
   primaryNetPort,
+  type EquipmentRadio,
   type NetworkProfile,
 } from "@shared/equipment";
 import { bleAvailable, bleErrorMessage, ic705Ble, isBleCancel, looksLikeBleId, type BlePhase } from "./ic705-ble";
@@ -15,6 +19,7 @@ import {
   formatWatts,
   holdPrimaryRadio,
   mergeLp100a,
+  isLextelBtDevice,
   suggestRadioName,
   useConsole,
   type LdgModel,
@@ -56,6 +61,16 @@ function defaultBaud(maker: RadioMaker, link: RadioLink) {
   if (maker === "tentec") return 57600;
   if (maker === "xiegu") return 19200;
   return 115200;
+}
+
+function defaultEquipmentId(maker: RadioMaker): string {
+  const list = listEquipmentByMaker(maker);
+  const serial = list.find((eq) => eq.hamlibBackend === "ser2net" && eq.hamlibModel);
+  return (serial || list[0])?.id || "";
+}
+
+function modelProto(eq: EquipmentRadio | undefined): RadioProto {
+  return eq?.protocol === "civ" ? "civ" : "cat";
 }
 
 function preferLink(maker: RadioMaker, current?: RadioLink): RadioLink {
@@ -117,6 +132,7 @@ export function Ic705Page() {
   const webBt = bleAvailable();
   const [name, setName] = useState(() => suggestRadioName("icom", "0xA4", "civ"));
   const [maker, setMaker] = useState<RadioMaker>("icom");
+  const [equipmentId, setEquipmentId] = useState("icom-ic-705");
   const [link, setLink] = useState<RadioLink>("usb");
   const [device, setDevice] = useState("");
   const [proto, setProto] = useState<RadioProto>("civ");
@@ -133,6 +149,11 @@ export function Ic705Page() {
 
   const icom = maker === "icom";
   const xiegu = maker === "xiegu";
+  const models = useMemo(() => listEquipmentByMaker(maker), [maker]);
+  const selectedEq = useMemo(() => (equipmentId ? getEquipment(equipmentId) : undefined), [equipmentId]);
+  const showCiv = Boolean(
+    selectedEq?.protocol === "civ" && proto === "civ" && (selectedEq.civAddr || selectedEq.hamlibPassCiv),
+  );
   const useCiv = (icom || xiegu) && proto === "civ";
   const useGatt = link === "bluetooth" && useCiv;
   const catUsb = link === "usb";
@@ -264,6 +285,7 @@ export function Ic705Page() {
     setEditingId(row.id);
     setName(row.name?.trim() || suggestRadioName(row.maker, row.civAddr, row.proto));
     setMaker(row.maker);
+    setEquipmentId(row.equipmentId || inferEquipmentId(row) || defaultEquipmentId(row.maker));
     setLink(preferLink(row.maker, row.link));
     setDevice(row.device);
     setProto(row.proto);
@@ -277,21 +299,28 @@ export function Ic705Page() {
   };
 
   const resetForm = () => {
+    const id = defaultEquipmentId(maker);
+    const eq = getEquipment(id);
+    const nextProto = modelProto(eq);
     setEditingId(null);
-    setName(suggestRadioName(maker, civAddr, maker === "icom" || maker === "xiegu" ? proto : "cat"));
+    setEquipmentId(id);
+    setProto(nextProto);
+    if (eq?.civAddr) setCivAddr(eq.civAddr);
+    setName(eq?.family || suggestRadioName(maker, eq?.civAddr || civAddr, nextProto));
     setDevice("");
     setPort("");
     setHost("");
     setNetUser("");
     setNetPassword("");
-    setBaud(defaultBaud(maker, link));
-    setProto(maker === "icom" || maker === "xiegu" ? "civ" : "cat");
+    setBaud(eq?.defaultBaud || defaultBaud(maker, link));
     if (link === "network") applyNetProfile(defaultNetworkProfile(maker), setPort, setNetProfile);
     else setNetProfile("");
   };
 
+  const radioProto: RadioProto = selectedEq?.protocol === "civ" ? proto : "cat";
+
   const resolvedName = () =>
-    name.trim() || suggestRadioName(maker, civAddr, icom || xiegu ? proto : "cat");
+    name.trim() || selectedEq?.family || suggestRadioName(maker, civAddr, radioProto);
 
   const payload = (): Partial<StationRadio> => {
     const radioName = resolvedName();
@@ -300,8 +329,9 @@ export function Ic705Page() {
       return {
         id: editingId || undefined,
         maker,
+        equipmentId: equipmentId || undefined,
         link: "network",
-        proto: icom || xiegu ? proto : "cat",
+        proto: radioProto,
         device: host,
         deviceName: endpoint,
         host,
@@ -319,8 +349,9 @@ export function Ic705Page() {
       return {
         id: editingId || undefined,
         maker,
+        equipmentId: equipmentId || undefined,
         link,
-        proto: icom ? proto : "cat",
+        proto: radioProto,
         device: s2nRow.id,
         deviceName: s2nRow.name,
         port: endpoint,
@@ -332,8 +363,9 @@ export function Ic705Page() {
     return {
       id: editingId || undefined,
       maker,
+      equipmentId: equipmentId || undefined,
       link,
-      proto: icom ? proto : "cat",
+      proto: radioProto,
       device,
       deviceName: selected?.label || device,
       port: port || device,
@@ -381,6 +413,10 @@ export function Ic705Page() {
     const viaS2n = (body.link ?? link) === "usb";
     const viaNet = (body.link ?? link) === "network";
     holdPrimaryRadio(false);
+    if (!row && !equipmentId) {
+      toast.error(tx("radioNeedModel"));
+      return;
+    }
     if (viaNet) {
       if (!(body.host || "").trim()) {
         toast.error(tx("radioNeedNetHost"));
@@ -668,19 +704,23 @@ export function Ic705Page() {
               value={maker}
               onChange={(e) => {
                 const next = e.target.value as RadioMaker;
+                const nextId = defaultEquipmentId(next);
+                const eq = getEquipment(nextId);
                 const nextLink = preferLink(next, link);
-                const nextProto = next === "icom" || next === "xiegu" ? "civ" : "cat";
-                const prevSuggest = suggestRadioName(maker, civAddr, icom || xiegu ? proto : "cat");
+                const nextProto = modelProto(eq);
+                const prevSuggest = selectedEq?.family || suggestRadioName(maker, civAddr, radioProto);
                 setMaker(next);
+                setEquipmentId(nextId);
                 setLink(nextLink);
                 setProto(nextProto);
-                setBaud(defaultBaud(next, nextLink));
+                if (eq?.civAddr) setCivAddr(eq.civAddr);
+                setBaud(eq?.defaultBaud || defaultBaud(next, nextLink));
                 setDevice("");
                 setHost("");
                 setNetUser("");
                 setNetPassword("");
                 if (!editingId && (!name.trim() || name.trim() === prevSuggest)) {
-                  setName(suggestRadioName(next, civAddr, nextProto));
+                  setName(eq?.family || suggestRadioName(next, eq?.civAddr || civAddr, nextProto));
                 }
                 if (nextLink === "network") {
                   applyNetProfile(defaultNetworkProfile(next), setPort, setNetProfile);
@@ -693,6 +733,31 @@ export function Ic705Page() {
               {MAKERS.map((m) => (
                 <option key={m} value={m}>
                   {tx(MAKER_KEY[m])}
+                </option>
+              ))}
+            </ConsoleSelect>
+          </Field>
+          <Field label={tx("radioModel")}>
+            <ConsoleSelect
+              value={equipmentId}
+              onChange={(e) => {
+                const nextId = e.target.value;
+                const eq = getEquipment(nextId);
+                const nextProto = modelProto(eq);
+                const prevSuggest = selectedEq?.family || suggestRadioName(maker, civAddr, radioProto);
+                setEquipmentId(nextId);
+                setProto(nextProto);
+                if (eq?.civAddr) setCivAddr(eq.civAddr);
+                if (!catUsb && eq?.defaultBaud) setBaud(eq.defaultBaud);
+                if (!editingId && (!name.trim() || name.trim() === prevSuggest)) {
+                  setName(eq?.family || name);
+                }
+              }}
+            >
+              {models.map((eq) => (
+                <option key={eq.id} value={eq.id}>
+                  {eq.label}
+                  {eq.hamlibBackend === "ser2net" && eq.hamlibModel ? ` · Hamlib ${eq.hamlibModel}` : ""}
                 </option>
               ))}
             </ConsoleSelect>
@@ -830,7 +895,7 @@ export function Ic705Page() {
               </ConsoleSelect>
             </Field>
           )}
-          {icom ? (
+          {selectedEq?.protocol === "civ" ? (
             <Field label={tx("protocol")}>
               <ConsoleSelect value={proto} onChange={(e) => setProto(e.target.value as RadioProto)}>
                 <option value="civ">{tx("radioProtoCiv")}</option>
@@ -863,19 +928,15 @@ export function Ic705Page() {
               </ConsoleSelect>
             </Field>
           )}
-          {useCiv ? (
+          {showCiv ? (
             <Field label={tx("civAddr")}>
               <ConsoleSelect
                 value={civAddr}
                 onChange={(e) => {
                   const addr = e.target.value;
-                  const prevSuggest = suggestRadioName(maker, civAddr, proto);
                   setCivAddr(addr);
                   ic705Ble.setCivAddr(addr);
                   setS((p) => ({ ...p, ic705: { ...p.ic705, addr } }));
-                  if (!editingId && (!name.trim() || name.trim() === prevSuggest)) {
-                    setName(suggestRadioName(maker, addr, proto));
-                  }
                 }}
               >
                 <option value="0xA4">IC-705 (0xA4)</option>
@@ -890,6 +951,19 @@ export function Ic705Page() {
             </Field>
           ) : null}
         </div>
+        {selectedEq ? (
+          <p className="mt-3 text-sm leading-relaxed text-[#8ea0b3]">
+            {selectedEq.hamlibBackend === "ser2net" && selectedEq.hamlibModel
+              ? loc({
+                  pt: `Hamlib na serial: -m ${selectedEq.hamlibModel}. A velocidade fica no ser2net. O endereço CI-V só entra no rigctld quando não é o padrão deste modelo.`,
+                  en: `Serial Hamlib: -m ${selectedEq.hamlibModel}. Speed stays on ser2net. The CI-V address is passed to rigctld only when it is not this model's default.`,
+                })
+              : loc({
+                  pt: "Este modelo não usa o rigctld na porta serial. Rede e proxy CAT seguem o caminho próprio.",
+                  en: "This model does not use rigctld on the serial port. Network and CAT proxy keep their own path.",
+                })}
+          </p>
+        ) : null}
         {useNet ? <p className="mt-3 text-sm leading-relaxed text-[#8ea0b3]">{tx("radioNetHelp")}</p> : null}
         {catUsb ? <p className="mt-3 text-sm leading-relaxed text-[#8ea0b3]">{tx("radioUsbS2nHelp")}</p> : null}
         {catUsb && radioSvcs.length === 0 ? <p className="mt-3 text-sm text-[#ffb300]">{tx("s2nNone")}</p> : null}
@@ -911,6 +985,7 @@ export function Ic705Page() {
           <PrimaryBtn
             disabled={
               busy ||
+              !equipmentId ||
               (catUsb && !device) ||
               (useNet && (!host.trim() || !port.trim() || (needNetAuth && !netUser.trim())))
             }
@@ -940,6 +1015,7 @@ export function Ic705Page() {
                   <th className="w-10 py-2 pr-2">{tx("radioPrimary")}</th>
                   <th className="py-2 whitespace-nowrap">{tx("name")}</th>
                   <th className="whitespace-nowrap">{tx("radioMaker")}</th>
+                  <th className="whitespace-nowrap">{tx("radioModel")}</th>
                   <th className="whitespace-nowrap">{tx("radioLink")}</th>
                   <th className="whitespace-nowrap">{tx("protocol")}</th>
                   <th className="whitespace-nowrap">{tx("radioPort")}</th>
@@ -964,6 +1040,12 @@ export function Ic705Page() {
                     </td>
                     <td className="py-2 font-semibold text-[#4fc3f7]">{row.name}</td>
                     <td className="py-2">{tx(MAKER_KEY[row.maker])}</td>
+                    <td className="py-2">
+                      {row.model || "—"}
+                      {row.hamlibModel ? (
+                        <span className="ml-1 font-['IBM_Plex_Mono'] text-[11px] text-[#8ea0b3]">{row.hamlibModel}</span>
+                      ) : null}
+                    </td>
                     <td className="py-2">{tx(linkLabelKey(row.link))}</td>
                     <td className="py-2">{row.proto === "civ" ? tx("radioProtoCiv") : tx("radioProtoCat")}</td>
                     <td className="py-2 font-['IBM_Plex_Mono'] text-[11px]">
@@ -1359,10 +1441,12 @@ const ALARM_KEY: Record<string, I18nKey> = {
 export function LextelPage() {
   const { s, setS, tx, pushLog } = useConsole();
   const d = s.lextel;
+  const nearby = d.devices.filter((row) => isLextelBtDevice(row));
   const busy = d.phase === "scanning" || d.phase === "pairing" || d.phase === "connecting";
 
   const applySnap = (j: typeof d) => {
-    setS((p) => ({ ...p, lextel: { ...p.lextel, ...j } }));
+    const devices = Array.isArray(j.devices) ? j.devices.filter((row) => isLextelBtDevice(row)) : undefined;
+    setS((p) => ({ ...p, lextel: { ...p.lextel, ...j, ...(devices ? { devices } : {}) } }));
   };
 
   const post = async (url: string, body?: unknown) => {
@@ -1380,7 +1464,8 @@ export function LextelPage() {
     pushLog("LEXTEL", tx("lextelScanning"));
     try {
       const j = await post("/api/lextel/scan", { seconds: 12 });
-      toast.message(`${tx("lextelFound")}: ${j.devices?.length ?? 0}`);
+      const found = (j.devices ?? []).filter((row) => isLextelBtDevice(row)).length;
+      toast.message(`${tx("lextelFound")}: ${found}`);
     } catch (err) {
       toast.error(String(err));
     }
@@ -1586,15 +1671,15 @@ export function LextelPage() {
         </Panel>
         <Panel>
           <PanelTitle>{tx("lextelNearby")}</PanelTitle>
-          {d.devices.length === 0 ? <p className="text-sm text-[#8ea0b3]">{tx("lextelNone")}</p> : null}
-          {d.devices.map((row) => (
+          {nearby.length === 0 ? <p className="text-sm text-[#8ea0b3]">{tx("lextelNone")}</p> : null}
+          {nearby.map((row) => (
             <div key={`${row.kind}-${row.addr}`} className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-[#101c28] px-3 py-2 text-sm">
               <div className="min-w-0">
                 <p className={`truncate font-['IBM_Plex_Mono'] ${row.likely ? "text-[#4fc3f7]" : "text-[#c5d4e0]"}`}>{row.name}</p>
                 <p className="truncate font-['IBM_Plex_Mono'] text-[11px] text-[#5d7184]">
                   {row.addr}
                   {row.paired ? ` · ${tx("lextelPaired")}` : ""}
-                  {row.kind === "serial" ? " · COM" : " · SPP"}
+                  {" · SPP"}
                 </p>
               </div>
               <Chip active={d.addr === row.addr} onClick={() => void connect(row.addr, row.name)}>

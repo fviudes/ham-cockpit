@@ -1,6 +1,8 @@
 #!/bin/bash
 # Liga/desliga unidades no boot e start/stop sob demanda. Chamado via sudo -n.
 #   station-svc is-active-all            → "id=estado" (um spawn só; usado no polling do console)
+#   station-svc list-running             → JSON (systemctl list-units --type=service --state=running)
+#   station-svc stop-unit|restart-unit UNIT  → systemctl stop|restart, nome validado (sem path)
 #   station-svc enable|disable|start|stop|is-enabled|is-active ID
 # IDs com unit própria: ser2net wavelog wlg mmdvm hamlib spe wifi bluetooth web docker
 # IDs especiais: db (container wavelog-db), mmdvm (pilha Nextion+Host+gateways via mmdvm-ctl)
@@ -68,6 +70,41 @@ if [[ "$cmd" == "is-active-all" ]]; then
     printf '%s=%s\n' "${ids[$i]}" "${st[$i]:-inactive}"
   done
   if command -v docker >/dev/null 2>&1 && db_running; then echo "db=active"; else echo "db=inactive"; fi
+  exit 0
+fi
+
+# Unit de serviço: letra/dígito, depois só o alfabeto seguro do systemd. Sem path, sem shell.
+valid_service_unit() {
+  local u="${1:-}"
+  [[ "$u" =~ ^[A-Za-z0-9][A-Za-z0-9:_.@+-]{0,127}\.service$ ]] || return 1
+  case "$u" in
+    */*|*\\*|*..*) return 1 ;;
+    systemd-poweroff.service|systemd-reboot.service|systemd-halt.service|systemd-kexec.service|systemd-soft-reboot.service|poweroff.service|reboot.service|halt.service)
+      return 1
+      ;;
+  esac
+  return 0
+}
+
+if [[ "$cmd" == "list-running" ]]; then
+  systemctl list-units --type=service --state=running --no-pager --output=json
+  exit 0
+fi
+
+if [[ "$cmd" == "stop-unit" || "$cmd" == "restart-unit" ]]; then
+  unit="${2:-}"
+  valid_service_unit "$unit" || { echo "unit inválida" >&2; exit 2; }
+  if [[ "$cmd" == "stop-unit" ]]; then
+    systemctl stop -- "$unit"
+    echo stopped
+  elif [[ "$unit" == "ham-cockpit.service" || "$unit" == "nginx.service" ]]; then
+    # --no-block: o systemctl volta antes de o próprio console morrer.
+    systemctl restart --no-block -- "$unit"
+    echo restarting
+  else
+    systemctl restart -- "$unit"
+    echo restarted
+  fi
   exit 0
 fi
 
@@ -152,7 +189,7 @@ case "$cmd" in
     systemctl is-active "$unit" 2>/dev/null || echo inactive
     ;;
   *)
-    echo "uso: station-svc is-active-all | enable|disable|start|stop|is-enabled|is-active ID" >&2
+    echo "uso: station-svc is-active-all | list-running | stop-unit|restart-unit UNIT | enable|disable|start|stop|is-enabled|is-active ID" >&2
     exit 1
     ;;
 esac

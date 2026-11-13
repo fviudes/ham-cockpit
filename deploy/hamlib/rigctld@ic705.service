@@ -1,11 +1,11 @@
 [Unit]
-Description=Hamlib rigctld IC-705 (porta/baud via ser2net device=radio)
+Description=Hamlib rigctld do rádio serial (modelo em radios.json, porta device=radio)
 After=ser2net.service
 Wants=ser2net.service
 StartLimitIntervalSec=300
 StartLimitBurst=20
-# Wrapper lê /opt/ser2net/services.json (device=radio).
-# Clientes (WSJT-X, WaveLogGate, console): modelo 2 em 127.0.0.1:4532.
+# Wrapper lê device=radio e o hamlibModel do rádio. Sem isso, sai 0.
+# Não usa a porta da SPE. Clientes: Hamlib NET em 127.0.0.1:4532.
 
 [Service]
 Type=simple

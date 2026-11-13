@@ -430,7 +430,7 @@ install_hamlib_tgz() {
 }
 
 ensure_hamlib_spe() {
-  local tgz="" need=0 dl=""
+  local tgz="" need=0 dl="" rig_changed=0 restart_u=0
   # Só reinstala o tarball se faltar ampctl/401. Nunca rebuilda Hamlib no OTA.
   if [[ ! -x "$HC_HAMLIB/bin/ampctld" ]] \
     || ! LD_LIBRARY_PATH="$HC_HAMLIB/lib" "$HC_HAMLIB/bin/ampctl" -l 2>/dev/null \
@@ -471,16 +471,35 @@ ensure_hamlib_spe() {
     safe_install -m 0755 "$ROOT/bin/ampctld-spe" /opt/ham-cockpit/bin/ampctld-spe
     sed -i 's/\r$//' /opt/ham-cockpit/bin/ampctld-spe 2>/dev/null || true
   fi
+  rig_changed=0
   if [[ -f "$ROOT/bin/rigctld-ic705" ]]; then
+    if [[ ! -f /opt/ham-cockpit/bin/rigctld-ic705 ]] \
+      || ! cmp -s "$ROOT/bin/rigctld-ic705" /opt/ham-cockpit/bin/rigctld-ic705; then
+      rig_changed=1
+    fi
     safe_install -m 0755 "$ROOT/bin/rigctld-ic705" /opt/ham-cockpit/bin/rigctld-ic705
     sed -i 's/\r$//' /opt/ham-cockpit/bin/rigctld-ic705 2>/dev/null || true
   fi
+  if [[ -f "$ROOT/bin/ser2net-ctl" ]]; then
+    safe_install -m 0755 "$ROOT/bin/ser2net-ctl" /opt/ham-cockpit/bin/ser2net-ctl
+    sed -i 's/\r$//' /opt/ham-cockpit/bin/ser2net-ctl 2>/dev/null || true
+  fi
   systemctl daemon-reload 2>/dev/null || true
+  # ampctld não sobe: o console usa o protocolo nativo na porta da SPE.
+  systemctl disable --now ampctld@spe.service >/dev/null 2>&1 || true
   # Não restart a cada OTA se already active (evita churn sob carga).
-  for u in ampctld@spe.service 'rigctld@ic705.service'; do
+  # O wrapper do IC-705 reinicia quando o arquivo muda: senão o processo
+  # velho continua na porta de outro acessório (SPE na 4001).
+  for u in 'rigctld@ic705.service'; do
     [[ -f "/etc/systemd/system/$u" ]] || continue
     systemctl enable "$u" 2>/dev/null || true
+    restart_u=0
     if [[ "$need" -eq 1 ]]; then
+      restart_u=1
+    elif [[ "$u" == "rigctld@ic705.service" && "$rig_changed" -eq 1 ]]; then
+      restart_u=1
+    fi
+    if [[ "$restart_u" -eq 1 ]]; then
       systemctl reset-failed "$u" 2>/dev/null || true
       systemctl restart "$u" 2>/dev/null \
         || systemctl start --job-mode=ignore-dependencies "$u" 2>/dev/null \
@@ -595,10 +614,22 @@ install -d -o hamcockpit -g hamcockpit -m 0775 \
   /opt/ham-cockpit/services \
   /opt/ham-cockpit/ldg \
   /opt/ham-cockpit/lp100a \
+  /opt/ham-cockpit/spe \
   /var/lib/hamcockpit \
   /var/lib/hamcockpit/chromium \
   /var/lib/hamcockpit/license \
   2>/dev/null || true
+if [[ ! -f /opt/ham-cockpit/spe/spe.json ]]; then
+  printf '%s\n' '{ "autoConnect": true }' >/opt/ham-cockpit/spe/spe.json
+  chown hamcockpit:hamcockpit /opt/ham-cockpit/spe/spe.json 2>/dev/null || true
+  chmod 0644 /opt/ham-cockpit/spe/spe.json 2>/dev/null || true
+fi
+# Mesma regra da imagem: só semeia ser2net se ainda não há services.json.
+if [[ ! -f /opt/ser2net/services.json && -f "$ROOT/ser2net/services.json" && -f "$ROOT/ser2net/ser2net.yaml" ]]; then
+  install -d -o hamcockpit -g hamcockpit /opt/ser2net
+  install -o hamcockpit -g hamcockpit -m 0644 "$ROOT/ser2net/ser2net.yaml" /opt/ser2net/ser2net.yaml
+  install -o hamcockpit -g hamcockpit -m 0644 "$ROOT/ser2net/services.json" /opt/ser2net/services.json
+fi
 
 # Docker + Wavelog no boot (units/perms). Sem docker.io no apt → só bake resolve.
 getent group docker >/dev/null 2>&1 || groupadd --system docker 2>/dev/null || true

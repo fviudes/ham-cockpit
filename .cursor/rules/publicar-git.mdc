@@ -1,0 +1,21 @@
+---
+description: Toda publicação (OTA, imagem, catálogo) vai ao Git — commit + push no canal certo.
+alwaysApply: true
+---
+
+# Publicar no Git
+
+De agora em diante **toda publicação** termina no Git remoto. Pacote OTA, `update/version.json`, bake de imagem e notas de release **não** ficam só no disco local.
+
+## O que fazer
+
+- Empacotar OTA (`pack-update.mjs`) **e** `git commit` **e** `git push` no remoto **`ham-cockpit`**, branch **`main`** (canal `raw.githubusercontent.com/fviudes/ham-cockpit`).
+- Sem force-push. Sem `--no-verify`. Scripts `tmp` / `.tmp-*` **fora** do commit.
+- Não declarar “publicado” enquanto `main` estiver `ahead` de `ham-cockpit/main`.
+- Imagem: bump da base de 3 partes, commit, push, **depois** disparar o bake (Actions). O artefato `.img.xz` sai no GitHub Release; o fonte do bake já tem que estar no remoto.
+
+## O que não fazer
+
+- Só gerar `update/*.tgz` / `version.json` e parar.
+- Publicar OTA por outro host (arquivo solto, gist, cópia SCP) no lugar do Git.
+- Pedir autorização extra ao usuário para o push de publicação — o pedido de “publicar” **é** o push (ainda precisa do cartão do Cursor se o ambiente bloquear `main`).

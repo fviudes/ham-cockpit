@@ -5,7 +5,13 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { randomBytes } from "node:crypto";
 import { SER2NET_RADIO_ID } from "../shared/const";
-import { EQUIPMENT_MAKERS, getEquipment, type EquipmentMaker } from "../shared/equipment";
+import {
+  EQUIPMENT_MAKERS,
+  getEquipment,
+  inferEquipmentId,
+  rigctldCivOverride,
+  type EquipmentMaker,
+} from "../shared/equipment";
 import {
   icomLanConnect,
   icomLanDisconnect,
@@ -15,7 +21,7 @@ import {
   resolveIcomLanModel,
 } from "./icom-lan";
 import { listSerialDevices } from "./list-serials";
-import { loadSer2net, saveSer2net } from "./ser2net-store";
+import { hamlibCtl, loadSer2net, saveSer2net } from "./ser2net-store";
 
 const execFileAsync = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -45,6 +51,12 @@ export type StationRadio = {
   error: string;
   /** Id no catálogo shared/equipment (opcional). */
   equipmentId?: string;
+  /** Nome do modelo no catálogo (ex.: IC-705). */
+  model?: string;
+  /** `rigctld -m` da serial. Só quando o modelo é ponte Hamlib/ser2net. */
+  hamlibModel?: number;
+  /** true = a serial manda `-c` (CI-V diferente do padrão do modelo). */
+  hamlibPassCiv?: boolean;
   /** Host/IP quando link === network. */
   host?: string;
   /** Perfil de rede (kind::via) do catálogo. */
@@ -131,16 +143,41 @@ function isIcomLan(row: StationRadio): boolean {
 }
 
 function hamlibModelFor(row: StationRadio): number {
+  if (row.hamlibModel && row.hamlibModel > 0) return row.hamlibModel;
   if (row.equipmentId) {
     const eq = getEquipment(row.equipmentId);
     if (eq?.hamlibModel) return eq.hamlibModel;
   }
-  const model = resolveIcomLanModel(row.equipmentId, `${row.name} ${row.deviceName}`);
+  const model = resolveIcomLanModel(row.equipmentId, `${row.name} ${row.deviceName} ${row.model || ""}`);
   if (model === "IC-705") return 3085;
   if (model === "IC-9700") return 3081;
   if (model === "IC-7610") return 3078;
   if (model === "IC-7300" || model === "IC-7300MK2") return 3073;
-  return 3085;
+  // LAN Icom sem modelo identificado continua no 3085 (caminho próprio, não a serial).
+  if (row.maker === "icom") return 3085;
+  return 0;
+}
+
+/** Rádio que alimenta o rigctld da serial. LAN fica de fora. */
+export function serialHamlibRadio(list: StationRadio[]): StationRadio | undefined {
+  const usable = list.filter((r) => r.link !== "network" && (r.hamlibModel || 0) > 0);
+  return usable.find((r) => r.primary) || usable[0];
+}
+
+function serialHamlibSig(list: StationRadio[]): string {
+  const row = serialHamlibRadio(list);
+  if (!row) return "";
+  return `${row.hamlibModel}|${row.hamlibPassCiv ? 1 : 0}|${row.civAddr}`;
+}
+
+function pokeSerialHamlib() {
+  if (icomLanLive()) return;
+  void hamlibCtl("start");
+}
+
+function persistAndPoke(beforeSig: string) {
+  persist();
+  if (serialHamlibSig(radios) !== beforeSig) pokeSerialHamlib();
 }
 
 function asMaker(v: unknown): RadioMaker {
@@ -236,7 +273,20 @@ function sanitize(raw: Partial<StationRadio>, fallback?: StationRadio): StationR
     String(raw.name ?? fallback?.name ?? "").trim() ||
     defaultName(maker, deviceName || endpoint || port || device, civAddr, proto);
   const hsUuid = String(raw.hsUuid ?? fallback?.hsUuid ?? "").trim().toUpperCase();
-  const equipmentId = String(raw.equipmentId ?? fallback?.equipmentId ?? "").trim();
+  const equipmentId = inferEquipmentId({
+    maker,
+    equipmentId: String(raw.equipmentId ?? fallback?.equipmentId ?? "").trim(),
+    name,
+    deviceName,
+    model: String(raw.model ?? fallback?.model ?? ""),
+    civAddr,
+    proto,
+  });
+  const eq = equipmentId ? getEquipment(equipmentId) : undefined;
+  const modelName = eq?.family || "";
+  const serialHamlib = Boolean(eq && eq.hamlibBackend === "ser2net" && eq.hamlibModel);
+  const hamlibModel = serialHamlib ? eq!.hamlibModel! : undefined;
+  const civOverride = eq && serialHamlib ? rigctldCivOverride(eq, civAddr, proto) : null;
   return {
     id: String(raw.id ?? fallback?.id ?? newId()),
     name,
@@ -254,6 +304,9 @@ function sanitize(raw: Partial<StationRadio>, fallback?: StationRadio): StationR
     primary: Boolean(raw.primary ?? fallback?.primary),
     error: String(raw.error ?? fallback?.error ?? ""),
     ...(equipmentId ? { equipmentId } : {}),
+    ...(modelName ? { model: modelName } : {}),
+    ...(hamlibModel ? { hamlibModel } : {}),
+    ...(civOverride ? { hamlibPassCiv: true } : {}),
     ...(link === "network"
       ? {
           host,
@@ -287,14 +340,17 @@ function persist() {
 function load() {
   try {
     const raw = JSON.parse(readFileSync(jsonPath(), "utf8")) as { radios?: unknown };
+    const previousSig = Array.isArray(raw.radios) ? serialHamlibSig(raw.radios as StationRadio[]) : "";
     if (Array.isArray(raw.radios)) radios = raw.radios.map((r) => sanitize(r as Partial<StationRadio>));
-    const before = radios.map((r) => `${r.id}:${r.primary}:${r.connected}`).join();
+    const before = radios.map((r) => `${r.id}:${r.primary}:${r.connected}:${r.equipmentId || ""}:${r.hamlibModel || 0}`).join();
     normalizePrimary();
     radios = radios.map((r) =>
       r.link === "bluetooth" && r.proto === "civ" && r.connected ? { ...r, connected: false } : r
     );
-    const after = radios.map((r) => `${r.id}:${r.primary}:${r.connected}`).join();
-    if (before !== after) persist();
+    const after = radios.map((r) => `${r.id}:${r.primary}:${r.connected}:${r.equipmentId || ""}:${r.hamlibModel || 0}`).join();
+    const hamlibChanged = serialHamlibSig(radios) !== previousSig;
+    if (before !== after || hamlibChanged) persist();
+    if (hamlibChanged) pokeSerialHamlib();
   } catch {
     radios = [];
   }
@@ -438,6 +494,7 @@ export async function radiosSave(body: { radios?: unknown }): Promise<RadiosSnap
 }
 
 export async function radiosUpsert(raw: Partial<StationRadio>): Promise<RadiosSnapshot> {
+  const beforeSig = serialHamlibSig(radios);
   const next = sanitize(raw, radios.find((r) => r.id === raw.id));
   if (next.primary) radios = radios.map((r) => ({ ...r, primary: r.id === next.id }));
   else if (!radios.some((r) => r.primary && r.id !== next.id)) next.primary = radios.length === 0 || radios.every((r) => r.id === next.id);
@@ -446,13 +503,16 @@ export async function radiosUpsert(raw: Partial<StationRadio>): Promise<RadiosSn
   else radios.push(next);
   normalizePrimary();
   persist();
+  if (serialHamlibSig(radios) !== beforeSig) pokeSerialHamlib();
   return radiosStatus();
 }
 
 export async function radiosSetPrimary(id: string): Promise<RadiosSnapshot> {
   if (!id || !radios.some((r) => r.id === id)) return radiosStatus();
+  const beforeSig = serialHamlibSig(radios);
   radios = radios.map((r) => ({ ...r, primary: r.id === id }));
   persist();
+  if (serialHamlibSig(radios) !== beforeSig) pokeSerialHamlib();
   return radiosStatus();
 }
 
@@ -461,10 +521,12 @@ function findRadio(id: string) {
 }
 
 export async function radiosRemove(id: string): Promise<RadiosSnapshot> {
+  const beforeSig = serialHamlibSig(radios);
   const row = findRadio(id);
   radios = radios.map((r) => (r.id === id ? { ...r, connected: false } : r)).filter((r) => r.id !== id);
   normalizePrimary();
   persist();
+  if (serialHamlibSig(radios) !== beforeSig) pokeSerialHamlib();
   if (row && (isIcomLan(row) || icomLanStatus().radioId === id)) {
     try {
       await icomLanDisconnect();
@@ -476,6 +538,7 @@ export async function radiosRemove(id: string): Promise<RadiosSnapshot> {
 }
 
 export async function radiosConnect(raw: Partial<StationRadio>): Promise<RadiosSnapshot> {
+  const beforeSig = serialHamlibSig(radios);
   const next = sanitize(raw, radios.find((r) => r.id === raw.id));
   next.error = "";
   const ble = next.link === "bluetooth" && next.maker === "icom" && next.proto === "civ";
@@ -527,7 +590,7 @@ export async function radiosConnect(raw: Partial<StationRadio>): Promise<RadiosS
     const idx = radios.findIndex((r) => r.id === next.id);
     if (idx >= 0) radios[idx] = next;
     else radios.push(next);
-    persist();
+    persistAndPoke(beforeSig);
     const snap = await radiosStatus();
     if (next.error) {
       snap.ok = false;
@@ -541,7 +604,7 @@ export async function radiosConnect(raw: Partial<StationRadio>): Promise<RadiosS
     const idx = radios.findIndex((r) => r.id === next.id);
     if (idx >= 0) radios[idx] = next;
     else radios.push(next);
-    persist();
+    persistAndPoke(beforeSig);
     const snap = await radiosStatus();
     snap.ok = false;
     snap.error = next.error;
@@ -552,7 +615,7 @@ export async function radiosConnect(raw: Partial<StationRadio>): Promise<RadiosS
     const idx = radios.findIndex((r) => r.id === next.id);
     if (idx >= 0) radios[idx] = next;
     else radios.push(next);
-    persist();
+    persistAndPoke(beforeSig);
     const snap = await radiosStatus();
     snap.needBle = true;
     snap.bleAddr = next.civAddr;
@@ -594,7 +657,7 @@ export async function radiosConnect(raw: Partial<StationRadio>): Promise<RadiosS
   const idx = radios.findIndex((r) => r.id === next.id);
   if (idx >= 0) radios[idx] = next;
   else radios.push(next);
-  persist();
+  persistAndPoke(beforeSig);
   const snap = await radiosStatus();
   if (next.error) {
     snap.ok = false;

@@ -4,7 +4,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { inspectCapture, LextelDecoder, type LextelInspect, type LextelLayout, type LextelReading } from "./lextel-parse";
-import { listSerialDevices } from "./list-serials";
 
 const execFileAsync = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -188,12 +187,36 @@ async function runHelper(args: string[], timeout = 30_000): Promise<string> {
   return `${stdout}\n${stderr}`.trim();
 }
 
+const BT_MAC = /^(?:[0-9A-F]{2}:){5}[0-9A-F]{2}$/;
+
+/** Endereço de inquiry/pareamento Classic. COM, /dev/tty e rfcomm aberto não entram. */
+function bluetoothMac(addr: string): string {
+  const t = addr.trim();
+  if (!t || /COM\d+/i.test(t) || /[\\/]/.test(t) || /rfcomm|tty/i.test(t)) return "";
+  const mac = t.toUpperCase();
+  return BT_MAC.test(mac) ? mac : "";
+}
+
+function onlyBluetooth(list: LextelDevice[]): LextelDevice[] {
+  const seen = new Set<string>();
+  const out: LextelDevice[] = [];
+  for (const d of list) {
+    if (d.kind === "serial") continue;
+    const addr = bluetoothMac(d.addr);
+    if (!addr || seen.has(addr)) continue;
+    seen.add(addr);
+    out.push({ ...d, addr, kind: "bt" });
+  }
+  return out;
+}
+
 function parseDevLines(text: string): LextelDevice[] {
   const out: LextelDevice[] = [];
   for (const line of text.split(/\r?\n/)) {
-    const m = line.match(/^DEV\s+([0-9A-Fa-f:]{11,17})\s+([01])\s+(.*)$/);
+    const m = line.match(/^DEV\s+([0-9A-Fa-f:]{17})\s+([01])\s+(.*)$/);
     if (!m) continue;
-    const addr = m[1].toUpperCase();
+    const addr = bluetoothMac(m[1]);
+    if (!addr) continue;
     const name = m[3].trim() || "unknown";
     out.push({ addr, name, paired: m[2] === "1", kind: "bt", likely: NAME_RE.test(name) });
   }
@@ -383,7 +406,9 @@ async function winClassicDevices(): Promise<LextelDevice[]> {
       } catch {
         /* */
       }
-      out.push({ addr, name, paired: true, kind: "bt", likely: NAME_RE.test(name) });
+      const mac = bluetoothMac(addr);
+      if (!mac) continue;
+      out.push({ addr: mac, name, paired: true, kind: "bt", likely: NAME_RE.test(name) });
     }
   } catch {
     /* */
@@ -432,32 +457,6 @@ export async function lextelOpenBluetooth(): Promise<LextelSnapshot> {
     }
   }
   return lextelScan(8);
-}
-
-async function serialCandidates(): Promise<LextelDevice[]> {
-  try {
-    const list = await listSerialDevices();
-    const spp = process.platform === "win32" ? await winSppPorts() : [];
-    const incoming = new Set(spp.filter((p) => p.incoming).map((p) => p.com));
-    const outgoing = new Set(spp.filter((p) => !p.incoming).map((p) => p.com));
-    return list.map((d) => {
-      const com = (d.path.match(/COM\d+/i) || [])[0]?.toUpperCase() || "";
-      const isIn = incoming.has(com);
-      return {
-        addr: d.path,
-        name: isIn ? `${d.label} (entrada)` : d.label,
-        paired: true,
-        kind: "serial" as const,
-        likely:
-          !isIn &&
-          (outgoing.has(com) ||
-            NAME_RE.test(`${d.path} ${d.label}`) ||
-            /bluetooth|rfcomm|monitor.?station/i.test(`${d.path} ${d.label}`)),
-      };
-    });
-  } catch {
-    return [];
-  }
 }
 
 function ingest(buf: Buffer, alreadyOnDisk = false) {
@@ -827,7 +826,6 @@ export function lextelStatus(): LextelSnapshot {
 export async function lextelScan(seconds = 12): Promise<LextelSnapshot> {
   phase = "scanning";
   error = "";
-  const serials = await serialCandidates();
   let classic: LextelDevice[] = [];
   if (process.platform === "win32") {
     classic = await winClassicDevices();
@@ -846,12 +844,8 @@ export async function lextelScan(seconds = 12): Promise<LextelSnapshot> {
       }
     }
   }
-  const seen = new Set<string>();
-  devices = [...classic, ...serials].filter((d) => {
-    if (seen.has(d.addr)) return false;
-    seen.add(d.addr);
-    return true;
-  });
+  // Procurar MS-2000 é só inquiry Bluetooth (MAC). Sem fallback de COM / tty / rfcomm.
+  devices = onlyBluetooth(classic);
   devices.sort((a, b) => Number(b.likely) - Number(a.likely) || a.name.localeCompare(b.name));
   if (phase === "scanning") {
     if (linkAlive()) phase = "streaming";

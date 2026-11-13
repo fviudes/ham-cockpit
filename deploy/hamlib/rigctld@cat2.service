@@ -1,5 +1,5 @@
 [Unit]
-Description=Hamlib rigctld CAT2 via ser2net :4002
+Description=Hamlib rigctld CAT2 via ser2net :4007
 After=ser2net.service
 Requires=ser2net.service
 StartLimitIntervalSec=300
@@ -8,7 +8,7 @@ StartLimitBurst=20
 [Service]
 Type=simple
 # Ajustar -m ao rádio real (rigctl -l). Porta NET pares: 4534.
-ExecStart=/usr/bin/rigctld -m 1021 -r 127.0.0.1:4002 -s 38400 -t 4534
+ExecStart=/usr/bin/rigctld -m 1021 -r 127.0.0.1:4007 -s 38400 -t 4534
 Restart=on-failure
 RestartSec=5
 

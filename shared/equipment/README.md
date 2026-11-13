@@ -27,7 +27,7 @@ Catálogo (modelo + conexões)
  Binding da estação  (data/equipment/bindings.json)
         │
         ▼
- planHamlib() → argv  (-m -r -t [-s] [-c])
+ planHamlib() → argv  (-m -r -t; -c só se o CI-V não for o padrão do modelo)
         │
         ▼
  rigctld  ←── console / WSJT-X / WaveLogGate (NET :4532)

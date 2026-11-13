@@ -12,6 +12,7 @@ import { formatWatts, useConsole, type LogKind } from "./state";
 import { TermPage } from "./term";
 import { BackupPage } from "./backup";
 import { LicensePage } from "./license";
+import { ProcessesPage } from "./processes";
 import { ActionProgress, Chip, ConsoleInput, Field, GhostBtn, PageHead, Panel, PanelTitle, PrimaryBtn, progressHint, stageLabel } from "./widgets";
 
 type LinuxUser = { name: string; sudo: boolean };
@@ -105,7 +106,13 @@ export function AdminPage() {
   const [loc, navigate] = useLocation();
   const path = loc.replace(/^\/console\/?/, "").split(/[?#]/)[0] || "admin";
   const tab =
-    path === "logs" || path === "term" || path === "services" || path === "updates" || path === "backup" || path === "license"
+    path === "logs" ||
+    path === "term" ||
+    path === "services" ||
+    path === "processes" ||
+    path === "updates" ||
+    path === "backup" ||
+    path === "license"
       ? path
       : "admin";
   const menusOpen = licenseMenusOpen(license?.gate ?? licenseGateOf(license?.state));
@@ -188,9 +195,11 @@ export function AdminPage() {
               ? tx("termTitle")
               : tab === "services"
                 ? tx("services")
-                : tab === "updates"
-                  ? tx("update")
-                  : tab === "backup"
+                : tab === "processes"
+                  ? tx("processes")
+                  : tab === "updates"
+                    ? tx("update")
+                    : tab === "backup"
                     ? tx("backupTitle")
                     : tab === "license"
                       ? tx("licTab")
@@ -203,6 +212,9 @@ export function AdminPage() {
         </Chip>
         <Chip active={tab === "services"} disabled={!menusOpen} onClick={() => navigate("/console/services")}>
           {tx("services")}
+        </Chip>
+        <Chip active={tab === "processes"} disabled={!menusOpen} onClick={() => navigate("/console/processes")}>
+          {tx("processes")}
         </Chip>
         <Chip active={tab === "updates"} disabled={!menusOpen} onClick={() => navigate("/console/updates")}>
           {tx("update")}
@@ -221,6 +233,7 @@ export function AdminPage() {
         </Chip>
       </div>
       {tab === "services" ? <ServicesPage embedded /> : null}
+      {tab === "processes" ? <ProcessesPage embedded /> : null}
       {tab === "updates" ? <UpdatesPage embedded /> : null}
       {tab === "backup" ? <BackupPage embedded /> : null}
       {tab === "license" ? <LicensePage embedded /> : null}

@@ -47,7 +47,7 @@ add_station_user() {
 add_station_user hamcockpit 1234
 add_station_user admin 1234
 
-install -d -o hamcockpit -g hamcockpit /opt/ham-cockpit /opt/ham-cockpit/bin /opt/ham-cockpit/radios /opt/ham-cockpit/equipment /opt/ser2net /opt/wavelog /opt/wavelog-gate /opt/lextel /backup
+install -d -o hamcockpit -g hamcockpit /opt/ham-cockpit /opt/ham-cockpit/bin /opt/ham-cockpit/radios /opt/ham-cockpit/equipment /opt/ham-cockpit/spe /opt/ser2net /opt/wavelog /opt/wavelog-gate /opt/lextel /backup
 install -m 0755 "$HERE/ham-cockpit-ap.sh" /opt/ham-cockpit/bin/ham-cockpit-ap.sh
 install -m 0755 "$HERE/first-boot.sh" /opt/ham-cockpit/bin/first-boot.sh
 # Idempotente: skip se src e dst forem o mesmo arquivo (inode).
@@ -113,8 +113,11 @@ chmod 0755 /opt/ham-cockpit/bin/root-login /opt/ham-cockpit/bin/station-user /op
 chown -R hamcockpit:hamcockpit /opt/lextel
 chmod 0775 /opt/lextel
 
+# Instalação limpa: YAML + services.json juntos (device=spe / device=radio).
+# Se o JSON já existe, não mexe — o lab já alinhado não pode ser reescrito.
 if [[ ! -f /opt/ser2net/services.json ]]; then
   install -o hamcockpit -g hamcockpit -m 0644 "$ROOT/deploy/ser2net/ser2net.yaml" /opt/ser2net/ser2net.yaml
+  install -o hamcockpit -g hamcockpit -m 0644 "$ROOT/deploy/ser2net/services.json" /opt/ser2net/services.json
 fi
 chown -R hamcockpit:hamcockpit /opt/ser2net
 chmod 0775 /opt/ser2net
@@ -344,6 +347,13 @@ enable_units sshd.service
 enable_units docker.service docker.socket nginx.service NetworkManager.service avahi-daemon.service
 enable_units ham-cockpit.target ham-cockpit.service ham-cockpit-ap.service first-boot.service
 enable_units ser2net.service 'rigctld@ic705.service' wavelog.service waveloggate.service
+# SPE: protocolo nativo em ser2net (rfc2217, 115200). Hamlib é o rigctld do rádio. ampctld não sobe.
+systemctl disable --now ampctld@spe.service >/dev/null 2>&1 || true
+if [[ ! -f /opt/ham-cockpit/spe/spe.json ]]; then
+  printf '%s\n' '{ "autoConnect": true }' >/opt/ham-cockpit/spe/spe.json
+  chown hamcockpit:hamcockpit /opt/ham-cockpit/spe/spe.json
+  chmod 0644 /opt/ham-cockpit/spe/spe.json
+fi
 enable_units nextiondriver.service mmdvmhost.service dmrgateway.service ysfgateway.service ircddbgateway.service
 enable_units seatd.service ham-cockpit-vfo.service ham-cockpit-vfo-idle.service
 # ircddbgatewayd (g4klx recente) exige broker MQTT local; sem mosquitto → Connection refused.

@@ -217,6 +217,16 @@ function main() {
   cpSync(wlgMjs, join(stage, "wavelog-gate", "wavelog-gate.mjs"));
   cpSync(wlgVer, join(stage, "wavelog-gate", "VERSION"));
 
+  const ser2netYaml = join(ROOT, "deploy", "ser2net", "ser2net.yaml");
+  const ser2netJson = join(ROOT, "deploy", "ser2net", "services.json");
+  if (!existsSync(ser2netYaml) || !existsSync(ser2netJson)) {
+    console.error("deploy/ser2net/{ser2net.yaml,services.json} obrigatório no pacote OTA");
+    process.exit(1);
+  }
+  mkdirSync(join(stage, "ser2net"), { recursive: true });
+  cpSync(ser2netYaml, join(stage, "ser2net", "ser2net.yaml"));
+  cpSync(ser2netJson, join(stage, "ser2net", "services.json"));
+
   // Bridges (~21 MiB) ficam em update/*.tgz no canal — NÃO embutir no pacote a cada OTA.
   // Hooks baixam só se binários faltarem. Use --with-bridges para pacote de reparo.
   const withBridges = process.argv.includes("--with-bridges");

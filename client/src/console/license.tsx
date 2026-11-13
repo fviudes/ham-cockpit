@@ -71,6 +71,8 @@ export function LicensePage({ embedded = false }: { embedded?: boolean }) {
       ? info.gate
       : licenseGateOf(info?.state);
   const buyEmphasis = gate === "trial_expired";
+  /** Compra só depois que este aparelho já recebeu a trial (ativa ou expirada). */
+  const canBuy = gate === "trial" || gate === "trial_expired";
 
   const activate = async () => {
     const callsign = normalizeCallsign(prefix);
@@ -239,17 +241,21 @@ export function LicensePage({ embedded = false }: { embedded?: boolean }) {
             <PrimaryBtn disabled={busy || !prefixOk || !emailOk || !serialShown} onClick={() => void activate()}>
               {tx("licActivate")}
             </PrimaryBtn>
-            {info?.buyUrl ? (
-              buyEmphasis ? (
-                <button
-                  type="button"
-                  className="rounded-md bg-[#ef4444] px-3 py-2 text-sm font-semibold text-white hover:bg-[#f87171]"
-                  onClick={() => window.open(info.buyUrl!, "_blank", "noopener")}
-                >
-                  {tx("licBuy")}
-                </button>
+            {info?.buyUrl && gate !== "licensed" ? (
+              canBuy ? (
+                buyEmphasis ? (
+                  <button
+                    type="button"
+                    className="rounded-md bg-[#ef4444] px-3 py-2 text-sm font-semibold text-white hover:bg-[#f87171]"
+                    onClick={() => window.open(info.buyUrl!, "_blank", "noopener")}
+                  >
+                    {tx("licBuy")}
+                  </button>
+                ) : (
+                  <GhostBtn onClick={() => window.open(info.buyUrl!, "_blank", "noopener")}>{tx("licBuy")}</GhostBtn>
+                )
               ) : (
-                <GhostBtn onClick={() => window.open(info.buyUrl!, "_blank", "noopener")}>{tx("licBuy")}</GhostBtn>
+                <GhostBtn disabled>{tx("licBuy")}</GhostBtn>
               )
             ) : null}
           </div>
@@ -258,6 +264,9 @@ export function LicensePage({ embedded = false }: { embedded?: boolean }) {
           ) : null}
           {!emailOk && email.trim() ? (
             <p className="mt-2 text-xs text-amber-200">{tx("licErrEmail")}</p>
+          ) : null}
+          {info?.buyUrl && gate !== "licensed" && !canBuy ? (
+            <p className="mt-2 text-xs text-[#64748b]">{tx("licBuyLocked")}</p>
           ) : null}
         </Panel>
 

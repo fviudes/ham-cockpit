@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.08** (`version.json`).
+Versão atual neste canal: **0.1.09** (`version.json`).
 
 ## Versionamento
 
@@ -20,12 +20,12 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.08",
+  "version": "0.1.09",
   "channel": "main",
-  "file": "ham-cockpit-0.1.08.tgz",
-  "sha256": "c0e8b0dd161f6d85cc83d9f91a56ebf5fdf602ab36f00969ba30d26eb90ad537",
-  "bytes": 4990574,
-  "notes": "Ham Cockpit v0.1.08 — nova base de imagem (bake). Inclui OTA leve sem bridges e melhorias até 0.1.07.18."
+  "file": "ham-cockpit-0.1.09.tgz",
+  "sha256": "317a5b91a581fbaf9177a6584d0260d0f8f90ab03f273c60a62e989120b7390d",
+  "bytes": 4999432,
+  "notes": "Ham Cockpit v0.1.09 — imagem limpa: SPE RFC2217 115200, Hamlib só no rádio pelo modelo, aba Processos e busca Lextel só Bluetooth."
 }
 ```
 

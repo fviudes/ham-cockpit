@@ -679,6 +679,47 @@ export function getEquipment(id: string): EquipmentRadio | undefined {
   return EQUIPMENT_CATALOG.find((e) => e.id === id);
 }
 
+export function normalizeCivAddr(addr?: string): string {
+  const m = String(addr || "").trim().match(/^0x([0-9a-fA-F]{2})$/i);
+  return m ? `0x${m[1]!.toUpperCase()}` : "";
+}
+
+/** CI-V padrão dos Icom já mapeados — não cobre endereço trocado no rádio. */
+const CIV_TO_EQUIPMENT: Record<string, string> = {
+  "0xA4": "icom-ic-705",
+  "0x98": "icom-ic-705",
+  "0x94": "icom-ic-7300",
+  "0x18": "icom-ic-7100",
+  "0x76": "icom-ic-7610",
+  "0x88": "icom-ic-9700",
+};
+
+/** Casa um rádio já gravado com um id do catálogo. Não inventa modelo. */
+export function inferEquipmentId(input: {
+  maker?: string;
+  equipmentId?: string;
+  name?: string;
+  deviceName?: string;
+  model?: string;
+  civAddr?: string;
+  proto?: string;
+}): string {
+  const explicit = String(input.equipmentId || "").trim();
+  if (explicit && getEquipment(explicit)) return explicit;
+  const blob = `${input.name || ""} ${input.deviceName || ""} ${input.model || ""}`.toLowerCase();
+  const list = input.maker ? listEquipmentByMaker(input.maker) : EQUIPMENT_CATALOG;
+  const ranked = [...list].sort((a, b) => b.family.length - a.family.length);
+  for (const eq of ranked) {
+    const fam = eq.family.toLowerCase();
+    if (fam && blob.includes(fam)) return eq.id;
+  }
+  if (input.maker === "icom" && input.proto !== "cat") {
+    const hit = CIV_TO_EQUIPMENT[normalizeCivAddr(input.civAddr)];
+    if (hit && getEquipment(hit)?.maker === "icom") return hit;
+  }
+  return "";
+}
+
 export function listEquipmentByMaker(maker: string): EquipmentRadio[] {
   return EQUIPMENT_CATALOG.filter((e) => e.maker === maker);
 }

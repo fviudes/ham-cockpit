@@ -1,0 +1,54 @@
+{
+  "bind": "127.0.0.1",
+  "folder": "/opt/ser2net",
+  "services": [
+    {
+      "id": "radio",
+      "name": "IC-705",
+      "serial": "/dev/serial/by-id/usb-Icom_Inc._IC-705_IC-705_43001885-if00",
+      "tcpPort": 4002,
+      "baud": 115200,
+      "device": "radio"
+    },
+    {
+      "id": "palstar",
+      "name": "Palstar",
+      "serial": "/dev/ttyAMA3",
+      "tcpPort": 4003,
+      "baud": 9600,
+      "device": "palstar"
+    },
+    {
+      "id": "spe",
+      "name": "SPE",
+      "serial": "/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_AH03EJ3G-if00-port0",
+      "tcpPort": 4001,
+      "baud": 115200,
+      "device": "spe"
+    },
+    {
+      "id": "hamplus",
+      "name": "Hamplus",
+      "serial": "/dev/serial/by-id/usb-FTDI_FT231X_USB_UART_D30K055K-if00-port0",
+      "tcpPort": 4004,
+      "baud": 9600,
+      "device": "hamplus"
+    },
+    {
+      "id": "acom",
+      "name": "ACOM 2000A",
+      "serial": "/dev/serial/by-id/usb-FTDI-ACOM2000A-if00",
+      "tcpPort": 4005,
+      "baud": 1200,
+      "device": "acom"
+    },
+    {
+      "id": "lp100a",
+      "name": "LP-100A",
+      "serial": "/dev/serial/by-id/usb-FTDI-LP100A-if00",
+      "tcpPort": 4006,
+      "baud": 115200,
+      "device": "lp100a"
+    }
+  ]
+}

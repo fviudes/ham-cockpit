@@ -4,29 +4,28 @@
  * Host → amp: 0x55×3 | CNT | DATA… | CHK
  * Status ← amp: 0xAA×3 | 0x43 | 67 CSV | chk0 chk1 | sep | CR LF
  *
- * YAML (setup que funciona):
+ * YAML (servidor que funciona, 115200):
  *   accepter: telnet(rfc2217),tcp,<bind>,<port>
- *   connector: serialdev,…,9600n81,local
+ *   connector: serialdev,…,115200n81,local
  *   kickolduser: true
  *
  * Power-on: RFC2217 SET-CONTROL DTR/RTS (pulso low→high).
  * ampctld -m 401 Beta fica parado — só o caminho nativo usa a porta.
  */
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import net from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
+import { SER2NET_ACC_BAUD } from "../shared/const";
 import { attachRfc2217, type Rfc2217Socket } from "./rfc2217";
 import { loadSer2net, saveSer2net } from "./ser2net-store";
 
-const execFileAsync = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OPT_DIR = "/opt/ham-cockpit/spe";
 const HELPER = "/opt/ham-cockpit/bin/station-svc";
 const POLL_MS = 700;
-const BAUD = 9600;
+const BAUD = 115200;
 const STATUS_WAIT_MS = 1500;
 
 export type SpePhase = "idle" | "connecting" | "ready" | "error";
@@ -242,6 +241,11 @@ function consumeRx() {
 }
 
 let saved = loadSaved();
+try {
+  if (!existsSync(jsonPath())) persist();
+} catch {
+  /* pasta ainda não gravável */
+}
 let live: Omit<SpeSnap, "ok" | "folder" | "baud" | "transport"> = {
   port: "",
   autoConnect: saved.autoConnect,
@@ -316,31 +320,66 @@ async function resolveEndpoint(): Promise<{ host: string; port: number } | null>
   return { host: cfg.bind || "127.0.0.1", port: svc.tcpPort };
 }
 
-/** Regrava YAML com telnet(rfc2217) na SPE (setup que funcionava no outro servidor). */
+/**
+ * `sudo` ignora SIGTERM enquanto o filho vive, e o timeout do execFile então
+ * nunca libera o `enqueue`. SIGKILL no grupo do processo sempre encerra a espera.
+ */
+function sudoBounded(args: string[], ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve();
+    };
+    const child = spawn("sudo", ["-n", ...args], { detached: true, stdio: "ignore" });
+    const timer = setTimeout(() => {
+      const pid = child.pid;
+      if (pid) {
+        try {
+          process.kill(-pid, "SIGKILL");
+        } catch {
+          /* já saiu */
+        }
+      }
+      finish();
+    }, ms);
+    child.once("error", finish);
+    child.once("close", finish);
+  });
+}
+
+/**
+ * Só regrava a linha da SPE se o baud salvo não for 115200.
+ * Não mexe no cabo nem força 9600. Se o YAML já está certo, não chama o sudo do reload.
+ */
 async function ensureSpeRfc2217Yaml(): Promise<void> {
   if (yamlEnsured) return;
   const cfg = await loadSer2net();
-  if (!cfg.services.some((s) => s.device === "spe")) return;
-  await saveSer2net({ bind: cfg.bind, services: cfg.services });
+  const baud = SER2NET_ACC_BAUD.spe;
+  const spe = cfg.services.find((s) => s.device === "spe");
+  if (!spe || spe.baud === baud) {
+    yamlEnsured = true;
+    return;
+  }
+  const services = cfg.services.map((s) => (s.device === "spe" ? { ...s, baud } : s));
+  let wrote = false;
+  await Promise.race([
+    saveSer2net({ bind: cfg.bind, services }).then(() => {
+      wrote = true;
+    }),
+    new Promise<void>((r) => setTimeout(r, 4_000)),
+  ]);
+  if (!wrote) return;
   yamlEnsured = true;
-  // ser2net reload — dá um respiro antes de conectar
   await new Promise((r) => setTimeout(r, 400));
 }
 
 async function stopAmpctld(): Promise<void> {
   if (process.platform !== "linux" || !existsSync(HELPER)) return;
-  try {
-    await execFileAsync("sudo", ["-n", HELPER, "stop", "spe"], {
-      timeout: 40_000,
-      windowsHide: true,
-    });
-    await execFileAsync("sudo", ["-n", HELPER, "disable", "spe"], {
-      timeout: 15_000,
-      windowsHide: true,
-    });
-  } catch {
-    /* ignore */
-  }
+  await sudoBounded([HELPER, "stop", "spe"], 4_000);
+  await sudoBounded([HELPER, "disable", "spe"], 3_000);
 }
 
 function writePacket(data: Buffer): boolean {

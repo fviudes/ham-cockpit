@@ -119,6 +119,12 @@ export type EquipmentRadio = {
   /** Modelo Hamlib (`rigctld -m`). null = ainda sem mapeamento. */
   hamlibModel: number | null;
   hamlibBackend: HamlibBackend;
+  /**
+   * true = a serial sempre manda `-c` ao rigctld.
+   * Omissão = `-c` só quando o CI-V gravado difere do padrão deste `-m`.
+   * IC-705 (3085) não recebe `-c` no 0xA4: o modelo Hamlib já traz o endereço.
+   */
+  hamlibPassCiv?: boolean;
   civAddr?: string;
   defaultBaud?: number;
   connections: EquipmentConnection[];

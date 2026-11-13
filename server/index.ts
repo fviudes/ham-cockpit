@@ -20,6 +20,7 @@ import {
 } from "./wavelog-status";
 import { wlgDown, wlgStatus, wlgUp } from "./wlg-status";
 import { netConnect, netForget, netSave, netScan, netSetAp, netSetHostname, netSetIp, netSetLink, netStatus } from "./net";
+import { processesAction, processesList } from "./processes";
 import { servicesApplyBoot, servicesPower, servicesSetAutostart, servicesStatus } from "./services";
 import { updatesApply, updatesRefresh, updatesStatus } from "./updates";
 import { layoutGet, layoutSave } from "./layouts";
@@ -509,6 +510,26 @@ async function startServer() {
       res.status(body.ok ? 200 : 400).json(body);
     } catch (err) {
       res.status(500).json({ ok: false, items: [], error: String(err) });
+    }
+  });
+
+  app.get("/api/processes", async (_req, res) => {
+    try {
+      const body = await processesList();
+      res.status(body.ok ? 200 : 500).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, available: false, items: [], error: String(err) });
+    }
+  });
+  app.post("/api/processes", async (req, res) => {
+    try {
+      res.setTimeout(60_000);
+      const action = String(req.body?.action ?? "");
+      const unit = String(req.body?.unit ?? "");
+      const body = await processesAction(unit, action);
+      res.status(body.ok ? 200 : 400).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, unit: "", action: "", error: String(err) });
     }
   });
 

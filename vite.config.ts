@@ -16,6 +16,7 @@ import { createUser, deleteUser, listUsers, sshStatus } from "./server/users";
 import { wavelogDatabase, wavelogDbUpdate, wavelogDown, wavelogStatus, wavelogUp } from "./server/wavelog-status";
 import { wlgDown, wlgStatus, wlgUp } from "./server/wlg-status";
 import { netConnect, netForget, netSave, netScan, netSetAp, netSetHostname, netSetIp, netSetLink, netStatus } from "./server/net";
+import { processesAction, processesList } from "./server/processes";
 import { servicesApplyBoot, servicesSetAutostart, servicesStatus } from "./server/services";
 import { updatesApply, updatesRefresh, updatesStatus } from "./server/updates";
 import { layoutGet, layoutSave } from "./server/layouts";
@@ -655,6 +656,38 @@ function vitePluginServices(): Plugin {
   };
 }
 
+function vitePluginProcesses(): Plugin {
+  return {
+    name: "processes-api",
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use(async (req, res, next) => {
+        const url = req.url?.split("?")[0] ?? "";
+        if (url !== "/api/processes") return next();
+        try {
+          if (req.method === "GET") {
+            const body = await processesList();
+            return sendJson(res, body.ok ? 200 : 500, body);
+          }
+          if (req.method === "POST") {
+            const raw = await readBody(req);
+            let body: { unit?: string; action?: string } = {};
+            try {
+              body = raw ? (JSON.parse(raw) as { unit?: string; action?: string }) : {};
+            } catch {
+              return sendJson(res, 400, { ok: false, unit: "", action: "", error: "JSON inválido" });
+            }
+            const result = await processesAction(String(body.unit ?? ""), String(body.action ?? ""));
+            return sendJson(res, result.ok ? 200 : 400, result);
+          }
+        } catch (err) {
+          return sendJson(res, 500, { ok: false, available: false, items: [], error: String(err) });
+        }
+        next();
+      });
+    },
+  };
+}
+
 function vitePluginHost(): Plugin {
   return {
     name: "host-api",
@@ -891,6 +924,7 @@ export default defineConfig(({ command }) => ({
           vitePluginLdg(),
           vitePluginNet(),
           vitePluginServices(),
+          vitePluginProcesses(),
           vitePluginLayout(),
           vitePluginUpdates(),
           vitePluginWavelog(),

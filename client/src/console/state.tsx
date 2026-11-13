@@ -127,6 +127,12 @@ export type StationRadio = {
   primary: boolean;
   error: string;
   equipmentId?: string;
+  /** Família do catálogo (ex.: IC-705). */
+  model?: string;
+  /** rigctld -m da serial, quando o modelo é ponte Hamlib. */
+  hamlibModel?: number;
+  /** true quando o rigctld da serial deve receber -c. */
+  hamlibPassCiv?: boolean;
   /** Host/IP quando link === network. */
   host?: string;
   /** Perfil de rede (kind::via) do catálogo. */
@@ -189,6 +195,16 @@ export function radioCardTitle(
 export type RadioPick = { id: string; label: string; kind: RadioLink; path: string };
 export type LextelPhase = "idle" | "scanning" | "pairing" | "connecting" | "streaming" | "error";
 export type LextelDev = { addr: string; name: string; paired: boolean; kind: "bt" | "serial"; likely: boolean };
+
+const LEXTEL_BT_MAC = /^(?:[0-9A-F]{2}:){5}[0-9A-F]{2}$/;
+
+/** Lista do botão Procurar MS-2000: só MAC Classic. COM, tty e rfcomm ficam de fora. */
+export function isLextelBtDevice(d: { addr?: string; kind?: string } | null | undefined): d is LextelDev {
+  if (!d || d.kind === "serial") return false;
+  const addr = String(d.addr || "").trim();
+  if (!addr || /COM\d+/i.test(addr) || /[\\/]/.test(addr) || /rfcomm|tty/i.test(addr)) return false;
+  return LEXTEL_BT_MAC.test(addr.toUpperCase());
+}
 export type LogRow = { ts: string; kind: LogKind; msg: string };
 
 export type Ser2netSvc = {
@@ -679,7 +695,7 @@ function initial(): Station {
       { id: 1, label: "PORT 1", device: "/dev/serial/by-id/usb-IC-705-if00", enabled: true, proto: "Icom CI-V", baud: 115200, civ: "0xA4", tcpPort: 4001, hamlibPort: 4532, hamlibModel: 3085 },
       { id: 2, label: "PORT 2", device: "/dev/ttyAMA2", enabled: true, proto: "Yaesu", baud: 38400, civ: "0x94", tcpPort: 4002, hamlibPort: 4534, hamlibModel: 1021 },
       { id: 3, label: "PORT 3", device: "/dev/ttyAMA3", enabled: true, proto: "Palstar", baud: 9600, civ: "0x94", tcpPort: 4003, hamlibPort: 0, hamlibModel: 0 },
-      { id: 4, label: "PORT 4", device: "/dev/serial/by-id/usb-FTDI-SPE", enabled: true, proto: "SPE", baud: 9600, civ: "0x94", tcpPort: 4004, hamlibPort: 4531, hamlibModel: 401 },
+      { id: 4, label: "PORT 4", device: "/dev/serial/by-id/usb-FTDI-SPE", enabled: true, proto: "SPE", baud: 115200, civ: "0x94", tcpPort: 4004, hamlibPort: 0, hamlibModel: 0 },
       { id: 5, label: "PORT 5", device: "/dev/serial/by-id/usb-FTDI-ACOM2000A-if00", enabled: true, proto: "ACOM 2000A", baud: 1200, civ: "0x94", tcpPort: 4005, hamlibPort: 0, hamlibModel: 0 },
     ],
     logs: [
@@ -1093,7 +1109,7 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
           mod: Number(j.mod) || 0,
           alarms: Array.isArray(j.alarms) ? j.alarms.map(String) : p.lextel.alarms,
           devices: Array.isArray(j.devices)
-            ? (j.devices as LextelDev[]).filter((d) => d && typeof d.addr === "string")
+            ? (j.devices as LextelDev[]).filter((d) => isLextelBtDevice(d))
             : p.lextel.devices,
           ascii: typeof j.ascii === "string" ? j.ascii : p.lextel.ascii,
           note: typeof j.note === "string" ? j.note : p.lextel.note,
