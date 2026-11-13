@@ -111,12 +111,37 @@ function winSppScript() {
   return join(ROOT, "deploy", "lextel", "win-spp.ps1");
 }
 
+function isRfcommPath(addr: string) {
+  return /(?:^|\/)dev\/rfcomm\d+$/i.test(addr.trim().replace(/\\/g, "/"));
+}
+
+function normalizeSerialPath(addr: string) {
+  const t = addr.trim().replace(/\\/g, "/");
+  if (!t) return t;
+  // Corrige configs antigas gravadas com /DEV/RFCOMM0
+  if (isRfcommPath(t) || /^\/DEV\//i.test(t)) {
+    return t.replace(/^\/DEV\//i, "/dev/").replace(/RFCOMM(\d*)/gi, (_m, n: string) => `rfcomm${n}`);
+  }
+  if (/^\/dev\//i.test(t)) return `/dev/${t.slice(5)}`;
+  return addr.trim();
+}
+
+function ensureCaptureReady() {
+  mkdirSync(dataDir(), { recursive: true });
+  const cap = capturePath();
+  if (!existsSync(cap)) writeFileSync(cap, Buffer.alloc(0));
+  return cap;
+}
+
 function loadSaved(): Saved {
   const fallback: Saved = { addr: "", name: "", pin: "1234", channel: 1, autoConnect: true, layout: null };
   try {
     const raw = JSON.parse(readFileSync(jsonPath(), "utf8")) as Partial<Saved>;
+    const addrRaw = typeof raw.addr === "string" ? raw.addr : "";
+    // Config antiga podia gravar /DEV/RFCOMM0 (toUpperCase indevido) — inutiliza o open() no Linux
+    const addr = normalizeSerialPath(addrRaw);
     return {
-      addr: typeof raw.addr === "string" ? raw.addr : "",
+      addr: isRfcommPath(addr) ? "" : addr,
       name: typeof raw.name === "string" ? raw.name : "",
       pin: typeof raw.pin === "string" && raw.pin ? raw.pin : "1234",
       channel: Number(raw.channel) > 0 ? Number(raw.channel) : 1,
@@ -135,6 +160,14 @@ function persist() {
   const tmp = `${jsonPath()}.${process.pid}.tmp`;
   writeFileSync(tmp, JSON.stringify(saved, null, 2), "utf8");
   renameSync(tmp, jsonPath());
+}
+
+try {
+  // Regrava config se limpamos /DEV/RFCOMM0 legado na carga
+  const disk = existsSync(jsonPath()) ? readFileSync(jsonPath(), "utf8") : "";
+  if (/\/DEV\/RFCOMM/i.test(disk) || /"addr"\s*:\s*"\/dev\/rfcomm/i.test(disk)) persist();
+} catch {
+  /* */
 }
 
 function helperExists() {
@@ -360,7 +393,9 @@ async function winClassicDevices(): Promise<LextelDevice[]> {
 
 export async function lextelLearn(): Promise<LextelSnapshot> {
   try {
-    const buf = existsSync(capturePath()) ? readFileSync(capturePath()) : Buffer.alloc(0);
+    const cap = ensureCaptureReady();
+    const buf = readFileSync(cap);
+    bytes = Math.max(bytes, buf.length);
     inspect = inspectCapture(buf);
     if (inspect.reading) reading = inspect.reading;
     if (inspect.layout) {
@@ -368,9 +403,20 @@ export async function lextelLearn(): Promise<LextelSnapshot> {
       saved.layout = inspect.layout;
       persist();
     }
-    if (!buf.length) error = "Sem dump — conecte o MS-2000 e deixe o SPP aberto alguns segundos";
-    else if (!inspect.reading) error = inspect.note;
-    else error = "";
+    if (!buf.length) {
+      error =
+        "Sem captura — conecte o SPP do MS-2000, deixe transmitir alguns segundos (PTT ajuda) e tente de novo. Arquivo: " +
+        cap;
+      inspect = { ...inspect, note: error };
+    } else if (!inspect.reading) {
+      error =
+        inspect.note ||
+        `Dump com ${buf.length} B, mas ainda sem mapa PEP/ROE/V — transmita mais ou confira o quadro`;
+      inspect = { ...inspect, note: error };
+    } else {
+      error = "";
+      inspect = { ...inspect, note: `decoder ${inspect.layout?.kind || "ok"} · ${buf.length} B` };
+    }
   } catch (err) {
     error = err instanceof Error ? err.message : String(err);
   }
@@ -418,15 +464,18 @@ function ingest(buf: Buffer, alreadyOnDisk = false) {
   if (!buf.length) return;
   bytes += buf.length;
   updatedAt = Date.now();
-  const live = comKey(pathOpen);
-  if (live && saved.addr !== live) {
-    saved.addr = live;
-    saved.name = saved.name.replace(/COM\d+/gi, live).replace(/\s*\(entrada\)/i, "").trim() || live;
-    persist();
+  // Só remapeia COM no Windows — nunca sobrescrever MAC Classic com /dev/rfcomm0 (nem uppercased)
+  if (process.platform === "win32" && /COM\d+/i.test(pathOpen)) {
+    const live = comKey(pathOpen);
+    if (live && saved.addr !== live) {
+      saved.addr = live;
+      saved.name = saved.name.replace(/COM\d+/gi, live).replace(/\s*\(entrada\)/i, "").trim() || live;
+      persist();
+    }
   }
   if (!alreadyOnDisk) {
     try {
-      const cap = capturePath();
+      const cap = ensureCaptureReady();
       if (existsSync(cap) && readFileSync(cap).length > CAPTURE_MAX) writeFileSync(cap, Buffer.alloc(0));
       appendFileSync(cap, buf);
     } catch {
@@ -479,18 +528,37 @@ function linkAlive() {
   return Boolean(stream || sppChild);
 }
 
+/** Normaliza só COM Windows; paths Unix (/dev/rfcomm0) nunca levam toUpperCase. */
 function comKey(s: string) {
-  const m = s.match(/COM\d+/i);
+  const t = s.trim();
+  if (!t) return "";
+  const m = t.match(/COM\d+/i);
   if (m) return m[0].toUpperCase();
-  return s.replace(/\\/g, "").toUpperCase();
+  if (/^\/dev\//i.test(t) || t.startsWith("/")) {
+    // Linux é case-sensitive: /DEV/RFCOMM0 ≠ /dev/rfcomm0
+    return normalizeSerialPath(t);
+  }
+  if (/^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}$/.test(t)) return t.toUpperCase();
+  return t.replace(/\\/g, "");
 }
 
 function samePort(a: string, b: string) {
   if (!a || !b) return false;
-  if (a.toUpperCase() === b.toUpperCase()) return true;
   const ca = comKey(a);
   const cb = comKey(b);
-  return Boolean(ca && cb && ca === cb);
+  if (ca && cb && ca === cb) return true;
+  // COM: comparação case-insensitive; /dev: case-sensitive
+  if (/COM\d+/i.test(a) && /COM\d+/i.test(b)) return a.toUpperCase() === b.toUpperCase();
+  return a === b;
+}
+
+function preferBtMac(hint = ""): string {
+  const want = hint.trim().toUpperCase();
+  if (/^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/.test(want)) return want;
+  const hit =
+    devices.find((d) => d.kind === "bt" && d.likely) ||
+    devices.find((d) => d.kind === "bt" && NAME_RE.test(d.name));
+  return hit?.addr || "";
 }
 
 function clearReconnect() {
@@ -695,28 +763,29 @@ function attachWinSpp(com: string) {
 }
 
 function attach(path: string) {
-  if (samePort(pathOpen, path) && linkAlive()) {
+  const openPath = normalizeSerialPath(path) || path;
+  if (samePort(pathOpen, openPath) && linkAlive()) {
     phase = "streaming";
     return;
   }
   closeStream();
   if (!decoder.layout && saved.layout) decoder.reset(saved.layout);
   try {
-    writeFileSync(capturePath(), Buffer.alloc(0));
+    writeFileSync(ensureCaptureReady(), Buffer.alloc(0));
   } catch {
     /* */
   }
   phase = "connecting";
   error = "";
-  pathOpen = path;
+  pathOpen = openPath;
   attachedAt = Date.now();
   bytes = 0;
-  if (process.platform === "win32" && /COM\d+/i.test(path)) {
-    const m = path.match(/COM\d+/i);
-    attachWinSpp(m ? m[0].toUpperCase() : path);
+  if (process.platform === "win32" && /COM\d+/i.test(openPath)) {
+    const m = openPath.match(/COM\d+/i);
+    attachWinSpp(m ? m[0].toUpperCase() : openPath);
     return;
   }
-  attachFd(path);
+  attachFd(openPath);
 }
 
 export function lextelStatus(): LextelSnapshot {
@@ -795,7 +864,10 @@ export async function lextelScan(seconds = 12): Promise<LextelSnapshot> {
 }
 
 export async function lextelSave(body: Partial<Saved>): Promise<LextelSnapshot> {
-  if (typeof body.addr === "string") saved.addr = body.addr.trim();
+  if (typeof body.addr === "string") {
+    const next = body.addr.trim();
+    saved.addr = isRfcommPath(next) ? "" : normalizeSerialPath(next) || next;
+  }
   if (typeof body.name === "string") saved.name = body.name.trim();
   if (typeof body.pin === "string" && /^\d{4,6}$/.test(body.pin.trim())) saved.pin = body.pin.trim();
   if (typeof body.channel === "number" && body.channel >= 1 && body.channel <= 30) saved.channel = Math.round(body.channel);
@@ -809,7 +881,22 @@ function isSerialPath(addr: string) {
 }
 
 export async function lextelConnect(body: { addr?: string; pin?: string; name?: string; channel?: number } = {}): Promise<LextelSnapshot> {
-  const addr = String(body.addr || saved.addr).trim();
+  let addr = String(body.addr || saved.addr).trim();
+  // Config/UI com /DEV/RFCOMM0: no Linux o SPP Classic exige MAC + bind, não open() no path uppercased
+  if (process.platform === "linux" && isRfcommPath(addr)) {
+    if (!devices.length) {
+      try {
+        await lextelScan(6);
+      } catch {
+        /* */
+      }
+    }
+    const mac = preferBtMac();
+    if (mac) addr = mac;
+    else addr = normalizeSerialPath(addr);
+  } else if (isSerialPath(addr)) {
+    addr = normalizeSerialPath(addr);
+  }
   if (!addr) {
     phase = "error";
     error = "Selecione o MS-2000 no scan";
@@ -821,18 +908,20 @@ export async function lextelConnect(body: { addr?: string; pin?: string; name?: 
   if (typeof body.channel === "number" && body.channel >= 1) saved.channel = Math.round(body.channel);
   error = "";
 
-  if (isSerialPath(addr)) {
-    const serial = process.platform === "win32" ? await winPreferOutgoingCom(addr) : addr;
+  if (isSerialPath(addr) && !(process.platform === "linux" && isRfcommPath(addr) && !existsSync(normalizeSerialPath(addr)))) {
+    const serial =
+      process.platform === "win32" ? await winPreferOutgoingCom(addr) : normalizeSerialPath(addr);
     if (linkAlive() && samePort(pathOpen, serial) && (bytes > 0 || Date.now() - attachedAt < 8000)) {
       if (phase !== "error") phase = "streaming";
-      saved.addr = comKey(serial) || serial;
+      // Windows: grava COM; Linux serial real: path com case preservado — nunca comKey uppercased em /dev
+      saved.addr = process.platform === "win32" ? comKey(serial) || serial : serial;
       persist();
       return lextelStatus();
     }
     if (serial !== saved.addr) {
       saved.name = saved.name.replace(/COM\d+/gi, serial).replace(/\s*\(entrada\)/i, "").trim() || serial;
     }
-    saved.addr = comKey(serial) || serial;
+    saved.addr = process.platform === "win32" ? comKey(serial) || serial : serial;
     persist();
     attach(process.platform === "win32" ? winComPath(serial) : serial);
     return lextelStatus();
@@ -864,6 +953,17 @@ export async function lextelConnect(body: { addr?: string; pin?: string; name?: 
     return lextelStatus();
   }
 
+  if (isRfcommPath(addr) || isSerialPath(addr)) {
+    phase = "error";
+    error =
+      "Endereço SPP inválido (ex.: /DEV/RFCOMM0). Toque em Procurar MS-2000 e conecte pelo MAC do Monitor Station.";
+    if (isRfcommPath(saved.addr)) {
+      saved.addr = "";
+      persist();
+    }
+    return lextelStatus();
+  }
+
   try {
     phase = "pairing";
     const listed = devices.find((d) => d.addr.toUpperCase() === addr.toUpperCase());
@@ -884,6 +984,8 @@ export async function lextelConnect(body: { addr?: string; pin?: string; name?: 
       /* default 1 */
     }
     saved.channel = ch;
+    saved.addr = addr.toUpperCase();
+    saved.name = saved.name || listed?.name || "Monitor Station";
     persist();
     await runHelper(["bind", addr, saved.pin, String(ch)], 12_000);
     attach(RFCOMM);

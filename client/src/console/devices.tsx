@@ -1417,7 +1417,9 @@ export function LextelPage() {
     try {
       const j = await post("/api/lextel/learn");
       if (j.decoded) toast.success(tx("lextelDecoded"));
-      else toast.message(j.note || tx("lextelLearn"));
+      else if (j.error || /sem captura|sem dump|ainda sem mapa/i.test(j.note || "")) {
+        toast.error(j.error || j.note || tx("lextelLearn"));
+      } else toast.message(j.note || tx("lextelLearn"));
     } catch (err) {
       toast.error(String(err));
     }
