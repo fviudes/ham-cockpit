@@ -433,7 +433,7 @@ if ! find /etc/openvpn /etc/openvpn/client -maxdepth 1 -name '*.conf' -print -qu
     :
   fi
 fi
-# Entrada total vinda do túnel (tun+ / tun0 e 10.8.0.0/24).
+# Entrada total vinda do túnel (tun+ / tun0 e 10.8.0.0/16).
 # Não desliga o firewall, não dá ufw enable/disable e não abre a WAN.
 # O unit oneshot reaplica no boot; a regra do ufw fica gravada para quando ele estiver ativo.
 allow_support_vpn_input() {
@@ -441,8 +441,8 @@ allow_support_vpn_input() {
     if ! iptables -C INPUT -i tun+ -m comment --comment "ham-cockpit vpn tun" -j ACCEPT 2>/dev/null; then
       iptables -I INPUT 1 -i tun+ -m comment --comment "ham-cockpit vpn tun" -j ACCEPT || true
     fi
-    if ! iptables -C INPUT -i tun+ -s 10.8.0.0/24 -m comment --comment "ham-cockpit vpn 10.8.0.0/24" -j ACCEPT 2>/dev/null; then
-      iptables -I INPUT 1 -i tun+ -s 10.8.0.0/24 -m comment --comment "ham-cockpit vpn 10.8.0.0/24" -j ACCEPT || true
+    if ! iptables -C INPUT -i tun+ -s 10.8.0.0/16 -m comment --comment "ham-cockpit vpn 10.8.0.0/16" -j ACCEPT 2>/dev/null; then
+      iptables -I INPUT 1 -i tun+ -s 10.8.0.0/16 -m comment --comment "ham-cockpit vpn 10.8.0.0/16" -j ACCEPT || true
     fi
   fi
   # rp_filter estrito (1) na tun0 descarta o retorno. O efetivo é o máximo com all;
@@ -458,11 +458,11 @@ allow_support_vpn_input() {
     if ! grep -q -- '-i tun0' /etc/ufw/user.rules 2>/dev/null; then
       ufw allow in on tun0 >/dev/null 2>&1 || true
     fi
-    if ! grep -q -- '-i tun+ -s 10.8.0.0/24' /etc/ufw/user.rules 2>/dev/null; then
-      ufw allow in on tun+ from 10.8.0.0/24 >/dev/null 2>&1 || true
+    if ! grep -q -- '-i tun+ -s 10.8.0.0/16' /etc/ufw/user.rules 2>/dev/null; then
+      ufw allow in on tun+ from 10.8.0.0/16 >/dev/null 2>&1 || true
     fi
-    if ! grep -q -- '-i tun0 -s 10.8.0.0/24' /etc/ufw/user.rules 2>/dev/null; then
-      ufw allow in on tun0 from 10.8.0.0/24 >/dev/null 2>&1 || true
+    if ! grep -q -- '-i tun0 -s 10.8.0.0/16' /etc/ufw/user.rules 2>/dev/null; then
+      ufw allow in on tun0 from 10.8.0.0/16 >/dev/null 2>&1 || true
     fi
   fi
   cat >/etc/systemd/system/ham-cockpit-vpn-input.service <<'EOF'
@@ -474,8 +474,8 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-# Aceita a entrada do tun+ e de 10.8.0.0/24. Não dá ufw enable/disable e não abre a WAN.
-ExecStart=/bin/bash -c 'iptables -C INPUT -i tun+ -m comment --comment "ham-cockpit vpn tun" -j ACCEPT 2>/dev/null || iptables -I INPUT 1 -i tun+ -m comment --comment "ham-cockpit vpn tun" -j ACCEPT || true; iptables -C INPUT -i tun+ -s 10.8.0.0/24 -m comment --comment "ham-cockpit vpn 10.8.0.0/24" -j ACCEPT 2>/dev/null || iptables -I INPUT 1 -i tun+ -s 10.8.0.0/24 -m comment --comment "ham-cockpit vpn 10.8.0.0/24" -j ACCEPT || true; if [ -r /proc/sys/net/ipv4/conf/tun0/rp_filter ] && [ "$(cat /proc/sys/net/ipv4/conf/tun0/rp_filter)" = 1 ]; then sysctl -w net.ipv4.conf.tun0.rp_filter=2 || true; fi; exit 0'
+# Aceita a entrada do tun+ e de 10.8.0.0/16. Não dá ufw enable/disable e não abre a WAN.
+ExecStart=/bin/bash -c 'iptables -C INPUT -i tun+ -m comment --comment "ham-cockpit vpn tun" -j ACCEPT 2>/dev/null || iptables -I INPUT 1 -i tun+ -m comment --comment "ham-cockpit vpn tun" -j ACCEPT || true; iptables -C INPUT -i tun+ -s 10.8.0.0/16 -m comment --comment "ham-cockpit vpn 10.8.0.0/16" -j ACCEPT 2>/dev/null || iptables -I INPUT 1 -i tun+ -s 10.8.0.0/16 -m comment --comment "ham-cockpit vpn 10.8.0.0/16" -j ACCEPT || true; if [ -r /proc/sys/net/ipv4/conf/tun0/rp_filter ] && [ "$(cat /proc/sys/net/ipv4/conf/tun0/rp_filter)" = 1 ]; then sysctl -w net.ipv4.conf.tun0.rp_filter=2 || true; fi; exit 0'
 
 [Install]
 WantedBy=multi-user.target

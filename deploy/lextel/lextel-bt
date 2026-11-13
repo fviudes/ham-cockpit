@@ -4,7 +4,7 @@
 # ou um segundo SPP. Este helper nunca dá rfkill, power off, hciconfig ou
 # disconnect fora do MAC pedido — isso derrubaria a outra sessão.
 #
-# Usage: lextel-bt scan|pair|bind|release|disconnect|devices|channel <args>
+# Usage: lextel-bt scan|pair|paired|bind|reconnect|release|disconnect|devices|channel <args>
 set -euo pipefail
 
 # Sessão própria. O Node mata o grupo do sudo; este processo fica nesse grupo
@@ -116,6 +116,158 @@ print_devices() {
   done || true
 }
 
+rfcomm_state() {
+  local line="$1"
+  # Palavra inteira: "disconnected" não pode contar como connected.
+  if echo "$line" | grep -Eq '[[:space:]]connected([[:space:]]|$)'; then
+    echo connected
+  elif echo "$line" | grep -Eq '[[:space:]]clean([[:space:]]|$)'; then
+    echo clean
+  elif echo "$line" | grep -Eq '[[:space:]]config([[:space:]]|$)'; then
+    echo config
+  elif [[ -z "$line" ]]; then
+    echo absent
+  else
+    echo other
+  fi
+}
+
+same_binding() {
+  local line="$1"
+  echo "$line" | grep -qi "$mac" || return 1
+  echo "$line" | grep -Eq "channel ${channel}([[:space:]]|$)"
+}
+
+# Solta e recria só quando o bind está preso (config) ou o open anterior
+# devolveu ENODEV. Espera o nó sumir e o novo aparecer: soltar e abrir no
+# mesmo instante deixa /dev/rfcomm0 em ENODEV e o console morre.
+settle_bind() {
+  local i
+  rfcomm release "$RFCOMM_N" 2>/dev/null || true
+  for i in $(seq 1 20); do
+    [[ -e "$RFCOMM_DEV" ]] || break
+    sleep 0.1
+  done
+  rfcomm bind "$RFCOMM_N" "$mac" "$channel"
+  for i in $(seq 1 20); do
+    [[ -c "$RFCOMM_DEV" ]] && break
+    sleep 0.1
+  done
+  sleep 0.4
+  if [[ ! -c "$RFCOMM_DEV" ]]; then
+    echo "ERR $RFCOMM_DEV nao apareceu apos o bind" >&2
+    exit 1
+  fi
+  fix_perms
+}
+
+# connected e clean do mesmo MAC ficam. clean é o bind pronto para o open,
+# não um link morto. Soltar esse bind é o que derruba o MS-2000 depois da OTA.
+bind_saved() {
+  local force="${1:-}"
+  local line st
+  line="$(rfcomm_line)"
+  st="$(rfcomm_state "$line")"
+  if same_binding "$line" && [[ "$st" == "connected" ]]; then
+    fix_perms
+    echo "OK $RFCOMM_DEV $mac $channel connected"
+    return 0
+  fi
+  if same_binding "$line" && [[ "$st" == "clean" && "$force" != "rebind" ]]; then
+    fix_perms
+    echo "OK $RFCOMM_DEV $mac $channel clean"
+    return 0
+  fi
+  ensure_adapter
+  bluetoothctl trust "$mac" >/dev/null 2>&1 || true
+  settle_bind
+  echo "OK $RFCOMM_DEV $mac $channel"
+}
+
+bt_info() {
+  timeout 4 bluetoothctl info "$mac" 2>/dev/null || true
+}
+
+# Não usa coproc: dentro de função o bash fecha o bluetoothctl antes do PIN.
+# FIFO no corpo do script. Sem scan se o MAC já está no cache.
+pair_mac() {
+  local info log fifo pid end
+  ensure_adapter
+  info="$(bt_info)"
+  if echo "$info" | grep -q 'Paired: yes'; then
+    bluetoothctl trust "$mac" >/dev/null 2>&1 || true
+    echo "OK pair $mac already"
+    return 0
+  fi
+  # "Device MAC not available" ainda começa com Device. Sem isso o scan
+  # não roda depois de um remove e o pair falha na hora.
+  if ! echo "$info" | grep -q '^Device ' || echo "$info" | grep -qi 'not available'; then
+    # scan on também liga LE (0x2005/0x200b) e o mini-UART estoura.
+    # bredr acha o MS-2000 sem varrer o BLE do IC-705.
+    timeout 8 bluetoothctl --timeout 6 scan bredr >/dev/null 2>&1 || \
+      timeout 8 bluetoothctl --timeout 6 scan on >/dev/null 2>&1 || true
+    bluetoothctl scan off >/dev/null 2>&1 || true
+  fi
+  log=/tmp/lextel-pair.log
+  : >"$log"
+  fifo="$(mktemp -u /tmp/lextel-pair.XXXXXX)"
+  mkfifo "$fifo"
+  if command -v stdbuf >/dev/null 2>&1; then
+    stdbuf -oL -eL bluetoothctl <"$fifo" >"$log" 2>&1 &
+  else
+    bluetoothctl <"$fifo" >"$log" 2>&1 &
+  fi
+  pid=$!
+  exec 7>"$fifo"
+  # bluetoothctl ainda está "Waiting to connect". Comando cedo demais
+  # falha com "Failed to register agent object" e o vínculo não nasce.
+  end=$((SECONDS + 6))
+  while (( SECONDS < end )); do
+    if grep -q '\[bluetooth\]' "$log"; then
+      break
+    fi
+    sleep 0.2
+  done
+  echo "agent off" >&7
+  sleep 0.3
+  echo "agent KeyboardDisplay" >&7
+  sleep 0.4
+  echo "default-agent" >&7
+  sleep 0.3
+  echo "pair $mac" >&7
+  end=$((SECONDS + 15))
+  while (( SECONDS < end )); do
+    if grep -qiE 'PIN code|Request PIN|Enter PIN' "$log" && ! grep -q 'PIN_SENT' "$log"; then
+      echo "$pin" >&7 || true
+      echo PIN_SENT >>"$log"
+    fi
+    if grep -qiE 'yes/no|confirm passkey|Request confirmation' "$log" && ! grep -q 'YES_SENT' "$log"; then
+      echo "yes" >&7 || true
+      echo YES_SENT >>"$log"
+    fi
+    if grep -qiE 'Pairing successful|Failed to pair|Authentication Failed|AlreadyExists|not available|org.bluez.Error' "$log"; then
+      break
+    fi
+    if ! kill -0 "$pid" 2>/dev/null; then
+      break
+    fi
+    sleep 0.4
+  done
+  echo "trust $mac" >&7 || true
+  echo "quit" >&7 || true
+  exec 7>&-
+  wait "$pid" 2>/dev/null || true
+  rm -f "$fifo"
+  bluetoothctl trust "$mac" >/dev/null 2>&1 || true
+  bluetoothctl scan off >/dev/null 2>&1 || true
+  if bt_info | grep -q 'Paired: yes'; then
+    echo "OK pair $mac"
+    return 0
+  fi
+  echo "ERR pair $mac sem vinculo" >&2
+  return 1
+}
+
 case "$cmd" in
   scan)
     ensure_adapter
@@ -135,38 +287,16 @@ case "$cmd" in
     ;;
   pair)
     valid_mac || { echo "ERR missing MAC" >&2; exit 1; }
-    ensure_adapter
-    if bluetoothctl info "$mac" 2>/dev/null | grep -q 'Paired: yes'; then
-      bluetoothctl trust "$mac" >/dev/null 2>&1 || true
-      echo "OK pair $mac already"
-      exit 0
-    fi
-    bluetoothctl scan on >/dev/null 2>&1 || true
-    coproc BT { bluetoothctl; }
-    echo "agent KeyboardOnly" >&"${BT[1]}" || true
-    echo "default-agent" >&"${BT[1]}" || true
-    echo "pair $mac" >&"${BT[1]}" || true
-    end=$((SECONDS + 20))
-    set +e
-    while (( SECONDS < end )); do
-      IFS= read -r -t 1 line <&"${BT[0]}"
-      [[ $? -eq 0 ]] || continue
-      if echo "$line" | grep -qiE 'PIN code|Passkey|passkey'; then
-        echo "$pin" >&"${BT[1]}" || true
-      fi
-      if echo "$line" | grep -qiE 'Pairing successful|Failed to pair|Authentication Failed|AlreadyExists'; then
-        echo "$line"
-        break
-      fi
-    done
-    set -e
-    echo "trust $mac" >&"${BT[1]}" || true
-    echo "scan off" >&"${BT[1]}" || true
-    echo "quit" >&"${BT[1]}" || true
-    wait "$BT_PID" 2>/dev/null || true
-    bluetoothctl trust "$mac" >/dev/null 2>&1 || true
-    bluetoothctl scan off >/dev/null 2>&1 || true
-    echo "OK pair $mac"
+    pair_mac
+    ;;
+  paired)
+    valid_mac || { echo "paired=no trusted=no"; exit 0; }
+    info="$(bt_info)"
+    paired=no
+    trusted=no
+    if echo "$info" | grep -q 'Paired: yes'; then paired=yes; fi
+    if echo "$info" | grep -q 'Trusted: yes'; then trusted=yes; fi
+    echo "paired=$paired trusted=$trusted"
     ;;
   channel)
     if ! valid_mac || ! have_controller; then
@@ -184,25 +314,25 @@ case "$cmd" in
     case "$channel" in
       ''|*[!0-9]*) channel=1 ;;
     esac
+    bind_saved "$rebind"
+    ;;
+  reconnect)
+    # OTA: religa só o MAC salvo. Não grava config, não mexe em ser2net,
+    # não dá rfkill, power off nem hciconfig, não solta link connected.
+    valid_mac || { echo "ERR missing MAC" >&2; exit 1; }
+    case "$channel" in
+      ''|*[!0-9]*) channel=1 ;;
+    esac
     ensure_adapter
     bluetoothctl trust "$mac" >/dev/null 2>&1 || true
-    line="$(rfcomm_line)"
-    same=0
-    if echo "$line" | grep -qi "$mac" && echo "$line" | grep -q "channel ${channel}"; then
-      same=1
+    info="$(bt_info)"
+    # Trusted sem Paired deixa o open() em config. Pareia sem scan (MAC já conhecido).
+    if ! echo "$info" | grep -q 'Paired: yes'; then
+      if ! pair_mac; then
+        echo "ERR pair $mac sem vinculo; bind segue" >&2
+      fi
     fi
-    # Link no ar: não solta. Soltar o rfcomm derruba o SPP que já está no ar.
-    if [[ "$same" -eq 1 ]] && echo "$line" | grep -qi 'connected'; then
-      fix_perms
-      echo "OK $RFCOMM_DEV $mac $channel live"
-      exit 0
-    fi
-    # A OTA antiga devolvia OK com o mesmo MAC em "config" (bind sem link).
-    # O open() ficava preso e o console não tentava de novo. Sem connected, refaz.
-    rfcomm release "$RFCOMM_N" 2>/dev/null || true
-    rfcomm bind "$RFCOMM_N" "$mac" "$channel"
-    fix_perms
-    echo "OK $RFCOMM_DEV $mac $channel"
+    bind_saved ""
     ;;
   release)
     rfcomm release "$RFCOMM_N" 2>/dev/null || true
@@ -215,7 +345,7 @@ case "$cmd" in
     echo "OK disconnect $mac"
     ;;
   *)
-    echo "ERR usage: lextel-bt scan|devices|pair|channel|bind|release|disconnect" >&2
+    echo "ERR usage: lextel-bt scan|devices|pair|paired|channel|bind|reconnect|release|disconnect" >&2
     exit 1
     ;;
 esac

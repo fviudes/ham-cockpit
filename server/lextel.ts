@@ -100,7 +100,7 @@ let recoverBusy = false;
 let connectBusy = false;
 let pendingConnect: { addr?: string; pin?: string; name?: string; channel?: number } | null = null;
 /** O bind atual não corresponde a um open que tenha funcionado. */
-let rfcommStale = true;
+let rfcommStale = false;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let opened = false;
 let opening = false;
@@ -796,7 +796,8 @@ async function recoverLink() {
       void lextelConnect(next);
       return;
     }
-    if (wantOpen && !linkAlive()) scheduleReconnect();
+    // Enquanto o open() do rfcomm está pendente, outro bind solta o nó.
+    if (wantOpen && !linkAlive() && !opening) scheduleReconnect();
     else if (linkAlive()) reconnectDelay = 600;
   }
 }
@@ -819,9 +820,13 @@ function closeStream() {
   opened = false;
   opening = false;
   if (stream) {
-    stream.removeAllListeners();
-    stream.destroy();
+    const rs = stream;
     stream = null;
+    // destroy() emite 'error' de novo no próximo tick. Sem ouvinte o Node
+    // trata ENODEV como exceção e o systemd derruba o console.
+    rs.removeAllListeners();
+    rs.on("error", () => {});
+    rs.destroy();
   }
   if (captureWatch) {
     clearInterval(captureWatch);
@@ -879,8 +884,11 @@ function attachFd(path: string) {
     clearOpenTimer();
     opened = false;
     opening = false;
+    const code = (err as NodeJS.ErrnoException).code || "";
     if (!error.startsWith("MS-2000")) error = err.message;
-    rfcommStale = true;
+    // ENODEV: o nó sumiu no release/bind. A próxima tentativa recria.
+    // Outro erro (hangup, EIO) reabre o bind clean que já está no MAC.
+    rfcommStale = code === "ENODEV";
     if (wantOpen) {
       phase = "connecting";
       if (stream === rs) closeStream();
@@ -895,7 +903,6 @@ function attachFd(path: string) {
       stream = null;
       pathOpen = "";
       if (wantOpen) {
-        rfcommStale = true;
         scheduleReconnect();
         return;
       }
@@ -1195,11 +1202,24 @@ async function lextelConnectBody(body: { addr?: string; pin?: string; name?: str
   }
 
   try {
-    phase = "pairing";
     const listed = devices.find((d) => d.addr.toUpperCase() === addr.toUpperCase());
-    if (!listed?.paired) {
+    // MAC já trusted ou pareado: não pareia de novo e não liga scan.
+    // O scan LE no adaptador compartilhado estoura o HCI e o IC-705 cai junto.
+    let known = listed?.paired === true;
+    if (!known) {
       try {
-        await runHelper(["pair", addr, saved.pin], 30_000);
+        const st = await runHelper(["paired", addr], 6_000);
+        // Trusted sem vínculo não abre o SPP: o open fica em "config".
+        known = /paired=yes/.test(st);
+      } catch (err) {
+        const msg = helperText(err);
+        if (noController(msg)) throw err;
+      }
+    }
+    if (!known) {
+      phase = "pairing";
+      try {
+        await runHelper(["pair", addr, saved.pin], 28_000);
       } catch (err) {
         const msg = helperText(err);
         if (noController(msg) || helperBusy(msg)) throw err;

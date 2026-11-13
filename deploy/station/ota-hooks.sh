@@ -509,7 +509,8 @@ ensure_hamlib_spe() {
   fi
   # Só o helper. Não regrava /opt/lextel/config.json (MAC salvo) e não mexe em
   # dtoverlay: disable-bt tiraria o onboard e o ttyAMA0 do MMDVM. O helper
-  # não dá rfkill, power off nem hciconfig.
+  # não dá rfkill, power off nem hciconfig. O reconnect do MAC fica no fim
+  # do gancho, depois que o helper novo já está no disco.
   if [[ -f "$ROOT/bin/lextel-bt" ]]; then
     safe_install -m 0755 "$ROOT/bin/lextel-bt" /opt/ham-cockpit/bin/lextel-bt
     sed -i 's/\r$//' /opt/ham-cockpit/bin/lextel-bt 2>/dev/null || true
@@ -650,7 +651,7 @@ if [[ -x /usr/sbin/openvpn && -f /etc/systemd/system/ham-cockpit-support-vpn.ser
     systemctl disable --now ham-cockpit-support-vpn.service 2>/dev/null || true
   fi
 fi
-# Entrada total vinda do túnel (tun+ / tun0 e 10.8.0.0/24).
+# Entrada total vinda do túnel (tun+ / tun0 e 10.8.0.0/16).
 # Não desliga o firewall, não dá ufw enable/disable e não abre a WAN.
 # O unit oneshot reaplica no boot; a regra do ufw fica gravada para quando ele estiver ativo.
 allow_support_vpn_input() {
@@ -658,8 +659,8 @@ allow_support_vpn_input() {
     if ! iptables -C INPUT -i tun+ -m comment --comment "ham-cockpit vpn tun" -j ACCEPT 2>/dev/null; then
       iptables -I INPUT 1 -i tun+ -m comment --comment "ham-cockpit vpn tun" -j ACCEPT || true
     fi
-    if ! iptables -C INPUT -i tun+ -s 10.8.0.0/24 -m comment --comment "ham-cockpit vpn 10.8.0.0/24" -j ACCEPT 2>/dev/null; then
-      iptables -I INPUT 1 -i tun+ -s 10.8.0.0/24 -m comment --comment "ham-cockpit vpn 10.8.0.0/24" -j ACCEPT || true
+    if ! iptables -C INPUT -i tun+ -s 10.8.0.0/16 -m comment --comment "ham-cockpit vpn 10.8.0.0/16" -j ACCEPT 2>/dev/null; then
+      iptables -I INPUT 1 -i tun+ -s 10.8.0.0/16 -m comment --comment "ham-cockpit vpn 10.8.0.0/16" -j ACCEPT || true
     fi
   fi
   # rp_filter estrito (1) na tun0 descarta o retorno. O efetivo é o máximo com all;
@@ -675,11 +676,11 @@ allow_support_vpn_input() {
     if ! grep -q -- '-i tun0' /etc/ufw/user.rules 2>/dev/null; then
       ufw allow in on tun0 >/dev/null 2>&1 || true
     fi
-    if ! grep -q -- '-i tun+ -s 10.8.0.0/24' /etc/ufw/user.rules 2>/dev/null; then
-      ufw allow in on tun+ from 10.8.0.0/24 >/dev/null 2>&1 || true
+    if ! grep -q -- '-i tun+ -s 10.8.0.0/16' /etc/ufw/user.rules 2>/dev/null; then
+      ufw allow in on tun+ from 10.8.0.0/16 >/dev/null 2>&1 || true
     fi
-    if ! grep -q -- '-i tun0 -s 10.8.0.0/24' /etc/ufw/user.rules 2>/dev/null; then
-      ufw allow in on tun0 from 10.8.0.0/24 >/dev/null 2>&1 || true
+    if ! grep -q -- '-i tun0 -s 10.8.0.0/16' /etc/ufw/user.rules 2>/dev/null; then
+      ufw allow in on tun0 from 10.8.0.0/16 >/dev/null 2>&1 || true
     fi
   fi
   cat >/etc/systemd/system/ham-cockpit-vpn-input.service <<'EOF'
@@ -691,8 +692,8 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-# Aceita a entrada do tun+ e de 10.8.0.0/24. Não dá ufw enable/disable e não abre a WAN.
-ExecStart=/bin/bash -c 'iptables -C INPUT -i tun+ -m comment --comment "ham-cockpit vpn tun" -j ACCEPT 2>/dev/null || iptables -I INPUT 1 -i tun+ -m comment --comment "ham-cockpit vpn tun" -j ACCEPT || true; iptables -C INPUT -i tun+ -s 10.8.0.0/24 -m comment --comment "ham-cockpit vpn 10.8.0.0/24" -j ACCEPT 2>/dev/null || iptables -I INPUT 1 -i tun+ -s 10.8.0.0/24 -m comment --comment "ham-cockpit vpn 10.8.0.0/24" -j ACCEPT || true; if [ -r /proc/sys/net/ipv4/conf/tun0/rp_filter ] && [ "$(cat /proc/sys/net/ipv4/conf/tun0/rp_filter)" = 1 ]; then sysctl -w net.ipv4.conf.tun0.rp_filter=2 || true; fi; exit 0'
+# Aceita a entrada do tun+ e de 10.8.0.0/16. Não dá ufw enable/disable e não abre a WAN.
+ExecStart=/bin/bash -c 'iptables -C INPUT -i tun+ -m comment --comment "ham-cockpit vpn tun" -j ACCEPT 2>/dev/null || iptables -I INPUT 1 -i tun+ -m comment --comment "ham-cockpit vpn tun" -j ACCEPT || true; iptables -C INPUT -i tun+ -s 10.8.0.0/16 -m comment --comment "ham-cockpit vpn 10.8.0.0/16" -j ACCEPT 2>/dev/null || iptables -I INPUT 1 -i tun+ -s 10.8.0.0/16 -m comment --comment "ham-cockpit vpn 10.8.0.0/16" -j ACCEPT || true; if [ -r /proc/sys/net/ipv4/conf/tun0/rp_filter ] && [ "$(cat /proc/sys/net/ipv4/conf/tun0/rp_filter)" = 1 ]; then sysctl -w net.ipv4.conf.tun0.rp_filter=2 || true; fi; exit 0'
 
 [Install]
 WantedBy=multi-user.target
@@ -814,5 +815,51 @@ if command -v docker >/dev/null 2>&1 || [[ -x /usr/bin/docker ]]; then
 else
   echo "ota-hooks: docker ausente neste host — grave imagem bake com docker.io" >&2
 fi
+
+# Religa o SPP do MAC salvo. Não grava /opt/lextel/config.json, não reinicia
+# o ser2net, não mexe em VPN, firewall, Hamlib nem no overlay. O helper não
+# solta um rfcomm connected e não dá rfkill, power off nem hciconfig.
+lextel_reconnect_saved() {
+  [[ -x /opt/ham-cockpit/bin/lextel-bt ]] || return 0
+  [[ -f /opt/lextel/config.json ]] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  local spec="" i
+  spec="$(python3 - <<'PY'
+import json, re
+p = "/opt/lextel/config.json"
+try:
+    d = json.load(open(p, encoding="utf-8"))
+except Exception:
+    raise SystemExit(0)
+if d.get("autoConnect") is False:
+    raise SystemExit(0)
+addr = str(d.get("addr") or "").strip().upper()
+if not re.fullmatch(r"([0-9A-F]{2}:){5}[0-9A-F]{2}", addr):
+    raise SystemExit(0)
+pin = str(d.get("pin") or "1234")
+if not pin.isdigit():
+    pin = "1234"
+try:
+    ch = int(d.get("channel") or 1)
+except Exception:
+    ch = 1
+if ch < 1 or ch > 30:
+    ch = 1
+print(f"{addr} {pin} {ch}")
+PY
+)" || true
+  [[ -n "$spec" ]] || return 0
+  echo "ota-hooks: Lextel religando ${spec%% *}" >&2
+  for i in 1 2 3 4 5; do
+    if /opt/ham-cockpit/bin/lextel-bt reconnect $spec; then
+      echo "ota-hooks: Lextel rfcomm do MAC salvo pronto" >&2
+      return 0
+    fi
+    sleep 1
+  done
+  echo "ota-hooks: AVISO — Lextel não religou agora; o console tenta de novo sem apagar o MAC" >&2
+  return 0
+}
+lextel_reconnect_saved || echo "ota-hooks: AVISO — reconnect do Lextel não rodou" >&2
 
 exit 0
