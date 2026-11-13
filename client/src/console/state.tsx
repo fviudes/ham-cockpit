@@ -105,7 +105,8 @@ export type Port = {
 
 export type WifiNet = { ssid: string; rssi: number; open: boolean };
 export type NetLink = "wifi" | "ethernet";
-export type LogKind = "BLE" | "CIV" | "IC705" | "RADIO" | "WiFi" | "SYS" | "WLOG" | "S2N" | "ACOM" | "LEXTEL" | "LDG" | "LP100A" | "MMDVM" | "ERRO";
+export type LogKind = "BLE" | "CIV" | "IC705" | "RADIO" | "WiFi" | "SYS" | "WLOG" | "S2N" | "ACOM" | "LEXTEL" | "LDG" | "LP100A" | "SPE" | "MMDVM" | "ERRO";
+export type SpePhase = "idle" | "connecting" | "ready" | "error";
 export type RadioMaker = "icom" | "kenwood" | "yaesu" | "flex" | "tentec" | "xiegu" | "hermes" | "anan";
 export type RadioLink = "usb" | "bluetooth" | "network";
 export type RadioProto = "cat" | "civ";
@@ -237,9 +238,15 @@ export type Station = {
     lastHex: string;
   };
   spe: {
+    autoConnect: boolean;
+    connected: boolean;
+    hardware: boolean;
+    phase: SpePhase;
+    error: string;
+    model: string;
     operate: boolean;
     tx: boolean;
-    bank: "A" | "B";
+    bank: "A" | "B" | "x";
     pout: number;
     pwr: "L" | "M" | "H";
     swrAtu: number;
@@ -251,9 +258,11 @@ export type Station = {
     input: number;
     temp: number;
     alarm: string;
+    warning: string;
     ledAl: boolean;
     ledTune: boolean;
     ledOn: boolean;
+    lastTxHex: string;
   };
   hamplus: { pwr: boolean; send: boolean; split: boolean; rotor: 1 | 2; deg: number; ant: number; radio: number };
   palstar: {
@@ -486,23 +495,31 @@ function initial(): Station {
       lastHex: "",
     },
     spe: {
+      autoConnect: true,
+      connected: false,
+      hardware: false,
+      phase: "idle",
+      error: "",
+      model: "13K",
       operate: false,
       tx: false,
       bank: "A",
       pout: 0,
       pwr: "L",
-      swrAtu: 1.05,
-      swrAnt: 1.12,
-      vpa: 48.2,
-      ipa: 0.1,
-      band: "40m",
+      swrAtu: 1,
+      swrAnt: 1,
+      vpa: 0,
+      ipa: 0,
+      band: "20m",
       ant: 1,
       input: 1,
-      temp: 28,
+      temp: 0,
       alarm: "",
+      warning: "",
       ledAl: false,
       ledTune: false,
-      ledOn: true,
+      ledOn: false,
+      lastTxHex: "",
     },
     hamplus: { pwr: true, send: false, split: false, rotor: 1, deg: 42, ant: 1, radio: 1 },
     palstar: { mode: "AUTO", ant: "COAX", fwd: 0, ref: 0, swr: 1.1, l: 12, c: 48, tune: false, match: true },
@@ -1213,6 +1230,77 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
       if (!j || typeof j !== "object") return;
       setS((p) => ({
         ...p,
+        spe: {
+          ...p.spe,
+          autoConnect: typeof j.autoConnect === "boolean" ? j.autoConnect : p.spe.autoConnect,
+          connected: Boolean(j.connected),
+          hardware: Boolean(j.hardware),
+          phase:
+            j.phase === "idle" || j.phase === "connecting" || j.phase === "ready" || j.phase === "error"
+              ? j.phase
+              : p.spe.phase,
+          error: typeof j.error === "string" ? j.error : p.spe.error,
+          model: typeof j.model === "string" && j.model ? j.model : p.spe.model,
+          operate: Boolean(j.operate),
+          tx: Boolean(j.tx),
+          bank: j.bank === "B" || j.bank === "x" || j.bank === "A" ? j.bank : p.spe.bank,
+          pout: Number.isFinite(Number(j.pout)) ? Number(j.pout) : p.spe.pout,
+          pwr: j.pwr === "L" || j.pwr === "M" || j.pwr === "H" ? j.pwr : p.spe.pwr,
+          swrAtu: Number.isFinite(Number(j.swrAtu)) ? Number(j.swrAtu) : p.spe.swrAtu,
+          swrAnt: Number.isFinite(Number(j.swrAnt)) ? Number(j.swrAnt) : p.spe.swrAnt,
+          vpa: Number.isFinite(Number(j.vpa)) ? Number(j.vpa) : p.spe.vpa,
+          ipa: Number.isFinite(Number(j.ipa)) ? Number(j.ipa) : p.spe.ipa,
+          band: typeof j.band === "string" && j.band ? j.band : p.spe.band,
+          ant: Number.isFinite(Number(j.ant)) ? Number(j.ant) : p.spe.ant,
+          input: Number(j.input) === 2 ? 2 : Number(j.input) === 1 ? 1 : p.spe.input,
+          temp: Number.isFinite(Number(j.temp)) ? Number(j.temp) : p.spe.temp,
+          alarm: typeof j.alarm === "string" ? j.alarm : p.spe.alarm,
+          warning: typeof j.warning === "string" ? j.warning : p.spe.warning,
+          ledAl: Boolean(j.ledAl),
+          ledTune: Boolean(j.ledTune),
+          ledOn: Boolean(j.ledOn ?? j.connected),
+          lastTxHex: typeof j.lastTxHex === "string" ? j.lastTxHex : p.spe.lastTxHex,
+        },
+      }));
+    };
+    let inflight = false;
+    const pull = () => {
+      if (inflight) return;
+      inflight = true;
+      void fetch("/api/spe")
+        .then((r) => r.json())
+        .then(apply)
+        .catch(() => undefined)
+        .finally(() => {
+          inflight = false;
+        });
+    };
+    pull();
+    const id = window.setInterval(pull, 700);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (!active) return;
+    const tmr = window.setTimeout(() => {
+      const row = servicesRef.current.find((r) => r.id === "spe");
+      if (row && row.autostart === false) return;
+      void fetch("/api/spe")
+        .then((r) => r.json())
+        .then((j: { autoConnect?: boolean; connected?: boolean }) => {
+          if (!j.autoConnect || j.connected) return;
+          void fetch("/api/spe/connect", { method: "POST" }).catch(() => undefined);
+        })
+        .catch(() => undefined);
+    }, 2000);
+    return () => window.clearTimeout(tmr);
+  }, [active]);
+
+  useEffect(() => {
+    const apply = (j: Record<string, unknown>) => {
+      if (!j || typeof j !== "object") return;
+      setS((p) => ({
+        ...p,
         wifi: {
           ...p.wifi,
           hostname: typeof j.hostname === "string" && j.hostname ? j.hostname : p.wifi.hostname,
@@ -1487,7 +1575,9 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
           if (prev.ptt) {
             return {
               ...prev,
-              spe: { ...prev.spe, tx: prev.spe.operate, pout: prev.spe.operate ? 620 : 0, ipa: prev.spe.operate ? 12.4 : 0.2 },
+              spe: prev.spe.hardware
+                ? prev.spe
+                : { ...prev.spe, tx: prev.spe.operate, pout: prev.spe.operate ? 620 : 0, ipa: prev.spe.operate ? 12.4 : 0.2 },
               palstar: { ...prev.palstar, fwd: prev.spe.operate ? 600 : 8, ref: 4 },
               ldg: {
                 ...prev.ldg,
@@ -1507,7 +1597,7 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
           }
           return {
             ...prev,
-            spe: { ...prev.spe, tx: false, pout: 0, ipa: 0.1 },
+            spe: prev.spe.hardware ? prev.spe : { ...prev.spe, tx: false, pout: 0, ipa: 0.1 },
             palstar: { ...prev.palstar, fwd: 0, ref: 0 },
             ldg: prev.ldg.hardware ? prev.ldg : { ...prev.ldg, fwd: 0, ref: 0, swr: 1 },
             lp100a: simLp100a(prev.lp100a, false),
@@ -1523,7 +1613,9 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
             smeter: 0.4,
             po,
             swr: prev.lextel.connected && prev.lextel.swr >= 1 ? prev.lextel.swr : swr,
-            spe: { ...prev.spe, tx: prev.spe.operate, pout: prev.spe.operate ? 620 : 0, ipa: prev.spe.operate ? 12.4 : 0.2 },
+            spe: prev.spe.hardware
+              ? prev.spe
+              : { ...prev.spe, tx: prev.spe.operate, pout: prev.spe.operate ? 620 : 0, ipa: prev.spe.operate ? 12.4 : 0.2 },
             palstar: { ...prev.palstar, fwd: prev.spe.operate ? 600 : 8, ref: 4 },
             ldg: {
               ...prev.ldg,
@@ -1547,7 +1639,7 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
           smeter: next,
           po: 0,
           swr: 1,
-          spe: { ...prev.spe, tx: false, pout: 0, ipa: 0.1 },
+          spe: prev.spe.hardware ? prev.spe : { ...prev.spe, tx: false, pout: 0, ipa: 0.1 },
           palstar: { ...prev.palstar, fwd: 0, ref: 0 },
           ldg: prev.ldg.hardware ? prev.ldg : { ...prev.ldg, fwd: 0, ref: 0, swr: 1 },
           lp100a: simLp100a(prev.lp100a, false),

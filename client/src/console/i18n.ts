@@ -7,7 +7,7 @@ const dict = {
   pt: {
     brand: "Ham Cockpit",
     tagline: "Gateway da estação",
-    version: "v0.1.07.13",
+    version: "v0.1.07.14",
     vfoHdmiExit: "Tecle CTRL+X para sair para o console",
     loginTitle: "Acessar o console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -738,7 +738,7 @@ const dict = {
     chainHint: "TTY → ser2net (device=radio) → rigctld -r bind:porta → NET :4532",
     manual5: "5. ser2net e Hamlib",
     manual5body:
-      "Pasta /opt/ser2net. rigctld IC-705 -m 3085 lê a porta do device=radio (não hardcode :4001). ampctld SPE -m 401 lê device=spe (Hamlib ≥4.6). ACOM sem ampctld. Não abra a TTY no Hamlib e no ser2net ao mesmo tempo.",
+      "Pasta /opt/ser2net. rigctld IC-705 -m 3085 lê a porta do device=radio (não hardcode :4001). SPE usa protocolo nativo no console (device=spe). ACOM sem ampctld. Não abra a TTY no Hamlib e no ser2net ao mesmo tempo.",
     manual6: "6. Terminal e SSH",
     manual6body:
       "A aba Terminal abre um shell root no Pi (via sudo no serviço hamcockpit). O sshd sobe no boot na porta 22. Contas criadas em Admin entram no grupo sudo e usam sudo quando precisarem. Login SSH de root por senha está desligado.",
@@ -836,7 +836,7 @@ const dict = {
     svcMmdvmHint: "MMDVM Host + DMR Gateway (WPSD).",
     svcRadioHint: "Reconecta o rádio marcado como principal.",
     svcHamlibHint: "rigctld do rádio principal (NET :4532). SPE usa o serviço SPE Expert.",
-    svcSpeHint: "Expert 1.3K-FA · ampctld -m 401 (Hamlib ≥4.6) via ser2net.",
+    svcSpeHint: "Expert 1.3K-FA · protocolo nativo SPE via ser2net (ampctld Beta opcional).",
     svcHamplusHint: "AS-603WL via ser2net IP.",
     svcPalstarHint: "AT-AUTO via ser2net IP.",
     svcLdgHint: "LDG Pro II via ser2net IP no jack METER.",
@@ -852,7 +852,7 @@ const dict = {
   en: {
     brand: "Ham Cockpit",
     tagline: "Station gateway",
-    version: "v0.1.07.13",
+    version: "v0.1.07.14",
     vfoHdmiExit: "Press CTRL+X to return to the console",
     loginTitle: "Sign in to the console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -1583,7 +1583,7 @@ const dict = {
     chainHint: "TTY → ser2net (device=radio) → rigctld -r bind:porta → NET :4532",
     manual5: "5. ser2net and Hamlib",
     manual5body:
-      "Folder /opt/ser2net. IC-705 rigctld -m 3085 follows device=radio (not hardcoded :4001). SPE ampctld -m 401 follows device=spe (Hamlib ≥4.6). ACOM has no ampctld. Do not open the TTY in Hamlib and ser2net at the same time.",
+      "Folder /opt/ser2net. IC-705 rigctld -m 3085 follows device=radio (not hardcoded :4001). SPE uses the native console protocol (device=spe). ACOM has no ampctld. Do not open the TTY in Hamlib and ser2net at the same time.",
     manual6: "6. Terminal and SSH",
     manual6body:
       "The Terminal tab opens a root shell on the Pi (via sudo from the hamcockpit service). sshd starts at boot on port 22. Accounts created in Admin join the sudo group and can invoke sudo when needed. Root SSH password login is disabled.",
@@ -1681,7 +1681,7 @@ const dict = {
     svcMmdvmHint: "MMDVM Host + DMR Gateway (WPSD).",
     svcRadioHint: "Reconnects the radio marked Primary.",
     svcHamlibHint: "Primary radio rigctld (NET :4532). SPE uses the SPE Expert service.",
-    svcSpeHint: "Expert 1.3K-FA · ampctld -m 401 (Hamlib ≥4.6) over ser2net.",
+    svcSpeHint: "Expert 1.3K-FA · native SPE protocol over ser2net (optional Beta ampctld).",
     svcHamplusHint: "AS-603WL over ser2net IP.",
     svcPalstarHint: "AT-AUTO over ser2net IP.",
     svcLdgHint: "LDG Pro II over ser2net IP on the METER jack.",

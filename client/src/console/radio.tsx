@@ -283,14 +283,47 @@ function LedBar({ value, max, tone }: { value: number; max: number; tone: "red" 
 const SPE_PWR: Record<"L" | "M" | "H", string> = { L: "Low", M: "Mid", H: "High" };
 
 function SpeViz() {
-  const { s, setS } = useConsole();
+  const { s, setS, pushLog } = useConsole();
   const a = s.spe;
+  const cmd = async (c: string) => {
+    try {
+      const r = await fetch("/api/spe/cmd", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cmd: c }),
+      });
+      const j = (await r.json()) as Record<string, unknown>;
+      setS((p) => ({
+        ...p,
+        spe: {
+          ...p.spe,
+          connected: Boolean(j.connected),
+          hardware: Boolean(j.hardware),
+          operate: Boolean(j.operate),
+          tx: Boolean(j.tx),
+          pout: Number.isFinite(Number(j.pout)) ? Number(j.pout) : p.spe.pout,
+          pwr: j.pwr === "L" || j.pwr === "M" || j.pwr === "H" ? j.pwr : p.spe.pwr,
+          swrAtu: Number.isFinite(Number(j.swrAtu)) ? Number(j.swrAtu) : p.spe.swrAtu,
+          swrAnt: Number.isFinite(Number(j.swrAnt)) ? Number(j.swrAnt) : p.spe.swrAnt,
+          band: typeof j.band === "string" && j.band ? j.band : p.spe.band,
+          ant: Number.isFinite(Number(j.ant)) ? Number(j.ant) : p.spe.ant,
+          ledOn: Boolean(j.ledOn ?? j.connected),
+          lastTxHex: typeof j.lastTxHex === "string" ? j.lastTxHex : p.spe.lastTxHex,
+          error: typeof j.error === "string" ? j.error : p.spe.error,
+        },
+      }));
+      const hex = typeof j.lastTxHex === "string" ? j.lastTxHex : "";
+      pushLog("SPE", hex ? `${c} · TX ${hex}` : c);
+    } catch (err) {
+      toast.error(String(err));
+    }
+  };
   return (
     <div>
-      <PanelTitle>SPE Expert 1.3K-FA</PanelTitle>
+      <PanelTitle>SPE Expert {a.model || "1.3K"}-FA</PanelTitle>
       <Lcd>
         <div className="mb-2 flex items-center justify-between border-b border-[#0c2236] pb-2">
-          <span className="text-[10px] font-semibold tracking-[0.2em] text-[#4fc3f7]">13K</span>
+          <span className="text-[10px] font-semibold tracking-[0.2em] text-[#4fc3f7]">{a.model || "13K"}</span>
           <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${a.operate ? "bg-[#10b981]/20 text-[#34d399]" : "text-[#8ea0b3]"}`}>
             {a.operate ? "OPERATE" : "STBY"}
           </span>
@@ -322,39 +355,26 @@ function SpeViz() {
         <Chip
           tone="ok"
           active={a.ledOn}
-          onClick={() =>
-            setS((p) => ({
-              ...p,
-              spe: {
-                ...p.spe,
-                ledOn: !p.spe.ledOn,
-                operate: p.spe.ledOn ? false : p.spe.operate,
-                tx: p.spe.ledOn ? false : p.spe.tx,
-                pout: p.spe.ledOn ? 0 : p.spe.pout,
-              },
-            }))
-          }
+          onClick={() => {
+            if (a.ledOn) void cmd("off");
+            else void fetch("/api/spe/connect", { method: "POST" }).then((r) => r.json()).then((j) => {
+              setS((p) => ({
+                ...p,
+                spe: {
+                  ...p.spe,
+                  connected: Boolean(j.connected),
+                  hardware: Boolean(j.hardware),
+                  ledOn: Boolean(j.ledOn ?? j.connected),
+                  error: typeof j.error === "string" ? j.error : p.spe.error,
+                },
+              }));
+            });
+          }}
         >
           {a.ledOn ? "Power On" : "Power Off"}
         </Chip>
-        <Chip
-          onClick={() => setS((p) => ({ ...p, spe: { ...p.spe, pwr: p.spe.pwr === "L" ? "M" : p.spe.pwr === "M" ? "H" : "L" } }))}
-        >
-          PWR {SPE_PWR[a.pwr]}
-        </Chip>
-        <Chip
-          tone="amber"
-          active={a.operate}
-          onClick={() =>
-            setS((p) => {
-              const on = !p.spe.operate;
-              return {
-                ...p,
-                spe: { ...p.spe, operate: on, ledOn: on ? true : p.spe.ledOn },
-              };
-            })
-          }
-        >
+        <Chip onClick={() => void cmd("pwr")}>PWR {SPE_PWR[a.pwr]}</Chip>
+        <Chip tone="amber" active={a.operate} onClick={() => void cmd(a.operate ? "op0" : "op1")}>
           {a.operate ? "Oper" : "StdBy"}
         </Chip>
       </div>

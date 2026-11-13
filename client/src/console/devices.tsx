@@ -1009,25 +1009,96 @@ export function Ic705Page() {
   );
 }
 
+function applySpe(setS: ReturnType<typeof useConsole>["setS"], j: Record<string, unknown>) {
+  setS((p) => ({
+    ...p,
+    spe: {
+      ...p.spe,
+      autoConnect: typeof j.autoConnect === "boolean" ? j.autoConnect : p.spe.autoConnect,
+      connected: Boolean(j.connected),
+      hardware: Boolean(j.hardware),
+      phase:
+        j.phase === "idle" || j.phase === "connecting" || j.phase === "ready" || j.phase === "error" ? j.phase : p.spe.phase,
+      error: typeof j.error === "string" ? j.error : p.spe.error,
+      model: typeof j.model === "string" && j.model ? j.model : p.spe.model,
+      operate: Boolean(j.operate),
+      tx: Boolean(j.tx),
+      bank: j.bank === "B" || j.bank === "x" || j.bank === "A" ? j.bank : p.spe.bank,
+      pout: Number.isFinite(Number(j.pout)) ? Number(j.pout) : p.spe.pout,
+      pwr: j.pwr === "L" || j.pwr === "M" || j.pwr === "H" ? j.pwr : p.spe.pwr,
+      swrAtu: Number.isFinite(Number(j.swrAtu)) ? Number(j.swrAtu) : p.spe.swrAtu,
+      swrAnt: Number.isFinite(Number(j.swrAnt)) ? Number(j.swrAnt) : p.spe.swrAnt,
+      vpa: Number.isFinite(Number(j.vpa)) ? Number(j.vpa) : p.spe.vpa,
+      ipa: Number.isFinite(Number(j.ipa)) ? Number(j.ipa) : p.spe.ipa,
+      band: typeof j.band === "string" && j.band ? j.band : p.spe.band,
+      ant: Number.isFinite(Number(j.ant)) ? Number(j.ant) : p.spe.ant,
+      input: Number(j.input) === 2 ? 2 : Number(j.input) === 1 ? 1 : p.spe.input,
+      temp: Number.isFinite(Number(j.temp)) ? Number(j.temp) : p.spe.temp,
+      alarm: typeof j.alarm === "string" ? j.alarm : p.spe.alarm,
+      warning: typeof j.warning === "string" ? j.warning : p.spe.warning,
+      ledAl: Boolean(j.ledAl),
+      ledTune: Boolean(j.ledTune),
+      ledOn: Boolean(j.ledOn ?? j.connected),
+      lastTxHex: typeof j.lastTxHex === "string" ? j.lastTxHex : p.spe.lastTxHex,
+    },
+  }));
+}
+
+export async function speCommand(cmd: string) {
+  const r = await fetch("/api/spe/cmd", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ cmd }),
+  });
+  return (await r.json()) as Record<string, unknown>;
+}
+
 export function SpePage() {
-  const { s, setS, tx } = useConsole();
+  const { s, setS, tx, pushLog } = useConsole();
   const a = s.spe;
   const ip = s2nAside(s.ser2net.bind, s.ser2net.services, "spe") || tx("s2nPick");
-  const cmd = (k: string) => {
-    if (k === "op1") setS((p) => ({ ...p, spe: { ...p.spe, operate: true } }));
-    if (k === "op0") setS((p) => ({ ...p, spe: { ...p.spe, operate: false } }));
-    if (k === "pwr") setS((p) => ({ ...p, spe: { ...p.spe, pwr: p.spe.pwr === "L" ? "M" : p.spe.pwr === "M" ? "H" : "L" } }));
-    if (k === "ant") setS((p) => ({ ...p, spe: { ...p.spe, ant: (p.spe.ant % 4) + 1 } }));
-    if (k === "input") setS((p) => ({ ...p, spe: { ...p.spe, input: p.spe.input === 1 ? 2 : 1 } }));
-    toast.message(`SPE · ${k}`);
+  const link = assignedSvc(s.ser2net.services, "spe");
+  const cmd = async (k: string) => {
+    if (!link) {
+      toast.error(tx("s2nPick"));
+      return;
+    }
+    try {
+      const j = await speCommand(k);
+      applySpe(setS, j);
+      if (j.error === "noport") toast.error(tx("s2nPick"));
+      else if (j.error === "tx" || j.error === "timeout") toast.error(String(j.error));
+      else if (j.error === "cmd") toast.message(`SPE · ${k}`);
+      else {
+        const hex = typeof j.lastTxHex === "string" && j.lastTxHex ? j.lastTxHex : "";
+        pushLog("SPE", hex ? `${k} · TX ${hex}` : k);
+        toast.message(hex ? `SPE · ${k} · ${hex.slice(0, 18)}…` : `SPE · ${k}`);
+      }
+    } catch (err) {
+      toast.error(String(err));
+    }
   };
   return (
     <div>
-      <PageHead kicker={tx("spe")} title="Expert 1.3K-FA" aside={<span className="text-xs text-[#8ea0b3]">{ip}</span>} />
+      <PageHead
+        kicker={tx("spe")}
+        title={`Expert ${a.model || "1.3K"}-FA`}
+        aside={
+          <span className="text-xs text-[#8ea0b3]">
+            {a.connected ? (a.hardware ? ip : `${ip} · …`) : ip}
+            {a.error ? ` · ${a.error}` : ""}
+          </span>
+        }
+      />
       <Ser2netLink acc="spe" />
+      {!a.connected && a.error ? (
+        <p className="mb-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+          SPE: {a.error === "noport" ? tx("s2nPick") : a.error}
+        </p>
+      ) : null}
       <Lcd>
         <div className="mb-3 flex items-center justify-between border-b border-[#0c2236] pb-3">
-          <span className="text-xs font-semibold tracking-[0.2em] text-[#4fc3f7]">13K</span>
+          <span className="text-xs font-semibold tracking-[0.2em] text-[#4fc3f7]">{a.model || "13K"}</span>
           <span className={`rounded px-2 py-0.5 text-[11px] font-bold ${a.operate ? "bg-[#10b981]/20 text-[#34d399]" : "text-[#8ea0b3]"}`}>
             {a.operate ? "OPERATE" : "STBY"}
           </span>
@@ -1065,9 +1136,21 @@ export function SpePage() {
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <Panel>
           <div className="grid grid-cols-3 gap-2">
-            {["Input", "← L", "L →", "Antena", "← C", "C →", "Band−", "Band+", "Tuner"].map((b) => (
-              <Chip key={b} onClick={() => cmd(b.toLowerCase())}>
-                {b}
+            {(
+              [
+                ["Input", "input"],
+                ["← L", "l-"],
+                ["L →", "l+"],
+                ["Antena", "antenna"],
+                ["← C", "c-"],
+                ["C →", "c+"],
+                ["Band−", "band-"],
+                ["Band+", "band+"],
+                ["Tuner", "tune"],
+              ] as const
+            ).map(([label, key]) => (
+              <Chip key={key} onClick={() => void cmd(key)}>
+                {label}
               </Chip>
             ))}
           </div>
@@ -1079,19 +1162,19 @@ export function SpePage() {
         </Panel>
         <Panel>
           <div className="grid grid-cols-3 gap-2">
-            <Chip onClick={() => cmd("nav")}>← ↑</Chip>
-            <Chip onClick={() => cmd("nav")}>↓ →</Chip>
-            <Chip active={a.operate} tone="ok" onClick={() => cmd("op1")}>
+            <Chip onClick={() => void cmd("left")}>← ↑</Chip>
+            <Chip onClick={() => void cmd("right")}>↓ →</Chip>
+            <Chip active={a.operate} tone="ok" onClick={() => void cmd("op1")}>
               On
             </Chip>
-            <Chip onClick={() => cmd("cat")}>Cat</Chip>
-            <Chip onClick={() => cmd("disp")}>Disp</Chip>
-            <Chip active={!a.operate} onClick={() => cmd("op0")}>
+            <Chip onClick={() => void cmd("cat")}>Cat</Chip>
+            <Chip onClick={() => void cmd("disp")}>Disp</Chip>
+            <Chip active={!a.operate} onClick={() => void cmd("op0")}>
               Off
             </Chip>
-            <Chip onClick={() => cmd("set")}>Set</Chip>
-            <Chip onClick={() => cmd("pwr")}>PWR</Chip>
-            <Chip active={a.operate} onClick={() => cmd("op1")}>
+            <Chip onClick={() => void cmd("set")}>Set</Chip>
+            <Chip onClick={() => void cmd("pwr")}>PWR</Chip>
+            <Chip active={a.operate} onClick={() => void cmd("op1")}>
               OP
             </Chip>
           </div>

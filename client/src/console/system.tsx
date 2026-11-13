@@ -16,7 +16,7 @@ import { ActionProgress, Chip, ConsoleInput, Field, GhostBtn, PageHead, Panel, P
 
 type LinuxUser = { name: string; sudo: boolean };
 
-const KINDS: LogKind[] = ["BLE", "CIV", "IC705", "RADIO", "WiFi", "SYS", "WLOG", "S2N", "ACOM", "LEXTEL", "LDG", "LP100A", "MMDVM", "ERRO"];
+const KINDS: LogKind[] = ["BLE", "CIV", "IC705", "RADIO", "WiFi", "SYS", "WLOG", "S2N", "ACOM", "LEXTEL", "LDG", "LP100A", "SPE", "MMDVM", "ERRO"];
 
 export function LogsPage({ embedded = false }: { embedded?: boolean }) {
   const { s, tx } = useConsole();
@@ -33,6 +33,7 @@ export function LogsPage({ embedded = false }: { embedded?: boolean }) {
     LEXTEL: true,
     LDG: true,
     LP100A: true,
+    SPE: true,
     MMDVM: true,
     ERRO: true,
   });
@@ -47,6 +48,7 @@ export function LogsPage({ embedded = false }: { embedded?: boolean }) {
     WLOG: "text-[#fbbf24]",
     S2N: "text-[#38bdf8]",
     ACOM: "text-[#fb7185]",
+    SPE: "text-[#fbbf24]",
     LEXTEL: "text-[#fbbf24]",
     LDG: "text-[#86efac]",
     LP100A: "text-[#fbbf24]",

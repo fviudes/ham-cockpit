@@ -49,8 +49,9 @@ const UNITS: Record<ServiceId, string> = {
   web: "ham-cockpit.service",
 };
 
-/** Serviços com unit/container gerenciado pelo helper station-svc. */
-const HELPER_IDS = new Set<ServiceId>(SERVICE_IDS.filter((id) => UNITS[id]));
+/** Serviços com unit/container gerenciado pelo helper station-svc.
+ *  spe: ampctld fica disponível via station-svc, mas o console usa protocolo nativo. */
+const HELPER_IDS = new Set<ServiceId>(SERVICE_IDS.filter((id) => UNITS[id] && id !== "spe"));
 
 /** Ligar/Desligar manual (além do início automático). */
 const POWER_IDS = new Set<ServiceId>([
@@ -185,6 +186,31 @@ async function probeRunning(id: ServiceId, states: Record<string, string>): Prom
       return false;
     }
   }
+  if (id === "spe") {
+    try {
+      const { speStatus } = await import("./spe");
+      const st = speStatus();
+      if (st.connected || st.phase === "connecting") return true;
+    } catch {
+      /* cai no ampctld */
+    }
+  }
+  if (id === "ldg") {
+    try {
+      const { ldgStatus } = await import("./ldg");
+      return Boolean(ldgStatus().connected);
+    } catch {
+      return false;
+    }
+  }
+  if (id === "lp100a") {
+    try {
+      const { lp100aStatus } = await import("./lp100a");
+      return Boolean(lp100aStatus().connected);
+    } catch {
+      return false;
+    }
+  }
   if (process.platform === "linux" && UNITS[id]) {
     return states[id] === "active";
   }
@@ -220,6 +246,17 @@ export async function servicesSetAutostart(id: string, autostart: boolean): Prom
     if (sid !== "web") {
       await serialize(() => helper(autostart ? "start" : "stop", sid));
     }
+  }
+  if (sid === "spe") {
+    // Desliga ampctld (libera ser2net) e sobe/desce o bridge nativo.
+    if (process.platform === "linux" && existsSync(HELPER)) {
+      await helper("stop", "spe");
+      await helper("disable", "spe");
+    }
+    const m = await import("./spe");
+    await m.speSave({ autoConnect: autostart });
+    if (autostart) await m.speConnect();
+    else await m.speDisconnect();
   }
   if (sid === "radio" && autostart) {
     const { radiosResumeIcomLan } = await import("./radios");
@@ -275,6 +312,12 @@ export async function servicesPower(id: string, on: boolean): Promise<ServicesSn
       const m = await import("./lp100a");
       if (on) await m.lp100aConnect();
       else await m.lp100aDisconnect();
+    } else if (sid === "spe") {
+      // Console usa protocolo nativo SPE; para o ampctld Beta que segura a :4001.
+      const m = await import("./spe");
+      if (on) await m.speConnect();
+      else await m.speDisconnect();
+      return servicesStatus();
     }
   } catch (err) {
     return { ...(await servicesStatus()), ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -283,7 +326,8 @@ export async function servicesPower(id: string, on: boolean): Promise<ServicesSn
   return servicesStatus();
 }
 
-const BOOT_UNIT_IDS: ServiceId[] = ["ser2net", "db", "wavelog", "wlg", "mmdvm", "hamlib", "spe", "bluetooth"];
+// spe: protocolo nativo no Node (reconcileDevices) — não sobe ampctld no boot.
+const BOOT_UNIT_IDS: ServiceId[] = ["ser2net", "db", "wavelog", "wlg", "mmdvm", "hamlib", "bluetooth"];
 
 /**
  * Reconcilia o que o início automático promete com o estado real (rede de segurança do systemd).
@@ -330,6 +374,11 @@ async function reconcileDevices(): Promise<void> {
     const { lp100aConnect, lp100aStatus } = await import("./lp100a");
     const st = lp100aStatus();
     if (st.autoConnect && st.port && !st.connected) void lp100aConnect().catch(() => undefined);
+  }
+  if (boot.spe) {
+    const { speConnect, speStatus } = await import("./spe");
+    const st = speStatus();
+    if (st.autoConnect && !st.connected) void speConnect().catch(() => undefined);
   }
 }
 

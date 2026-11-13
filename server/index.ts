@@ -26,6 +26,7 @@ import { layoutGet, layoutSave } from "./layouts";
 import { isLoopback, vfoDisplayExit } from "./vfo-display";
 import { ldgCmd, ldgConnect, ldgDisconnect, ldgPeek, ldgSave, ldgStatus } from "./ldg";
 import { lp100aCmd, lp100aConnect, lp100aDisconnect, lp100aPeek, lp100aSave, lp100aStatus } from "./lp100a";
+import { speCmd, speConnect, speDisconnect, spePeek, speSave, speStatus } from "./spe";
 import {
   backupCreateStart,
   backupDelete,
@@ -173,6 +174,43 @@ async function startServer() {
   app.post("/api/lp100a/cmd", async (req, res) => {
     try {
       res.json(await lp100aCmd(String(req.body?.cmd || "")));
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+
+  app.get("/api/spe", async (_req, res) => {
+    try {
+      res.json(await spePeek());
+    } catch {
+      res.json(speStatus());
+    }
+  });
+  app.put("/api/spe", async (req, res) => {
+    try {
+      res.json(await speSave(req.body ?? {}));
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/spe/connect", async (_req, res) => {
+    try {
+      const body = await speConnect();
+      res.status(body.ok && body.connected ? 200 : 400).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/spe/disconnect", async (_req, res) => {
+    try {
+      res.json(await speDisconnect());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.post("/api/spe/cmd", async (req, res) => {
+    try {
+      res.json(await speCmd(String(req.body?.cmd || "")));
     } catch (err) {
       res.status(500).json({ ok: false, error: String(err) });
     }
