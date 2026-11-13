@@ -2,7 +2,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 import { resolvePrimaryRoute, sendPrimaryCmd } from "./radio-cmd";
 import { BANDS, formatVfo, MODES, radioCardTitle, sMeterLabel, useConsole } from "./state";
-import { Chip, ConsoleSelect, Lcd } from "./widgets";
+import { Chip, ConsoleSelect, Lcd, PanelTitle } from "./widgets";
 
 const AGC = ["OFF", "FAST", "MID", "SLOW"] as const;
 const PRE = ["OFF", "ON1", "ON2"] as const;
@@ -97,12 +97,23 @@ export function VfoPanel() {
     send({ type: "setAgc", agc: v });
   };
 
+  const applyPower = (on: boolean) => {
+    setS((p) => ({
+      ...p,
+      power: on,
+      // Standby: força RX e zera Po local até o poll voltar.
+      ...(on ? {} : { ptt: false, po: 0 }),
+    }));
+    pushLog("CIV", on ? "POWER ON" : "STANDBY");
+    send({ type: "setPower", on });
+  };
+
   return (
     <div className="relative overflow-hidden">
+      {/* Mesmas classes do título "MMDVM Painel" (PanelTitle). */}
+      <PanelTitle>{radioTitle}</PanelTitle>
       <Lcd className="min-w-0">
-        {/* Mesmo padrão do título "LEXTEL MS-2000" no card Lextel. */}
         <div className="mb-3 flex items-center justify-between border-b border-[#0c2236] pb-3">
-          <span className="text-xs font-semibold tracking-[0.2em] text-[#4fc3f7]">{radioTitle}</span>
           <span
             className={`rounded px-2 py-0.5 text-[11px] font-bold ${
               s.ptt ? "bg-[#ef4444]/20 text-[#f87171]" : "bg-[#10b981]/20 text-[#34d399]"
@@ -215,8 +226,16 @@ export function VfoPanel() {
             </option>
           ))}
         </Drop>
-        <div className="col-span-2 flex items-end">
-          <Chip tone={s.ptt ? "danger" : "ok"} active onClick={() => applyPtt(!s.ptt)}>
+        <div className="col-span-2 flex items-end gap-1.5">
+          <Chip
+            tone={s.power ? "ok" : "amber"}
+            active
+            onClick={() => applyPower(!s.power)}
+            disabled={!panelRadio && !(s.ic705.ble && s.ic705.phase === "ready")}
+          >
+            {s.power ? tx("powerOn") : tx("powerOff")}
+          </Chip>
+          <Chip tone={s.ptt ? "danger" : "ok"} active onClick={() => applyPtt(!s.ptt)} disabled={!s.power}>
             {s.ptt ? tx("pttOn") : tx("pttOff")}
           </Chip>
         </div>

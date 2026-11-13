@@ -54,6 +54,7 @@ function applyCivPatchToStation(prev: Station, patch: CivPatch): Station {
   if (patch.nb != null) next.nb = patch.nb;
   if (patch.split != null) next.split = patch.split;
   if (patch.vfo) next.vfo = patch.vfo;
+  if (patch.power != null) next.power = patch.power;
   return next;
 }
 

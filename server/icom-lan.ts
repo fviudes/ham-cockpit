@@ -520,6 +520,13 @@ export async function icomLanCmd(
         rig.sendCiv(civPayload(0x16, 0x12, byte));
         return { ok: true };
       }
+      case "setPower":
+      case "power": {
+        // CI-V 0x18: 0x01 = power on, 0x00 = standby.
+        const on = Boolean(body.on ?? body.power ?? body.value);
+        rig.sendCiv(civPayload(0x18, on ? 0x01 : 0x00));
+        return { ok: true };
+      }
       case "readFreq": {
         const hz = await rig.readOperatingFrequency();
         return { ok: true, reply: { hz } };
@@ -566,6 +573,7 @@ type LanTelemetry = {
   att?: boolean;
   agc?: "OFF" | "FAST" | "MID" | "SLOW";
   split?: boolean;
+  power?: boolean;
 };
 
 function mapModeReply(mode: {
@@ -742,6 +750,13 @@ async function pollLanTelemetry(tick: number): Promise<LanTelemetry> {
     const agcFrame = await askCivReply((f) => f.length >= 8 && f[4] === 0x16 && f[5] === 0x12, [0x16, 0x12]);
     const agc = agcFrame ? parseAgcFrame(agcFrame) : undefined;
     if (agc) out.agc = agc;
+    // CI-V 0x18 — power on (01) / standby (00).
+    const pwrFrame = await askCivReply(
+      (f) => f.length >= 7 && f[4] === 0x18 && (f[5] === 0x00 || f[5] === 0x01),
+      [0x18],
+      q.timeout,
+    );
+    if (pwrFrame && (pwrFrame[5] === 0x00 || pwrFrame[5] === 0x01)) out.power = pwrFrame[5] === 0x01;
   }
 
   // VFO inativo: lê sem deixar o PTT ativo (troca rápida A↔B).

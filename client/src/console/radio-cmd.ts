@@ -109,6 +109,15 @@ export async function pollPrimaryTelemetry(
         /* */
       }
     }
+    if (tick % 5 === 2) {
+      try {
+        const p = await postHamlibReply("\\get_powerstat", port);
+        if (p === "1" || /on/i.test(p)) patch.power = true;
+        else if (p === "0" || /off|standby/i.test(p)) patch.power = false;
+      } catch {
+        /* */
+      }
+    }
     try {
       const t = await postHamlibReply("t", port);
       if (t === "1" || t === "0") patch.ptt = t === "1";
@@ -162,11 +171,27 @@ export async function sendPrimaryCmd(
     | { type: "setNb"; on: boolean }
     | { type: "setPre"; pre: "OFF" | "ON1" | "ON2" }
     | { type: "setAtt"; on: boolean }
-    | { type: "setAgc"; agc: "OFF" | "FAST" | "MID" | "SLOW" },
+    | { type: "setAgc"; agc: "OFF" | "FAST" | "MID" | "SLOW" }
+    | { type: "setPower"; on: boolean },
   opts?: { bleReady?: boolean; hamlibPort?: number },
 ): Promise<void> {
   const route = resolvePrimaryRoute(items, opts);
-  if (!route.live) return;
+  if (!route.live) {
+    // Standby: CAT some; ainda tenta 0x18 / powerstat pelo transporte conhecido.
+    if (action.type !== "setPower") return;
+    try {
+      if (route.transport === "ble" || ic705Ble.connected) {
+        await ic705Ble.setPower(action.on);
+      } else if (route.transport === "lan" || (route.radio && isIcomLan(route.radio))) {
+        await postCiv("setPower", { on: action.on });
+      } else if (route.transport === "hamlib" || route.radio) {
+        await postHamlib(`\\set_powerstat ${action.on ? 1 : 0}`, opts?.hamlibPort ?? 4532);
+      }
+    } catch {
+      /* */
+    }
+    return;
+  }
 
   try {
     if (route.transport === "ble") {
@@ -197,6 +222,9 @@ export async function sendPrimaryCmd(
           break;
         case "setAgc":
           await ic705Ble.setAgc(action.agc);
+          break;
+        case "setPower":
+          await ic705Ble.setPower(action.on);
           break;
       }
       return;
@@ -231,6 +259,9 @@ export async function sendPrimaryCmd(
         case "setAgc":
           await postCiv("setAgc", { agc: action.agc });
           break;
+        case "setPower":
+          await postCiv("setPower", { on: action.on });
+          break;
       }
       return;
     }
@@ -249,6 +280,9 @@ export async function sendPrimaryCmd(
           break;
         case "setVfo":
           await postHamlib(`V VFO${action.vfo}`, port);
+          break;
+        case "setPower":
+          await postHamlib(`\\set_powerstat ${action.on ? 1 : 0}`, port);
           break;
         default:
           break;

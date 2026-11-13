@@ -1,6 +1,6 @@
 {
-  "version": "0.1.07.12",
+  "version": "0.1.07.13",
   "channel": "main",
-  "file": "ham-cockpit-0.1.07.12.tgz",
-  "notes": "ser2net: opção Só TCP evita editar GPS/linha vazia e roubar device=radio do CI-V (Status Hamlib Desconectado). Lab: SPE no FT232R @9600."
+  "file": "ham-cockpit-0.1.07.13.tgz",
+  "notes": "Ham Cockpit v0.1.07.13 — Power on/off (standby CI-V 0x18) no card do radio; titulo do radio com mesmas classes do MMDVM Painel."
 }
