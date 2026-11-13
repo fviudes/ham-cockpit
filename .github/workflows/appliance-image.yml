@@ -82,12 +82,11 @@ jobs:
           path: |
             image/out/ham-cockpit-*-raspi.img.xz
             image/out/ham-cockpit-*-raspi.img.xz.sha256
-            image/out/mmdvm-arm64.tgz
           if-no-files-found: error
           compression-level: 0
           retention-days: 30
-      # mmdvm-arm64.tgz no artifact/Release = byproduct do bake (ponte OTA).
-      # Os bins já estão em /usr/local/bin dentro do .img.xz (imagem única).
+      # MMDVM entra compilado em /usr/local/bin dentro do .img.xz.
+      # Não publicar mmdvm-arm64.tgz ao lado da imagem.
       - name: Publish GitHub Release
         if: github.repository == 'fviudes/ham-cockpit'
         env:
@@ -98,8 +97,7 @@ jobs:
           TAG="v${VER}"
           IMG="$(ls image/out/ham-cockpit-*-raspi.img.xz | head -n 1)"
           SUM="${IMG}.sha256"
-          MMDVM="image/out/mmdvm-arm64.tgz"
-          NOTES="Imagem Ubuntu Server 24.04 LTS ARM64 (+raspi) com Ham Cockpit ${TAG} para Raspberry Pi 3 / 4 / 5. Stack completo embutido: Docker, ser2net, Hamlib, console, AP Wi-Fi, MMDVM/Nextion em /usr/local/bin, e imagens Docker Wavelog+MariaDB em /opt/wavelog/images (first-boot faz docker load — sem pull obrigatório). Grave no cartão/SSD com o Raspberry Pi Imager (Use custom). Se a Release tiver .part00/.part01, junte antes de gravar (ver .JOIN.txt). O asset mmdvm-arm64.tgz é só ponte OTA para estações antigas."
+          NOTES="Imagem Ubuntu Server 24.04 LTS ARM64 (+raspi) com Ham Cockpit ${TAG} para Raspberry Pi 3 / 4 / 5. Stack completo embutido: Docker, ser2net, Hamlib, console, AP Wi-Fi, MMDVM/Nextion compilados em /usr/local/bin, e imagens Docker Wavelog+MariaDB em /opt/wavelog/images (first-boot faz docker load — sem pull obrigatório). Grave no cartão/SSD com o Raspberry Pi Imager (Use custom). Se a Release tiver .part00/.part01, junte antes de gravar (ver .JOIN.txt)."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" --notes "$NOTES"
           else
@@ -145,15 +143,17 @@ jobs:
             done
             gh release upload "$TAG" "$IMG" "$SUM" --clobber
           fi
-          # O bake (sudo) deixa update/mmdvm-arm64.tgz root:root — não copiar por cima.
-          # Upload do tgz = ponte OTA; a imagem .img.xz já embute os mesmos bins.
-          if [[ -f "$MMDVM" ]]; then
-            gh release upload "$TAG" "$MMDVM" --clobber
-          fi
-          OTA="$(ls update/ham-cockpit-*.tgz 2>/dev/null | head -n 1 || true)"
-          if [[ -n "$OTA" && -f "$OTA" ]]; then
+          # Pacote MMDVM não é asset da Release: os bins estão dentro do .img.
+          gh release delete-asset "$TAG" mmdvm-arm64.tgz --yes 2>/dev/null || true
+          OTA="update/ham-cockpit-${VER_FULL}.tgz"
+          if [[ -f "$OTA" ]]; then
             gh release upload "$TAG" "$OTA" --clobber
           fi
+          for old in $(gh release view "$TAG" --json assets --jq '.assets[].name' 2>/dev/null || true); do
+            if [[ "$old" == ham-cockpit-*.tgz && "$old" != "ham-cockpit-${VER_FULL}.tgz" ]]; then
+              gh release delete-asset "$TAG" "$old" --yes 2>/dev/null || true
+            fi
+          done
       - name: Atualizar o portal (Cloudflare Pages)
         if: github.repository == 'fviudes/ham-cockpit'
         continue-on-error: true

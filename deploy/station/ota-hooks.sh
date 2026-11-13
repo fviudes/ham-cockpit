@@ -172,6 +172,12 @@ enable_mmdvm_units() {
 
 ensure_mmdvm_bins() {
   local tgz="" from_pkg=0
+  # Imagem: os bins são compilados no chroot. Baixar o tarball aqui faz o
+  # build-binaries achar o binário e pular a compilação.
+  if [[ "${HAMCOCKPIT_CHROOT:-0}" == "1" ]]; then
+    echo "ota-hooks: chroot de bake — MMDVM será compilado na imagem, sem baixar tarball" >&2
+    return 0
+  fi
   # Pacote OTA embutiu o tarball — só reinstala se faltar bin ou Nextion sem HC_FD2_GUARD.
   # Extrair/instalar o tgz a cada OTA (antes: always) saturava o Pi e a UI em ~93%.
   if [[ -f "$ROOT/mmdvm-arm64.tgz" ]]; then

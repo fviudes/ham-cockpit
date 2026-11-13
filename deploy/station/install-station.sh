@@ -100,7 +100,13 @@ fi
 if [[ -f "$ROOT/VERSION" ]]; then
   install -m 0644 "$ROOT/VERSION" /opt/ham-cockpit/VERSION
 fi
-(cd /opt/ham-cockpit && npm install --omit=dev)
+# No bake, o postinstall do runtime dispara ota-hooks e baixaria mmdvm-arm64.tgz
+# antes da compilação — o build então pula e o pacote sai “de fora” da imagem.
+if [[ "$CHROOT" == "1" ]]; then
+  (cd /opt/ham-cockpit && HC_OTA_APPLY=1 npm install --omit=dev)
+else
+  (cd /opt/ham-cockpit && npm install --omit=dev)
+fi
 chown -R hamcockpit:hamcockpit /opt/ham-cockpit
 chown root:root /opt/ham-cockpit/bin/root-login /opt/ham-cockpit/bin/station-user /opt/ham-cockpit/bin/ser2net-ctl /opt/ham-cockpit/bin/station-net /opt/ham-cockpit/bin/station-svc /opt/ham-cockpit/bin/station-upd /opt/ham-cockpit/bin/station-backup /opt/ham-cockpit/bin/lextel-bt /opt/ham-cockpit/bin/vfo-display-ctl /opt/ham-cockpit/bin/vfo-display-kiosk /opt/ham-cockpit/bin/vfo-display-idle /opt/ham-cockpit/bin/ldg-serial /opt/ham-cockpit/bin/mmdvm-ctl /opt/ham-cockpit/bin/ampctld-spe /opt/ham-cockpit/bin/rigctld-ic705
 chmod 0755 /opt/ham-cockpit/bin/root-login /opt/ham-cockpit/bin/station-user /opt/ham-cockpit/bin/ser2net-ctl /opt/ham-cockpit/bin/station-net /opt/ham-cockpit/bin/station-svc /opt/ham-cockpit/bin/station-upd /opt/ham-cockpit/bin/station-backup /opt/ham-cockpit/bin/lextel-bt /opt/ham-cockpit/bin/vfo-display-ctl /opt/ham-cockpit/bin/vfo-display-kiosk /opt/ham-cockpit/bin/vfo-display-idle /opt/ham-cockpit/bin/ldg-serial /opt/ham-cockpit/bin/mmdvm-ctl /opt/ham-cockpit/bin/ampctld-spe /opt/ham-cockpit/bin/rigctld-ic705

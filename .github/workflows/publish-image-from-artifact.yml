@@ -54,12 +54,11 @@ jobs:
           fi
           IMG="$(ls image/out/ham-cockpit-*-raspi.img.xz | head -n 1)"
           SUM="${IMG}.sha256"
-          MMDVM="image/out/mmdvm-arm64.tgz"
           test -f "$IMG"
           if [[ ! -f "$SUM" ]]; then
             sha256sum "$IMG" | tee "$SUM"
           fi
-          NOTES="Imagem Ubuntu Server 24.04 LTS ARM64 (+raspi) com Ham Cockpit ${TAG} para Raspberry Pi 3 / 4 / 5. Stack completo embutido: Docker, ser2net, Hamlib, console, AP Wi-Fi, MMDVM/Nextion em /usr/local/bin, e imagens Docker Wavelog+MariaDB em /opt/wavelog/images (first-boot faz docker load — sem pull obrigatório). Grave no cartão/SSD com o Raspberry Pi Imager (Use custom). Se a Release tiver .part00/.part01, junte antes de gravar (ver .JOIN.txt). O asset mmdvm-arm64.tgz é só ponte OTA para estações antigas."
+          NOTES="Imagem Ubuntu Server 24.04 LTS ARM64 (+raspi) com Ham Cockpit ${TAG} para Raspberry Pi 3 / 4 / 5. Stack completo embutido: Docker, ser2net, Hamlib, console, AP Wi-Fi, MMDVM/Nextion compilados em /usr/local/bin, e imagens Docker Wavelog+MariaDB em /opt/wavelog/images (first-boot faz docker load — sem pull obrigatório). Grave no cartão/SSD com o Raspberry Pi Imager (Use custom). Se a Release tiver .part00/.part01, junte antes de gravar (ver .JOIN.txt)."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" --notes "$NOTES"
           else
@@ -100,9 +99,7 @@ jobs:
             done
             gh release upload "$TAG" "$IMG" "$SUM" --clobber
           fi
-          if [[ -f "$MMDVM" ]]; then
-            gh release upload "$TAG" "$MMDVM" --clobber
-          fi
+          gh release delete-asset "$TAG" mmdvm-arm64.tgz --yes 2>/dev/null || true
       - name: Atualizar o portal (Cloudflare Pages)
         continue-on-error: true
         env:

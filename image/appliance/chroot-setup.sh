@@ -110,8 +110,10 @@ fi
 
 chmod +x "$SEED/deploy/station/install-station.sh"
 # Compila g4klx (Host/DMR/YSF/ircDDB) + NextionDriver no bake ARM64 nativo.
+# MMDVM_FORCE: o postinstall não pode deixar um tarball baixado no lugar da compilação.
 # MMDVM_BUILD_BINARIES=0 para pular (só em debug — a imagem de release exige os binários).
 export MMDVM_BUILD_BINARIES="${MMDVM_BUILD_BINARIES:-1}"
+export MMDVM_FORCE="${MMDVM_FORCE:-1}"
 export MMDVM_PURGE_BUILD="${MMDVM_PURGE_BUILD:-1}"
 bash "$SEED/deploy/station/install-station.sh"
 
