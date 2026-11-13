@@ -14,6 +14,7 @@
  * Gera update/ham-cockpit-<versão>.tgz e atualiza update/version.json.
  * Não inclui configs da estação (rádios, Wi‑Fi, bindings, layouts…).
  */
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import {
   cpSync,
@@ -216,27 +217,38 @@ function main() {
   cpSync(wlgMjs, join(stage, "wavelog-gate", "wavelog-gate.mjs"));
   cpSync(wlgVer, join(stage, "wavelog-gate", "VERSION"));
 
-  // Ponte OTA (estações antigas / reparo Nextion). Imagem bake já tem os bins
-  // em /usr/local/bin — este tgz não é requisito de install limpo.
+  // Bridges (~21 MiB) ficam em update/*.tgz no canal — NÃO embutir no pacote a cada OTA.
+  // Hooks baixam só se binários faltarem. Use --with-bridges para pacote de reparo.
+  const withBridges = process.argv.includes("--with-bridges");
   const mmdvmTgz = join(UPDATE_DIR, "mmdvm-arm64.tgz");
-  if (existsSync(mmdvmTgz)) {
-    cpSync(mmdvmTgz, join(stage, "mmdvm-arm64.tgz"));
-    console.log("incluindo mmdvm-arm64.tgz no pacote OTA (ponte; bake já embute os bins)");
-  } else {
-    console.warn(
-      "AVISO: update/mmdvm-arm64.tgz ausente — OTA só reparará MMDVM em estações sem bins (download/build); imagem limpa não depende deste arquivo",
-    );
-  }
-
-  // Hamlib ≥4.6 (SPE Expert 401). Ubuntu 24.04 apt fica em 4.5.5 sem modelo SPE.
   const hamlibTgz = join(UPDATE_DIR, "hamlib-arm64.tgz");
-  if (existsSync(hamlibTgz)) {
-    cpSync(hamlibTgz, join(stage, "hamlib-arm64.tgz"));
-    console.log("incluindo hamlib-arm64.tgz no pacote OTA (ampctld SPE 401)");
+  if (withBridges) {
+    if (existsSync(mmdvmTgz)) {
+      cpSync(mmdvmTgz, join(stage, "mmdvm-arm64.tgz"));
+      console.log("incluindo mmdvm-arm64.tgz (--with-bridges)");
+    } else {
+      console.warn("AVISO: --with-bridges mas update/mmdvm-arm64.tgz ausente");
+    }
+    if (existsSync(hamlibTgz)) {
+      cpSync(hamlibTgz, join(stage, "hamlib-arm64.tgz"));
+      console.log("incluindo hamlib-arm64.tgz (--with-bridges)");
+    } else {
+      console.warn("AVISO: --with-bridges mas update/hamlib-arm64.tgz ausente");
+    }
   } else {
-    console.warn(
-      "AVISO: update/hamlib-arm64.tgz ausente — ampctld@spe falha em estações só com apt 4.5.5; rode deploy/hamlib/build-hamlib.sh no Pi",
+    console.log(
+      "bridges fora do pacote OTA (mmdvm/hamlib ficam em update/ no GitHub; hooks baixam sob demanda)",
     );
+    if (!existsSync(mmdvmTgz)) {
+      console.warn(
+        "AVISO: update/mmdvm-arm64.tgz ausente no canal — estações sem bins não terão fallback OTA",
+      );
+    }
+    if (!existsSync(hamlibTgz)) {
+      console.warn(
+        "AVISO: update/hamlib-arm64.tgz ausente no canal — ampctld@spe em estações só apt 4.5.5 sem fallback",
+      );
+    }
   }
 
   // No Windows o working tree pode ter CRLF; no Pi isso quebra shebang/units (`$'\r': command not found`).
@@ -269,10 +281,15 @@ function main() {
     prevNotes ||
     `Ham Cockpit v${version}`;
 
+  const size = readFileSync(tgzPath).byteLength;
+  const sha256 = createHash("sha256").update(readFileSync(tgzPath)).digest("hex");
+
   const meta = {
     version,
     channel: "main",
     file: tgzName,
+    sha256,
+    bytes: size,
     notes,
   };
   writeFileSync(join(UPDATE_DIR, "version.json"), `${JSON.stringify(meta, null, 2)}\n`, "utf8");
@@ -313,8 +330,7 @@ Instalação e operação: [README na raiz](../README.md). Imagem do cartão: [\
 
   rmSync(stageRoot, { recursive: true, force: true });
 
-  const size = readFileSync(tgzPath).byteLength;
-  console.log(`OK ${tgzName} (${(size / 1024).toFixed(1)} KiB)`);
+  console.log(`OK ${tgzName} (${(size / 1024 / 1024).toFixed(2)} MiB, sha256=${sha256.slice(0, 12)}…)`);
   console.log(`version.json → ${version} / file=${tgzName}`);
 }
 

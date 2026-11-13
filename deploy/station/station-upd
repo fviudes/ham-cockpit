@@ -316,14 +316,14 @@ PY
 
 schedule_console_restart() {
   # Fora do cgroup do console — senão o apply morre com código nulo.
-  # sleep 8: Node devolve 100% + POST/poll do cliente antes do restart cortar o HTTP.
+  # sleep 4: Node devolve 100% + 1–2 polls (500 ms) antes do restart cortar o HTTP.
   if command -v systemd-run >/dev/null 2>&1; then
     systemd-run --quiet --collect --no-block \
-      /bin/bash -c 'sleep 8; systemctl try-restart ham-cockpit.service >/dev/null 2>&1 || true' \
+      /bin/bash -c 'sleep 4; systemctl try-restart ham-cockpit.service >/dev/null 2>&1 || true' \
       >/dev/null 2>&1 || true
     return 0
   fi
-  nohup bash -c 'sleep 8; systemctl try-restart ham-cockpit.service >/dev/null 2>&1 || true' >/dev/null 2>&1 &
+  nohup bash -c 'sleep 4; systemctl try-restart ham-cockpit.service >/dev/null 2>&1 || true' >/dev/null 2>&1 &
 }
 
 github_wavelog_tag() {
@@ -358,7 +358,7 @@ set_env_kv() {
 # Copia o console (dist) + bin/ sem apagar configs da estação
 # (layouts, net, services, equipment, radios, ldg, lp100a, mmdvm…).
 apply_app() {
-  local meta ver file tmp src unit
+  local meta ver file sha tmp src unit cache_dir cached need_dl=1 need_npm=1
   emit_progress app 3 prepare 1
   meta="$(github_app_meta)"
   if [[ -z "${meta:-}" ]]; then
@@ -367,18 +367,38 @@ apply_app() {
   fi
   ver="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("version",""))' <<<"$meta")"
   file="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("file") or "")' <<<"$meta")"
+  sha="$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("sha256") or "")' <<<"$meta")"
   tmp="$(mktemp -d)"
   # shellcheck disable=SC2064
   trap "rm -rf '$tmp'" RETURN
-  if [[ -n "$file" ]]; then
-    emit_progress app 8 download 1
-    download_with_progress app "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/${file}" "$tmp/pkg.tgz" 8 56
-    emit_progress app 58 install 1
-    run_with_heartbeat app install 58 68 12 tar -xzf "$tmp/pkg.tgz" -C "$tmp"
-  else
+  if [[ -z "$file" ]]; then
     echo "canal de update sem arquivo .tgz (version.json.file vazio)" >&2
     return 1
   fi
+  cache_dir=/var/cache/ham-cockpit/ota
+  mkdir -p "$cache_dir"
+  cached="$cache_dir/$file"
+  if [[ -n "$sha" && -f "$cached" ]]; then
+    if echo "$sha  $cached" | sha256sum -c --status 2>/dev/null; then
+      need_dl=0
+      echo "OTA: cache local OK ($file) — pulando download" >&2
+      emit_progress app 56 download 1
+      cp -a "$cached" "$tmp/pkg.tgz"
+    fi
+  fi
+  if [[ "$need_dl" -eq 1 ]]; then
+    emit_progress app 8 download 1
+    download_with_progress app "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/${file}" "$tmp/pkg.tgz" 8 56
+    if [[ -n "$sha" ]]; then
+      if ! echo "$sha  $tmp/pkg.tgz" | sha256sum -c --status 2>/dev/null; then
+        echo "sha256 do pacote OTA não confere — abortando" >&2
+        return 1
+      fi
+    fi
+    cp -a "$tmp/pkg.tgz" "$cached"
+  fi
+  emit_progress app 58 install 1
+  run_with_heartbeat app install 58 68 12 tar -xzf "$tmp/pkg.tgz" -C "$tmp"
   src="$(find "$tmp" -maxdepth 4 -type d -name public -printf '%h\n' 2>/dev/null | head -n 1 || true)"
   if [[ -z "${src:-}" ]]; then
     src="$(find "$tmp" -maxdepth 4 -name index.js | head -n 1 || true)"
@@ -391,6 +411,12 @@ apply_app() {
   emit_progress app 70 install 1
   mkdir -p "$APP_HOME" "$APP_HOME/bin"
   # Só sobrescreve artefatos do pacote; pastas de config existentes permanecem.
+  # npm: compara package.json ANTES de sobrescrever (evita resolve no registry a cada OTA).
+  if [[ -f "$src/package.json" && -f "$APP_HOME/package.json" ]] \
+    && cmp -s "$src/package.json" "$APP_HOME/package.json" \
+    && [[ -d "$APP_HOME/node_modules/express" ]]; then
+    need_npm=0
+  fi
   cp -a "$src/index.js" "$APP_HOME/index.js"
   rm -rf "$APP_HOME/public"
   cp -a "$src/public" "$APP_HOME/public"
@@ -404,12 +430,16 @@ apply_app() {
   if [[ -f "$src/sudoers-hamcockpit" ]]; then
     cp -a "$src/sudoers-hamcockpit" "$APP_HOME/sudoers-hamcockpit"
   fi
-  # versions.json / VERSION só após hooks OK — senão o canal marca sucesso cedo.
+  # Bridges opcionais (pacotes antigos / --with-bridges). Só copia se mudou.
   if [[ -f "$src/mmdvm-arm64.tgz" ]]; then
-    cp -a "$src/mmdvm-arm64.tgz" "$APP_HOME/mmdvm-arm64.tgz"
+    if [[ ! -f "$APP_HOME/mmdvm-arm64.tgz" ]] || ! cmp -s "$src/mmdvm-arm64.tgz" "$APP_HOME/mmdvm-arm64.tgz"; then
+      cp -a "$src/mmdvm-arm64.tgz" "$APP_HOME/mmdvm-arm64.tgz"
+    fi
   fi
   if [[ -f "$src/hamlib-arm64.tgz" ]]; then
-    cp -a "$src/hamlib-arm64.tgz" "$APP_HOME/hamlib-arm64.tgz"
+    if [[ ! -f "$APP_HOME/hamlib-arm64.tgz" ]] || ! cmp -s "$src/hamlib-arm64.tgz" "$APP_HOME/hamlib-arm64.tgz"; then
+      cp -a "$src/hamlib-arm64.tgz" "$APP_HOME/hamlib-arm64.tgz"
+    fi
   fi
   if [[ -d "$src/bin" ]]; then
     # Não sobrescreve o station-upd em execução: bash relê o arquivo e pode
@@ -456,7 +486,10 @@ apply_app() {
     systemctl daemon-reload 2>/dev/null || true
   fi
   emit_progress app 70 install 1
-  if [[ -f "$APP_HOME/package.json" ]]; then
+  if [[ "$need_npm" -eq 0 ]]; then
+    echo "OTA: package.json inalterado + node_modules OK — pulando npm install" >&2
+    emit_progress app 78 install 1
+  elif [[ -f "$APP_HOME/package.json" ]]; then
     # HC_OTA_APPLY=1 → postinstall NÃO roda ota-hooks (evita double work + teto ~85%).
     run_with_heartbeat app install 70 78 15 \
       bash -c "cd \"$APP_HOME\" && HC_OTA_APPLY=1 npm install --omit=dev" || true

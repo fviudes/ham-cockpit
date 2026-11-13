@@ -424,7 +424,7 @@ install_hamlib_tgz() {
 }
 
 ensure_hamlib_spe() {
-  local tgz="" need=0
+  local tgz="" need=0 dl=""
   # Só reinstala o tarball se faltar ampctl/401. Nunca rebuilda Hamlib no OTA.
   if [[ ! -x "$HC_HAMLIB/bin/ampctld" ]] \
     || ! LD_LIBRARY_PATH="$HC_HAMLIB/lib" "$HC_HAMLIB/bin/ampctl" -l 2>/dev/null \
@@ -433,11 +433,25 @@ ensure_hamlib_spe() {
   fi
   if [[ -f "$ROOT/hamlib-arm64.tgz" ]]; then
     tgz="$ROOT/hamlib-arm64.tgz"
-    cp -a "$tgz" /opt/ham-cockpit/hamlib-arm64.tgz 2>/dev/null || true
+    if [[ ! -f /opt/ham-cockpit/hamlib-arm64.tgz ]] || ! cmp -s "$tgz" /opt/ham-cockpit/hamlib-arm64.tgz; then
+      cp -a "$tgz" /opt/ham-cockpit/hamlib-arm64.tgz 2>/dev/null || true
+    fi
   elif [[ -f /opt/ham-cockpit/hamlib-arm64.tgz ]]; then
     tgz=/opt/ham-cockpit/hamlib-arm64.tgz
   fi
   if [[ "$need" -eq 1 ]]; then
+    if [[ -z "$tgz" ]]; then
+      dl="$(mktemp)"
+      echo "ota-hooks: baixando hamlib-arm64.tgz do canal update/…" >&2
+      if curl -fsSL -A "Ham-Cockpit/ota" \
+        "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/hamlib-arm64.tgz" \
+        -o "$dl" \
+        && [[ -s "$dl" ]]; then
+        cp -a "$dl" /opt/ham-cockpit/hamlib-arm64.tgz 2>/dev/null || true
+        tgz=/opt/ham-cockpit/hamlib-arm64.tgz
+      fi
+      rm -f "$dl"
+    fi
     if [[ -n "$tgz" ]]; then
       echo "ota-hooks: instalando Hamlib SPE em $HC_HAMLIB ($tgz)…" >&2
       install_hamlib_tgz "$tgz" || true

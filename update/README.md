@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.07.17** (`version.json`).
+Versão atual neste canal: **0.1.07.18** (`version.json`).
 
 ## Versionamento
 
@@ -20,10 +20,12 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.07.17",
+  "version": "0.1.07.18",
   "channel": "main",
-  "file": "ham-cockpit-0.1.07.17.tgz",
-  "notes": "Lextel: corrige path /DEV/RFCOMM0 (case), captura/aprender com dump e reconnect pelo MAC Classic."
+  "file": "ham-cockpit-0.1.07.18.tgz",
+  "sha256": "a92c750c0c612281224cceabd30c08b9745243c4f71a22af7e9f1955c07b4de4",
+  "bytes": 4990696,
+  "notes": "OTA mais rápido: pacote sem bridges (~5 MiB), cache sha256, skip npm se package.json igual, check sem bloquear UI."
 }
 ```
 

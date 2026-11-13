@@ -366,13 +366,21 @@ function looksVersion(v: string): boolean {
 
 type Remotes = { app: string; wavelog: string; wlg: string };
 
-async function fetchRemotes(): Promise<Remotes> {
+let remotesCache: { at: number; rem: Remotes } | null = null;
+
+async function fetchRemotes(force = false): Promise<Remotes> {
+  // Cache 5 min: evita 3× curl GitHub a cada poll do card (Pi 3 saturava com check paralelo).
+  if (!force && remotesCache && Date.now() - remotesCache.at < 300_000) {
+    return remotesCache.rem;
+  }
   const [app, wavelog, wlg] = await Promise.all([
     githubAppVersion(),
     githubTag("wavelog/wavelog"),
     githubRawVersion(`https://raw.githubusercontent.com/${UPDATE_REPO}/main/deploy/wavelog-gate/VERSION`),
   ]);
-  return { app, wavelog, wlg };
+  const rem = { app, wavelog, wlg };
+  remotesCache = { at: Date.now(), rem };
+  return rem;
 }
 
 function applyRemotes(base: UpdatesSnapshot, rem: Remotes): UpdatesSnapshot {
@@ -438,7 +446,7 @@ function runCheck(kind: "check" | "refresh"): Promise<UpdatesSnapshot> {
   inflightKind = kind;
   inflight = (async () => {
     try {
-      const [live, rem] = await Promise.all([helper(kind), fetchRemotes()]);
+      const [live, rem] = await Promise.all([helper(kind), fetchRemotes(kind === "refresh")]);
       const snap = applyRemotes(live ?? baseline(), rem);
       cache = { at: Date.now(), snap };
       return snap;
@@ -456,12 +464,18 @@ export async function updatesStatus(force = false): Promise<UpdatesSnapshot> {
     const base = cache?.snap ?? baseline();
     return snapshot(base.items, base.os, true, "");
   }
-  if (!force && cache && Date.now() - cache.at < 60_000) {
+  // 2 min: station-upd check no Pi 3 leva 6–9 s; polling não deve rearmar a cada 60 s.
+  if (!force && cache && Date.now() - cache.at < 120_000) {
     return snapshot(cache.snap.items, cache.snap.os, cache.snap.ok, cache.snap.error);
   }
-  // Já existe verificação em andamento: reaproveita (ou devolve o cache velho sem esperar).
+  // Já existe verificação em andamento: devolve cache velho sem bloquear a UI.
   if (inflight) {
-    if (cache && !force) return snapshot(cache.snap.items, cache.snap.os, cache.snap.ok, cache.snap.error);
+    if (cache) return snapshot(cache.snap.items, cache.snap.os, cache.snap.ok, cache.snap.error);
+    // Sem cache ainda: não trava HTTP — baseline até o primeiro check terminar.
+    if (!force) {
+      void inflight;
+      return baseline();
+    }
     return inflight;
   }
   return runCheck("check");
@@ -473,6 +487,7 @@ export async function updatesRefresh(): Promise<UpdatesSnapshot> {
     await inflight.catch(() => undefined);
   }
   cache = null;
+  remotesCache = null;
   return runCheck("refresh");
 }
 
