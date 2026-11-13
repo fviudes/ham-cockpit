@@ -1,6 +1,6 @@
 {
-  "version": "0.1.07.11",
+  "version": "0.1.07.12",
   "channel": "main",
-  "file": "ham-cockpit-0.1.07.11.tgz",
-  "notes": "Hamlib na lista Admin/Serviços: Ligar/Desligar e autostart controlam rigctld@ic705 (rádio principal NET :4532). SPE Expert continua separado (ampctld@spe)."
+  "file": "ham-cockpit-0.1.07.12.tgz",
+  "notes": "ser2net: opção Só TCP evita editar GPS/linha vazia e roubar device=radio do CI-V (Status Hamlib Desconectado). Lab: SPE no FT232R @9600."
 }

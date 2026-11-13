@@ -1,5 +1,5 @@
 {
-  "app": "0.1.07.09",
+  "app": "0.1.07.12",
   "os": "Ubuntu Server 24.04.1 LTS",
   "osAvailable": "Ubuntu Server 24.04.3 LTS",
   "ser2net": "4.3.13",
@@ -7,3 +7,4 @@
   "wavelog": "1.9.4",
   "wlg": "1.0.1"
 }
+

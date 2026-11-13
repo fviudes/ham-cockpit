@@ -94,7 +94,8 @@ export function Ser2netPage() {
     setTcpPort(row.tcpPort);
     setSerial(row.serial);
     setBaud(row.baud);
-    setDevice(row.device || SER2NET_RADIO_ID);
+    // Não forçar "radio" em linha sem vínculo (ex.: GPS) — senão o save rouba device=radio do CI-V.
+    setDevice(row.device || "");
   };
 
   const others = n.services.filter((x) => x.id !== editingId);
@@ -192,6 +193,7 @@ export function Ser2netPage() {
                 }
               }}
             >
+              <option value="">{tx("s2nForNone")}</option>
               <option value={SER2NET_RADIO_ID}>{tx("s2nForRadio")}</option>
               {SER2NET_ACC_IDS.map((id) => (
                 <option key={id} value={id}>

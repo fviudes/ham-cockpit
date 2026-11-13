@@ -27,8 +27,9 @@ export function radioSer2netSvcs(services: Ser2netSvc[]): Ser2netSvc[] {
   return services.filter((x) => !x.device || x.device === SER2NET_RADIO_ID);
 }
 
-export function s2nDeviceLabelKey(device: Ser2netDevice): "s2nForRadio" | Ser2netAccId {
-  if (!device || device === SER2NET_RADIO_ID) return "s2nForRadio";
+export function s2nDeviceLabelKey(device: Ser2netDevice): "s2nForNone" | "s2nForRadio" | Ser2netAccId {
+  if (!device) return "s2nForNone";
+  if (device === SER2NET_RADIO_ID) return "s2nForRadio";
   return device;
 }
 
