@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "postinstall": "bash ./ota-hooks.sh || true"
+    "postinstall": "if [ \"${HC_OTA_APPLY:-}\" = 1 ]; then exit 0; fi; bash ./ota-hooks.sh || true"
   },
   "dependencies": {
     "express": "^4.21.2",

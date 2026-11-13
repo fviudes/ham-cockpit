@@ -92,10 +92,24 @@ install_mmdvm_tgz() {
 
 # Runtime wx/MQTT para ircddbgatewayd em estações antigas (OTA sem bake novo).
 # Sem apt (imagem read-only improvável) só registra aviso.
+# Rápido: se wx + mosquitto já estão instalados, NÃO faz apt-get update (travava OTA em ~93%).
 ensure_mmdvm_runtime_pkgs() {
   command -v apt-get >/dev/null 2>&1 || return 0
   export DEBIAN_FRONTEND=noninteractive
   local pkgs=(libmosquitto1 mosquitto libdlt2)
+  local has_wx=0 has_mqtt=0
+  if dpkg-query -W -f='${Status}' libwxbase3.2-1t64 2>/dev/null | grep -q "install ok installed" \
+    || dpkg-query -W -f='${Status}' libwxbase3.2-1 2>/dev/null | grep -q "install ok installed"; then
+    has_wx=1
+  fi
+  if dpkg-query -W -f='${Status}' mosquitto 2>/dev/null | grep -q "install ok installed" \
+    || command -v mosquitto >/dev/null 2>&1; then
+    has_mqtt=1
+  fi
+  if [[ "$has_wx" -eq 1 && "$has_mqtt" -eq 1 ]]; then
+    echo "ota-hooks: runtime wx/mosquitto já presente — pulando apt" >&2
+    return 0
+  fi
   local p cand ok=()
   for p in libwxbase3.2-1t64 libwxgtk3.2-1t64 libwxbase3.2-1 libwxgtk3.2-1 "${pkgs[@]}"; do
     cand="$(apt-cache policy "$p" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
@@ -158,13 +172,22 @@ enable_mmdvm_units() {
 
 ensure_mmdvm_bins() {
   local tgz="" from_pkg=0
-  # Pacote OTA embutiu o tarball → sempre instalar/atualizar bins (não toca INI do operador).
+  # Pacote OTA embutiu o tarball — só reinstala se faltar bin ou Nextion sem HC_FD2_GUARD.
+  # Extrair/instalar o tgz a cada OTA (antes: always) saturava o Pi e a UI em ~93%.
   if [[ -f "$ROOT/mmdvm-arm64.tgz" ]]; then
     tgz="$ROOT/mmdvm-arm64.tgz"
     from_pkg=1
   else
     tgz="$(pick_mmdvm_tgz || true)"
   fi
+
+  if ! mmdvm_missing && ! nextion_needs_patch; then
+    # Não extrai o tgz só para hosts — isso sozinho mantinha a UI em ~93% no Pi.
+    echo "ota-hooks: binários MMDVM OK — pulando tarball/apt hosts" >&2
+    enable_mmdvm_units
+    return 0
+  fi
+
   if [[ -n "$tgz" ]]; then
     refresh_mmdvm_data_from_tgz "$tgz" || true
   fi
@@ -402,6 +425,7 @@ install_hamlib_tgz() {
 
 ensure_hamlib_spe() {
   local tgz="" need=0
+  # Só reinstala o tarball se faltar ampctl/401. Nunca rebuilda Hamlib no OTA.
   if [[ ! -x "$HC_HAMLIB/bin/ampctld" ]] \
     || ! LD_LIBRARY_PATH="$HC_HAMLIB/lib" "$HC_HAMLIB/bin/ampctl" -l 2>/dev/null \
       | awk '$1+0==401 {found=1} END{exit !found}'; then
@@ -413,13 +437,15 @@ ensure_hamlib_spe() {
   elif [[ -f /opt/ham-cockpit/hamlib-arm64.tgz ]]; then
     tgz=/opt/ham-cockpit/hamlib-arm64.tgz
   fi
-  if [[ "$need" -eq 1 || -f "$ROOT/hamlib-arm64.tgz" ]]; then
+  if [[ "$need" -eq 1 ]]; then
     if [[ -n "$tgz" ]]; then
       echo "ota-hooks: instalando Hamlib SPE em $HC_HAMLIB ($tgz)…" >&2
       install_hamlib_tgz "$tgz" || true
-    elif [[ "$need" -eq 1 ]]; then
+    else
       echo "ota-hooks: AVISO — sem hamlib-arm64.tgz; ampctld@spe precisa Hamlib ≥4.6" >&2
     fi
+  else
+    echo "ota-hooks: Hamlib SPE (401) já OK — pulando tarball" >&2
   fi
   if [[ -f "$ROOT/bin/ampctld-spe" ]]; then
     safe_install -m 0755 "$ROOT/bin/ampctld-spe" /opt/ham-cockpit/bin/ampctld-spe
@@ -430,13 +456,18 @@ ensure_hamlib_spe() {
     sed -i 's/\r$//' /opt/ham-cockpit/bin/rigctld-ic705 2>/dev/null || true
   fi
   systemctl daemon-reload 2>/dev/null || true
+  # Não restart a cada OTA se already active (evita churn sob carga).
   for u in ampctld@spe.service 'rigctld@ic705.service'; do
     [[ -f "/etc/systemd/system/$u" ]] || continue
     systemctl enable "$u" 2>/dev/null || true
-    systemctl reset-failed "$u" 2>/dev/null || true
-    systemctl restart "$u" 2>/dev/null \
-      || systemctl start --job-mode=ignore-dependencies "$u" 2>/dev/null \
-      || true
+    if [[ "$need" -eq 1 ]]; then
+      systemctl reset-failed "$u" 2>/dev/null || true
+      systemctl restart "$u" 2>/dev/null \
+        || systemctl start --job-mode=ignore-dependencies "$u" 2>/dev/null \
+        || true
+    elif ! systemctl is-active --quiet "$u"; then
+      systemctl start --job-mode=ignore-dependencies "$u" 2>/dev/null || true
+    fi
   done
 }
 ensure_hamlib_spe || true

@@ -529,10 +529,33 @@ function spawnApply(sid: UpdateId): Promise<UpdatesSnapshot> {
         job.pct = 100;
         job.determinate = true;
         job.stage = "done";
+        job.error = "";
         const over = applyRemotes(parsed, await fetchRemotes());
-        cache = { at: Date.now(), snap: over };
-        jobs.delete(sid);
-        resolve(over);
+        // Mantém 100% no poll por alguns segundos (restart do console apaga a memória).
+        cache = {
+          at: Date.now(),
+          snap: snapshot(
+            over.items.map((row) =>
+              row.id === sid
+                ? {
+                    ...row,
+                    applying: false,
+                    progress: 100,
+                    stage: "done",
+                    determinate: true,
+                    updatable: false,
+                  }
+                : row,
+            ),
+            over.os,
+            true,
+            "",
+          ),
+        };
+        setTimeout(() => {
+          if (jobs.get(sid)?.status === "ok") jobs.delete(sid);
+        }, 20_000);
+        resolve(cache.snap);
         return;
       }
       job.status = "error";

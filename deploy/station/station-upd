@@ -159,6 +159,7 @@ check_app() {
 }
 
 # Heartbeat enquanto um comando longo roda (prepare/install/restart sem byte count).
+# Ao terminar com sucesso emite `hi` (antes parava em ~97% da faixa → UI em 85/93%).
 run_with_heartbeat() {
   local id="$1" stage="$2" lo="$3" hi="$4" eta="$5"
   shift 5
@@ -168,6 +169,7 @@ uid, stage, lo, hi, eta = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.ar
 cmd = sys.argv[6:]
 stop = False
 t0 = time.time()
+rc = 1
 
 def emit(pct):
     elapsed = time.time() - t0
@@ -182,9 +184,10 @@ def emit(pct):
 def beat():
     while not stop:
         elapsed = time.time() - t0
+        # Assíntota em 0.99 da faixa (não 0.97) — hooks longos passam de 85/93.
         frac = 1 - pow(2, -elapsed / max(eta, 1.5))
-        emit(lo + (hi - lo) * min(0.97, frac))
-        time.sleep(0.35)
+        emit(lo + (hi - lo) * min(0.99, frac))
+        time.sleep(0.4)
 
 th = threading.Thread(target=beat, daemon=True)
 th.start()
@@ -192,6 +195,8 @@ try:
     rc = subprocess.call(cmd)
 finally:
     stop = True
+    th.join(timeout=1.0)
+    emit(hi if rc == 0 else max(lo, min(hi - 1, lo + int((hi - lo) * 0.5))))
 sys.exit(rc)
 PY
 }
@@ -311,13 +316,14 @@ PY
 
 schedule_console_restart() {
   # Fora do cgroup do console — senão o apply morre com código nulo.
+  # sleep 8: Node devolve 100% + POST/poll do cliente antes do restart cortar o HTTP.
   if command -v systemd-run >/dev/null 2>&1; then
     systemd-run --quiet --collect --no-block \
-      /bin/bash -c 'sleep 3; systemctl try-restart ham-cockpit.service >/dev/null 2>&1 || true' \
+      /bin/bash -c 'sleep 8; systemctl try-restart ham-cockpit.service >/dev/null 2>&1 || true' \
       >/dev/null 2>&1 || true
     return 0
   fi
-  nohup bash -c 'sleep 3; systemctl try-restart ham-cockpit.service >/dev/null 2>&1 || true' >/dev/null 2>&1 &
+  nohup bash -c 'sleep 8; systemctl try-restart ham-cockpit.service >/dev/null 2>&1 || true' >/dev/null 2>&1 &
 }
 
 github_wavelog_tag() {
@@ -449,10 +455,11 @@ apply_app() {
     done
     systemctl daemon-reload 2>/dev/null || true
   fi
-  emit_progress app 78 install 1
+  emit_progress app 70 install 1
   if [[ -f "$APP_HOME/package.json" ]]; then
-    # postinstall chama ota-hooks (|| true no package.json); falha real valida-se abaixo.
-    run_with_heartbeat app install 78 86 20 bash -c "cd \"$APP_HOME\" && npm install --omit=dev" || true
+    # HC_OTA_APPLY=1 → postinstall NÃO roda ota-hooks (evita double work + teto ~85%).
+    run_with_heartbeat app install 70 78 15 \
+      bash -c "cd \"$APP_HOME\" && HC_OTA_APPLY=1 npm install --omit=dev" || true
   fi
   # Backup do INI do operador ANTES dos hooks. Nunca copiar template por cima.
   # (3× no lab: OTA apagou indicativo/ID na tela; stop Host derruba PartOf.)
@@ -465,9 +472,10 @@ apply_app() {
       cp -a "$APP_HOME/mmdvm/$_ini" "$APP_HOME/mmdvm/${_ini}.ota-bak" || true
     fi
   done
-  # Hooks obrigatórios: falha → não bump de VERSION (estação ainda vê OTA no canal).
+  # Hooks (único lugar): faixa 78→98 para a UI não “travar” em 85/93.
   if [[ -x "$APP_HOME/ota-hooks.sh" ]]; then
-    if ! run_with_heartbeat app install 86 94 25 bash "$APP_HOME/ota-hooks.sh"; then
+    emit_progress app 78 hooks 1
+    if ! run_with_heartbeat app hooks 78 98 45 bash "$APP_HOME/ota-hooks.sh"; then
       echo "ota-hooks.sh falhou — VERSION não avançada (reaplicável)" >&2
       return 1
     fi
@@ -493,9 +501,9 @@ apply_app() {
     chown root:root "$APP_HOME/bin/station-upd" 2>/dev/null || true
     chmod 0755 "$APP_HOME/bin/station-upd"
   fi
-  emit_progress app 96 restart 1
+  emit_progress app 99 restart 1
   NEED_CONSOLE_RESTART=1
-  emit_progress app 99 done 1
+  emit_progress app 100 done 1
 }
 
 compose_wavelog() {

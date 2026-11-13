@@ -7,7 +7,7 @@ const dict = {
   pt: {
     brand: "Ham Cockpit",
     tagline: "Gateway da estação",
-    version: "v0.1.07.14",
+    version: "v0.1.07.15",
     vfoHdmiExit: "Tecle CTRL+X para sair para o console",
     loginTitle: "Acessar o console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -195,6 +195,7 @@ const dict = {
     makerHermes: "Hermes Lite",
     makerAnan: "Anan",
     spePort: "IP via ser2net · RS232 9600",
+    speNeedOta: "API SPE ausente neste firmware — atualize o Ham Cockpit (OTA ≥ 0.1.07.15).",
     acomTitle: "2000A",
     acomPort: "RS232 1200 8N1 · null-modem 2–3 / 3–2 / 5–5",
     acomHelp:
@@ -510,6 +511,7 @@ const dict = {
     updStageIndexes: "Atualizando índices",
     updStageDownload: "Baixando",
     updStageInstall: "Instalando",
+    updStageHooks: "Finalizando estação",
     updStageRestart: "Reiniciando",
     updStageDone: "Concluído",
     updOk: "Componente atualizado",
@@ -852,7 +854,7 @@ const dict = {
   en: {
     brand: "Ham Cockpit",
     tagline: "Station gateway",
-    version: "v0.1.07.14",
+    version: "v0.1.07.15",
     vfoHdmiExit: "Press CTRL+X to return to the console",
     loginTitle: "Sign in to the console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -1040,6 +1042,7 @@ const dict = {
     makerHermes: "Hermes Lite",
     makerAnan: "Anan",
     spePort: "IP via ser2net · RS232 9600",
+    speNeedOta: "SPE API missing on this firmware — update Ham Cockpit (OTA ≥ 0.1.07.15).",
     acomTitle: "2000A",
     acomPort: "RS232 1200 8N1 · null-modem 2–3 / 3–2 / 5–5",
     acomHelp:
@@ -1355,6 +1358,7 @@ const dict = {
     updStageIndexes: "Updating indexes",
     updStageDownload: "Downloading",
     updStageInstall: "Installing",
+    updStageHooks: "Finishing station",
     updStageRestart: "Restarting",
     updStageDone: "Done",
     updOk: "Component updated",

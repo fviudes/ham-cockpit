@@ -350,6 +350,7 @@ const UPD_STAGE: Record<string, I18nKey> = {
   update: "updStageIndexes",
   download: "updStageDownload",
   install: "updStageInstall",
+  hooks: "updStageHooks",
   restart: "updStageRestart",
   done: "updStageDone",
   error: "updFail",

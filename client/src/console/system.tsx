@@ -578,6 +578,18 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
         toast.error(j.error || tx("updFail"));
         return;
       }
+      // Força 100% na UI mesmo se o job já foi limpo / console reiniciou.
+      setS((p) => ({
+        ...p,
+        updates: {
+          ...p.updates,
+          items: p.updates.items.map((row) =>
+            row.id === id
+              ? { ...row, applying: false, progress: 100, stage: "done", determinate: true }
+              : row,
+          ),
+        },
+      }));
       const after = j.items?.find((row) => row.id === id);
       const stillPending =
         Boolean(after) &&

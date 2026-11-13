@@ -183,13 +183,14 @@ function parseStatusCsv(payload: string): boolean {
   const band = bandLabel((f[5] || "").trim());
   const txAnt = (f[6] || "1").trim();
   const ant = Number.parseInt(txAnt[0] || "1", 10) || 1;
-  const pwrCh = (f[9] || "L").trim().toUpperCase();
-  const pout = Number.parseInt((f[10] || "0").trim(), 10) || 0;
-  const swrAtu = Number.parseFloat((f[11] || "0").trim()) || 0;
-  const swrAnt = Number.parseFloat((f[12] || "0").trim()) || 0;
-  const vpa = Number.parseFloat((f[13] || "0").trim()) || 0;
-  const ipa = Number.parseFloat((f[14] || "0").trim()) || 0;
-  const temp = Number.parseInt((f[15] || "0").trim(), 10) || 0;
+  // 0=ID 1=S/O 2=R/T 3=bank 4=input 5=band 6=txAnt 7=rxAnt 8=pwr 9=pout …
+  const pwrCh = (f[8] || "L").trim().toUpperCase();
+  const pout = Number.parseInt((f[9] || "0").trim(), 10) || 0;
+  const swrAtu = Number.parseFloat((f[10] || "0").trim()) || 0;
+  const swrAnt = Number.parseFloat((f[11] || "0").trim()) || 0;
+  const vpa = Number.parseFloat((f[12] || "0").trim()) || 0;
+  const ipa = Number.parseFloat((f[13] || "0").trim()) || 0;
+  const temp = Number.parseInt((f[14] || "0").trim(), 10) || 0;
   const warning = (f[17] || "N").trim().toUpperCase();
   const alarm = (f[18] || "N").trim().toUpperCase();
 
