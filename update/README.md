@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.09.01** (`version.json`).
+Versão atual neste canal: **0.1.09.02** (`version.json`).
 
 ## Versionamento
 
@@ -20,12 +20,12 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.09.01",
+  "version": "0.1.09.02",
   "channel": "main",
-  "file": "ham-cockpit-0.1.09.01.tgz",
-  "sha256": "bbadff8a65b95f14527b18e16d51c50bcc989996d58a4d3bfdcc1704a85d8c3e",
-  "bytes": 5043066,
-  "notes": "Ham Cockpit v0.1.09.01 — ajustes de estação, mostrador, suporte e backup depois da 0.1.09."
+  "file": "ham-cockpit-0.1.09.02.tgz",
+  "sha256": "11519e1feb079788bb71ce65c6cbe9b3898c081ecfce69b9a43d0eb03edb8769",
+  "bytes": 5049531,
+  "notes": "Ham Cockpit v0.1.09.02 — SPE sai de aguardando ao desligar, VPN de suporte, firewall do túnel e menu."
 }
 ```
 
