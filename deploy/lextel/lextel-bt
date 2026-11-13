@@ -191,17 +191,14 @@ case "$cmd" in
     if echo "$line" | grep -qi "$mac" && echo "$line" | grep -q "channel ${channel}"; then
       same=1
     fi
-    # Conectado: não solta. Soltar o rfcomm derruba o SPP que já está no ar.
+    # Link no ar: não solta. Soltar o rfcomm derruba o SPP que já está no ar.
     if [[ "$same" -eq 1 ]] && echo "$line" | grep -qi 'connected'; then
       fix_perms
       echo "OK $RFCOMM_DEV $mac $channel live"
       exit 0
     fi
-    if [[ "$same" -eq 1 && "$rebind" != "rebind" ]]; then
-      fix_perms
-      echo "OK $RFCOMM_DEV $mac $channel"
-      exit 0
-    fi
+    # A OTA antiga devolvia OK com o mesmo MAC em "config" (bind sem link).
+    # O open() ficava preso e o console não tentava de novo. Sem connected, refaz.
     rfcomm release "$RFCOMM_N" 2>/dev/null || true
     rfcomm bind "$RFCOMM_N" "$mac" "$channel"
     fix_perms

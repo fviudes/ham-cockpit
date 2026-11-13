@@ -174,14 +174,20 @@ async function daemonActive(): Promise<boolean> {
   }
 }
 
-/** Probe leve: daemon Hamlib NET escuta e responde (mesmo sem rádio/RF). */
+/**
+ * Probe leve: o rigctld aceita TCP. Não manda "f".
+ * Um segundo cliente com poll de frequência abre outro CI-V enquanto o hub
+ * ainda está no rádio, e o ser2net (kickolduser) derruba a sessão.
+ */
 export async function probeHamlibNet(port = HAMLIB_NET_PORT, host = "127.0.0.1", timeoutMs = 900): Promise<boolean> {
   return new Promise((resolve) => {
     const sock = new Socket();
     let done = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const finish = (ok: boolean) => {
       if (done) return;
       done = true;
+      if (timer) clearTimeout(timer);
       try {
         sock.destroy();
       } catch {
@@ -189,20 +195,12 @@ export async function probeHamlibNet(port = HAMLIB_NET_PORT, host = "127.0.0.1",
       }
       resolve(ok);
     };
-    const timer = setTimeout(() => finish(false), timeoutMs);
+    timer = setTimeout(() => finish(false), timeoutMs);
     sock.connect(port, host, () => {
-      sock.write("f\n");
-    });
-    sock.on("data", () => {
-      clearTimeout(timer);
       finish(true);
     });
-    sock.on("error", () => {
-      clearTimeout(timer);
-      finish(false);
-    });
+    sock.on("error", () => finish(false));
     sock.on("close", () => {
-      clearTimeout(timer);
       if (!done) finish(false);
     });
   });

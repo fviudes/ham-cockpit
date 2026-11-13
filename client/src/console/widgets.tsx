@@ -393,7 +393,7 @@ export function progressHint(row: {
   return bits.join(" · ");
 }
 
-export function UpdatesMenu() {
+export function UpdatesMenu({ preview = false }: { preview?: boolean } = {}) {
   const { s, tx } = useConsole();
   const [, navigate] = useLocation();
   const jobs = s.updates.jobs.filter((row) => row.status === "running");
@@ -406,7 +406,8 @@ export function UpdatesMenu() {
     stage: row.stage,
     error: row.error,
   }));
-  if (s.updates.pending <= 0 && live.length === 0) return null;
+  const devPreview = import.meta.env.DEV && preview && s.updates.pending <= 0 && live.length === 0;
+  if (s.updates.pending <= 0 && live.length === 0 && !devPreview) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -429,9 +430,11 @@ export function UpdatesMenu() {
               ))}
             </span>
           ) : null}
-          <span className="absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-[#ffb300] px-1 font-['IBM_Plex_Mono'] text-[9px] font-bold text-[#071018]">
-            {live.length > 0 ? live.length : s.updates.pending}
-          </span>
+          {live.length > 0 || s.updates.pending > 0 ? (
+            <span className="absolute -right-1 -top-1 grid min-w-4 place-items-center rounded-full bg-[#ffb300] px-1 font-['IBM_Plex_Mono'] text-[9px] font-bold text-[#071018]">
+              {live.length > 0 ? live.length : s.updates.pending}
+            </span>
+          ) : null}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className={cn(menuBox, "min-w-[18rem]")}>

@@ -507,7 +507,9 @@ ensure_hamlib_spe() {
     safe_install -m 0755 "$ROOT/bin/ser2net-ctl" /opt/ham-cockpit/bin/ser2net-ctl
     sed -i 's/\r$//' /opt/ham-cockpit/bin/ser2net-ctl 2>/dev/null || true
   fi
-  # Só o helper. /opt/lextel/config.json do aparelho não entra no pacote e não é reescrito.
+  # Só o helper. Não regrava /opt/lextel/config.json (MAC salvo) e não mexe em
+  # dtoverlay: disable-bt tiraria o onboard e o ttyAMA0 do MMDVM. O helper
+  # não dá rfkill, power off nem hciconfig.
   if [[ -f "$ROOT/bin/lextel-bt" ]]; then
     safe_install -m 0755 "$ROOT/bin/lextel-bt" /opt/ham-cockpit/bin/lextel-bt
     sed -i 's/\r$//' /opt/ham-cockpit/bin/lextel-bt 2>/dev/null || true
@@ -520,7 +522,10 @@ ensure_hamlib_spe() {
     install -m 0644 "$ROOT/hamlib-models.json" /opt/ham-cockpit/hamlib-models.json
   fi
   systemctl daemon-reload 2>/dev/null || true
-  # ampctld não sobe: o console usa o protocolo nativo na porta da SPE.
+  # Hamlib do Ubuntu 4.5.5 abre UDP no Icom e o CI-V morre. O rigctld tem de
+  # ser o 4.6.5 do prefixo, com LD_LIBRARY_PATH. SPE é RFC2217 na 4001 e o
+  # rádio é TCP cru na 4002. ampctld do SPE fica desligado. Não recarrega
+  # o ser2net: um reload derruba as duas sessões.
   systemctl disable --now ampctld@spe.service >/dev/null 2>&1 || true
   # Não restart a cada OTA se already active (evita churn sob carga).
   # O wrapper do IC-705 reinicia quando o arquivo muda: senão o processo
@@ -610,14 +615,32 @@ fi
 
 # VPN de suporte. Não apaga /opt/ham-cockpit/support-vpn.json (escolha ligado/desligado).
 # Não mexe em services.json, rádios, INI nem /opt/lextel/config.json.
+# 203/EXEC no lab: a unit existia e o pacote openvpn não.
+if [[ ! -x /usr/sbin/openvpn ]] && command -v apt-get >/dev/null 2>&1; then
+  export DEBIAN_FRONTEND=noninteractive
+  if ! apt-get update -qq; then
+    echo "ota-hooks: AVISO — apt-get update falhou; OpenVPN de suporte não instalado" >&2
+  elif ! apt-get install -y --no-install-recommends openvpn; then
+    echo "ota-hooks: AVISO — não foi possível instalar o pacote openvpn" >&2
+  fi
+fi
 if [[ -f "$ROOT/support/client.ovpn" ]]; then
   install -d -o root -g root -m 0755 /opt/ham-cockpit/support
   safe_install -o root -g root -m 0600 "$ROOT/support/client.ovpn" /opt/ham-cockpit/support/client.ovpn
+  sed -i 's/\r$//' /opt/ham-cockpit/support/client.ovpn 2>/dev/null || true
   if [[ -f "$ROOT/support/auth.txt" ]]; then
     safe_install -o root -g root -m 0600 "$ROOT/support/auth.txt" /opt/ham-cockpit/support/auth.txt
+    sed -i 's/\r$//' /opt/ham-cockpit/support/auth.txt 2>/dev/null || true
   fi
 fi
-if [[ -f /etc/systemd/system/ham-cockpit-support-vpn.service && -f /opt/ham-cockpit/support-vpn.json ]]; then
+# O pacote openvpn habilita o unit genérico, sem perfil. Sem .conf ele fica desligado.
+if ! find /etc/openvpn /etc/openvpn/client -maxdepth 1 -name '*.conf' -print -quit 2>/dev/null | grep -q .; then
+  if systemctl disable --now openvpn.service >/dev/null 2>&1; then
+    :
+  fi
+fi
+if [[ -x /usr/sbin/openvpn && -f /etc/systemd/system/ham-cockpit-support-vpn.service && -f /opt/ham-cockpit/support-vpn.json ]]; then
+  systemctl daemon-reload 2>/dev/null || true
   if grep -q '"enabled"[[:space:]]*:[[:space:]]*true' /opt/ham-cockpit/support-vpn.json; then
     systemctl enable ham-cockpit-support-vpn.service 2>/dev/null || true
     if ! systemctl is-active --quiet ham-cockpit-support-vpn.service; then
@@ -627,6 +650,61 @@ if [[ -f /etc/systemd/system/ham-cockpit-support-vpn.service && -f /opt/ham-cock
     systemctl disable --now ham-cockpit-support-vpn.service 2>/dev/null || true
   fi
 fi
+# Entrada total vinda do túnel (tun+ / tun0 e 10.8.0.0/24).
+# Não desliga o firewall, não dá ufw enable/disable e não abre a WAN.
+# O unit oneshot reaplica no boot; a regra do ufw fica gravada para quando ele estiver ativo.
+allow_support_vpn_input() {
+  if command -v iptables >/dev/null 2>&1; then
+    if ! iptables -C INPUT -i tun+ -m comment --comment "ham-cockpit vpn tun" -j ACCEPT 2>/dev/null; then
+      iptables -I INPUT 1 -i tun+ -m comment --comment "ham-cockpit vpn tun" -j ACCEPT || true
+    fi
+    if ! iptables -C INPUT -i tun+ -s 10.8.0.0/24 -m comment --comment "ham-cockpit vpn 10.8.0.0/24" -j ACCEPT 2>/dev/null; then
+      iptables -I INPUT 1 -i tun+ -s 10.8.0.0/24 -m comment --comment "ham-cockpit vpn 10.8.0.0/24" -j ACCEPT || true
+    fi
+  fi
+  # rp_filter estrito (1) na tun0 descarta o retorno. O efetivo é o máximo com all;
+  # aqui só se mexe na tun0, e só se ela estiver em 1. Não altera all, eth0 nem a WAN.
+  if [[ -r /proc/sys/net/ipv4/conf/tun0/rp_filter ]] && [[ "$(cat /proc/sys/net/ipv4/conf/tun0/rp_filter)" == "1" ]]; then
+    sysctl -w net.ipv4.conf.tun0.rp_filter=2 >/dev/null || true
+  fi
+  if command -v ufw >/dev/null 2>&1 && [[ -f /etc/ufw/user.rules ]]; then
+    # ufw 0.36 rejeita "--force allow" e "comment". Não dá enable nem disable.
+    if ! grep -q -- '-i tun+' /etc/ufw/user.rules 2>/dev/null; then
+      ufw allow in on tun+ >/dev/null 2>&1 || true
+    fi
+    if ! grep -q -- '-i tun0' /etc/ufw/user.rules 2>/dev/null; then
+      ufw allow in on tun0 >/dev/null 2>&1 || true
+    fi
+    if ! grep -q -- '-i tun+ -s 10.8.0.0/24' /etc/ufw/user.rules 2>/dev/null; then
+      ufw allow in on tun+ from 10.8.0.0/24 >/dev/null 2>&1 || true
+    fi
+    if ! grep -q -- '-i tun0 -s 10.8.0.0/24' /etc/ufw/user.rules 2>/dev/null; then
+      ufw allow in on tun0 from 10.8.0.0/24 >/dev/null 2>&1 || true
+    fi
+  fi
+  cat >/etc/systemd/system/ham-cockpit-vpn-input.service <<'EOF'
+[Unit]
+Description=Ham Cockpit entrada do tunel VPN
+After=network-online.target ufw.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Aceita a entrada do tun+ e de 10.8.0.0/24. Não dá ufw enable/disable e não abre a WAN.
+ExecStart=/bin/bash -c 'iptables -C INPUT -i tun+ -m comment --comment "ham-cockpit vpn tun" -j ACCEPT 2>/dev/null || iptables -I INPUT 1 -i tun+ -m comment --comment "ham-cockpit vpn tun" -j ACCEPT || true; iptables -C INPUT -i tun+ -s 10.8.0.0/24 -m comment --comment "ham-cockpit vpn 10.8.0.0/24" -j ACCEPT 2>/dev/null || iptables -I INPUT 1 -i tun+ -s 10.8.0.0/24 -m comment --comment "ham-cockpit vpn 10.8.0.0/24" -j ACCEPT || true; if [ -r /proc/sys/net/ipv4/conf/tun0/rp_filter ] && [ "$(cat /proc/sys/net/ipv4/conf/tun0/rp_filter)" = 1 ]; then sysctl -w net.ipv4.conf.tun0.rp_filter=2 || true; fi; exit 0'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload 2>/dev/null || true
+  if ! systemctl enable ham-cockpit-vpn-input.service 2>/dev/null; then
+    mkdir -p /etc/systemd/system/multi-user.target.wants
+    ln -sfn /etc/systemd/system/ham-cockpit-vpn-input.service /etc/systemd/system/multi-user.target.wants/ham-cockpit-vpn-input.service
+  fi
+  return 0
+}
+allow_support_vpn_input || echo "ota-hooks: AVISO — entrada do tunel VPN nao aplicada" >&2
 
 # .env do Wavelog costuma nascer root:root 600 (Docker/install antigo).
 # Sem isso o backup do console falha com EACCES ao copiar /opt/wavelog/.env.
@@ -679,8 +757,30 @@ if [[ ! -f /opt/ham-cockpit/spe/spe.json ]]; then
   chown hamcockpit:hamcockpit /opt/ham-cockpit/spe/spe.json 2>/dev/null || true
   chmod 0644 /opt/ham-cockpit/spe/spe.json 2>/dev/null || true
 fi
-# Mesma regra da imagem: só semeia ser2net se ainda não há services.json.
-if [[ ! -f /opt/ser2net/services.json && -f "$ROOT/ser2net/services.json" && -f "$ROOT/ser2net/ser2net.yaml" ]]; then
+# A OTA anterior só apagava o LCK neste gancho. /var/lock no disco da raiz
+# sobrevive ao reboot e o ser2net novo recusa o TTY ("Port in use by pid"
+# do próprio processo). A regra fica no unit (ExecStartPre) e no tmpfiles
+# (/var/lock -> /run/lock). Não reinicia o ser2net: isso derruba o CI-V.
+if [[ -f "$ROOT/bin/ser2net-clear-locks" ]]; then
+  safe_install -m 0755 "$ROOT/bin/ser2net-clear-locks" /opt/ham-cockpit/bin/ser2net-clear-locks
+  sed -i 's/\r$//' /opt/ham-cockpit/bin/ser2net-clear-locks 2>/dev/null || true
+  /opt/ham-cockpit/bin/ser2net-clear-locks install || true
+fi
+
+# Hamlib do Ubuntu 4.5.5 abre UDP no Icom e o CI-V morre.
+# SPE é RFC2217 na 4001 e o rádio é TCP cru na 4002; ampctld fica desligado.
+# OTA não substitui ser2net.yaml, services.json, rádios, INI, lextel nem spe.json vivos.
+ser2net_yaml_keeps_contract() {
+  local y=/opt/ser2net/ser2net.yaml
+  [[ -f "$y" ]] || return 1
+  grep -q 'telnet(rfc2217),tcp,127.0.0.1,4001' "$y" || return 1
+  grep -q 'accepter: tcp,127.0.0.1,4002' "$y" || return 1
+  grep -q 'telnet(rfc2217),tcp,127.0.0.1,4002' "$y" && return 1
+  return 0
+}
+if ser2net_yaml_keeps_contract; then
+  echo "ota-hooks: ser2net.yaml já tem 4001 RFC2217 e 4002 TCP — não substitui" >&2
+elif [[ ! -f /opt/ser2net/services.json && -f "$ROOT/ser2net/services.json" && -f "$ROOT/ser2net/ser2net.yaml" ]]; then
   install -d -o hamcockpit -g hamcockpit /opt/ser2net
   install -o hamcockpit -g hamcockpit -m 0644 "$ROOT/ser2net/ser2net.yaml" /opt/ser2net/ser2net.yaml
   install -o hamcockpit -g hamcockpit -m 0644 "$ROOT/ser2net/services.json" /opt/ser2net/services.json

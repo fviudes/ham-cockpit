@@ -19,14 +19,24 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { SER2NET_ACC_BAUD } from "../shared/const";
 import { attachRfc2217, type Rfc2217Socket } from "./rfc2217";
-import { loadSer2net, saveSer2net } from "./ser2net-store";
+import { loadSer2net } from "./ser2net-store";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OPT_DIR = "/opt/ham-cockpit/spe";
-const HELPER = "/opt/ham-cockpit/bin/station-svc";
+const SER2NET_CTL = "/opt/ham-cockpit/bin/ser2net-ctl";
+/** Marca do bundle: o processo no lab tem que ser este cliente, não o que parava no ECONNRESET. */
+const SPE_BUILD = "spe-off-unwait";
 const POLL_MS = 700;
 const BAUD = 115200;
 const STATUS_WAIT_MS = 1500;
+/**
+ * Leitura sem bytes do amp. Três polls (700 ms) e a espera acaba.
+ * Não usa socket.setTimeout: o poll de STATUS escreveria no socket e
+ * renovaria um idle timer, e a fila continuaria achando que há comunicação.
+ */
+const SILENCE_MS = 2_500;
+/** A UART fica muda enquanto a Expert liga. Isso não segura a fila. */
+const WAKE_GRACE_MS = 12_000;
 
 export type SpePhase = "idle" | "connecting" | "ready" | "error";
 export type SpePwr = "L" | "M" | "H";
@@ -63,6 +73,7 @@ export type SpeSnap = {
   lastTxHex: string;
   transport: "rfc2217";
   folder: string;
+  build: string;
 };
 
 type Saved = { autoConnect: boolean };
@@ -202,6 +213,8 @@ function parseStatusCsv(payload: string): boolean {
   live.ledTune = /t/i.test(txAnt.slice(1));
   live.ledOn = true;
   live.hardware = true;
+  heardHardware = true;
+  wakeUntil = 0;
   live.phase = "ready";
   live.error = "";
   live.lastRx = payload.slice(0, 96);
@@ -283,6 +296,20 @@ let pollTimer: ReturnType<typeof setInterval> | null = null;
 let chain = Promise.resolve();
 let statusEpoch = 0;
 let yamlEnsured = false;
+/** Ligado enquanto a sessão deve voltar sozinha. speDisconnect desliga. */
+let wantLink = false;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectDelay = 800;
+let silenceTimer: ReturnType<typeof setTimeout> | null = null;
+let lastRxAt = 0;
+/** Sobe quando a sessão cai, para o waitStatus devolver a fila. */
+let linkGen = 0;
+/** Invalida um TCP que ainda não fez attach (disconnect no meio do connect). */
+let sessionGen = 0;
+/** Silêncio antes do primeiro STATUS, só durante o boot do wake. */
+let wakeUntil = 0;
+/** STATUS válido nesta sessão. Silêncio depois disso é a linear desligada. */
+let heardHardware = false;
 
 function enqueue<T>(fn: () => Promise<T>): Promise<T> {
   const run = chain.then(fn, fn);
@@ -294,7 +321,144 @@ function enqueue<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 function snap(): SpeSnap {
-  return { ok: true, ...live, baud: BAUD, transport: "rfc2217", folder: dataDir() };
+  return { ok: true, ...live, baud: BAUD, transport: "rfc2217", folder: dataDir(), build: SPE_BUILD };
+}
+
+function clearReconnect() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+}
+
+/** Fora do enqueue: chamar speConnect daqui de dentro travaria a fila. */
+function scheduleReconnect() {
+  if (!wantLink || reconnectTimer) return;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    if (!wantLink) return;
+    if (sock && !sock.destroyed && live.connected) {
+      reconnectDelay = 800;
+      return;
+    }
+    void speConnect().catch(() => undefined);
+  }, reconnectDelay);
+  reconnectTimer.unref?.();
+  reconnectDelay = Math.min(8_000, Math.round(reconnectDelay * 1.5));
+}
+
+function clearSilence() {
+  if (silenceTimer) {
+    clearTimeout(silenceTimer);
+    silenceTimer = null;
+  }
+}
+
+function armSilence(ms = SILENCE_MS) {
+  clearSilence();
+  silenceTimer = setTimeout(onSilence, ms);
+  silenceTimer.unref?.();
+}
+
+function noteRx() {
+  lastRxAt = Date.now();
+  if (sock && !sock.destroyed) armSilence(SILENCE_MS);
+}
+
+/**
+ * A linear desligou, o socket morreu ou a leitura ficou muda.
+ * Sai de "connecting" / aguardando. Não agenda reconnect: isso
+ * reabria o TCP, não vinha STATUS e a UI ficava em "…" para sempre.
+ */
+function settleDown(error: "" | "nocomm") {
+  wantLink = false;
+  clearReconnect();
+  clearSilence();
+  wakeUntil = 0;
+  heardHardware = false;
+  linkGen += 1;
+  sessionGen += 1;
+  dropSock();
+  live.connected = false;
+  live.hardware = false;
+  live.phase = "idle";
+  live.error = error;
+  live.tx = false;
+  live.operate = false;
+  live.pout = 0;
+  live.ipa = 0;
+  live.vpa = 0;
+  live.swrAtu = 1;
+  live.swrAnt = 1;
+  live.ledOn = false;
+  live.ledAl = false;
+  live.ledTune = false;
+  if (!error) {
+    live.lastTxHex = "";
+    live.lastRx = "";
+  }
+}
+
+function onSilence() {
+  silenceTimer = null;
+  if (!sock || sock.destroyed) return;
+  const quietFor = Date.now() - lastRxAt;
+  if (quietFor < SILENCE_MS) {
+    armSilence(SILENCE_MS - quietFor);
+    return;
+  }
+  // Boot do wake: ainda não houve STATUS. Não tratar como desligamento.
+  if (Date.now() < wakeUntil && !heardHardware) {
+    armSilence(Math.max(200, wakeUntil - Date.now()));
+    return;
+  }
+  settleDown("nocomm");
+}
+
+function noteDown(msg: string) {
+  live.connected = false;
+  live.hardware = false;
+  live.ledOn = false;
+  if (msg) live.error = msg;
+  linkGen += 1;
+  if (wantLink) {
+    live.phase = "connecting";
+    scheduleReconnect();
+    return;
+  }
+  if (live.phase !== "idle") live.phase = "error";
+}
+
+/** Socket que já estava de pé caiu (close, ECONNRESET, EPIPE). */
+function onLinkLost() {
+  linkGen += 1;
+  live.connected = false;
+  live.hardware = false;
+  live.ledOn = false;
+  live.tx = false;
+  const booting = Date.now() < wakeUntil && !heardHardware && wantLink;
+  if (booting) {
+    live.phase = "connecting";
+    live.error = "";
+    clearSilence();
+    scheduleReconnect();
+    return;
+  }
+  wantLink = false;
+  clearReconnect();
+  clearSilence();
+  wakeUntil = 0;
+  heardHardware = false;
+  live.phase = "idle";
+  live.error = "nocomm";
+  live.operate = false;
+  live.pout = 0;
+  live.ipa = 0;
+  live.vpa = 0;
+  live.swrAtu = 1;
+  live.swrAnt = 1;
+  live.ledAl = false;
+  live.ledTune = false;
 }
 
 function stopPoll() {
@@ -306,6 +470,7 @@ function stopPoll() {
 
 function dropSock() {
   stopPoll();
+  clearSilence();
   rx = Buffer.alloc(0);
   const r = rfc;
   rfc = null;
@@ -351,35 +516,24 @@ function sudoBounded(args: string[], ms: number): Promise<void> {
 }
 
 /**
- * Só regrava a linha da SPE se o baud salvo não for 115200.
- * Não mexe no cabo nem força 9600. Se o YAML já está certo, não chama o sudo do reload.
+ * Confere o baud. Não grava o YAML: saveSer2net recarrega o ser2net inteiro
+ * e derruba o CI-V na 4002 junto com a SPE. O contrato (4001 RFC2217, 4002 TCP)
+ * fica no instalador.
  */
 async function ensureSpeRfc2217Yaml(): Promise<void> {
   if (yamlEnsured) return;
+  yamlEnsured = true;
   const cfg = await loadSer2net();
   const baud = SER2NET_ACC_BAUD.spe;
   const spe = cfg.services.find((s) => s.device === "spe");
-  if (!spe || spe.baud === baud) {
-    yamlEnsured = true;
-    return;
-  }
-  const services = cfg.services.map((s) => (s.device === "spe" ? { ...s, baud } : s));
-  let wrote = false;
-  await Promise.race([
-    saveSer2net({ bind: cfg.bind, services }).then(() => {
-      wrote = true;
-    }),
-    new Promise<void>((r) => setTimeout(r, 4_000)),
-  ]);
-  if (!wrote) return;
-  yamlEnsured = true;
-  await new Promise((r) => setTimeout(r, 400));
+  if (spe && spe.baud !== baud) live.error = "baud";
 }
 
 async function stopAmpctld(): Promise<void> {
-  if (process.platform !== "linux" || !existsSync(HELPER)) return;
-  await sudoBounded([HELPER, "stop", "spe"], 4_000);
-  await sudoBounded([HELPER, "disable", "spe"], 3_000);
+  if (process.platform !== "linux" || !existsSync(SER2NET_CTL)) return;
+  // quiet-amp só desliga ampctld@spe. "stop" no ser2net-ctl, sem o filtro,
+  // é systemctl stop ser2net e derruba o rádio (4002) junto com a SPE.
+  await sudoBounded([SER2NET_CTL, "quiet-amp"], 4_000);
 }
 
 function writePacket(data: Buffer): boolean {
@@ -393,13 +547,15 @@ function requestStatus() {
   writePacket(Buffer.from([0x90]));
 }
 
-async function waitStatus(prevEpoch: number, ms = STATUS_WAIT_MS): Promise<boolean> {
+async function waitStatus(prevEpoch: number, ms = STATUS_WAIT_MS, gen = linkGen): Promise<boolean> {
   const end = Date.now() + ms;
   while (Date.now() < end) {
+    if (linkGen !== gen) return false;
+    if (!sock || sock.destroyed || !rfc) return false;
     if (statusEpoch !== prevEpoch && live.hardware) return true;
     await new Promise((r) => setTimeout(r, 80));
   }
-  return statusEpoch !== prevEpoch && live.hardware;
+  return linkGen === gen && statusEpoch !== prevEpoch && live.hardware;
 }
 
 function startPoll() {
@@ -420,32 +576,35 @@ function attachSock(s: net.Socket, host: string, port: number) {
   live.port = `${host}:${port}`;
   live.connected = true;
   live.hardware = false;
-  live.phase = "ready";
+  live.phase = "connecting";
   live.error = "";
-  live.ledOn = true;
+  live.ledOn = false;
+  heardHardware = false;
+  lastRxAt = Date.now();
   rfc = attachRfc2217(s, (app) => {
+    noteRx();
     rx = Buffer.concat([rx, app]);
     consumeRx();
   });
-  s.on("error", (err) => {
-    live.error = err.message;
-    live.phase = "error";
-    live.hardware = false;
-    live.connected = false;
+  s.on("error", () => {
+    if (sock !== s) return;
     dropSock();
+    onLinkLost();
   });
   s.on("close", () => {
     if (sock !== s) return;
     sock = null;
     rfc = null;
     stopPoll();
-    live.connected = false;
-    live.hardware = false;
-    if (live.phase !== "idle") live.phase = "error";
+    clearSilence();
+    onLinkLost();
   });
+  armSilence(SILENCE_MS);
   // Linhas altas após connect (amp já ligada) + poll STATUS
   rfc.setRts(true);
   rfc.setDtr(true);
+  reconnectDelay = 800;
+  clearReconnect();
   startPoll();
 }
 
@@ -458,102 +617,141 @@ export async function spePeek(): Promise<SpeSnap> {
 }
 
 export async function speSave(body: Record<string, unknown>): Promise<SpeSnap> {
-  if (typeof body.autoConnect === "boolean") saved.autoConnect = body.autoConnect;
+  if (typeof body.autoConnect === "boolean") {
+    saved.autoConnect = body.autoConnect;
+    if (!body.autoConnect) {
+      wantLink = false;
+      clearReconnect();
+    } else if (!sock || sock.destroyed) {
+      wantLink = true;
+      reconnectDelay = 800;
+      scheduleReconnect();
+    }
+  }
   persist();
   live.autoConnect = saved.autoConnect;
   return snap();
 }
 
-export async function speConnect(): Promise<SpeSnap> {
-  return enqueue(async () => {
-    live.error = "";
-    live.phase = "connecting";
-    live.autoConnect = saved.autoConnect;
-    await stopAmpctld();
-    try {
-      await ensureSpeRfc2217Yaml();
-    } catch {
-      /* se falhar rewrite, ainda tenta conectar */
-    }
-    const ep = await resolveEndpoint();
-    if (!ep) {
-      live.connected = false;
-      live.hardware = false;
-      live.phase = "error";
-      live.error = "noport";
-      return snap();
-    }
-    live.port = `${ep.host}:${ep.port}`;
-    return await new Promise<SpeSnap>((resolve) => {
-      const s = new net.Socket();
-      let settled = false;
-      const finish = (ok: boolean, error?: string) => {
-        if (settled) return;
-        settled = true;
-        if (!ok) {
-          try {
-            s.destroy();
-          } catch {
-            /* ignore */
-          }
-          live.connected = false;
-          live.hardware = false;
-          live.phase = "error";
-          live.error = error || "timeout";
-          resolve(snap());
-          return;
+/** Já dentro da fila. speConnect() daqui travaria o enqueue. */
+async function connectInside(): Promise<SpeSnap> {
+  wantLink = true;
+  // Socket já aberto (ainda sem STATUS) não é motivo para derrubar de novo.
+  // Quem precisa de uma sessão nova (o ligar) fecha antes de chegar aqui.
+  if (sock && !sock.destroyed && live.connected) {
+    reconnectDelay = 800;
+    clearReconnect();
+    return snap();
+  }
+  if (sock) {
+    dropSock();
+    live.connected = false;
+  }
+  const gen = ++sessionGen;
+  live.error = "";
+  live.phase = "connecting";
+  live.hardware = false;
+  live.ledOn = false;
+  live.autoConnect = saved.autoConnect;
+  await stopAmpctld();
+  if (gen !== sessionGen || !wantLink) return snap();
+  try {
+    await ensureSpeRfc2217Yaml();
+  } catch {
+    /* leitura do yaml falhou; ainda tenta a 4001, sem recarregar o ser2net */
+  }
+  const ep = await resolveEndpoint();
+  if (!ep) {
+    noteDown("noport");
+    return snap();
+  }
+  if (gen !== sessionGen || !wantLink) return snap();
+  live.port = `${ep.host}:${ep.port}`;
+  return await new Promise<SpeSnap>((resolve) => {
+    const s = new net.Socket();
+    let settled = false;
+    const finish = (ok: boolean, error?: string) => {
+      if (settled) return;
+      settled = true;
+      if (gen !== sessionGen || !wantLink) {
+        try {
+          s.destroy();
+        } catch {
+          /* ignore */
         }
-        attachSock(s, ep.host, ep.port);
         resolve(snap());
-      };
-      const timer = setTimeout(() => finish(false, "timeout"), 3000);
-      s.once("error", (err) => {
-        clearTimeout(timer);
-        finish(false, err.message);
-      });
-      s.connect(ep.port, ep.host, () => {
-        clearTimeout(timer);
-        finish(true);
-      });
+        return;
+      }
+      if (!ok) {
+        try {
+          s.destroy();
+        } catch {
+          /* ignore */
+        }
+        noteDown(error || "timeout");
+        resolve(snap());
+        return;
+      }
+      attachSock(s, ep.host, ep.port);
+      resolve(snap());
+    };
+    const timer = setTimeout(() => finish(false, "timeout"), 3000);
+    s.once("error", (err) => {
+      clearTimeout(timer);
+      finish(false, err.message);
+    });
+    s.connect(ep.port, ep.host, () => {
+      clearTimeout(timer);
+      finish(true);
     });
   });
 }
 
+export async function speConnect(): Promise<SpeSnap> {
+  return enqueue(() => connectInside());
+}
+
 export async function speDisconnect(): Promise<SpeSnap> {
-  dropSock();
-  live.connected = false;
-  live.hardware = false;
-  live.phase = "idle";
-  live.error = "";
-  live.tx = false;
-  live.pout = 0;
-  live.ipa = 0;
-  live.swrAtu = 1;
-  live.swrAnt = 1;
-  live.ledOn = false;
-  live.lastTxHex = "";
-  live.lastRx = "";
+  settleDown("");
   return snap();
 }
 
 /** Power-on Expert via RFC2217 (DTR/RTS), não via tecla 0x0B. */
 export async function spePowerOn(): Promise<SpeSnap> {
   return enqueue(async () => {
-    if (!live.connected || !rfc) {
-      const up = await speConnect();
-      if (!up.connected || !rfc) return up;
+    const talking = Boolean(sock && !sock.destroyed && rfc && live.connected && live.hardware);
+    if (talking) return snap();
+    // Sessão muda ou caída: fecha, abre o RFC2217 de novo e manda o wake.
+    // Sem o close, o ligar escrevia no mesmo socket e parecia no-op.
+    wakeUntil = Date.now() + WAKE_GRACE_MS;
+    heardHardware = false;
+    if (sock) {
+      dropSock();
+      live.connected = false;
     }
+    live.tx = false;
+    live.operate = false;
+    live.pout = 0;
+    live.ipa = 0;
+    live.vpa = 0;
+    live.ledOn = false;
+    const up = await connectInside();
+    if (!up.connected || !rfc) return up;
     const prev = statusEpoch;
+    const gen = linkGen;
     live.error = "";
     await rfc.pulseWake(1000);
-    live.lastTxHex = "rfc2217:RTS/DTR wake";
-    // Amp reinicia UART — aguarda STATUS
-    for (let i = 0; i < 20; i++) {
-      requestStatus();
-      if (await waitStatus(prev, 500)) break;
+    if (linkGen !== gen || !rfc || !sock || sock.destroyed) {
+      const again = await connectInside();
+      if (!again.connected || !rfc) return again;
+      await rfc.pulseWake(1000);
     }
+    requestStatus();
+    live.lastTxHex = "rfc2217:RTS/DTR wake";
+    // A fila só espera este corte. O poll e o silêncio terminam o boot.
+    await waitStatus(prev, 500, linkGen);
+    if (!live.hardware && live.connected) live.phase = "connecting";
     live.ledOn = live.hardware;
-    if (!live.hardware) live.error = "nowake";
     return snap();
   });
 }
@@ -565,36 +763,33 @@ export async function speCmd(cmd: string): Promise<SpeSnap> {
   if (key === "on" || key === "poweron" || key === "wake") return spePowerOn();
 
   return enqueue(async () => {
+    if (key === "off") {
+      const gen = linkGen;
+      const prev = statusEpoch;
+      wakeUntil = 0;
+      if (rfc && sock && !sock.destroyed) {
+        writePacket(Buffer.from([0x0a]));
+        rfc.setDtr(false);
+        rfc.setRts(false);
+        await waitStatus(prev, 350, gen);
+      }
+      settleDown("");
+      return snap();
+    }
+
     if (!live.connected || !rfc) {
-      const up = await speConnect();
+      const up = await connectInside();
       if (!up.connected) return up;
     }
 
     if (key === "op1" && live.operate) {
       requestStatus();
-      await waitStatus(statusEpoch, 600);
+      await waitStatus(statusEpoch, 600, linkGen);
       return snap();
     }
     if (key === "op0" && !live.operate) {
       requestStatus();
-      await waitStatus(statusEpoch, 600);
-      return snap();
-    }
-
-    if (key === "off") {
-      const prev = statusEpoch;
-      const ok = writePacket(Buffer.from([0x0a]));
-      if (!ok) {
-        live.error = "tx";
-        live.phase = "error";
-        return snap();
-      }
-      if (rfc) {
-        rfc.setDtr(false);
-        rfc.setRts(false);
-      }
-      await waitStatus(prev, 400);
-      await speDisconnect();
+      await waitStatus(statusEpoch, 600, linkGen);
       return snap();
     }
 
@@ -607,36 +802,45 @@ export async function speCmd(cmd: string): Promise<SpeSnap> {
     const prevPwr = live.pwr;
     const prevOp = live.operate;
     const prev = statusEpoch;
+    const gen = linkGen;
     const ok = writePacket(Buffer.from([code]));
     if (!ok) {
-      live.error = "tx";
-      live.phase = "error";
+      settleDown("nocomm");
       return snap();
     }
 
     // Espera ACK/STATUS antes de devolver o snap (UI precisa de pwr/swr/operate atualizados)
     await new Promise((r) => setTimeout(r, 100));
+    if (linkGen !== gen) return snap();
     requestStatus();
-    await waitStatus(prev, STATUS_WAIT_MS);
+    await waitStatus(prev, STATUS_WAIT_MS, gen);
 
-    // PWR cicla L→M→H: se ainda igual, mais um poll
+    // PWR cicla L→M→H: se ainda igual, mais um poll. A queda da sessão solta a fila.
     if (key === "pwr" || key === "power") {
-      for (let i = 0; i < 6 && live.pwr === prevPwr; i++) {
+      for (let i = 0; i < 6 && live.pwr === prevPwr && linkGen === gen; i++) {
         await new Promise((r) => setTimeout(r, 150));
+        if (linkGen !== gen) break;
         const e = statusEpoch;
         requestStatus();
-        await waitStatus(e, 500);
+        await waitStatus(e, 500, gen);
       }
     }
     if (key === "op1" || key === "op0" || key === "op" || key === "operate") {
-      for (let i = 0; i < 4 && live.operate === prevOp; i++) {
+      for (let i = 0; i < 4 && live.operate === prevOp && linkGen === gen; i++) {
         await new Promise((r) => setTimeout(r, 120));
+        if (linkGen !== gen) break;
         const e = statusEpoch;
         requestStatus();
-        await waitStatus(e, 400);
+        await waitStatus(e, 400, gen);
       }
     }
 
     return snap();
   });
+}
+
+// autoConnect no boot e depois de um restart do Node: a sessão volta sozinha.
+if (saved.autoConnect) {
+  wantLink = true;
+  scheduleReconnect();
 }

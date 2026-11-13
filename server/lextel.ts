@@ -102,6 +102,9 @@ let pendingConnect: { addr?: string; pin?: string; name?: string; channel?: numb
 /** O bind atual não corresponde a um open que tenha funcionado. */
 let rfcommStale = true;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let opened = false;
+let opening = false;
+let openTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectDelay = 600;
 let sppPortsAt = 0;
 let sppPortsCache: { com: string; incoming: boolean; mac: string }[] = [];
@@ -682,7 +685,10 @@ function killPidTree(pid: number | undefined) {
 }
 
 function linkAlive() {
-  return Boolean(stream || sppChild);
+  // No Linux, o objeto do stream existe antes do open(). RFCOMM preso em
+  // open() não é link: senão o recover acha que está vivo e não tenta de novo.
+  if (process.platform === "win32") return Boolean(stream || sppChild);
+  return opened && Boolean(stream);
 }
 
 /** Normaliza só COM Windows; paths Unix (/dev/rfcomm0) nunca levam toUpperCase. */
@@ -801,7 +807,17 @@ function killLeftoverWinSpp(_com?: string) {
   if (pid) killPidTree(pid);
 }
 
+function clearOpenTimer() {
+  if (openTimer) {
+    clearTimeout(openTimer);
+    openTimer = null;
+  }
+}
+
 function closeStream() {
+  clearOpenTimer();
+  opened = false;
+  opening = false;
   if (stream) {
     stream.removeAllListeners();
     stream.destroy();
@@ -834,7 +850,23 @@ function attachFd(path: string) {
     ...(process.platform === "linux" ? { fs: { open: openNoctty, read, close } } : {}),
   });
   stream = rs;
+  clearOpenTimer();
+  // open() do RFCOMM bloqueia até o aparelho atender. Sem este prazo o
+  // stream existe, o recover acha que o link está vivo e não tenta de novo.
+  openTimer = setTimeout(() => {
+    if (opened || stream !== rs) return;
+    error = `MS-2000 ${saved.addr || "salvo"} sem resposta no SPP. Nova tentativa, sem desligar o Bluetooth.`;
+    rfcommStale = true;
+    opening = false;
+    phase = "connecting";
+    closeStream();
+    scheduleReconnect();
+  }, 12_000);
+  openTimer.unref?.();
   rs.on("open", () => {
+    opened = true;
+    opening = false;
+    clearOpenTimer();
     phase = "streaming";
     reconnectDelay = 600;
     rfcommStale = false;
@@ -844,16 +876,19 @@ function attachFd(path: string) {
     ingest(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   });
   rs.on("error", (err) => {
-    error = err.message;
+    clearOpenTimer();
+    opened = false;
+    opening = false;
+    if (!error.startsWith("MS-2000")) error = err.message;
     rfcommStale = true;
     if (wantOpen) {
       phase = "connecting";
-      closeStream();
+      if (stream === rs) closeStream();
       scheduleReconnect();
       return;
     }
     phase = "error";
-    closeStream();
+    if (stream === rs) closeStream();
   });
   rs.on("close", () => {
     if (pathOpen === path) {
@@ -960,6 +995,8 @@ function attach(path: string) {
   }
   phase = "connecting";
   error = "";
+  opening = true;
+  opened = false;
   pathOpen = openPath;
   attachedAt = Date.now();
   bytes = 0;
@@ -1266,6 +1303,7 @@ export async function lextelAutoConnect(): Promise<void> {
 const recoverWatch = setInterval(() => {
   if (!wantOpen || recoverBusy || connectBusy || autoRunning) return;
   if (phase === "scanning" || phase === "pairing") return;
+  if (opening && attachedAt && Date.now() - attachedAt < 12_000) return;
   if (linkAlive()) {
     if (process.platform === "win32" && bytes === 0 && attachedAt && Date.now() - attachedAt > 5000) {
       void remapIfWrongCom();

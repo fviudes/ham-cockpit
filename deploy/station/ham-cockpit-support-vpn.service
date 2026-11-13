@@ -2,14 +2,16 @@
 Description=Ham Cockpit VPN de suporte
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
 WorkingDirectory=/opt/ham-cockpit/support
-ExecStart=/usr/sbin/openvpn --config /opt/ham-cockpit/support/client.ovpn --writepid /run/ham-cockpit-support-vpn.pid
+# run sai 0 se support-vpn.json não estiver enabled; aí o Restart não religa.
+ExecStart=/opt/ham-cockpit/bin/station-support-vpn run
 Restart=on-failure
 RestartSec=5
-KillMode=process
 DeviceAllow=/dev/net/tun rw
 
 [Install]

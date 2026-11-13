@@ -283,8 +283,16 @@ function LedBar({ value, max, tone }: { value: number; max: number; tone: "red" 
 const SPE_PWR: Record<"L" | "M" | "H", string> = { L: "Low", M: "Mid", H: "High" };
 
 function SpeViz() {
-  const { s, setS, pushLog } = useConsole();
+  const { s, setS, pushLog, tx } = useConsole();
   const a = s.spe;
+  const speState =
+    a.hardware && a.connected
+      ? ""
+      : a.phase === "connecting"
+        ? tx("speWait")
+        : a.error === "nocomm"
+          ? tx("speNoComm")
+          : tx("speOff");
   const cmd = async (c: string) => {
     try {
       const r = await fetch("/api/spe/cmd", {
@@ -299,6 +307,10 @@ function SpeViz() {
           ...p.spe,
           connected: Boolean(j.connected),
           hardware: Boolean(j.hardware),
+          phase:
+            j.phase === "idle" || j.phase === "connecting" || j.phase === "ready" || j.phase === "error"
+              ? j.phase
+              : p.spe.phase,
           operate: Boolean(j.operate),
           tx: Boolean(j.tx),
           pout: Number.isFinite(Number(j.pout)) ? Number(j.pout) : p.spe.pout,
@@ -324,6 +336,7 @@ function SpeViz() {
   return (
     <div>
       <PanelTitle>SPE Expert {a.model || "1.3K"}-FA</PanelTitle>
+      {speState ? <p className="mb-2 text-[11px] text-[#8ea0b3]">{speState}</p> : null}
       <Lcd>
         <div className="mb-2 flex items-center justify-between border-b border-[#0c2236] pb-2">
           <span className="text-[10px] font-semibold tracking-[0.2em] text-[#4fc3f7]">{a.model || "13K"}</span>

@@ -17,7 +17,16 @@ restart_hamlib_units() {
 }
 
 case "${1:-}" in
+  # O console antigo chamava "stop spe" para calar o ampctld. Sem este
+  # filtro, "stop" é systemctl stop ser2net e derruba 4001 e 4002.
+  quiet-amp)
+    /usr/bin/systemctl disable --now ampctld@spe.service >/dev/null 2>&1 || true
+    ;;
   start|stop|restart|reload-or-restart|is-active)
+    if [[ "$1" == "stop" && "${2:-}" == "spe" ]]; then
+      /usr/bin/systemctl disable --now ampctld@spe.service >/dev/null 2>&1 || true
+      exit 0
+    fi
     /usr/bin/systemctl "$1" ser2net.service
     if [[ "$1" != "stop" && "$1" != "is-active" ]]; then
       restart_hamlib_units
@@ -45,7 +54,7 @@ case "${1:-}" in
     /usr/bin/systemctl is-active rigctld@ic705.service 2>/dev/null || echo inactive
     ;;
   *)
-    echo "uso: ser2net-ctl start|stop|restart|reload-or-restart|is-active|sync-spe|sync-hamlib|start-hamlib|stop-hamlib|is-hamlib" >&2
+    echo "uso: ser2net-ctl start|stop|restart|reload-or-restart|is-active|quiet-amp|sync-spe|sync-hamlib|start-hamlib|stop-hamlib|is-hamlib" >&2
     exit 2
     ;;
 esac

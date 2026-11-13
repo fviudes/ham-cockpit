@@ -927,7 +927,10 @@ export function StatusPage() {
             {tempC == null ? "—" : `${tempC.toFixed(1)} °C`}
           </p>
           <p className="mb-2 text-[10px] tracking-wide text-[#8ea0b3] uppercase">{tx("last5min")}</p>
-          <TimeLine values={tempSeries} max={85} color="#f87171" tickFmt={(n) => `${n}°`} />
+          {/* -mx-5 cancela o padding do Panel: o traçado vai de uma borda à outra. */}
+          <div className="-mx-5">
+            <TimeLine flush values={tempSeries} max={85} color="#f87171" tickFmt={(n) => `${n}°`} />
+          </div>
         </Panel>
         <Panel>
           <PanelTitle>{tx("disk")}</PanelTitle>
@@ -1044,6 +1047,7 @@ function TimeLine({
   tickFmt,
   overlay,
   overlayColor,
+  flush = false,
 }: {
   values: Array<number | null>;
   max: number;
@@ -1051,13 +1055,17 @@ function TimeLine({
   tickFmt: (n: number) => string;
   overlay?: Array<number | null>;
   overlayColor?: string;
+  /** Estica o traçado na largura do quadro, com folga só para o eixo. */
+  flush?: boolean;
 }) {
-  const w = 280;
+  // 480×96 ≈ a proporção do card de temperatura (2 colunas). Com preserveAspectRatio
+  // "none" o traçado preenche a largura sem achatar o rótulo do eixo.
+  const w = flush ? 480 : 280;
   const h = 96;
-  const padL = 2;
-  const padR = 40;
+  const padL = flush ? 6 : 2;
+  const padR = flush ? 42 : 40;
   const padT = 8;
-  const padB = 4;
+  const padB = flush ? 8 : 4;
   const innerW = w - padL - padR;
   const innerH = h - padT - padB;
   const cap = Math.max(1, max);
@@ -1080,21 +1088,57 @@ function TimeLine({
     return d.trim();
   };
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="h-28 w-full" role="img">
+    <svg
+      viewBox={`0 0 ${w} ${h}`}
+      className={flush ? "block h-28 w-full" : "h-28 w-full"}
+      preserveAspectRatio={flush ? "none" : undefined}
+      role="img"
+    >
       {ticks.map((t) => {
         const y = padT + innerH - (t / cap) * innerH;
         return (
           <g key={t}>
-            <line x1={padL} x2={w - padR} y1={y} y2={y} stroke="rgba(79,195,247,0.18)" strokeWidth="1" />
-            <text x={w - padR + 3} y={y + 3} fill="#8ea0b3" fontSize="7" fontFamily="IBM Plex Mono, ui-monospace, monospace">
+            <line
+              x1={padL}
+              x2={w - padR}
+              y1={y}
+              y2={y}
+              stroke="rgba(79,195,247,0.18)"
+              strokeWidth="1"
+              vectorEffect={flush ? "non-scaling-stroke" : undefined}
+            />
+            <text
+              x={flush ? w - 4 : w - padR + 3}
+              y={y + 3}
+              textAnchor={flush ? "end" : undefined}
+              fill="#8ea0b3"
+              fontSize={flush ? "11" : "7"}
+              fontFamily="IBM Plex Mono, ui-monospace, monospace"
+            >
               {tickFmt(t)}
             </text>
           </g>
         );
       })}
-      <path d={pathFor(values)} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      <path
+        d={pathFor(values)}
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        vectorEffect={flush ? "non-scaling-stroke" : undefined}
+      />
       {overlay ? (
-        <path d={pathFor(overlay)} fill="none" stroke={overlayColor || "#60a5fa"} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        <path
+          d={pathFor(overlay)}
+          fill="none"
+          stroke={overlayColor || "#60a5fa"}
+          strokeWidth="2"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          vectorEffect={flush ? "non-scaling-stroke" : undefined}
+        />
       ) : null}
     </svg>
   );

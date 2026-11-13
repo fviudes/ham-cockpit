@@ -9,6 +9,9 @@ StartLimitBurst=20
 
 [Service]
 Type=simple
+# LCK em /var/lock no disco sobrevive ao reboot e o processo novo recusa o TTY
+# ("Port in use by pid" do próprio ser2net). Limpa lock morto antes de abrir.
+ExecStartPre=-/opt/ham-cockpit/bin/ser2net-clear-locks clean
 ExecStart=/usr/sbin/ser2net -n -c /opt/ser2net/ser2net.yaml
 # Saída 0 e SIGHUP também voltam. O limite acima corta laço se o YAML estiver inválido.
 Restart=always

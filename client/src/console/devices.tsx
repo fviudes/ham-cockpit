@@ -1202,6 +1202,16 @@ export function SpePage() {
   const a = s.spe;
   const ip = s2nAside(s.ser2net.bind, s.ser2net.services, "spe") || tx("s2nPick");
   const link = assignedSvc(s.ser2net.services, "spe");
+  const speState =
+    a.hardware && a.connected
+      ? ip
+      : a.phase === "connecting"
+        ? `${ip} · ${tx("speWait")}`
+        : a.error === "nocomm"
+          ? tx("speNoComm")
+          : a.error === "noport"
+            ? tx("s2nPick")
+            : tx("speOff");
   const cmd = async (k: string) => {
     if (!link) {
       toast.error(tx("s2nPick"));
@@ -1212,6 +1222,7 @@ export function SpePage() {
       applySpe(setS, j);
       if (j.error === "noapi") toast.error(tx("speNeedOta"));
       else if (j.error === "noport") toast.error(tx("s2nPick"));
+      else if (j.error === "nocomm") toast.message(tx("speNoComm"));
       else if (j.error === "tx" || j.error === "timeout") toast.error(String(j.error));
       else if (j.error === "cmd") toast.message(`SPE · ${k}`);
       else {
@@ -1228,15 +1239,10 @@ export function SpePage() {
       <PageHead
         kicker={tx("spe")}
         title={`Expert ${a.model || "1.3K"}-FA`}
-        aside={
-          <span className="text-xs text-[#8ea0b3]">
-            {a.connected ? (a.hardware ? ip : `${ip} · …`) : ip}
-            {a.error ? ` · ${a.error}` : ""}
-          </span>
-        }
+        aside={<span className="text-xs text-[#8ea0b3]">{speState}</span>}
       />
       <Ser2netLink acc="spe" />
-      {!a.connected && a.error ? (
+      {!a.connected && a.error && a.error !== "nocomm" ? (
         <p className="mb-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
           SPE: {a.error === "noport" ? tx("s2nPick") : a.error}
         </p>

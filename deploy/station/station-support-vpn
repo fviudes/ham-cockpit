@@ -1,17 +1,78 @@
 #!/bin/bash
 # Liga ou desliga a VPN de suporte. Chamado via sudo -n.
-#   station-support-vpn start|stop|is-active|is-enabled
+#   station-support-vpn start|stop|is-active|is-enabled|run
 # Não imprime perfil, certificado nem credencial.
 set -euo pipefail
 
 UNIT=ham-cockpit-support-vpn.service
 cmd="${1:-}"
 
+STATE=/opt/ham-cockpit/support-vpn.json
+PROFILE=/opt/ham-cockpit/support/client.ovpn
+OVPN=/usr/sbin/openvpn
+
+vpn_enabled() {
+  [[ -f "$STATE" ]] || return 1
+  local raw
+  raw="$(tr -d '[:space:]' < "$STATE")"
+  [[ "$raw" == *'"enabled":true'* ]]
+}
+
+journal_since() {
+  local mark="$1"
+  if [[ -n "$mark" ]]; then
+    journalctl -u "$UNIT" --after-cursor "$mark" --no-pager -o cat 2>/dev/null || true
+  else
+    journalctl -u "$UNIT" --since "2 min ago" --no-pager -o cat 2>/dev/null || true
+  fi
+}
+
 case "$cmd" in
+  run)
+    # Restart=on-failure só segue se o estado estiver enabled.
+    # Desligado: sai 0 para o systemd não religar o túnel.
+    if ! vpn_enabled; then
+      exit 0
+    fi
+    if [[ ! -x "$OVPN" ]]; then
+      echo "openvpn ausente" >&2
+      exit 1
+    fi
+    if [[ ! -f "$PROFILE" ]]; then
+      echo "perfil ausente" >&2
+      exit 1
+    fi
+    exec "$OVPN" --config "$PROFILE" --writepid /run/ham-cockpit-support-vpn.pid
+    ;;
   start)
-    systemctl enable "$UNIT"
+    systemctl enable "$UNIT" >/dev/null 2>&1
     systemctl reset-failed "$UNIT" >/dev/null 2>&1 || true
-    systemctl start "$UNIT"
+    mark="$(journalctl -u "$UNIT" -n 0 --show-cursor -o cat 2>/dev/null | sed -n 's/^-- cursor: //p' | tail -n 1)"
+    if ! systemctl start "$UNIT" >/dev/null 2>&1; then
+      : # o processo pode cair no AUTH_FAILED antes do start retornar; o journal abaixo decide
+    fi
+    for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do
+      sleep 1
+      log="$(journal_since "$mark")"
+      if printf '%s\n' "$log" | grep -q "Initialization Sequence Completed"; then
+        exit 0
+      fi
+      if printf '%s\n' "$log" | grep -q "AUTH_FAILED"; then
+        systemctl disable --now "$UNIT" >/dev/null 2>&1 || true
+        echo "AUTH_FAILED" >&2
+        exit 1
+      fi
+      if printf '%s\n' "$log" | grep -q "Options error"; then
+        systemctl disable --now "$UNIT" >/dev/null 2>&1 || true
+        echo "Options error" >&2
+        exit 1
+      fi
+    done
+    if ! systemctl is-active --quiet "$UNIT"; then
+      systemctl disable --now "$UNIT" >/dev/null 2>&1 || true
+      echo "O OpenVPN não chegou a estabelecer o túnel." >&2
+      exit 1
+    fi
     ;;
   stop)
     systemctl disable --now "$UNIT" >/dev/null 2>&1 || true
@@ -25,7 +86,7 @@ case "$cmd" in
     systemctl is-enabled "$UNIT" 2>/dev/null || true
     ;;
   *)
-    echo "uso: start|stop|is-active|is-enabled" >&2
+    echo "uso: start|stop|is-active|is-enabled|run" >&2
     exit 2
     ;;
 esac

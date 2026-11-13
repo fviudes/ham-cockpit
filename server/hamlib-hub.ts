@@ -382,12 +382,13 @@ async function runJob(lane: RigLane, job: RigJob) {
   await new Promise<void>((done) => {
     lane.txnDone = done;
     lane.current = job;
+    // O poll da UI é 450 ms. Este timer só solta o HTTP; não fecha o socket.
+    // Fechar aos 2,5 s deixa CLOSE-WAIT enquanto o rigctld ainda está no CI-V
+    // e o próximo poll abre outro TCP. Uma leitura por vez.
     lane.caller = setTimeout(() => {
       lane.caller = null;
       settle(job, { ok: false, reply: "", error: "timeout" });
     }, job.timeoutMs);
-    // Não abre outro TCP enquanto o rigctld não devolve a linha. O poll que
-    // chega no meio recebe "ocupado" em vez de empilhar CLOSE-WAIT.
     lane.hard = setTimeout(() => {
       lane.hard = null;
       dropSock(lane);

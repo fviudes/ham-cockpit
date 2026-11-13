@@ -53,6 +53,7 @@ const BIN_FROM_STATION = [
 
 const BIN_EXTRA = [
   [join(ROOT, "deploy", "lextel", "lextel-bt"), "lextel-bt"],
+  [join(ROOT, "deploy", "ser2net", "ser2net-clear-locks"), "ser2net-clear-locks"],
   [join(ROOT, "deploy", "mmdvm", "mmdvm-ctl"), "mmdvm-ctl"],
   [join(ROOT, "deploy", "mmdvm", "build-binaries.sh"), "mmdvm-build-binaries.sh"],
   [join(ROOT, "deploy", "hamlib", "ampctld-spe"), "ampctld-spe"],

@@ -1,0 +1,113 @@
+#!/bin/bash
+# Lock UUCP do ser2net.
+# /var/lock no disco da raiz sobrevive ao reboot. O PID escrito no LCK é
+# reaproveitado e o ser2net recusa o TTY ("Port in use by pid" do próprio
+# processo). /run/lock fica em tmpfs; /var/lock tem que ser o mesmo sítio.
+# Apagar o arquivo uma vez no gancho da OTA não resolve o próximo boot.
+set -u
+
+mkdir -p /run/lock
+chmod 0775 /run/lock 2>/dev/null || true
+
+fstype="$(findmnt -T /run/lock -n -o FSTYPE 2>/dev/null || true)"
+if [[ "$fstype" != "tmpfs" ]]; then
+  bak="$(mktemp -d)"
+  find /run/lock -maxdepth 1 -name 'LCK*' -exec cp -a {} "$bak/" \; 2>/dev/null || true
+  mount -t tmpfs -o mode=0775,nosuid,nodev tmpfs /run/lock || true
+  find "$bak" -maxdepth 1 -name 'LCK*' -exec cp -a {} /run/lock/ \; 2>/dev/null || true
+  rm -rf "$bak"
+fi
+
+ensure_symlink() {
+  if [[ -L /var/lock ]]; then
+    return 0
+  fi
+  if [[ -e /var/lock && ! -d /var/lock ]]; then
+    echo "ser2net-clear-locks: /var/lock existe e não é diretório" >&2
+    return 1
+  fi
+  if [[ -d /var/lock ]]; then
+    find /var/lock -maxdepth 1 -name 'LCK*' -exec cp -a {} /run/lock/ \; 2>/dev/null || true
+    bak="/var/lock.disk-bak.$$"
+    mv /var/lock "$bak"
+    if ln -s /run/lock /var/lock; then
+      rm -rf "$bak" || true
+      echo "ser2net-clear-locks: /var/lock agora aponta para /run/lock"
+    else
+      mv "$bak" /var/lock
+      echo "ser2net-clear-locks: não consegui apontar /var/lock para /run/lock" >&2
+      return 1
+    fi
+  else
+    ln -s /run/lock /var/lock
+  fi
+}
+
+install_rule() {
+  cat > /etc/tmpfiles.d/ham-cockpit-lock.conf <<'EOF'
+# LCK no disco da raiz sobrevivia ao reboot e o ser2net dizia "Port in use by pid".
+d /run/lock 0775 root root -
+L+ /var/lock - - - - /run/lock
+EOF
+  ensure_symlink
+}
+
+# Lock vale só se o PID tem o TTY aberto. PID morto ou reaproveitado sai.
+clear_stale() {
+  python3 - <<'PY' || true
+import os, pathlib
+holders=set()
+for proc in pathlib.Path("/proc").iterdir():
+    if not proc.name.isdigit():
+        continue
+    try:
+        for item in (proc/"fd").iterdir():
+            tgt=os.readlink(item)
+            if tgt.startswith("/dev/tty") or "/serial/by-id/" in tgt or tgt.startswith("/dev/rfcomm"):
+                holders.add(int(proc.name))
+                break
+    except Exception:
+        pass
+seen=set()
+for root in ("/var/lock", "/run/lock"):
+    p=pathlib.Path(root)
+    if not p.is_dir():
+        continue
+    for f in list(p.glob("LCK*")):
+        try:
+            st=f.stat()
+        except FileNotFoundError:
+            continue
+        key=(st.st_dev, st.st_ino)
+        if key in seen:
+            continue
+        seen.add(key)
+        raw=f.read_text(errors="replace").strip()
+        if not raw.isdigit():
+            continue
+        pid=int(raw)
+        if pid in holders:
+            continue
+        try:
+            f.unlink()
+        except FileNotFoundError:
+            continue
+        print(f"ser2net-clear-locks: removido {f} pid={pid}", flush=True)
+PY
+}
+
+cmd="${1:-clean}"
+case "$cmd" in
+  install)
+    install_rule
+    clear_stale
+    ;;
+  clean)
+    ensure_symlink
+    clear_stale
+    ;;
+  *)
+    echo "uso: ser2net-clear-locks install|clean" >&2
+    exit 2
+    ;;
+esac

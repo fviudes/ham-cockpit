@@ -421,7 +421,10 @@ async function startServer() {
         return;
       }
       const out = await hubRigctl(port, command, host);
-      res.status(out.ok ? 200 : 502).json(out);
+      // ocupado/timeout é fila, não queda do Node. 502 faz o nginx e a UI
+      // trata o console como morto a cada poll de 450 ms.
+      const queued = out.error === "ocupado" || out.error === "timeout" || out.error === "fila cheia";
+      res.status(out.ok || queued ? 200 : 502).json(out);
     } catch (err) {
       res.status(500).json({ ok: false, error: String(err) });
     }

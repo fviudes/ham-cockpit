@@ -162,14 +162,25 @@ function LcdLamp({ label, tone }: { label: string; tone: "amber" | "rx" | "tx" }
   );
 }
 
-/** Serviços ativos em exatamente duas linhas, encolhendo o chip em vez de rolar. */
-function HeaderServiceRows({ chips, corner }: { chips: HeaderChip[]; corner?: ReactNode }) {
+/** Serviços em duas linhas; à direita, idioma/usuário em cima e avisos embaixo, cortados por um fio vertical. */
+function HeaderServiceRows({
+  chips,
+  identity,
+  notices,
+}: {
+  chips: HeaderChip[];
+  identity?: ReactNode;
+  notices?: ReactNode;
+}) {
   const mid = Math.ceil(chips.length / 2);
   const rows = [chips.slice(0, mid), chips.slice(mid)];
   return (
-    <div className="@container col-start-2 row-span-2 grid h-full min-w-0 grid-rows-2 gap-1 overflow-hidden">
+    <div className="@container col-start-2 row-span-2 grid h-full min-w-0 grid-cols-[minmax(0,1fr)_auto] grid-rows-2 gap-x-2 gap-y-1 overflow-hidden">
       {rows.map((row, index) => (
-        <div key={index} className="flex w-full min-h-0 min-w-0 items-center gap-1 overflow-hidden">
+        <div
+          key={index}
+          className={`col-start-1 flex min-h-0 min-w-0 items-center gap-1 overflow-hidden ${index === 0 ? "row-start-1" : "row-start-2"}`}
+        >
           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
             {row.map((chip) => {
               const cls = `${HEADER_CHIP} ${chip.className}`;
@@ -194,9 +205,15 @@ function HeaderServiceRows({ chips, corner }: { chips: HeaderChip[]; corner?: Re
               );
             })}
           </div>
-          {index === 0 && corner ? <div className="flex shrink-0 items-center gap-2">{corner}</div> : null}
         </div>
       ))}
+      <div className="col-start-2 row-span-2 row-start-1 flex min-h-0 items-stretch gap-2">
+        <div aria-hidden="true" className="w-px shrink-0 self-stretch bg-[rgba(79,195,247,0.4)]" />
+        <div className="grid shrink-0 grid-rows-2 items-center justify-items-end gap-1 pr-1">
+          <div className="flex items-center justify-end gap-2">{identity}</div>
+          <div className="flex min-h-0 items-center justify-end gap-1.5">{notices}</div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -579,13 +596,13 @@ function Shell({ onLogout }: { onLogout: () => void }) {
             </div>
             <HeaderServiceRows
               chips={headerChips}
-              corner={
+              identity={
                 <>
                   <LangToggle />
-                  {menusOpen ? <UpdatesMenu /> : null}
                   <UserMenu name={user} onLogout={onLogout} menusOpen={menusOpen} />
                 </>
               }
+              notices={menusOpen || import.meta.env.DEV ? <UpdatesMenu preview={import.meta.env.DEV} /> : null}
             />
           </div>
         </header>
