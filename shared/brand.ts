@@ -8,7 +8,7 @@ export const APP_LOGO = "/brand/ham-cockpit-logo-256.png";
 export const APP_LOGO_LG = "/brand/ham-cockpit-logo-512.png";
 export const APP_USER = "hamcockpit";
 /** Versão completa (3 ou 4 partes). Ver docs/versionamento.md. */
-export const APP_VERSION = "0.1.10.01";
+export const APP_VERSION = "0.1.10.02";
 /** Base de imagem (sempre 3 partes) para nomes `.img.xz` / release de bake. */
 export const APP_IMAGE_VERSION = imageBase(APP_VERSION);
 export const APP_BLE_NAME = "Ham-Cockpit-Web01";

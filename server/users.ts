@@ -7,12 +7,14 @@ const execFileAsync = promisify(execFile);
 const HELPER = "/opt/ham-cockpit/bin/station-user";
 const NAME_RE = /^[a-z][a-z0-9_-]{0,31}$/;
 const FORBIDDEN = new Set(["root", "daemon", "bin", "sys", "sync", "games", "man", "mail", "www-data", "nobody"]);
+const PROTECTED = new Set(["root", "hamcockpit", "suporte"]);
 
 export type LinuxUser = { name: string; sudo: boolean };
 
 const mockUsers: LinuxUser[] = [
   { name: "hamcockpit", sudo: true },
   { name: "admin", sudo: true },
+  { name: "suporte", sudo: true },
 ];
 
 function linux(): boolean {
@@ -69,6 +71,9 @@ export async function listUsers(): Promise<LinuxUser[]> {
 
 export async function createUser(name: string, password: string): Promise<{ ok: boolean; error?: string }> {
   const user = name.trim().toLowerCase();
+  if (user === "suporte") {
+    return { ok: false, error: "usuário protegido" };
+  }
   if (!NAME_RE.test(user) || FORBIDDEN.has(user)) {
     return { ok: false, error: "nome inválido" };
   }
@@ -94,7 +99,7 @@ export async function createUser(name: string, password: string): Promise<{ ok: 
 
 export async function deleteUser(name: string): Promise<{ ok: boolean; error?: string }> {
   const user = name.trim().toLowerCase();
-  if (user === "hamcockpit" || user === "root" || !NAME_RE.test(user)) {
+  if (PROTECTED.has(user) || !NAME_RE.test(user)) {
     return { ok: false, error: "usuário protegido" };
   }
   if (!linux()) {

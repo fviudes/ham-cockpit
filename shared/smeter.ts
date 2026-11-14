@@ -42,10 +42,10 @@ export function hamlibStrengthToUiSMeter(dbRelS9: number): number {
 
 /**
  * Tentativa do ponteiro no menu. O poll de frequência/modo/PTT continua no ritmo antigo.
- * 25 vezes por segundo (1000/25 = 40 ms). Se a leitura anterior ainda não voltou,
+ * 60 vezes por segundo (1000/60 ≈ 17 ms). Se a leitura anterior ainda não voltou,
  * o tick não dispara outro fetch.
  */
-export const SMETER_POLL_MS = Math.round(1000 / 25);
+export const SMETER_POLL_MS = Math.round(1000 / 60);
 
 export function smeterTickOpen(inFlight: boolean): boolean {
   return !inFlight;

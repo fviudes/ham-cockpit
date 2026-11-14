@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.10.01** (`version.json`).
+Versão atual neste canal: **0.1.10.02** (`version.json`).
 
 ## Versionamento
 
@@ -20,12 +20,12 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.10.01",
+  "version": "0.1.10.02",
   "channel": "main",
-  "file": "ham-cockpit-0.1.10.01.tgz",
-  "sha256": "7e302d84767f1cc5fce0bb6a68579b7d206a55a5f18083c9b810bfb0e6cba83f",
-  "bytes": 5058163,
-  "notes": "Ham Cockpit v0.1.10.01 — Lextel aceita pump e religa uma vez; S-meter a 25 Hz; Power on do IC-705 em 0x18 0x01.\n\nA OTA não sobrescreve rádios, INI, services.json, Lextel, SPE nem a escolha da VPN."
+  "file": "ham-cockpit-0.1.10.02.tgz",
+  "sha256": "22b1a14ed92366f0c8516f9c9db5512f75394d6f2682ff75723783bc13d2829f",
+  "bytes": 5060095,
+  "notes": "Ham Cockpit v0.1.10.02 — S-meter a 60 Hz; conta suporte fixa com sudo de root; a resposta da VPN volta pelo túnel.\n\nA OTA não sobrescreve rádios, INI, services.json, Lextel, SPE nem a escolha da VPN."
 }
 ```
 

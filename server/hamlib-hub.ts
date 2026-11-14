@@ -257,7 +257,7 @@ function isSmeterPoll(command: string) {
 }
 
 /**
- * STRENGTH a 25 Hz não entra se a faixa está ocupada: o tick é pulado.
+ * STRENGTH a 60 Hz não entra se a faixa está ocupada: o tick é pulado.
  * `f` / `m` / `t` podem ficar no único lugar atrás da leitura atual, no mesmo
  * socket. Segundo poll, ou fila já com alguém, não entra — não abre outro TCP.
  */
@@ -454,7 +454,7 @@ function ensureSock(lane: RigLane): Promise<void> {
 async function runJob(lane: RigLane, job: RigJob) {
   lane.lines = [];
   lane.buf = "";
-  // Marca a leitura no ar antes do TCP. O próximo poll (S-meter a 25 Hz)
+  // Marca a leitura no ar antes do TCP. O próximo poll (S-meter a 60 Hz)
   // vê a faixa ocupada e não entra na fila enquanto esta não fechar.
   lane.current = job;
   try {
@@ -472,7 +472,7 @@ async function runJob(lane: RigLane, job: RigJob) {
   await new Promise<void>((done) => {
     lane.txnDone = done;
     lane.current = job;
-    // O poll geral da UI é 450 ms. O S-meter pede STRENGTH à parte (40 ms)
+    // O poll geral da UI é 450 ms. O S-meter pede STRENGTH à parte (17 ms)
     // e, com a faixa ocupada, recebe "ocupado" sem segundo socket.
     // Este timer só solta o HTTP; não fecha o socket.
     // Fechar aos 2,5 s deixa CLOSE-WAIT enquanto o rigctld ainda está no CI-V

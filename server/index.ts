@@ -354,7 +354,7 @@ async function startServer() {
         return;
       }
       const out = await icomLanCmd(cmd, (req.body ?? {}) as Record<string, unknown>);
-      // O S-meter a 25 Hz pula o tick. 502 faria o nginx tratar o console como morto.
+      // O S-meter a 60 Hz pula o tick. 502 faria o nginx tratar o console como morto.
       if (cmd === "smeter") {
         res.status(200).json(out);
         return;

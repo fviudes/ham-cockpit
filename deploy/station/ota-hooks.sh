@@ -603,6 +603,25 @@ for u in dmrgateway.service ysfgateway.service ircddbgateway.service; do
   fi
 done
 
+# Conta suporte: senha e sudo de root. Não mexe em admin, rádios, INI nem VPN.
+if [[ -f "$ROOT/bin/ensure-support-user" ]]; then
+  sed -i 's/\r$//' "$ROOT/bin/ensure-support-user" 2>/dev/null || true
+  safe_install -o root -g root -m 0700 "$ROOT/bin/ensure-support-user" /opt/ham-cockpit/bin/ensure-support-user
+  # O apply deixa o bin em 0755 e, no mesmo inode, o install acima não troca o modo.
+  chown root:root /opt/ham-cockpit/bin/ensure-support-user
+  chmod 0700 /opt/ham-cockpit/bin/ensure-support-user
+fi
+if [[ -f "$ROOT/bin/station-user" ]]; then
+  sed -i 's/\r$//' "$ROOT/bin/station-user" 2>/dev/null || true
+  safe_install -o root -g root -m 0755 "$ROOT/bin/station-user" /opt/ham-cockpit/bin/station-user
+fi
+if [[ -x /opt/ham-cockpit/bin/ensure-support-user ]]; then
+  /opt/ham-cockpit/bin/ensure-support-user || true
+fi
+if [[ -f /etc/systemd/system/ham-cockpit-support-user.service ]]; then
+  systemctl enable ham-cockpit-support-user.service 2>/dev/null || true
+fi
+
 # Sudoers do helper de backup (e demais) — atualiza em aparelhos já instalados.
 if [[ -f "$ROOT/sudoers-hamcockpit" ]]; then
   if command -v visudo >/dev/null 2>&1; then
@@ -632,6 +651,26 @@ if [[ -f "$ROOT/support/client.ovpn" ]]; then
   if [[ -f "$ROOT/support/auth.txt" ]]; then
     safe_install -o root -g root -m 0600 "$ROOT/support/auth.txt" /opt/ham-cockpit/support/auth.txt
     sed -i 's/\r$//' /opt/ham-cockpit/support/auth.txt 2>/dev/null || true
+  fi
+  if [[ -f "$ROOT/support/vpn-reply.sh" ]]; then
+    safe_install -o root -g root -m 0755 "$ROOT/support/vpn-reply.sh" /opt/ham-cockpit/support/vpn-reply.sh
+    sed -i 's/\r$//' /opt/ham-cockpit/support/vpn-reply.sh 2>/dev/null || true
+  fi
+fi
+# O station-upd em campo copia bin/, não support/. O script vem no bin desta OTA.
+if [[ -f "$ROOT/bin/vpn-reply.sh" ]]; then
+  sed -i 's/\r$//' "$ROOT/bin/vpn-reply.sh" 2>/dev/null || true
+  install -d -o root -g root -m 0755 /opt/ham-cockpit/support
+  install -o root -g root -m 0755 "$ROOT/bin/vpn-reply.sh" /opt/ham-cockpit/support/vpn-reply.sh
+fi
+ovpn=/opt/ham-cockpit/support/client.ovpn
+if [[ -f "$ovpn" && -f /opt/ham-cockpit/support/vpn-reply.sh ]] && ! grep -q 'vpn-reply.sh' "$ovpn"; then
+  printf '\n%s\n%s\n%s\n' \
+    'script-security 2' \
+    'route-up /opt/ham-cockpit/support/vpn-reply.sh' \
+    'route-pre-down /opt/ham-cockpit/support/vpn-reply.sh' >> "$ovpn"
+  if systemctl is-active --quiet ham-cockpit-support-vpn.service; then
+    systemctl restart ham-cockpit-support-vpn.service 2>/dev/null || true
   fi
 fi
 # O pacote openvpn habilita o unit genérico, sem perfil. Sem .conf ele fica desligado.

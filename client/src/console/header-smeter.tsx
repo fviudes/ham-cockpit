@@ -6,7 +6,7 @@
  * de S0 a S9+60). Agulha só se move com leitura real do rádio; sem sinal
  * fica no batente esquerdo (S0), sem número de dBm.
  *
- * A leitura do ponteiro é só o nível (25 Hz). Frequência, modo e o resto
+ * A leitura do ponteiro é só o nível (60 Hz). Frequência, modo e o resto
  * do menu continuam no poll de 450 ms.
  */
 import { useEffect, useRef, useState } from "react";
@@ -16,7 +16,7 @@ import { pollPrimarySmeter } from "./radio-cmd";
 import { publishSmeter, subscribeSmeter } from "./smeter-bus";
 import { useConsole } from "./state";
 
-/** O painel VFO acompanha o medidor no ritmo antigo (~1 s), não a 25 Hz. */
+/** O painel VFO acompanha o medidor no ritmo antigo (~1 s), não a 60 Hz. */
 const SMETER_STATE_MS = 900;
 
 const CX = 246;
@@ -116,12 +116,12 @@ function Ticks({
 }
 
 /**
- * Curva da agulha. 17 ms é a mesma fração da amostra (~42%) que os 28 ms eram a 15 Hz:
- * assenta dentro de uma leitura de 25 Hz (40 ms) e ainda atravessa vários quadros.
+ * Curva da agulha. 7 ms é a mesma fração da amostra (~42%) que os 17 ms eram a 25 Hz:
+ * assenta dentro de uma leitura de 60 Hz (17 ms).
  */
-const NEEDLE_TAU_MS = 17;
+const NEEDLE_TAU_MS = 7;
 /** Quadro atrasado não percorre a curva inteira — evita o salto seco. */
-const NEEDLE_DT_CAP_MS = 19;
+const NEEDLE_DT_CAP_MS = 8;
 
 function useSmoothedAngle(reading: number | null) {
   const target = needleAngle(reading);

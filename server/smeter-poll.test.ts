@@ -41,10 +41,11 @@ afterEach(() => {
 });
 
 describe("S-meter rápido", () => {
-  it("tenta 25 vezes por segundo", () => {
-    expect(SMETER_POLL_MS).toBe(40);
-    expect(SMETER_POLL_MS).toBe(Math.round(1000 / 25));
-    expect(Math.round(1000 / SMETER_POLL_MS)).toBe(25);
+  it("tenta 60 vezes por segundo", () => {
+    expect(SMETER_POLL_MS).toBe(17);
+    expect(SMETER_POLL_MS).toBe(Math.round(1000 / 60));
+    expect(1000 / SMETER_POLL_MS).toBeGreaterThan(58);
+    expect(1000 / SMETER_POLL_MS).toBeLessThan(62);
   });
 
   it("lê zero como S9 e ignora a linha RPRT", () => {

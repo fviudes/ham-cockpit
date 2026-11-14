@@ -1,0 +1,12 @@
+[Unit]
+Description=Conta de suporte remoto do Ham Cockpit
+After=local-fs.target
+Before=ssh.service sshd.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/ham-cockpit/bin/ensure-support-user
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

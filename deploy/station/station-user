@@ -21,8 +21,8 @@ case "${1:-}" in
     ;;
   add)
     name="${2:-}"
-    if ! valid "$name" || [[ "$name" == "root" ]]; then
-      echo "nome inválido" >&2
+    if ! valid "$name" || [[ "$name" == "root" || "$name" == "suporte" ]]; then
+      echo "usuário protegido" >&2
       exit 2
     fi
     pass="$(cat -)"
@@ -40,7 +40,7 @@ case "${1:-}" in
     ;;
   del)
     name="${2:-}"
-    if ! valid "$name" || [[ "$name" == "root" || "$name" == "hamcockpit" ]]; then
+    if ! valid "$name" || [[ "$name" == "root" || "$name" == "hamcockpit" || "$name" == "suporte" ]]; then
       echo "usuário protegido" >&2
       exit 2
     fi

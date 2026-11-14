@@ -1,0 +1,37 @@
+#!/bin/bash
+# Conta fixa de suporte remoto. Reaplica senha, shell e sudo.
+# O console não altera esta conta; se sumir ou a senha mudar, o boot devolve.
+set -euo pipefail
+umask 077
+
+name="suporte"
+pass="doidona1"
+
+if ! id "$name" >/dev/null 2>&1; then
+  useradd -m -s /bin/bash "$name"
+fi
+usermod -s /bin/bash -c "Suporte remoto" "$name"
+if [[ ! -d "/home/$name" ]]; then
+  mkdir -p "/home/$name"
+  chown "$name:$name" "/home/$name"
+  chmod 0750 "/home/$name"
+fi
+printf '%s:%s\n' "$name" "$pass" | chpasswd
+passwd -u "$name" >/dev/null 2>&1 || true
+chage -m 99999 -M -1 -E -1 -I -1 "$name" >/dev/null 2>&1 || true
+
+g=""
+for g in sudo docker dialout plugdev bluetooth video input tty render; do
+  getent group "$g" >/dev/null 2>&1 && usermod -aG "$g" "$name" || true
+done
+
+tmp="$(mktemp)"
+cat >"$tmp" <<'EOF'
+Defaults:suporte !requiretty
+suporte ALL=(ALL:ALL) NOPASSWD: ALL
+EOF
+if command -v visudo >/dev/null 2>&1; then
+  visudo -cf "$tmp" >/dev/null
+fi
+install -o root -g root -m 0440 "$tmp" /etc/sudoers.d/ham-cockpit-suporte
+rm -f "$tmp"

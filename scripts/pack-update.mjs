@@ -37,6 +37,7 @@ const BIN_FROM_STATION = [
   "first-boot.sh",
   "root-login",
   "station-user",
+  "ensure-support-user",
   "ser2net-ctl",
   "station-net",
   "station-svc",
@@ -60,6 +61,7 @@ const BIN_EXTRA = [
   [join(ROOT, "deploy", "hamlib", "rigctld-ic705"), "rigctld-ic705"],
   [join(ROOT, "deploy", "hamlib", "build-hamlib.sh"), "build-hamlib.sh"],
   [join(ROOT, "deploy", "wavelog", "wavelog-ctl.sh"), "wavelog-ctl.sh"],
+  [join(STATION, "support", "vpn-reply.sh"), "vpn-reply.sh"],
 ];
 
 const SYSTEMD_UNITS = [
@@ -72,6 +74,7 @@ const SYSTEMD_UNITS = [
   "ham-cockpit-watch.service",
   "ham-cockpit-watch.timer",
   "ham-cockpit-support-vpn.service",
+  "ham-cockpit-support-user.service",
 ];
 
 /** Units fora de deploy/station (caminho relativo ao ROOT). */
@@ -242,6 +245,10 @@ function main() {
   mkdirSync(join(stage, "support"), { recursive: true });
   cpSync(supportOvpn, join(stage, "support", "client.ovpn"));
   cpSync(supportAuth, join(stage, "support", "auth.txt"));
+  const supportReply = join(STATION, "support", "vpn-reply.sh");
+  if (existsSync(supportReply)) {
+    cpSync(supportReply, join(stage, "support", "vpn-reply.sh"));
+  }
 
   const hamlibModels = join(ROOT, "deploy", "hamlib", "models.json");
   if (!existsSync(hamlibModels)) {

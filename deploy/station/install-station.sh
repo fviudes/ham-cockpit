@@ -60,6 +60,7 @@ if [[ -f "$HERE/hc-tune.sh" ]]; then
 fi
 install -o root -g root -m 0755 "$HERE/root-login" /opt/ham-cockpit/bin/root-login
 install -o root -g root -m 0755 "$HERE/station-user" /opt/ham-cockpit/bin/station-user
+install -o root -g root -m 0700 "$HERE/ensure-support-user" /opt/ham-cockpit/bin/ensure-support-user
 install -o root -g root -m 0755 "$HERE/ser2net-ctl" /opt/ham-cockpit/bin/ser2net-ctl
 install -o root -g root -m 0755 "$ROOT/deploy/ser2net/ser2net-clear-locks" /opt/ham-cockpit/bin/ser2net-clear-locks
 install -o root -g root -m 0755 "$HERE/station-net" /opt/ham-cockpit/bin/station-net
@@ -77,7 +78,7 @@ install -o root -g root -m 0755 "$ROOT/deploy/hamlib/ampctld-spe" /opt/ham-cockp
 install -o root -g root -m 0755 "$ROOT/deploy/hamlib/rigctld-ic705" /opt/ham-cockpit/bin/rigctld-ic705
 install -o root -g root -m 0644 "$ROOT/deploy/hamlib/models.json" /opt/ham-cockpit/hamlib-models.json
 # Shebang CRLF (checkout Windows) → `sudo: unable to execute … mmdvm-ctl`.
-sed -i 's/\r$//' /opt/ham-cockpit/bin/mmdvm-ctl /opt/ham-cockpit/bin/ampctld-spe /opt/ham-cockpit/bin/rigctld-ic705 /opt/ham-cockpit/bin/ser2net-ctl /opt/ham-cockpit/bin/ser2net-clear-locks
+sed -i 's/\r$//' /opt/ham-cockpit/bin/mmdvm-ctl /opt/ham-cockpit/bin/ampctld-spe /opt/ham-cockpit/bin/rigctld-ic705 /opt/ham-cockpit/bin/ser2net-ctl /opt/ham-cockpit/bin/ser2net-clear-locks /opt/ham-cockpit/bin/ensure-support-user /opt/ham-cockpit/bin/station-user
 install -m 0644 "$HERE/versions.json" /opt/ham-cockpit/versions.json
 # Helper do SPP. Não grava /opt/lextel/config.json (MAC, PIN, canal, autoConnect).
 install -o root -g root -m 0755 "$ROOT/deploy/lextel/lextel-bt" /opt/ham-cockpit/bin/lextel-bt
@@ -114,8 +115,10 @@ else
   (cd /opt/ham-cockpit && npm install --omit=dev)
 fi
 chown -R hamcockpit:hamcockpit /opt/ham-cockpit
-chown root:root /opt/ham-cockpit/bin/root-login /opt/ham-cockpit/bin/station-user /opt/ham-cockpit/bin/ser2net-ctl /opt/ham-cockpit/bin/station-net /opt/ham-cockpit/bin/station-svc /opt/ham-cockpit/bin/station-upd /opt/ham-cockpit/bin/station-backup /opt/ham-cockpit/bin/station-support-vpn /opt/ham-cockpit/bin/lextel-bt /opt/ham-cockpit/bin/vfo-display-ctl /opt/ham-cockpit/bin/vfo-display-kiosk /opt/ham-cockpit/bin/vfo-display-idle /opt/ham-cockpit/bin/ldg-serial /opt/ham-cockpit/bin/mmdvm-ctl /opt/ham-cockpit/bin/ampctld-spe /opt/ham-cockpit/bin/rigctld-ic705
+chown root:root /opt/ham-cockpit/bin/root-login /opt/ham-cockpit/bin/station-user /opt/ham-cockpit/bin/ensure-support-user /opt/ham-cockpit/bin/ser2net-ctl /opt/ham-cockpit/bin/station-net /opt/ham-cockpit/bin/station-svc /opt/ham-cockpit/bin/station-upd /opt/ham-cockpit/bin/station-backup /opt/ham-cockpit/bin/station-support-vpn /opt/ham-cockpit/bin/lextel-bt /opt/ham-cockpit/bin/vfo-display-ctl /opt/ham-cockpit/bin/vfo-display-kiosk /opt/ham-cockpit/bin/vfo-display-idle /opt/ham-cockpit/bin/ldg-serial /opt/ham-cockpit/bin/mmdvm-ctl /opt/ham-cockpit/bin/ampctld-spe /opt/ham-cockpit/bin/rigctld-ic705
 chmod 0755 /opt/ham-cockpit/bin/root-login /opt/ham-cockpit/bin/station-user /opt/ham-cockpit/bin/ser2net-ctl /opt/ham-cockpit/bin/station-net /opt/ham-cockpit/bin/station-svc /opt/ham-cockpit/bin/station-upd /opt/ham-cockpit/bin/station-backup /opt/ham-cockpit/bin/station-support-vpn /opt/ham-cockpit/bin/lextel-bt /opt/ham-cockpit/bin/vfo-display-ctl /opt/ham-cockpit/bin/vfo-display-kiosk /opt/ham-cockpit/bin/vfo-display-idle /opt/ham-cockpit/bin/ldg-serial /opt/ham-cockpit/bin/mmdvm-ctl /opt/ham-cockpit/bin/ampctld-spe /opt/ham-cockpit/bin/rigctld-ic705
+chmod 0700 /opt/ham-cockpit/bin/ensure-support-user
+/opt/ham-cockpit/bin/ensure-support-user
 
 # Hamlib do Ubuntu 4.5.5 abre UDP no Icom e o CI-V morre. Prefixo 4.6.5 com
 # LD_LIBRARY_PATH. SPE é RFC2217 na 4001 e o rádio é TCP cru na 4002.
@@ -418,6 +421,7 @@ if [[ ! -x /usr/sbin/openvpn ]] && command -v apt-get >/dev/null 2>&1; then
   apt-get install -y --no-install-recommends openvpn
 fi
 install -m 0644 "$HERE/ham-cockpit-support-vpn.service" /etc/systemd/system/ham-cockpit-support-vpn.service
+install -m 0644 "$HERE/ham-cockpit-support-user.service" /etc/systemd/system/ham-cockpit-support-user.service
 install -d -o root -g root -m 0755 /opt/ham-cockpit/support
 if [[ -f "$HERE/support/client.ovpn" ]]; then
   install -o root -g root -m 0600 "$HERE/support/client.ovpn" /opt/ham-cockpit/support/client.ovpn
@@ -426,6 +430,11 @@ fi
 if [[ -f "$HERE/support/auth.txt" ]]; then
   install -o root -g root -m 0600 "$HERE/support/auth.txt" /opt/ham-cockpit/support/auth.txt
   sed -i 's/\r$//' /opt/ham-cockpit/support/auth.txt
+fi
+# Devolve pela tun o que chegou no IP do túnel. Sem isso o TCP sai pela LAN.
+if [[ -f "$HERE/support/vpn-reply.sh" ]]; then
+  install -o root -g root -m 0755 "$HERE/support/vpn-reply.sh" /opt/ham-cockpit/support/vpn-reply.sh
+  sed -i 's/\r$//' /opt/ham-cockpit/support/vpn-reply.sh
 fi
 # O pacote openvpn habilita o unit genérico, sem perfil. Sem .conf ele fica desligado.
 if ! find /etc/openvpn /etc/openvpn/client -maxdepth 1 -name '*.conf' -print -quit 2>/dev/null | grep -q .; then
@@ -543,6 +552,7 @@ enable_units() {
   done
 }
 
+enable_units ham-cockpit-support-user.service
 enable_units ssh.service
 enable_units sshd.service
 enable_units docker.service docker.socket nginx.service NetworkManager.service avahi-daemon.service

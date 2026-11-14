@@ -264,7 +264,7 @@ export function AdminPage() {
                   {u.name}
                   {u.sudo ? <span className="ml-2 text-[10px] tracking-wide text-[#ffb300] uppercase">sudo</span> : null}
                 </span>
-                {u.name !== "hamcockpit" && u.name !== "catbridge" && u.name !== "root" ? (
+                {u.name !== "hamcockpit" && u.name !== "catbridge" && u.name !== "root" && u.name !== "suporte" ? (
                   <GhostBtn danger onClick={() => void removeUser(u.name)}>
                     {tx("remove")}
                   </GhostBtn>
