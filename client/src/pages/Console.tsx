@@ -155,9 +155,9 @@ function LcdDigits({ text }: { text: string }) {
   );
 }
 
-function LcdLamp({ label, tone }: { label: string; tone: "amber" | "rx" | "tx" }) {
+function LcdLamp({ label, tone }: { label: ReactNode; tone: "amber" | "rx" | "tx" }) {
   return (
-    <span className={`lcd-lamp lcd-14 lcd-lamp-${tone} inline-flex items-center justify-center rounded-full border`}>
+    <span className={`lcd-lamp lcd-14 lcd-lamp-${tone} inline-flex items-center justify-center border`}>
       {label}
     </span>
   );
@@ -577,19 +577,27 @@ function Shell({ onLogout }: { onLogout: () => void }) {
             </button>
           ) : null}
           <div className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] grid-rows-[2.85rem_2.85rem] gap-x-2 gap-y-1">
-            <div className="row-span-2 flex h-full min-h-0 items-stretch gap-1.5">
+            <div className="lcd-bezel row-span-2 flex h-full min-h-0 items-stretch gap-1.5 overflow-hidden py-0.5 pr-2.5 pl-0.5">
             <HeaderSMeter live={liveSignal} />
             <div
               ref={headerFreqRef}
               title={tx("freqWheel")}
-              className="lcd-bezel flex h-full min-h-0 w-max cursor-ns-resize flex-col items-stretch justify-center gap-1 px-2.5"
+              className="flex h-full min-h-0 w-max cursor-ns-resize flex-col items-stretch justify-center gap-1"
             >
               <p className="flex items-baseline justify-center gap-1.5 whitespace-nowrap leading-none">
                 <LcdDigits text={vfoKhz} />
                 <span className="lcd-14 lcd-unit">kHz</span>
               </p>
               <div className="flex items-center justify-center gap-1.5">
-                <LcdLamp label={vfoLetter} tone="amber" />
+                <LcdLamp
+                  label={
+                    <span className="inline-flex items-center gap-1">
+                      <span>VFO</span>
+                      <span>{vfoLetter}</span>
+                    </span>
+                  }
+                  tone="amber"
+                />
                 <LcdLamp label={vfoMode} tone="amber" />
                 <LcdLamp label={s.ptt ? tx("tx") : tx("rx")} tone={s.ptt ? "tx" : "rx"} />
               </div>

@@ -43,13 +43,13 @@ export function hamlibStrengthToUiSMeter(dbRelS9: number): number {
 /**
  * Tentativa de leitura no rádio. O poll de frequência/modo/PTT continua no ritmo antigo.
  * 60 vezes por segundo (1000/60 ≈ 17 ms). Se a leitura anterior ainda não voltou,
- * o tick não dispara outro fetch. O desenho do ponteiro e da barra é mais lento
- * (SMETER_FRAME_MS) e persegue este alvo numa curva.
+ * o tick não dispara outro fetch. O desenho do ponteiro e da barra acompanha
+ * a 60 quadros (SMETER_FRAME_MS) e persegue este alvo na mesma curva.
  */
 export const SMETER_POLL_MS = Math.round(1000 / 60);
 
-/** Desenho do ponteiro e da barra: 30 quadros por segundo. */
-export const SMETER_FRAME_MS = Math.round(1000 / 30);
+/** Desenho do ponteiro e da barra: 60 quadros por segundo. A curva (tau) não muda. */
+export const SMETER_FRAME_MS = Math.round(1000 / 60);
 /**
  * Constante de tempo da curva, igual na subida e na descida.
  * ~63% do caminho em 160 ms; um salto de várias unidades S atravessa vários quadros.

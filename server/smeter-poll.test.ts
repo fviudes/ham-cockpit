@@ -51,9 +51,11 @@ describe("S-meter rápido", () => {
     expect(1000 / SMETER_POLL_MS).toBeLessThan(62);
   });
 
-  it("desenha a 30 quadros por segundo", () => {
-    expect(SMETER_FRAME_MS).toBe(33);
-    expect(SMETER_FRAME_MS).toBe(Math.round(1000 / 30));
+  it("desenha a 60 quadros por segundo", () => {
+    expect(SMETER_FRAME_MS).toBe(17);
+    expect(SMETER_FRAME_MS).toBe(Math.round(1000 / 60));
+    expect(1000 / SMETER_FRAME_MS).toBeGreaterThan(58);
+    expect(1000 / SMETER_FRAME_MS).toBeLessThan(62);
   });
 
   it("um quadro não fecha o salto e a curva é simétrica", () => {

@@ -1,8 +1,8 @@
 {
-  "version": "0.1.10.03",
+  "version": "0.1.10.04",
   "channel": "main",
-  "file": "ham-cockpit-0.1.10.03.tgz",
-  "sha256": "e472c617abeb206c8e036bb0d6fd0955fafeae648781497bf13516d6841d7e87",
-  "bytes": 5060863,
-  "notes": "Ham Cockpit v0.1.10.03 — S-meter sobe e desce suave a 30 quadros; a captura do Lextel não trava; o usuário suporte entra no console web e não pode ser removido.\n\nA OTA não sobrescreve rádios, INI, services.json, Lextel, SPE nem a escolha da VPN."
+  "file": "ham-cockpit-0.1.10.04.tgz",
+  "sha256": "5e3906d9ccf2ae148e82e608196318727c39bddb2f9e519c9b9d99860309f5b9",
+  "bytes": 5060602,
+  "notes": "Ham Cockpit v0.1.10.04 — frequencímetro e frequência no mesmo LCD âmbar, com VFO, modo e RX/TX em caixas; o S-meter desenha a 60 quadros com a mesma suavidade.\n\nA OTA não sobrescreve rádios, INI, services.json, Lextel, SPE nem a escolha da VPN."
 }

@@ -6,7 +6,7 @@
  * de S0 a S9+60). Agulha só se move com leitura real do rádio; sem sinal
  * fica no batente esquerdo (S0), sem número de dBm.
  *
- * A leitura do ponteiro é só o nível. O desenho sobe e desce a 30 quadros/s;
+ * A leitura do ponteiro é só o nível. O desenho sobe e desce a 60 quadros/s;
  * a leitura no rádio continua no poll rápido e, se estiver ocupada, é pulada.
  * Frequência, modo e o resto do menu continuam no poll de 450 ms.
  */
@@ -192,7 +192,7 @@ export function HeaderSMeter({ live }: { live: boolean }) {
 
   return (
     <div
-      className="h-full shrink-0 overflow-hidden rounded-[3px] bg-black"
+      className="h-full shrink-0 overflow-hidden"
       style={{ aspectRatio: "478 / 200" }}
       role="meter"
       aria-label={hasReading ? "Medidor S" : "Medidor S em repouso"}
