@@ -1,8 +1,8 @@
 {
-  "version": "0.1.09.02",
+  "version": "0.1.09.03",
   "channel": "main",
-  "file": "ham-cockpit-0.1.09.02.tgz",
-  "sha256": "11519e1feb079788bb71ce65c6cbe9b3898c081ecfce69b9a43d0eb03edb8769",
-  "bytes": 5049531,
-  "notes": "Ham Cockpit v0.1.09.02 — SPE sai de aguardando ao desligar, VPN de suporte, firewall do túnel e menu."
+  "file": "ham-cockpit-0.1.09.03.tgz",
+  "sha256": "3b3ff4ca22639c0fcf5afc5d68d98e14d1638abed39da895cdfc3d51f51a7cd8",
+  "bytes": 5051208,
+  "notes": "Ham Cockpit v0.1.09.03 — Lextel permanece ativo depois da atualização e a VPN aceita 10.8.0.0/16."
 }
