@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.09.03** (`version.json`).
+Versão atual neste canal: **0.1.09.04** (`version.json`).
 
 ## Versionamento
 
@@ -20,12 +20,12 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.09.03",
+  "version": "0.1.09.04",
   "channel": "main",
-  "file": "ham-cockpit-0.1.09.03.tgz",
-  "sha256": "3b3ff4ca22639c0fcf5afc5d68d98e14d1638abed39da895cdfc3d51f51a7cd8",
-  "bytes": 5051208,
-  "notes": "Ham Cockpit v0.1.09.03 — Lextel permanece ativo depois da atualização e a VPN aceita 10.8.0.0/16."
+  "file": "ham-cockpit-0.1.09.04.tgz",
+  "sha256": "641098ab0aeef9afaa0a4d7d9783caaac6aedb19d20f1899b268a9fb4fb48caf",
+  "bytes": 5052867,
+  "notes": "Ham Cockpit v0.1.09.04 — S-meter no menu e o aparelho aparece no DHCP como ham-cockpit."
 }
 ```
 
