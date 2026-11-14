@@ -1,4 +1,4 @@
-/** Amostras do S-meter. O ponteiro assina aqui; o restante do header não re-renderiza a 60 Hz. */
+/** Amostras do S-meter. Ponteiro e barra assinam aqui; o restante do header não re-renderiza a cada leitura. */
 type Listener = (reading: number) => void;
 
 const listeners = new Set<Listener>();

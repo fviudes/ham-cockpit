@@ -1,8 +1,8 @@
 {
-  "version": "0.1.10.02",
+  "version": "0.1.10.03",
   "channel": "main",
-  "file": "ham-cockpit-0.1.10.02.tgz",
-  "sha256": "22b1a14ed92366f0c8516f9c9db5512f75394d6f2682ff75723783bc13d2829f",
-  "bytes": 5060095,
-  "notes": "Ham Cockpit v0.1.10.02 — S-meter a 60 Hz; conta suporte fixa com sudo de root; a resposta da VPN volta pelo túnel.\n\nA OTA não sobrescreve rádios, INI, services.json, Lextel, SPE nem a escolha da VPN."
+  "file": "ham-cockpit-0.1.10.03.tgz",
+  "sha256": "e472c617abeb206c8e036bb0d6fd0955fafeae648781497bf13516d6841d7e87",
+  "bytes": 5060863,
+  "notes": "Ham Cockpit v0.1.10.03 — S-meter sobe e desce suave a 30 quadros; a captura do Lextel não trava; o usuário suporte entra no console web e não pode ser removido.\n\nA OTA não sobrescreve rádios, INI, services.json, Lextel, SPE nem a escolha da VPN."
 }

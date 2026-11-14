@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { useEffect, useRef, type ReactNode } from "react";
 import { resolvePrimaryRoute, sendPrimaryCmd } from "./radio-cmd";
+import { useEasedNumber, useSmoothedSmeter } from "./smeter-motion";
 import { BANDS, formatVfo, MODES, radioCardTitle, sMeterLabel, useConsole } from "./state";
 import { Chip, ConsoleSelect, Lcd, PanelTitle } from "./widgets";
 
@@ -9,13 +10,14 @@ const PRE = ["OFF", "ON1", "ON2"] as const;
 
 export function VfoPanel() {
   const { s, setS, setFreq, tx, pushLog } = useConsole();
-  const sm = sMeterLabel(s.smeter);
-  const activeHz = s.vfo === "B" ? s.freqB : s.freq;
-  const activeMode = s.vfo === "B" ? s.modeB : s.mode;
-  const bandId = bandOf(activeHz);
   const bleReady = s.ic705.phase === "ready" && s.ic705.ble;
   const route = resolvePrimaryRoute(s.radios.items, { bleReady });
   const liveCat = route.live;
+  const sShown = useSmoothedSmeter(liveCat, s.smeter);
+  const sm = sMeterLabel(sShown);
+  const activeHz = s.vfo === "B" ? s.freqB : s.freq;
+  const activeMode = s.vfo === "B" ? s.modeB : s.mode;
+  const bandId = bandOf(activeHz);
   const primaryRadio = s.radios.items.find((r) => r.primary);
   const panelRadio = route.radio || s.radios.items.find((r) => r.connected) || primaryRadio;
   const radioTitle = radioCardTitle(panelRadio, tx("radioFallback"));
@@ -163,7 +165,7 @@ export function VfoPanel() {
 
       <Ic705Meter
         txOn={s.ptt}
-        sValue={s.smeter}
+        sValue={sShown}
         po={s.po || 0}
         sLabel={sm}
         poLabel={tx("meterPo")}
@@ -425,7 +427,8 @@ function Ic705Meter({
   poLabel: string;
   sName: string;
 }) {
-  const fill = txOn ? Math.max(0, Math.min(1, po / 10)) : sMeterFill(sValue);
+  const poFill = useEasedNumber(txOn ? Math.max(0, Math.min(1, po / 10)) : 0);
+  const fill = txOn ? poFill : sMeterFill(sValue);
   const lit = Math.round(fill * METER_SEGS);
   const marks = txOn ? PO_MARKS : S_MARKS;
   const bySeg = new Map(marks.map((m) => [markSeg(m.at), m.label]));

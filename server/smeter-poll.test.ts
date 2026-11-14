@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  SMETER_DT_CAP_MS,
+  SMETER_FRAME_MS,
   SMETER_POLL_MS,
   hamlibStrengthToUiSMeter,
   parseHamlibStrength,
   runSmeterPoll,
+  stepSmeter,
 } from "../shared/smeter";
 import { hubRigctl, noteRigPower, rewriteIc705PowerOn, rigCommandAdmission } from "./hamlib-hub";
 import { pollPrimarySmeter, sendPrimaryCmd } from "../client/src/console/radio-cmd";
@@ -46,6 +49,26 @@ describe("S-meter rápido", () => {
     expect(SMETER_POLL_MS).toBe(Math.round(1000 / 60));
     expect(1000 / SMETER_POLL_MS).toBeGreaterThan(58);
     expect(1000 / SMETER_POLL_MS).toBeLessThan(62);
+  });
+
+  it("desenha a 30 quadros por segundo", () => {
+    expect(SMETER_FRAME_MS).toBe(33);
+    expect(SMETER_FRAME_MS).toBe(Math.round(1000 / 30));
+  });
+
+  it("um quadro não fecha o salto e a curva é simétrica", () => {
+    const up = stepSmeter(0, 9, SMETER_FRAME_MS);
+    const down = stepSmeter(9, 0, SMETER_FRAME_MS);
+    expect(up).toBeGreaterThan(0);
+    expect(up).toBeLessThan(2.5);
+    expect(9 - down).toBeCloseTo(up, 5);
+    let risen = 0;
+    for (let i = 0; i < 8; i++) risen = stepSmeter(risen, 9, SMETER_FRAME_MS);
+    expect(risen).toBeGreaterThan(3);
+    expect(risen).toBeLessThan(9);
+    const late = stepSmeter(0, 9, 500);
+    expect(late).toBeCloseTo(stepSmeter(0, 9, SMETER_DT_CAP_MS), 5);
+    expect(late).toBeLessThan(4);
   });
 
   it("lê zero como S9 e ignora a linha RPRT", () => {

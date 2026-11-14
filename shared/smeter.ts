@@ -41,11 +41,33 @@ export function hamlibStrengthToUiSMeter(dbRelS9: number): number {
 }
 
 /**
- * Tentativa do ponteiro no menu. O poll de frequência/modo/PTT continua no ritmo antigo.
+ * Tentativa de leitura no rádio. O poll de frequência/modo/PTT continua no ritmo antigo.
  * 60 vezes por segundo (1000/60 ≈ 17 ms). Se a leitura anterior ainda não voltou,
- * o tick não dispara outro fetch.
+ * o tick não dispara outro fetch. O desenho do ponteiro e da barra é mais lento
+ * (SMETER_FRAME_MS) e persegue este alvo numa curva.
  */
 export const SMETER_POLL_MS = Math.round(1000 / 60);
+
+/** Desenho do ponteiro e da barra: 30 quadros por segundo. */
+export const SMETER_FRAME_MS = Math.round(1000 / 30);
+/**
+ * Constante de tempo da curva, igual na subida e na descida.
+ * ~63% do caminho em 160 ms; um salto de várias unidades S atravessa vários quadros.
+ */
+export const SMETER_TAU_MS = 160;
+/** Quadro atrasado não percorre a curva inteira. */
+export const SMETER_DT_CAP_MS = 50;
+
+/** Um passo da curva. Mesma fração para subir e para descer. */
+export function stepSmeter(shown: number, target: number, dtMs: number): number {
+  if (!Number.isFinite(shown)) return Number.isFinite(target) ? target : 0;
+  if (!Number.isFinite(target)) return shown;
+  const dt = Math.min(SMETER_DT_CAP_MS, Math.max(0, dtMs));
+  if (dt <= 0) return shown;
+  const k = 1 - Math.exp(-dt / SMETER_TAU_MS);
+  const next = shown + (target - shown) * k;
+  return Math.abs(next - target) < 0.01 ? target : next;
+}
 
 export function smeterTickOpen(inFlight: boolean): boolean {
   return !inFlight;

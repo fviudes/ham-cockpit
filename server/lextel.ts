@@ -2,14 +2,19 @@ import { execFile, spawn, type ChildProcess } from "node:child_process";
 import {
   appendFileSync,
   close,
+  closeSync,
   constants as fsConstants,
   createReadStream,
   existsSync,
   mkdirSync,
   open as openFd,
+  openSync,
   read,
   readFileSync,
+  readSync,
   renameSync,
+  statSync,
+  truncateSync,
   unlinkSync,
   writeFileSync,
   type ReadStream,
@@ -95,6 +100,8 @@ let updatedAt = 0;
 let inspect: LextelInspect = inspectCapture(Buffer.alloc(0));
 let captureWatch: ReturnType<typeof setInterval> | null = null;
 let captureOff = 0;
+/** Tamanho já gravado. Relê o arquivo a cada pacote enche o disco e o SPP para perto dos 256 KiB. */
+let captureLen = -1;
 let wantOpen = false;
 let autoRunning = false;
 let recoverBusy = false;
@@ -439,26 +446,74 @@ function releaseSppLock() {
   }
 }
 
+function captureSize(path: string): number {
+  try {
+    return statSync(path).size;
+  } catch {
+    return 0;
+  }
+}
+
+/** Lê só o trecho novo. O arquivo inteiro, a cada pacote, travava o fluxo perto de 256 KiB. */
+function readCaptureSlice(path: string, from: number, len: number): Buffer | null {
+  if (len <= 0) return Buffer.alloc(0);
+  const fd = openSync(path, "r");
+  try {
+    const buf = Buffer.alloc(len);
+    let off = 0;
+    while (off < len) {
+      const n = readSync(fd, buf, off, len - off, from + off);
+      if (n <= 0) break;
+      off += n;
+    }
+    return off === len ? buf : buf.subarray(0, off);
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function appendCapture(buf: Buffer) {
+  const cap = ensureCaptureReady();
+  if (captureLen < 0) captureLen = captureSize(cap);
+  if (captureLen + buf.length > CAPTURE_MAX) {
+    truncateSync(cap, 0);
+    captureLen = 0;
+    captureOff = 0;
+  }
+  appendFileSync(cap, buf);
+  captureLen += buf.length;
+}
+
 function startCaptureWatch() {
   if (captureWatch) clearInterval(captureWatch);
   try {
-    if (existsSync(capturePath())) {
-      const all = readFileSync(capturePath());
-      if (!reading && all.length) ingest(all.subarray(Math.max(0, all.length - 2048)), true);
-      captureOff = all.length;
+    const p = capturePath();
+    if (existsSync(p)) {
+      const size = captureSize(p);
+      captureLen = size;
+      if (!reading && size) {
+        const from = Math.max(0, size - 2048);
+        const tail = readCaptureSlice(p, from, size - from);
+        if (tail?.length) ingest(tail, true);
+      }
+      captureOff = size;
     }
   } catch {
     /* */
   }
   captureWatch = setInterval(() => {
     try {
-      if (!existsSync(capturePath())) return;
-      const all = readFileSync(capturePath());
-      if (all.length < captureOff) captureOff = 0;
-      if (all.length > captureOff) {
-        ingest(all.subarray(captureOff), true);
-        captureOff = all.length;
-      }
+      const p = capturePath();
+      if (!existsSync(p)) return;
+      const size = captureSize(p);
+      let from = captureOff;
+      if (size < from) from = 0;
+      if (size <= from) return;
+      const take = Math.min(size - from, 64 * 1024);
+      const chunk = readCaptureSlice(p, from, take);
+      if (!chunk?.length) return;
+      ingest(chunk, true);
+      captureOff = from + chunk.length;
     } catch {
       /* */
     }
@@ -635,16 +690,14 @@ function ingest(buf: Buffer, alreadyOnDisk = false) {
       persist();
     }
   }
+  const got = decoder.push(buf);
   if (!alreadyOnDisk) {
     try {
-      const cap = ensureCaptureReady();
-      if (existsSync(cap) && readFileSync(cap).length > CAPTURE_MAX) writeFileSync(cap, Buffer.alloc(0));
-      appendFileSync(cap, buf);
+      appendCapture(buf);
     } catch {
-      /* disk */
+      /* o dump é histórico; não pode segurar o SPP */
     }
   }
-  const got = decoder.push(buf);
   if (got) {
     reading = got;
     if (error && /UnauthorizedAccess|win-spp/i.test(error)) error = "";
@@ -1101,6 +1154,8 @@ function attach(path: string) {
   if (!decoder.layout && saved.layout) decoder.reset(saved.layout);
   try {
     writeFileSync(ensureCaptureReady(), Buffer.alloc(0));
+    captureLen = 0;
+    captureOff = 0;
   } catch {
     /* */
   }

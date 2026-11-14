@@ -1,6 +1,6 @@
 import { BluetoothPage, WifiPage } from "@/console/network";
 import { AcomPage, HamplusPage, Ic705Page, LdgPage, LextelPage, Lp100aPage, PalstarPage, SpePage } from "@/console/devices";
-import { DEFAULT_PASS, DEFAULT_USER, type I18nKey } from "@/console/i18n";
+import { DEFAULT_USER, type I18nKey } from "@/console/i18n";
 import { resolvePrimaryRoute, sendPrimaryCmd } from "@/console/radio-cmd";
 import { ConsoleProvider, useConsole } from "@/console/state";
 import { SVC_LABEL, serviceLive } from "@/console/services-ui";
@@ -298,12 +298,8 @@ function Login({ onOk }: { onOk: (name: string) => void }) {
           onSubmit={(e) => {
             e.preventDefault();
             const fd = new FormData(e.currentTarget);
-            const u = String(fd.get("user") || "");
+            const u = String(fd.get("user") || "").trim();
             const p = String(fd.get("pass") || "");
-            if (u !== DEFAULT_USER || p !== DEFAULT_PASS) {
-              setErr(true);
-              return;
-            }
             void (async () => {
               try {
                 const r = await fetch("/api/console/session", {

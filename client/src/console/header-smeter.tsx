@@ -6,17 +6,19 @@
  * de S0 a S9+60). Agulha só se move com leitura real do rádio; sem sinal
  * fica no batente esquerdo (S0), sem número de dBm.
  *
- * A leitura do ponteiro é só o nível (60 Hz). Frequência, modo e o resto
- * do menu continuam no poll de 450 ms.
+ * A leitura do ponteiro é só o nível. O desenho sobe e desce a 30 quadros/s;
+ * a leitura no rádio continua no poll rápido e, se estiver ocupada, é pulada.
+ * Frequência, modo e o resto do menu continuam no poll de 450 ms.
  */
 import { useEffect, useRef, useState } from "react";
 import { SMETER_POLL_MS, runSmeterPoll } from "@shared/smeter";
+import { useEasedNumber } from "./smeter-motion";
 import { ic705Ble } from "./ic705-ble";
 import { pollPrimarySmeter } from "./radio-cmd";
 import { publishSmeter, subscribeSmeter } from "./smeter-bus";
 import { useConsole } from "./state";
 
-/** O painel VFO acompanha o medidor no ritmo antigo (~1 s), não a 60 Hz. */
+/** O restante do painel não acompanha cada amostra. A barra lê o barramento à parte. */
 const SMETER_STATE_MS = 900;
 
 const CX = 246;
@@ -115,57 +117,9 @@ function Ticks({
   return <>{lines}</>;
 }
 
-/**
- * Curva da agulha. 7 ms é a mesma fração da amostra (~42%) que os 17 ms eram a 25 Hz:
- * assenta dentro de uma leitura de 60 Hz (17 ms).
- */
-const NEEDLE_TAU_MS = 7;
-/** Quadro atrasado não percorre a curva inteira — evita o salto seco. */
-const NEEDLE_DT_CAP_MS = 8;
-
-function useSmoothedAngle(reading: number | null) {
-  const target = needleAngle(reading);
-  const shown = useRef(target);
-  const targetRef = useRef(target);
-  targetRef.current = target;
-  const [angle, setAngle] = useState(target);
-
-  useEffect(() => {
-    const rest = needleAngle(null);
-    if (reading == null) {
-      shown.current = rest;
-      setAngle(rest);
-      return;
-    }
-    const reduce =
-      typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) {
-      shown.current = targetRef.current;
-      setAngle(targetRef.current);
-      return;
-    }
-    let raf = 0;
-    let last = performance.now();
-    const step = (now: number) => {
-      const dest = targetRef.current;
-      const dt = Math.min(NEEDLE_DT_CAP_MS, now - last);
-      last = now;
-      const k = 1 - Math.exp(-dt / NEEDLE_TAU_MS);
-      const next = shown.current + (dest - shown.current) * k;
-      const settled = Math.abs(next - dest) < 0.03;
-      shown.current = settled ? dest : next;
-      setAngle(shown.current);
-      if (!settled) raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [reading, target]);
-
-  return angle;
-}
-
 function Needle({ reading }: { reading: number | null }) {
-  const angle = useSmoothedAngle(reading);
+  const eased = useEasedNumber(reading ?? 0);
+  const angle = needleAngle(eased);
   const [tipX, tipY] = polar(angle, 468);
   return (
     <line
