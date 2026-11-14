@@ -658,7 +658,7 @@ function parseAgcFrame(frame: Buffer): "OFF" | "FAST" | "MID" | "SLOW" | undefin
   return undefined;
 }
 
-/** Um CI-V por vez. O S-meter a 6 Hz não entra no meio do poll. */
+/** Um CI-V por vez. O S-meter a 25 Hz não entra no meio do poll. */
 let civHeld = false;
 
 function releaseCiv() {

@@ -158,6 +158,10 @@ function hamlibModelFor(row: StationRadio): number {
 }
 
 /** Rádio que alimenta o rigctld da serial. LAN fica de fora. */
+export function currentSerialHamlib(): StationRadio | undefined {
+  return serialHamlibRadio(radios);
+}
+
 export function serialHamlibRadio(list: StationRadio[]): StationRadio | undefined {
   const usable = list.filter((r) => r.link !== "network" && (r.hamlibModel || 0) > 0);
   return usable.find((r) => r.primary) || usable[0];

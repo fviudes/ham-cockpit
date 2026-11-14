@@ -82,6 +82,8 @@ type Saved = {
 
 let stream: ReadStream | null = null;
 let sppChild: ChildProcess | null = null;
+/** open() do RFCOMM fora do thread pool. SIGTERM interrompe; destroy() do stream não. */
+let pumpChild: ChildProcess | null = null;
 let decoder = new LextelDecoder();
 let phase: LextelPhase = "idle";
 let error = "";
@@ -688,6 +690,7 @@ function linkAlive() {
   // No Linux, o objeto do stream existe antes do open(). RFCOMM preso em
   // open() não é link: senão o recover acha que está vivo e não tenta de novo.
   if (process.platform === "win32") return Boolean(stream || sppChild);
+  if (pumpChild && opened) return true;
   return opened && Boolean(stream);
 }
 
@@ -819,6 +822,14 @@ function closeStream() {
   clearOpenTimer();
   opened = false;
   opening = false;
+  if (pumpChild) {
+    const child = pumpChild;
+    pumpChild = null;
+    // Processo do usuário (não o sudo root). O open() do RFCOMM é
+    // interruptível — o fd sai na hora. Sem isso o try-restart fica ~30s
+    // em Stopping e o religamento acerta o DLC no meio.
+    killHelper(child);
+  }
   if (stream) {
     const rs = stream;
     stream = null;
@@ -864,9 +875,11 @@ function attachFd(path: string) {
     // O prazo estourou com o bind ainda de pé (clean ou config). Pedir
     // rebind aqui faz o helper soltar esse nó, o open devolve ENODEV e o
     // console entra em retry eterno. Só ENODEV marca o nó como ausente.
+    // 8s: religar na hora, com o hci0 ainda no tx timeout, trava o mini-UART.
     rfcommStale = false;
     opening = false;
     phase = "connecting";
+    reconnectDelay = 8_000;
     closeStream();
     scheduleReconnect();
   }, 12_000);
@@ -909,7 +922,7 @@ function attachFd(path: string) {
         scheduleReconnect();
         return;
       }
-      if (phase !== "error" && !sppChild) phase = "idle";
+      if (phase !== "error" && !sppChild && !pumpChild) phase = "idle";
     }
   });
 }
@@ -990,6 +1003,94 @@ function attachWinSpp(com: string) {
   run(bauds[0]!);
 }
 
+function markPumpOpen() {
+  if (opened) return;
+  opened = true;
+  opening = false;
+  clearOpenTimer();
+  phase = "streaming";
+  reconnectDelay = 600;
+  rfcommStale = false;
+  error = "";
+}
+
+/** Open do SPP num processo filho. O thread pool do Node mascara sinais:
+ *  o open() de lá não atende o SIGTERM do try-restart e o DLC fica closed.
+ */
+function attachPump(path: string) {
+  if (!helperExists()) {
+    attachFd(path);
+    return;
+  }
+  // Sem sudo: o binário é 0755 e o nó já está dialout (o Node abre o
+  // rfcomm hoje). Processo do próprio usuário morre com SIGTERM; o sudo
+  // root o console não consegue matar, e o open() segurava o Stopping.
+  // O argv tem de ser exatamente "pump", aceito antes do case do helper.
+  // Sem esse braço o helper responde "ERR usage" e o SPP não abre.
+  const child = spawn(HELPER, ["pump"], {
+    detached: process.platform !== "win32",
+    windowsHide: true,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  pumpChild = child;
+  clearOpenTimer();
+  let stderrBuf = "";
+  openTimer = setTimeout(() => {
+    if (opened || pumpChild !== child) return;
+    error = `MS-2000 ${saved.addr || "salvo"} sem resposta no SPP. Nova tentativa, sem desligar o Bluetooth.`;
+    rfcommStale = false;
+    opening = false;
+    phase = "connecting";
+    reconnectDelay = 8_000;
+    closeStream();
+    scheduleReconnect();
+  }, 12_000);
+  openTimer.unref?.();
+  child.stderr?.setEncoding("utf8");
+  child.stderr?.on("data", (chunk: string) => {
+    stderrBuf = (stderrBuf + chunk).slice(-2000);
+    if (/(?:^|\n)OPEN(?:\n|$)/.test(stderrBuf)) markPumpOpen();
+    if (/ENODEV/.test(stderrBuf)) rfcommStale = true;
+  });
+  child.stdout?.on("data", (chunk: Buffer | string) => {
+    markPumpOpen();
+    ingest(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  });
+  child.on("error", (err) => {
+    if (pumpChild !== child) return;
+    pumpChild = null;
+    clearOpenTimer();
+    opened = false;
+    opening = false;
+    error = err.message;
+    if (wantOpen) {
+      phase = "connecting";
+      scheduleReconnect();
+      return;
+    }
+    phase = "error";
+  });
+  child.on("close", () => {
+    if (pumpChild !== child) return;
+    pumpChild = null;
+    clearOpenTimer();
+    const wasOpen = opened;
+    opened = false;
+    opening = false;
+    if (/ENODEV/.test(stderrBuf)) rfcommStale = true;
+    if (!wantOpen) {
+      if (!wasOpen && phase !== "error") phase = "idle";
+      return;
+    }
+    if (!error.startsWith("MS-2000")) {
+      const line = stderrBuf.trim().split(/\n/).pop() || "";
+      if (line && line !== "OPEN") error = line;
+    }
+    phase = "connecting";
+    scheduleReconnect();
+  });
+}
+
 function attach(path: string) {
   const openPath = normalizeSerialPath(path) || path;
   if (samePort(pathOpen, openPath) && linkAlive()) {
@@ -1013,6 +1114,10 @@ function attach(path: string) {
   if (process.platform === "win32" && /COM\d+/i.test(openPath)) {
     const m = openPath.match(/COM\d+/i);
     attachWinSpp(m ? m[0].toUpperCase() : openPath);
+    return;
+  }
+  if (process.platform === "linux" && isRfcommPath(openPath)) {
+    attachPump(openPath);
     return;
   }
   attachFd(openPath);
@@ -1258,7 +1363,9 @@ async function lextelConnectBody(body: { addr?: string; pin?: string; name?: str
     }
     // Helper ocupado ou sem controlador: o bind clean continua. Marcar
     // stale faria o próximo bind pedir rebind e soltar o nó.
+    // Nó que ficou closed: esperar. Religar em cima do tx timeout trava o hci0.
     rfcommStale = !helperBusy(msg) && !noController(msg) && /ENODEV|nao apareceu|não apareceu/i.test(msg);
+    if (/continua closed|nao saiu|não saiu/i.test(msg)) reconnectDelay = 15_000;
     closeStream();
     if (wantOpen) {
       phase = "connecting";

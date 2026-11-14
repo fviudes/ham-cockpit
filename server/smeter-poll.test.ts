@@ -5,8 +5,8 @@ import {
   parseHamlibStrength,
   runSmeterPoll,
 } from "../shared/smeter";
-import { hubRigctl, rigCommandAdmission } from "./hamlib-hub";
-import { pollPrimarySmeter } from "../client/src/console/radio-cmd";
+import { hubRigctl, noteRigPower, rewriteIc705PowerOn, rigCommandAdmission } from "./hamlib-hub";
+import { pollPrimarySmeter, sendPrimaryCmd } from "../client/src/console/radio-cmd";
 import type { StationRadio } from "../client/src/console/state";
 
 function radio(partial: Partial<StationRadio>): StationRadio {
@@ -41,9 +41,10 @@ afterEach(() => {
 });
 
 describe("S-meter rápido", () => {
-  it("tenta cerca de 6 vezes por segundo", () => {
-    expect(SMETER_POLL_MS).toBe(167);
-    expect(Math.round(1000 / SMETER_POLL_MS)).toBe(6);
+  it("tenta 25 vezes por segundo", () => {
+    expect(SMETER_POLL_MS).toBe(40);
+    expect(SMETER_POLL_MS).toBe(Math.round(1000 / 25));
+    expect(Math.round(1000 / SMETER_POLL_MS)).toBe(25);
   });
 
   it("lê zero como S9 e ignora a linha RPRT", () => {
@@ -118,6 +119,51 @@ describe("fila do Hamlib", () => {
     expect(rigCommandAdmission("f", false, 0)).toBe("ok");
     expect(rigCommandAdmission("F 7100000", true, 0)).toBe("ok");
     expect(rigCommandAdmission("F 7100000", false, 4)).toBe("fila cheia");
+  });
+
+  it("standby pula f e STRENGTH e deixa o ligar passar", () => {
+    expect(rigCommandAdmission("f", false, 0, "off")).toBe("ocupado");
+    expect(rigCommandAdmission("\\get_level STRENGTH", false, 0, "off")).toBe("ocupado");
+    expect(rigCommandAdmission("\\get_powerstat", false, 0, "off")).toBe("ocupado");
+    expect(rigCommandAdmission("\\set_powerstat 1", false, 0, "off")).toBe("ok");
+    expect(rigCommandAdmission("F 7140000", false, 0, "off")).toBe("ok");
+  });
+
+  it("com o rádio em standby o poll nem abre socket", async () => {
+    noteRigPower("127.0.0.1", 9, "off");
+    const started = Date.now();
+    const out = await hubRigctl(9, "f", "127.0.0.1", 400);
+    expect(Date.now() - started).toBeLessThan(150);
+    expect(out).toEqual({ ok: false, reply: "", error: "ocupado" });
+    noteRigPower("127.0.0.1", 9, "unknown");
+  });
+
+  it("IC-705 troca set_powerstat 1 pelo quadro 0x18 0x01", () => {
+    const raw = "\\send_raw icom 0xFE:0xFE:0xA4:0xE0:0x18:0x01:0xFD";
+    expect(rewriteIc705PowerOn("\\set_powerstat 1", { hamlibModel: 3085, civAddr: "0xA4" })).toBe(raw);
+    expect(rewriteIc705PowerOn("\\set_powerstat 1", { equipmentId: "icom-ic-705" })).toBe(raw);
+    expect(rewriteIc705PowerOn("\\set_powerstat 1", { hamlibModel: 3070, equipmentId: "icom-ic-7100" })).toBe(
+      "\\set_powerstat 1",
+    );
+    expect(rewriteIc705PowerOn("\\set_powerstat 0", { hamlibModel: 3085 })).toBe("\\set_powerstat 0");
+  });
+
+  it("Power on do IC-705 manda o quadro cru e o standby não pede o medidor", async () => {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", (_url: string, init?: RequestInit) => {
+      seen.push(String(init?.body ?? ""));
+      return Promise.resolve(json({ ok: true, reply: "RPRT 0" }));
+    });
+    const row = radio({});
+    await sendPrimaryCmd([row], { type: "setPower", on: false });
+    expect(seen.some((b) => b.includes("0x18:0x00"))).toBe(true);
+    expect(seen.some((b) => b.includes("set_powerstat"))).toBe(false);
+    seen.length = 0;
+    expect(await pollPrimarySmeter([row])).toBeNull();
+    expect(seen).toHaveLength(0);
+    await sendPrimaryCmd([row], { type: "setPower", on: true });
+    expect(seen).toHaveLength(1);
+    expect(JSON.parse(seen[0]!).command).toBe("\\send_raw icom 0xFE:0xFE:0xA4:0xE0:0x18:0x01:0xFD");
   });
 
   it("STRENGTH com leitura no ar responde ocupado sem esperar o socket", async () => {

@@ -5,7 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { lextelConnect, lextelDisconnect, lextelKeepalive, lextelLearn, lextelOpenBluetooth, lextelSave, lextelScan, lextelStatus } from "./lextel";
 import { listSerialDevices } from "./list-serials";
-import { radiosConnect, radiosDisconnect, radiosMarkBle, radiosRemove, radiosResumeIcomLan, radiosSave, radiosSetPrimary, radiosStatus, radiosUpsert } from "./radios";
+import { currentSerialHamlib, radiosConnect, radiosDisconnect, radiosMarkBle, radiosRemove, radiosResumeIcomLan, radiosSave, radiosSetPrimary, radiosStatus, radiosUpsert } from "./radios";
 import { hamlibCtl, loadSer2net, probeHamlibNet, saveSer2net } from "./ser2net-store";
 import { attachTerminal } from "./term";
 import { createUser, deleteUser, listUsers, sshStatus } from "./users";
@@ -60,6 +60,7 @@ import {
   hubSaveBindings,
   hubStatus,
   hubUpsertBinding,
+  rewriteIc705PowerOn,
 } from "./hamlib-hub";
 import { icomLanCmd, icomLanStatus } from "./icom-lan";
 import { registerLicenseRoutes } from "./license";
@@ -353,7 +354,7 @@ async function startServer() {
         return;
       }
       const out = await icomLanCmd(cmd, (req.body ?? {}) as Record<string, unknown>);
-      // O S-meter a 6 Hz pula o tick. 502 faria o nginx tratar o console como morto.
+      // O S-meter a 25 Hz pula o tick. 502 faria o nginx tratar o console como morto.
       if (cmd === "smeter") {
         res.status(200).json(out);
         return;
@@ -420,7 +421,11 @@ async function startServer() {
     try {
       const port = Number(req.body?.port ?? 4532);
       const host = String(req.body?.host ?? "127.0.0.1");
-      const command = String(req.body?.command ?? "");
+      let command = String(req.body?.command ?? "");
+      if (port === 4532) {
+        const row = currentSerialHamlib();
+        command = rewriteIc705PowerOn(command, row);
+      }
       if (!command.trim()) {
         res.status(400).json({ ok: false, error: "command obrigatório" });
         return;

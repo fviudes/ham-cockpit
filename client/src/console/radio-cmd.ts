@@ -92,6 +92,7 @@ export async function pollPrimaryTelemetry(
   }
 
   if (route.transport === "hamlib") {
+    if (hamlibAsleep) return null;
     const port = opts?.hamlibPort ?? 4532;
     const patch: import("./ic705-ble").CivPatch = {};
     const tick = opts?.tick ?? 0;
@@ -128,6 +129,8 @@ export async function pollPrimaryTelemetry(
     }
     // S-meter fica fora deste poll (450 ms). O menu pede só STRENGTH em
     // /api/hamlib/smeter (~167 ms) e pula o tick se a fila ainda não soltou.
+    if (patch.power === false) markHamlibPower(false);
+    else if (patch.power === true || patch.freq != null) markHamlibPower(true);
     return Object.keys(patch).length ? patch : null;
   }
 
@@ -166,6 +169,7 @@ export async function pollPrimarySmeter(
   }
 
   if (route.transport === "hamlib") {
+    if (hamlibAsleep) return null;
     try {
       const r = await fetch("/api/hamlib/smeter", {
         method: "POST",
@@ -229,17 +233,35 @@ function civSendRaw(addr: string, payload: string): string {
   return `\\send_raw icom 0xFE:0xFE:0x${addr}:0xE0:${payload}:0xFD`;
 }
 
+function isIc705(radio?: StationRadio): boolean {
+  return modelOf(radio) === 3085 || radio?.equipmentId === "icom-ic-705";
+}
+
+let hamlibAsleep = false;
+
+function markHamlibPower(on: boolean) {
+  hamlibAsleep = !on;
+}
+
 async function hamlibPower(on: boolean, port: number, radio?: StationRadio) {
-  if (on) {
-    await postHamlib("\\set_powerstat 1", port);
-    return;
-  }
   const addr = civAddrByte(radio);
   const model = modelOf(radio);
+  if (on) {
+    if (isIc705(radio)) {
+      // 705 em standby não acorda por set_powerstat: o Hamlib consulta e estoura o prazo.
+      await postHamlib(civSendRaw(addr, "0x18:0x01"), port);
+      markHamlibPower(true);
+      return;
+    }
+    await postHamlib("\\set_powerstat 1", port);
+    markHamlibPower(true);
+    return;
+  }
   // IC-705: 0x18 0x02 volta FA. Com o item 1A 05 0073 em 01, o 0x18 0x00 entra em standby
   // (USB continua no ar). 0073 em 00 é "Shutdown only" e o mesmo 0x00 desliga de vez.
   // O \set_powerstat do Icom 4.6.5 manda 0x00 sem esse item, e não emite 0x02.
-  if (model === 3085 || radio?.equipmentId === "icom-ic-705") {
+  if (isIc705(radio)) {
+    markHamlibPower(false);
     await postHamlib(civSendRaw(addr, "0x1A:0x05:0x00:0x73:0x01"), port);
     await postHamlib(civSendRaw(addr, "0x18:0x00"), port);
     return;

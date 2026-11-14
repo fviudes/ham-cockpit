@@ -12,6 +12,7 @@ import {
   formatRigctldCommand,
   getEquipment,
   listHamlibReady,
+  normalizeCivAddr,
   planHamlib,
   type EquipmentBinding,
   type EquipmentMaker,
@@ -200,6 +201,8 @@ type RigJob = {
   settled: boolean;
 };
 
+type RigPower = "on" | "off" | "unknown";
+
 type RigLane = {
   host: string;
   port: number;
@@ -209,6 +212,7 @@ type RigLane = {
   queue: RigJob[];
   pumping: boolean;
   current: RigJob | null;
+  power: RigPower;
   idle: ReturnType<typeof setTimeout> | null;
   hard: ReturnType<typeof setTimeout> | null;
   caller: ReturnType<typeof setTimeout> | null;
@@ -230,6 +234,7 @@ function laneFor(host: string, port: number): RigLane {
       queue: [],
       pumping: false,
       current: null,
+      power: "unknown",
       idle: null,
       hard: null,
       caller: null,
@@ -252,7 +257,7 @@ function isSmeterPoll(command: string) {
 }
 
 /**
- * STRENGTH a 6 Hz não entra se a faixa está ocupada: o tick é pulado.
+ * STRENGTH a 25 Hz não entra se a faixa está ocupada: o tick é pulado.
  * `f` / `m` / `t` podem ficar no único lugar atrás da leitura atual, no mesmo
  * socket. Segundo poll, ou fila já com alguém, não entra — não abre outro TCP.
  */
@@ -260,12 +265,68 @@ export function rigCommandAdmission(
   command: string,
   laneBusy: boolean,
   queueLength: number,
+  power: RigPower = "unknown",
 ): "ok" | "ocupado" | "fila cheia" {
+  if (power === "off" && isPollCommand(command)) return "ocupado";
   if (isPollCommand(command) && (laneBusy || queueLength > 0)) {
     if (isSmeterPoll(command) || queueLength > 0) return "ocupado";
   }
   if (!isPollCommand(command) && queueLength >= 4) return "fila cheia";
   return "ok";
+}
+
+export function rewriteIc705PowerOn(
+  command: string,
+  radio?: { hamlibModel?: number; equipmentId?: string; civAddr?: string } | null,
+): string {
+  const c = command.trim();
+  if (!/^\\set_powerstat\s+1$/i.test(c)) return command;
+  if (!radio) return command;
+  if (radio.hamlibModel !== 3085 && radio.equipmentId !== "icom-ic-705") return command;
+  // 705 em standby não acorda por set_powerstat: o Hamlib consulta e estoura o prazo.
+  const addr = (normalizeCivAddr(radio.civAddr) || "0xA4").slice(2);
+  return `\\send_raw icom 0xFE:0xFE:0x${addr}:0xE0:0x18:0x01:0xFD`;
+}
+
+function isRigWake(command: string): boolean {
+  const c = command.trim();
+  if (/^\\set_powerstat\s+1$/i.test(c)) return true;
+  return /\\send_raw\b/i.test(c) && /0x18:0x01\b/i.test(c);
+}
+
+function rememberPower(lane: RigLane, command: string, value: RigReply) {
+  const c = command.trim();
+  if (/^\\get_powerstat\b/i.test(c)) {
+    if (!value.ok) return;
+    const line =
+      value.reply
+        .split("\n")
+        .map((s) => s.trim())
+        .find((s) => s && !s.startsWith("RPRT")) || "";
+    if (line === "1" || /^on$/i.test(line)) lane.power = "on";
+    else if (line === "0" || line === "2" || /off|standby/i.test(line)) lane.power = "off";
+    return;
+  }
+  if (!value.ok) return;
+  if (/^\\set_powerstat\s+0$/i.test(c)) lane.power = "off";
+  else if (/^\\set_powerstat\s+1$/i.test(c)) lane.power = "on";
+  else if (/\\send_raw\b/i.test(c) && /0x18:0x00\b/i.test(c)) lane.power = "off";
+  else if (/\\send_raw\b/i.test(c) && /0x18:0x02\b/i.test(c)) lane.power = "off";
+  else if (/\\send_raw\b/i.test(c) && /0x18:0x01\b/i.test(c)) lane.power = "on";
+}
+
+function releaseQueuedPolls(lane: RigLane) {
+  if (!lane.queue.length) return;
+  const keep: RigJob[] = [];
+  for (const job of lane.queue) {
+    if (isPollCommand(job.command)) settle(job, { ok: false, reply: "", error: "ocupado" });
+    else keep.push(job);
+  }
+  lane.queue = keep;
+}
+
+export function noteRigPower(host: string, port: number, power: RigPower) {
+  laneFor(host, port).power = power;
 }
 
 function settle(job: RigJob, value: RigReply) {
@@ -300,7 +361,10 @@ function finishTxn(lane: RigLane, value: RigReply | null) {
   lane.current = null;
   lane.lines = [];
   lane.buf = "";
-  if (job && value) settle(job, value);
+  if (job && value) {
+    rememberPower(lane, job.command, value);
+    settle(job, value);
+  }
   if (done) done();
 }
 
@@ -390,7 +454,7 @@ function ensureSock(lane: RigLane): Promise<void> {
 async function runJob(lane: RigLane, job: RigJob) {
   lane.lines = [];
   lane.buf = "";
-  // Marca a leitura no ar antes do TCP. O próximo poll (S-meter a 6 Hz)
+  // Marca a leitura no ar antes do TCP. O próximo poll (S-meter a 25 Hz)
   // vê a faixa ocupada e não entra na fila enquanto esta não fechar.
   lane.current = job;
   try {
@@ -408,7 +472,7 @@ async function runJob(lane: RigLane, job: RigJob) {
   await new Promise<void>((done) => {
     lane.txnDone = done;
     lane.current = job;
-    // O poll geral da UI é 450 ms. O S-meter pede STRENGTH à parte (~167 ms)
+    // O poll geral da UI é 450 ms. O S-meter pede STRENGTH à parte (40 ms)
     // e, com a faixa ocupada, recebe "ocupado" sem segundo socket.
     // Este timer só solta o HTTP; não fecha o socket.
     // Fechar aos 2,5 s deixa CLOSE-WAIT enquanto o rigctld ainda está no CI-V
@@ -456,7 +520,20 @@ export function hubRigctl(
   const cmd = command.trim().endsWith("\n") ? command.trim() : `${command.trim()}\n`;
   const lane = laneFor(host, listenPort);
   return new Promise((resolve) => {
-    const admission = rigCommandAdmission(cmd, Boolean(lane.current) || lane.pumping, lane.queue.length);
+    if (isRigWake(cmd)) {
+      releaseQueuedPolls(lane);
+      if (lane.current && isPollCommand(lane.current.command)) {
+        const job = lane.current;
+        dropSock(lane);
+        finishTxn(lane, job.settled ? null : { ok: false, reply: "", error: "ocupado" });
+      }
+    }
+    const admission = rigCommandAdmission(
+      cmd,
+      Boolean(lane.current) || lane.pumping,
+      lane.queue.length,
+      lane.power,
+    );
     if (admission === "ocupado") {
       resolve({ ok: false, reply: "", error: "ocupado" });
       return;

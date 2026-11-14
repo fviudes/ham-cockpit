@@ -822,37 +822,38 @@ fi
 #
 # Por que este religamento é obrigatório: a OTA troca o binário com o Node
 # ainda segurando /dev/rfcomm0 e, em seguida, o station-upd faz try-restart
-# do console. O restart fecha o fd. O bind do MAC salvo fica em "clean"
-# (nó criado, aparelho ainda não atendeu). clean NÃO é link morto. Se o
-# retry tratar clean como falha e der rfcomm release, o open devolve
-# ENODEV, o Node pede "rebind" e solta o nó de novo — o MS-2000 não volta.
-# O helper mantém clean e connected. A segunda chamada corre depois do
-# restart, porque religar só aqui é desfeito quando o fd fecha.
+# (sleep 4). O open() do RFCOMM roda numa thread com sinais mascarados: o
+# SIGTERM não solta o fd. O processo fica em Stopping até a página
+# Bluetooth estourar (~30s) e o nó fica "closed", não clean. Um sleep fixo
+# de 20s a partir daqui corre DENTRO desse Stopping (lab 0.1.10: reconnect
+# às 01:20:58, Stopped só às 01:21:16) e o console novo abre o DLC morto.
+# O hci0 então registra "link tx timeout" / "command tx timeout" e o
+# MS-2000 não volta. clean e connected continuam intocados. A segunda
+# chamada espera o ActiveEnterTimestamp mudar e repete ~20s depois.
 lextel_reconnect_saved() {
   [[ -x /opt/ham-cockpit/bin/lextel-bt ]] || return 0
   [[ -f /opt/lextel/config.json ]] || return 0
-  local i
+  # Uma chamada só. Várias em segundos disputam o flock e o hci0 estoura
+  # link tx timeout. clean/connected não se solta; se o fd antigo ainda
+  # segura o nó, o reconnect-after-restart repete depois que o console sobe.
   echo "ota-hooks: Lextel religando o MAC salvo (clean não é link morto)" >&2
-  for i in 1 2 3 4 5; do
-    if /opt/ham-cockpit/bin/lextel-bt reconnect-saved; then
-      echo "ota-hooks: Lextel rfcomm do MAC salvo pronto" >&2
-      return 0
-    fi
-    sleep 1
-  done
+  if /opt/ham-cockpit/bin/lextel-bt reconnect-saved; then
+    echo "ota-hooks: Lextel rfcomm do MAC salvo pronto" >&2
+    return 0
+  fi
   echo "ota-hooks: AVISO — Lextel não religou agora; o console tenta de novo sem apagar o MAC" >&2
   return 0
 }
 lextel_reconnect_saved || echo "ota-hooks: AVISO — reconnect do Lextel não rodou" >&2
-# ~4s depois o station-upd reinicia o Node. 8s+12s cobre esse restart e o
-# chown do apply. Não reescreve config.json e não toca no ser2net.
+# Não reescreve config.json e não toca no ser2net. O helper espera o
+# console realmente subir (fd antigo largado) e religa de novo ~20s depois.
 if [[ -x /opt/ham-cockpit/bin/lextel-bt && -f /opt/lextel/config.json ]]; then
   if command -v systemd-run >/dev/null 2>&1; then
-    systemd-run --quiet --collect --on-active=8s \
-      /bin/bash -c 'sleep 12; exec /opt/ham-cockpit/bin/lextel-bt reconnect-saved' \
+    systemd-run --quiet --collect \
+      /opt/ham-cockpit/bin/lextel-bt reconnect-after-restart \
       >/dev/null 2>&1 || echo "ota-hooks: AVISO — reconnect do Lextel pós-restart não agendou" >&2
   else
-    nohup bash -c 'sleep 20; exec /opt/ham-cockpit/bin/lextel-bt reconnect-saved' >/dev/null 2>&1 &
+    nohup /opt/ham-cockpit/bin/lextel-bt reconnect-after-restart >/dev/null 2>&1 &
   fi
 fi
 

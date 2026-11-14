@@ -1,5 +1,5 @@
 {
-  "app": "0.1.10",
+  "app": "0.1.10.01",
   "os": "Ubuntu Server 24.04.1 LTS",
   "osAvailable": "Ubuntu Server 24.04.3 LTS",
   "ser2net": "4.3.13",

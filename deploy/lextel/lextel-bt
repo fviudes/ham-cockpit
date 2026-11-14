@@ -4,8 +4,54 @@
 # ou um segundo SPP. Este helper nunca dá rfkill, power off, hciconfig ou
 # disconnect fora do MAC pedido — isso derrubaria a outra sessão.
 #
-# Usage: lextel-bt scan|pair|paired|bind|reconnect|reconnect-saved|release|disconnect|devices|channel <args>
+# Usage: lextel-bt scan|pair|paired|bind|reconnect|reconnect-saved|reconnect-after-restart|pump|release|disconnect|devices|channel <args>
 set -euo pipefail
+
+# pump é o open() do SPP num processo que o SIGTERM interrompe. Não passa
+# pelo wrapper: ele segura o stdout até o fim e o open() numa thread do
+# Node (sinais mascarados) não morre com o try-restart — o console fica
+# 30s em Stopping e o religamento seguinte acerta o DLC no meio da página.
+# O Node faz spawn(["pump"]) sem sudo. Se este if não existir, o wrapper
+# reexecuta e o case não tem braço pump: a stderr sai
+# "ERR usage: …|release|disconnect", o bind clean fica sem open, a UI
+# permanece em connecting com 0 bytes e o hci0 mata o enlace por tx timeout.
+# clean do mesmo MAC não se solta — é o nó pronto para este open, não link morto.
+if [[ "${1:-}" == "pump" ]]; then
+  exec </dev/null
+  cd /
+  trap '' HUP
+  export LEXTEL_RFCOMM="${LEXTEL_RFCOMM:-/dev/rfcomm0}"
+  python3 -c '
+import errno, os, sys
+dev = os.environ.get("LEXTEL_RFCOMM", "/dev/rfcomm0")
+flags = os.O_RDONLY | getattr(os, "O_NOCTTY", 0)
+try:
+    fd = os.open(dev, flags)
+except OSError as e:
+    name = errno.errorcode.get(e.errno, str(e.errno))
+    sys.stderr.write("ERR %s\n" % name)
+    sys.stderr.flush()
+    raise SystemExit(1)
+sys.stderr.write("OPEN\n")
+sys.stderr.flush()
+while True:
+    try:
+        blob = os.read(fd, 256)
+    except OSError as e:
+        name = errno.errorcode.get(e.errno, str(e.errno))
+        sys.stderr.write("ERR %s\n" % name)
+        sys.stderr.flush()
+        raise SystemExit(1)
+    if not blob:
+        break
+    try:
+        sys.stdout.buffer.write(blob)
+        sys.stdout.buffer.flush()
+    except BrokenPipeError:
+        raise SystemExit(0)
+'
+  exit $?
+fi
 
 # Sessão própria. O Node mata o grupo do sudo; este processo fica nesse grupo
 # e encerra só a sessão nova. systemd-run --pipe não serve: a unit transiente
@@ -44,6 +90,37 @@ shift
 exec </dev/null
 cd /
 trap '' HUP
+
+# A OTA faz try-restart com sleep 4, mas o processo antigo só larga o
+# /dev/rfcomm0 quando o open() volta (página Bluetooth ~30s). Um sleep fixo
+# de 20s religa no meio do Stopping e o exit seguinte deixa o nó "closed".
+# Aqui espera o ActiveEnterTimestamp mudar (o console novo está no ar) e
+# só então religa; se o restart aconteceu, repete ~20s depois. Não grava
+# config.json, não toca em ser2net e não segura o flock durante a espera.
+if [[ "${1:-}" == "reconnect-after-restart" ]]; then
+  ts_epoch() {
+    date -d "$1" +%s 2>/dev/null || echo 0
+  }
+  before="$(systemctl show -p ActiveEnterTimestamp --value ham-cockpit.service 2>/dev/null || true)"
+  before_epoch="$(ts_epoch "$before")"
+  restarted=0
+  for _i in $(seq 1 90); do
+    state="$(systemctl is-active ham-cockpit.service 2>/dev/null || true)"
+    now="$(systemctl show -p ActiveEnterTimestamp --value ham-cockpit.service 2>/dev/null || true)"
+    now_epoch="$(ts_epoch "$now")"
+    if [[ "$state" == "active" && "$now_epoch" -gt "$before_epoch" && "$now_epoch" -gt 0 ]]; then
+      restarted=1
+      break
+    fi
+    sleep 1
+  done
+  "$0" reconnect-saved || true
+  if [[ "$restarted" == 1 ]]; then
+    sleep 20
+    "$0" reconnect-saved || true
+  fi
+  exit 0
+fi
 
 lockdir=/run/lock
 [[ -d "$lockdir" && -w "$lockdir" ]] || lockdir=/tmp
@@ -125,11 +202,25 @@ rfcomm_state() {
     echo clean
   elif echo "$line" | grep -Eq '[[:space:]]config([[:space:]]|$)'; then
     echo config
+  elif echo "$line" | grep -Eq '[[:space:]]connecting([[:space:]]|$)'; then
+    echo connecting
+  elif echo "$line" | grep -Eq '[[:space:]](closed|disconnected)([[:space:]]|$)'; then
+    echo closed
   elif [[ -z "$line" ]]; then
     echo absent
   else
     echo other
   fi
+}
+
+# O open() do pump ainda não devolveu fd: fuser não vê o processo, mas
+# rfcomm release nesse instante derruba a página e o hci0 fica em
+# "command tx timeout". O bash do pump continua no ar até o python sair.
+pump_running() {
+  local hit
+  # grep -q com pipefail devolve 141 quando acha a linha (SIGPIPE no ps).
+  hit="$(ps -eo args 2>/dev/null | grep '[l]extel-bt pump' || true)"
+  [[ -n "$hit" ]]
 }
 
 same_binding() {
@@ -144,10 +235,25 @@ same_binding() {
 settle_bind() {
   local i
   rfcomm release "$RFCOMM_N" 2>/dev/null || true
-  for i in $(seq 1 20); do
+  for i in $(seq 1 30); do
     [[ -e "$RFCOMM_DEV" ]] || break
     sleep 0.1
   done
+  if [[ -e "$RFCOMM_DEV" ]]; then
+    local left
+    left="$(rfcomm_state "$(rfcomm_line)")"
+    # Nó preso em closed: bind por cima não recria o DLC e o open seguinte
+    # pagina em cima do link que o kernel já matou.
+    if [[ "$left" == "clean" || "$left" == "connected" || "$left" == "config" || "$left" == "connecting" ]]; then
+      fix_perms
+      return 0
+    fi
+    echo "ERR $RFCOMM_DEV nao saiu do estado ${left:-preso}" >&2
+    exit 1
+  fi
+  # O ACL do release precisa cair antes do nó novo. Sem esta pausa o
+  # open pagina o mesmo link estourado.
+  sleep 0.4
   rfcomm bind "$RFCOMM_N" "$mac" "$channel"
   for i in $(seq 1 20); do
     [[ -c "$RFCOMM_DEV" ]] && break
@@ -170,20 +276,23 @@ rfcomm_held() {
   return 1
 }
 
-# connected e clean do mesmo MAC ficam, inclusive quando o Node pede
-# "rebind". clean é o bind pronto para o open, não um link morto: o
-# aparelho ainda não atendeu. O console pede rebind depois de um ENODEV
-# ou de um open que estourou o prazo. Soltar o clean nesse retry é o que
-# derruba o MS-2000 depois da OTA — o open seguinte volta ENODEV e o
-# Node fica pedindo rebind para sempre.
-# config sem ninguém no fd é DLC preso (o open morreu no meio). Aí sim
-# recria. config com o fd aberto é o open em andamento: não solta.
+# connected, clean e connecting do mesmo MAC ficam, inclusive quando o
+# Node pede "rebind". clean é o bind pronto para o open, não um link morto.
+# closed é o que sobra quando o try-restart mata o open no meio: não é
+# clean, e abrir esse nó pagina um DLC já encerrado. Sem fd e sem pump,
+# recria. Com pump ou fd aberto, não solta — o release nesse instante
+# deixa o hci0 em command tx timeout.
 bind_saved() {
   local force="${1:-}"
   local line st
   line="$(rfcomm_line)"
   st="$(rfcomm_state "$line")"
-  if same_binding "$line" && [[ "$st" == "connected" || "$st" == "clean" ]]; then
+  if pump_running || { same_binding "$line" && rfcomm_held; }; then
+    fix_perms
+    echo "OK $RFCOMM_DEV $mac $channel ${st:-open}"
+    return 0
+  fi
+  if same_binding "$line" && [[ "$st" == "connected" || "$st" == "clean" || "$st" == "connecting" ]]; then
     fix_perms
     echo "OK $RFCOMM_DEV $mac $channel $st"
     return 0
@@ -198,7 +307,17 @@ bind_saved() {
   ensure_adapter
   bluetoothctl trust "$mac" >/dev/null 2>&1 || true
   settle_bind
-  echo "OK $RFCOMM_DEV $mac $channel"
+  line="$(rfcomm_line)"
+  st="$(rfcomm_state "$line")"
+  case "$st" in
+    connected|clean|config|connecting)
+      echo "OK $RFCOMM_DEV $mac $channel $st"
+      ;;
+    *)
+      echo "ERR $RFCOMM_DEV continua ${st} apos o bind" >&2
+      exit 1
+      ;;
+  esac
 }
 
 # OTA e install-station. Lê o MAC salvo e não grava o config.json.
@@ -413,7 +532,7 @@ case "$cmd" in
     echo "OK disconnect $mac"
     ;;
   *)
-    echo "ERR usage: lextel-bt scan|devices|pair|paired|channel|bind|reconnect|reconnect-saved|release|disconnect" >&2
+    echo "ERR usage: lextel-bt scan|devices|pair|paired|channel|bind|reconnect|reconnect-saved|reconnect-after-restart|pump|release|disconnect" >&2
     exit 1
     ;;
 esac

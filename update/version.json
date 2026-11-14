@@ -1,8 +1,8 @@
 {
-  "version": "0.1.10",
+  "version": "0.1.10.01",
   "channel": "main",
-  "file": "ham-cockpit-0.1.10.tgz",
-  "sha256": "0cc3e4653848816bd198d95916e40edff43bada287a8118418e18b0718344f93",
-  "bytes": 5054935,
-  "notes": "Ham Cockpit v0.1.10 — imagem e OTA com o laboratório.\n\n- Lextel: o MAC salvo não é reescrito. Bind clean ou connected do mesmo aparelho permanece, inclusive no rebind. O prazo do open não marca o bind como velho. Rebind só depois de ENODEV, e ENODEV não encerra o processo. A instalação e a OTA religam agora e de novo cerca de 20 s depois do reinício do console, sem rfkill, power off ou hciconfig.\n- S-meter do menu a cerca de 6 Hz, só o nível, com agulha interpolada. O restante do poll fica em 450 ms, sem STRENGTH. Leitura ainda no ar: o tick é pulado e a resposta é HTTP 200 ocupado.\n- Power off do IC-705 grava standby e envia 0x18 0x00.\n- A imagem nasce com o mesmo console: Bluetooth na mini-UART e MMDVM em ttyAMA0, IC-705 no Hamlib 4.6.5 pela porta 4002, SPE na 4001 RFC2217 com ampctld desligado, trava CI-V em /run/lock, VPN de suporte só no túnel, DHCP com client-id MAC e hostname ham-cockpit. A OTA não sobrescreve rádios, INI, services.json, Lextel, SPE nem a escolha da VPN."
+  "file": "ham-cockpit-0.1.10.01.tgz",
+  "sha256": "7e302d84767f1cc5fce0bb6a68579b7d206a55a5f18083c9b810bfb0e6cba83f",
+  "bytes": 5058163,
+  "notes": "Ham Cockpit v0.1.10.01 — Lextel aceita pump e religa uma vez; S-meter a 25 Hz; Power on do IC-705 em 0x18 0x01.\n\nA OTA não sobrescreve rádios, INI, services.json, Lextel, SPE nem a escolha da VPN."
 }

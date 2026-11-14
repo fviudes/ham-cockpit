@@ -659,15 +659,23 @@ if [[ "$CHROOT" != "1" ]]; then
   fi
   systemctl enable --now ham-cockpit.target || systemctl start ham-cockpit.target || true
   systemctl restart waveloggate.service || systemctl start waveloggate.service || true
-  # Mesmo religamento da OTA. A instalação troca o helper com o SPP no ar;
-  # o bind do MAC em /opt/lextel/config.json fica "clean" (nó pronto, o
-  # aparelho ainda não atendeu). clean não é link morto — soltar esse bind
-  # faz o open devolver ENODEV e o MS-2000 não volta. Não reescreve o
-  # config.json e não reinicia o ser2net.
+  # Mesmo religamento da OTA. A instalação troca o helper com o SPP no ar.
+  # clean não é link morto. closed (open morto no try-restart) é recriado
+  # pelo helper, sem reescrever config.json e sem reiniciar o ser2net.
+  # Uma chamada agora e outra só depois que o console sobe. Laço curto
+  # martela o hci0 (link tx timeout). Um sleep fixo corre enquanto o
+  # processo antigo ainda segura o fd.
   if [[ -x /opt/ham-cockpit/bin/lextel-bt && -f /opt/lextel/config.json ]]; then
     echo "install-station: Lextel religando o MAC salvo (clean não é link morto)" >&2
     /opt/ham-cockpit/bin/lextel-bt reconnect-saved \
       || echo "install-station: AVISO — Lextel não religou agora; o console tenta de novo sem apagar o MAC" >&2
+    if command -v systemd-run >/dev/null 2>&1; then
+      systemd-run --quiet --collect \
+        /opt/ham-cockpit/bin/lextel-bt reconnect-after-restart \
+        >/dev/null 2>&1 || echo "install-station: AVISO — reconnect do Lextel pós-restart não agendou" >&2
+    else
+      nohup /opt/ham-cockpit/bin/lextel-bt reconnect-after-restart >/dev/null 2>&1 &
+    fi
   fi
 fi
 
