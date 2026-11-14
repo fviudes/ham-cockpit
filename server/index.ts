@@ -353,6 +353,11 @@ async function startServer() {
         return;
       }
       const out = await icomLanCmd(cmd, (req.body ?? {}) as Record<string, unknown>);
+      // O S-meter a 6 Hz pula o tick. 502 faria o nginx tratar o console como morto.
+      if (cmd === "smeter") {
+        res.status(200).json(out);
+        return;
+      }
       res.status(out.ok ? 200 : 502).json(out);
     } catch (err) {
       res.status(500).json({ ok: false, error: String(err) });
@@ -427,6 +432,21 @@ async function startServer() {
       res.status(out.ok || queued ? 200 : 502).json(out);
     } catch (err) {
       res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  // Só STRENGTH, na mesma fila do rigctld. Sempre 200: ocupado/timeout não é queda do console.
+  app.post("/api/hamlib/smeter", async (req, res) => {
+    try {
+      const port = Number(req.body?.port ?? 4532);
+      const host = String(req.body?.host ?? "127.0.0.1");
+      if (!Number.isFinite(port) || port <= 0) {
+        res.status(200).json({ ok: false, reply: "", error: "porta inválida" });
+        return;
+      }
+      const out = await hubRigctl(port, "\\get_level STRENGTH", host, 1000);
+      res.status(200).json(out);
+    } catch (err) {
+      res.status(200).json({ ok: false, reply: "", error: String(err) });
     }
   });
 

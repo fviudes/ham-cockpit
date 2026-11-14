@@ -1,0 +1,131 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  SMETER_POLL_MS,
+  hamlibStrengthToUiSMeter,
+  parseHamlibStrength,
+  runSmeterPoll,
+} from "../shared/smeter";
+import { hubRigctl, rigCommandAdmission } from "./hamlib-hub";
+import { pollPrimarySmeter } from "../client/src/console/radio-cmd";
+import type { StationRadio } from "../client/src/console/state";
+
+function radio(partial: Partial<StationRadio>): StationRadio {
+  return {
+    id: "r1",
+    name: "IC-705",
+    maker: "icom",
+    link: "usb",
+    device: "",
+    deviceName: "IC-705",
+    proto: "civ",
+    port: "4002",
+    baud: 115200,
+    civAddr: "0xA4",
+    connected: true,
+    primary: true,
+    error: "",
+    hamlibModel: 3085,
+    ...partial,
+  };
+}
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("S-meter rápido", () => {
+  it("tenta cerca de 6 vezes por segundo", () => {
+    expect(SMETER_POLL_MS).toBe(167);
+    expect(Math.round(1000 / SMETER_POLL_MS)).toBe(6);
+  });
+
+  it("lê zero como S9 e ignora a linha RPRT", () => {
+    expect(parseHamlibStrength("0\nRPRT 0")).toBe(0);
+    expect(parseHamlibStrength("-12\nRPRT 0")).toBe(-12);
+    expect(hamlibStrengthToUiSMeter(0)).toBe(9);
+  });
+
+  it("sem rádio não busca nada", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const value = await pollPrimarySmeter([radio({ connected: false })]);
+    expect(value).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("Hamlib pede só o endpoint do medidor, não o poll geral", async () => {
+    const seen: { url: string; body: string }[] = [];
+    vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
+      seen.push({ url: String(url), body: String(init?.body ?? "") });
+      return Promise.resolve(json({ ok: true, reply: "-12\nRPRT 0" }));
+    });
+    const value = await pollPrimarySmeter([radio({})]);
+    expect(value).toBe(hamlibStrengthToUiSMeter(-12));
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.url).toBe("/api/hamlib/smeter");
+    expect(seen[0]!.body).toBe(JSON.stringify({ port: 4532 }));
+    expect(seen[0]!.body).not.toMatch(/command|poll|\\bf\\b|STRENGTH|get_level/);
+  });
+
+  it("ocupado no medidor vira leitura pulada, sem segundo fetch", async () => {
+    let calls = 0;
+    let release: (value: Response) => void = () => {};
+    const hung = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    vi.stubGlobal("fetch", () => {
+      calls += 1;
+      return hung;
+    });
+    const gate = { busy: false };
+    const row = radio({});
+    const first = runSmeterPoll(gate, () => pollPrimarySmeter([row]));
+    const second = await runSmeterPoll(gate, () => pollPrimarySmeter([row]));
+    expect(second).toBeNull();
+    expect(calls).toBe(1);
+    release(json({ ok: false, reply: "", error: "ocupado" }));
+    await expect(first).resolves.toBeNull();
+  });
+
+  it("CI-V LAN pede só smeter", async () => {
+    const seen: { url: string; body: string }[] = [];
+    vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
+      seen.push({ url: String(url), body: String(init?.body ?? "") });
+      return Promise.resolve(json({ ok: true, reply: { skipped: true } }));
+    });
+    const value = await pollPrimarySmeter([
+      radio({ link: "network", netProfile: "icom-lan-udp", proto: "civ" }),
+    ]);
+    expect(value).toBeNull();
+    expect(seen).toHaveLength(1);
+    expect(seen[0]!.url).toBe("/api/radios/civ");
+    expect(JSON.parse(seen[0]!.body)).toEqual({ cmd: "smeter" });
+  });
+});
+
+describe("fila do Hamlib", () => {
+  it("não admite outro STRENGTH com a faixa ocupada", () => {
+    expect(rigCommandAdmission("\\get_level STRENGTH", true, 0)).toBe("ocupado");
+    expect(rigCommandAdmission("f", true, 0)).toBe("ok");
+    expect(rigCommandAdmission("f", false, 1)).toBe("ocupado");
+    expect(rigCommandAdmission("f", false, 0)).toBe("ok");
+    expect(rigCommandAdmission("F 7100000", true, 0)).toBe("ok");
+    expect(rigCommandAdmission("F 7100000", false, 4)).toBe("fila cheia");
+  });
+
+  it("STRENGTH com leitura no ar responde ocupado sem esperar o socket", async () => {
+    const first = hubRigctl(1, "\\get_level STRENGTH", "127.0.0.1", 400);
+    const started = Date.now();
+    const second = await hubRigctl(1, "\\get_level STRENGTH", "127.0.0.1", 400);
+    expect(Date.now() - started).toBeLessThan(150);
+    expect(second).toEqual({ ok: false, reply: "", error: "ocupado" });
+    await first;
+  });
+});

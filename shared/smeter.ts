@@ -39,3 +39,38 @@ export function hamlibStrengthToUiSMeter(dbRelS9: number): number {
   if (dbRelS9 <= 0) return Math.max(0, Math.min(9, 9 + dbRelS9 / 6));
   return Math.min(12, 9 + Math.min(60, dbRelS9) / 20);
 }
+
+/**
+ * Tentativa do ponteiro no menu. O poll de frequência/modo/PTT continua no ritmo antigo.
+ * 1000/6 ≈ 167 ms. Se a leitura anterior ainda não voltou, o tick não dispara outro fetch.
+ */
+export const SMETER_POLL_MS = 167;
+
+export function smeterTickOpen(inFlight: boolean): boolean {
+  return !inFlight;
+}
+
+/** Uma leitura por vez. O segundo tick, com a primeira ainda no ar, não chama `poll`. */
+export async function runSmeterPoll(
+  gate: { busy: boolean },
+  poll: () => Promise<number | null>,
+): Promise<number | null> {
+  if (!smeterTickOpen(gate.busy)) return null;
+  gate.busy = true;
+  try {
+    return await poll();
+  } finally {
+    gate.busy = false;
+  }
+}
+
+/** Primeira linha numérica do rigctld (`-12` + `RPRT 0`). Zero é S9, não “sem leitura”. */
+export function parseHamlibStrength(reply: string): number | null {
+  for (const line of String(reply || "").split(/\n/)) {
+    const text = line.trim();
+    if (!text || /^RPRT\b/i.test(text)) continue;
+    const n = Number.parseFloat(text);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}

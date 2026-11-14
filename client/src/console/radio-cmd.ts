@@ -4,7 +4,7 @@
  */
 import { getEquipment, normalizeCivAddr } from "@shared/equipment";
 import { HAMLIB_LEVELS, type HamlibLevels } from "@shared/equipment/hamlib-rigs";
-import { hamlibStrengthToUiSMeter } from "@shared/smeter";
+import { hamlibStrengthToUiSMeter, parseHamlibStrength } from "@shared/smeter";
 import { ic705Ble } from "./ic705-ble";
 import type { StationRadio } from "./state";
 
@@ -126,19 +126,60 @@ export async function pollPrimaryTelemetry(
     } catch {
       /* */
     }
-    if (!patch.ptt && tick % 2 === 0) {
-      try {
-        const s = await postHamlibReply("\\get_level STRENGTH", port);
-        const raw = Number.parseFloat(s);
-        if (Number.isFinite(raw)) {
-          // Hamlib STRENGTH = dB relativo a S9 (−54…+60), não 0..100%.
-          patch.smeter = hamlibStrengthToUiSMeter(raw);
-        }
-      } catch {
-        /* */
-      }
-    }
+    // S-meter fica fora deste poll (450 ms). O menu pede só STRENGTH em
+    // /api/hamlib/smeter (~167 ms) e pula o tick se a fila ainda não soltou.
     return Object.keys(patch).length ? patch : null;
+  }
+
+  return null;
+}
+
+/**
+ * Só o nível de sinal. Não manda `f`, modo, PTT nem o poll completo.
+ * Sem transporte ao vivo devolve null — o ponteiro fica em S0, sem dBm inventado.
+ * Hamlib ocupado/timeout e CI-V em curso também devolvem null (o tick é pulado).
+ */
+export async function pollPrimarySmeter(
+  items: StationRadio[],
+  opts?: { bleReady?: boolean; hamlibPort?: number },
+): Promise<number | null> {
+  const route = resolvePrimaryRoute(items, opts);
+  if (!route.live || route.transport === "none") return null;
+
+  if (route.transport === "ble") {
+    ic705Ble.requestSmeter();
+    return null;
+  }
+
+  if (route.transport === "lan") {
+    try {
+      const j = await postCiv("smeter");
+      const reply = (j.reply && typeof j.reply === "object" ? j.reply : null) as {
+        smeter?: number;
+        skipped?: boolean;
+      } | null;
+      if (!reply || reply.skipped || reply.smeter == null || !Number.isFinite(reply.smeter)) return null;
+      return reply.smeter;
+    } catch {
+      return null;
+    }
+  }
+
+  if (route.transport === "hamlib") {
+    try {
+      const r = await fetch("/api/hamlib/smeter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ port: opts?.hamlibPort ?? 4532 }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; reply?: string };
+      if (!r.ok || j.ok === false) return null;
+      const raw = parseHamlibStrength(String(j.reply || ""));
+      if (raw == null) return null;
+      return hamlibStrengthToUiSMeter(raw);
+    } catch {
+      return null;
+    }
   }
 
   return null;
@@ -172,12 +213,20 @@ function standbyOf(radio?: StationRadio): boolean {
   return Boolean(getEquipment(radio.equipmentId)?.standby);
 }
 
-/** Quadro CI-V 0x18 0x02. O set_powerstat do Icom 4.6.5 não emite esse byte. */
-function civStandbyCmd(radio?: StationRadio): string {
+function modelOf(radio?: StationRadio): number {
+  const eq = radio?.equipmentId ? getEquipment(radio.equipmentId) : undefined;
+  return radio?.hamlibModel || eq?.hamlibModel || 0;
+}
+
+function civAddrByte(radio?: StationRadio): string {
   const eq = radio?.equipmentId ? getEquipment(radio.equipmentId) : undefined;
   const addr = normalizeCivAddr(radio?.civAddr) || normalizeCivAddr(eq?.civAddr) || "0xA4";
-  const b = addr.slice(2).toLowerCase();
-  return `w \\0xfe\\0xfe\\0x${b}\\0xe0\\0x18\\0x02\\0xfd`;
+  return addr.slice(2).toUpperCase();
+}
+
+/** Frame CI-V inteiro. O `w` do rigctld acrescenta CR; o send_raw com terminador icom não. */
+function civSendRaw(addr: string, payload: string): string {
+  return `\\send_raw icom 0xFE:0xFE:0x${addr}:0xE0:${payload}:0xFD`;
 }
 
 async function hamlibPower(on: boolean, port: number, radio?: StationRadio) {
@@ -185,8 +234,19 @@ async function hamlibPower(on: boolean, port: number, radio?: StationRadio) {
     await postHamlib("\\set_powerstat 1", port);
     return;
   }
-  if (standbyOf(radio)) {
-    await postHamlib(civStandbyCmd(radio), port);
+  const addr = civAddrByte(radio);
+  const model = modelOf(radio);
+  // IC-705: 0x18 0x02 volta FA. Com o item 1A 05 0073 em 01, o 0x18 0x00 entra em standby
+  // (USB continua no ar). 0073 em 00 é "Shutdown only" e o mesmo 0x00 desliga de vez.
+  // O \set_powerstat do Icom 4.6.5 manda 0x00 sem esse item, e não emite 0x02.
+  if (model === 3085 || radio?.equipmentId === "icom-ic-705") {
+    await postHamlib(civSendRaw(addr, "0x1A:0x05:0x00:0x73:0x01"), port);
+    await postHamlib(civSendRaw(addr, "0x18:0x00"), port);
+    return;
+  }
+  // IC-7100: o código já separava o standby neste quadro. Não usar nos outros Icom.
+  if (model === 3070 || standbyOf(radio)) {
+    await postHamlib(civSendRaw(addr, "0x18:0x02"), port);
     return;
   }
   await postHamlib("\\set_powerstat 0", port);

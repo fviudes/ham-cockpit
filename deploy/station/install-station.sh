@@ -659,6 +659,16 @@ if [[ "$CHROOT" != "1" ]]; then
   fi
   systemctl enable --now ham-cockpit.target || systemctl start ham-cockpit.target || true
   systemctl restart waveloggate.service || systemctl start waveloggate.service || true
+  # Mesmo religamento da OTA. A instalação troca o helper com o SPP no ar;
+  # o bind do MAC em /opt/lextel/config.json fica "clean" (nó pronto, o
+  # aparelho ainda não atendeu). clean não é link morto — soltar esse bind
+  # faz o open devolver ENODEV e o MS-2000 não volta. Não reescreve o
+  # config.json e não reinicia o ser2net.
+  if [[ -x /opt/ham-cockpit/bin/lextel-bt && -f /opt/lextel/config.json ]]; then
+    echo "install-station: Lextel religando o MAC salvo (clean não é link morto)" >&2
+    /opt/ham-cockpit/bin/lextel-bt reconnect-saved \
+      || echo "install-station: AVISO — Lextel não religou agora; o console tenta de novo sem apagar o MAC" >&2
+  fi
 fi
 
 echo "estação habilitada no boot · ham-cockpit.target"

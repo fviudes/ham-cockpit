@@ -98,6 +98,12 @@ jobs:
           IMG="$(ls image/out/ham-cockpit-*-raspi.img.xz | head -n 1)"
           SUM="${IMG}.sha256"
           NOTES="Imagem Ubuntu Server 24.04 LTS ARM64 (+raspi) com Ham Cockpit ${TAG} para Raspberry Pi 3 / 4 / 5. Stack completo embutido: Docker, ser2net, Hamlib, console, AP Wi-Fi, MMDVM/Nextion compilados em /usr/local/bin, e imagens Docker Wavelog+MariaDB em /opt/wavelog/images (first-boot faz docker load — sem pull obrigatório). Grave no cartão/SSD com o Raspberry Pi Imager (Use custom). Se a Release tiver .part00/.part01, junte antes de gravar (ver .JOIN.txt)."
+          if [[ -f update/version.json ]]; then
+            EXTRA="$(python3 -c 'import json; print(json.load(open("update/version.json")).get("notes","").strip(), end="")')"
+            if [[ -n "$EXTRA" ]]; then
+              NOTES="${NOTES}"$'\n\n'"${EXTRA}"
+            fi
+          fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" --notes "$NOTES"
           else

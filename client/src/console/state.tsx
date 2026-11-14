@@ -13,6 +13,7 @@ import { t, type I18nKey, type Lang } from "./i18n";
 import { applyHtmlLang, LANG_EVENT, readLang, writeLang } from "./lang-store";
 import { bleAvailable, bleErrorMessage, ic705Ble, isBleCancel, looksLikeBleId, type BlePhase, type CivPatch } from "./ic705-ble";
 import { pollPrimaryTelemetry, resolvePrimaryRoute } from "./radio-cmd";
+import { publishSmeter } from "./smeter-bus";
 import { SERVICE_IDS, UPDATE_IDS, asSer2netDevice, type ServiceId, type UpdateId, type Ser2netDevice } from "@shared/const";
 import { licenseGateOf, type LicenseGate } from "@shared/license";
 import { isNewerVersion } from "@shared/version";
@@ -1538,6 +1539,10 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
         );
       },
       onCiv: (patch) => {
+        // Quadro só com S-meter: o ponteiro já assinou o barramento.
+        // Não re-renderiza frequência, modo e o resto do header a cada amostra.
+        const onlyMeter = patch.smeter != null && Object.keys(patch).length === 1;
+        if (onlyMeter) return;
         setS((prev) => applyCivPatchToStation(prev, patch));
       },
       onDisconnect: () => {
@@ -1586,6 +1591,7 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
           } else if (++miss >= 3) serialOn = false;
           nextSerial = serialOn;
         }
+        if (patch?.smeter != null && Number.isFinite(patch.smeter)) publishSmeter(patch.smeter);
         if ((patch && Object.keys(patch).length) || nextSerial != null) {
           setS((prev) => {
             const base = patch && Object.keys(patch).length ? applyCivPatchToStation(prev, patch) : prev;

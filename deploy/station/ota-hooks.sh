@@ -818,40 +818,23 @@ fi
 
 # Religa o SPP do MAC salvo. Não grava /opt/lextel/config.json, não reinicia
 # o ser2net, não mexe em VPN, firewall, Hamlib nem no overlay. O helper não
-# solta um rfcomm connected e não dá rfkill, power off nem hciconfig.
+# dá rfkill, power off nem hciconfig.
+#
+# Por que este religamento é obrigatório: a OTA troca o binário com o Node
+# ainda segurando /dev/rfcomm0 e, em seguida, o station-upd faz try-restart
+# do console. O restart fecha o fd. O bind do MAC salvo fica em "clean"
+# (nó criado, aparelho ainda não atendeu). clean NÃO é link morto. Se o
+# retry tratar clean como falha e der rfcomm release, o open devolve
+# ENODEV, o Node pede "rebind" e solta o nó de novo — o MS-2000 não volta.
+# O helper mantém clean e connected. A segunda chamada corre depois do
+# restart, porque religar só aqui é desfeito quando o fd fecha.
 lextel_reconnect_saved() {
   [[ -x /opt/ham-cockpit/bin/lextel-bt ]] || return 0
   [[ -f /opt/lextel/config.json ]] || return 0
-  command -v python3 >/dev/null 2>&1 || return 0
-  local spec="" i
-  spec="$(python3 - <<'PY'
-import json, re
-p = "/opt/lextel/config.json"
-try:
-    d = json.load(open(p, encoding="utf-8"))
-except Exception:
-    raise SystemExit(0)
-if d.get("autoConnect") is False:
-    raise SystemExit(0)
-addr = str(d.get("addr") or "").strip().upper()
-if not re.fullmatch(r"([0-9A-F]{2}:){5}[0-9A-F]{2}", addr):
-    raise SystemExit(0)
-pin = str(d.get("pin") or "1234")
-if not pin.isdigit():
-    pin = "1234"
-try:
-    ch = int(d.get("channel") or 1)
-except Exception:
-    ch = 1
-if ch < 1 or ch > 30:
-    ch = 1
-print(f"{addr} {pin} {ch}")
-PY
-)" || true
-  [[ -n "$spec" ]] || return 0
-  echo "ota-hooks: Lextel religando ${spec%% *}" >&2
+  local i
+  echo "ota-hooks: Lextel religando o MAC salvo (clean não é link morto)" >&2
   for i in 1 2 3 4 5; do
-    if /opt/ham-cockpit/bin/lextel-bt reconnect $spec; then
+    if /opt/ham-cockpit/bin/lextel-bt reconnect-saved; then
       echo "ota-hooks: Lextel rfcomm do MAC salvo pronto" >&2
       return 0
     fi
@@ -861,5 +844,16 @@ PY
   return 0
 }
 lextel_reconnect_saved || echo "ota-hooks: AVISO — reconnect do Lextel não rodou" >&2
+# ~4s depois o station-upd reinicia o Node. 8s+12s cobre esse restart e o
+# chown do apply. Não reescreve config.json e não toca no ser2net.
+if [[ -x /opt/ham-cockpit/bin/lextel-bt && -f /opt/lextel/config.json ]]; then
+  if command -v systemd-run >/dev/null 2>&1; then
+    systemd-run --quiet --collect --on-active=8s \
+      /bin/bash -c 'sleep 12; exec /opt/ham-cockpit/bin/lextel-bt reconnect-saved' \
+      >/dev/null 2>&1 || echo "ota-hooks: AVISO — reconnect do Lextel pós-restart não agendou" >&2
+  else
+    nohup bash -c 'sleep 20; exec /opt/ham-cockpit/bin/lextel-bt reconnect-saved' >/dev/null 2>&1 &
+  fi
+fi
 
 exit 0

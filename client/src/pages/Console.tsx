@@ -582,7 +582,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
           ) : null}
           <div className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] grid-rows-[2.85rem_2.85rem] gap-x-2 gap-y-1">
             <div className="row-span-2 flex h-full min-h-0 items-stretch gap-1.5">
-            <HeaderSMeter reading={liveSignal ? s.smeter : null} />
+            <HeaderSMeter live={liveSignal} />
             <div
               ref={headerFreqRef}
               title={tx("freqWheel")}

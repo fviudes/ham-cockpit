@@ -130,8 +130,8 @@ export type EquipmentRadio = {
   defaultBaud?: number;
   /**
    * true só quando o protocolo confirma standby (não é chute).
-   * Icom: CI-V 0x18 0x02 (S_PWR_STDBY no Hamlib 4.6.5). O `\set_powerstat` do
-   * backend Icom dessa versão não distingue: qualquer valor ≠ ligado manda 0x00.
+   * IC-705: 1A 05 0073 = 01 e CI-V 0x18 0x00 (0x18 0x02 é NAK).
+   * IC-7100: CI-V 0x18 0x02. O `\set_powerstat` do Icom 4.6.5 manda 0x00 se o valor não for on.
    */
   standby?: boolean;
   connections: EquipmentConnection[];

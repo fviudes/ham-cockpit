@@ -4,7 +4,7 @@
 # ou um segundo SPP. Este helper nunca dá rfkill, power off, hciconfig ou
 # disconnect fora do MAC pedido — isso derrubaria a outra sessão.
 #
-# Usage: lextel-bt scan|pair|paired|bind|reconnect|release|disconnect|devices|channel <args>
+# Usage: lextel-bt scan|pair|paired|bind|reconnect|reconnect-saved|release|disconnect|devices|channel <args>
 set -euo pipefail
 
 # Sessão própria. O Node mata o grupo do sudo; este processo fica nesse grupo
@@ -161,27 +161,90 @@ settle_bind() {
   fix_perms
 }
 
-# connected e clean do mesmo MAC ficam. clean é o bind pronto para o open,
-# não um link morto. Soltar esse bind é o que derruba o MS-2000 depois da OTA.
+# Alguém ainda está no open(). Soltar o nó nesse instante devolve ENODEV.
+rfcomm_held() {
+  if command -v fuser >/dev/null 2>&1 && [[ -e "$RFCOMM_DEV" ]]; then
+    fuser -s "$RFCOMM_DEV" 2>/dev/null
+    return $?
+  fi
+  return 1
+}
+
+# connected e clean do mesmo MAC ficam, inclusive quando o Node pede
+# "rebind". clean é o bind pronto para o open, não um link morto: o
+# aparelho ainda não atendeu. O console pede rebind depois de um ENODEV
+# ou de um open que estourou o prazo. Soltar o clean nesse retry é o que
+# derruba o MS-2000 depois da OTA — o open seguinte volta ENODEV e o
+# Node fica pedindo rebind para sempre.
+# config sem ninguém no fd é DLC preso (o open morreu no meio). Aí sim
+# recria. config com o fd aberto é o open em andamento: não solta.
 bind_saved() {
   local force="${1:-}"
   local line st
   line="$(rfcomm_line)"
   st="$(rfcomm_state "$line")"
-  if same_binding "$line" && [[ "$st" == "connected" ]]; then
+  if same_binding "$line" && [[ "$st" == "connected" || "$st" == "clean" ]]; then
     fix_perms
-    echo "OK $RFCOMM_DEV $mac $channel connected"
+    echo "OK $RFCOMM_DEV $mac $channel $st"
     return 0
   fi
-  if same_binding "$line" && [[ "$st" == "clean" && "$force" != "rebind" ]]; then
-    fix_perms
-    echo "OK $RFCOMM_DEV $mac $channel clean"
-    return 0
+  if same_binding "$line" && [[ "$st" == "config" ]]; then
+    if [[ "$force" != "rebind" ]] || rfcomm_held; then
+      fix_perms
+      echo "OK $RFCOMM_DEV $mac $channel config"
+      return 0
+    fi
   fi
   ensure_adapter
   bluetoothctl trust "$mac" >/dev/null 2>&1 || true
   settle_bind
   echo "OK $RFCOMM_DEV $mac $channel"
+}
+
+# OTA e install-station. Lê o MAC salvo e não grava o config.json.
+reconnect_saved() {
+  local spec addr p ch
+  [[ -f /opt/lextel/config.json ]] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  spec="$(python3 - <<'PY'
+import json, re
+p = "/opt/lextel/config.json"
+try:
+    d = json.load(open(p, encoding="utf-8"))
+except Exception:
+    raise SystemExit(0)
+if d.get("autoConnect") is False:
+    raise SystemExit(0)
+addr = str(d.get("addr") or "").strip().upper()
+if not re.fullmatch(r"([0-9A-F]{2}:){5}[0-9A-F]{2}", addr):
+    raise SystemExit(0)
+pin = str(d.get("pin") or "1234")
+if not pin.isdigit():
+    pin = "1234"
+try:
+    ch = int(d.get("channel") or 1)
+except Exception:
+    ch = 1
+if ch < 1 or ch > 30:
+    ch = 1
+print(f"{addr} {pin} {ch}")
+PY
+)" || true
+  [[ -n "$spec" ]] || return 0
+  read -r addr p ch <<<"$spec"
+  mac="$addr"
+  pin="$p"
+  channel="$ch"
+  valid_mac || return 0
+  ensure_adapter
+  bluetoothctl trust "$mac" >/dev/null 2>&1 || true
+  info="$(bt_info)"
+  if ! echo "$info" | grep -q 'Paired: yes'; then
+    if ! pair_mac; then
+      echo "ERR pair $mac sem vinculo; bind segue" >&2
+    fi
+  fi
+  bind_saved ""
 }
 
 bt_info() {
@@ -317,8 +380,9 @@ case "$cmd" in
     bind_saved "$rebind"
     ;;
   reconnect)
-    # OTA: religa só o MAC salvo. Não grava config, não mexe em ser2net,
-    # não dá rfkill, power off nem hciconfig, não solta link connected.
+    # OTA: religa só o MAC pedido. Não grava config, não mexe em ser2net,
+    # não dá rfkill, power off nem hciconfig, não solta link connected
+    # nem o bind clean (clean não é link morto).
     valid_mac || { echo "ERR missing MAC" >&2; exit 1; }
     case "$channel" in
       ''|*[!0-9]*) channel=1 ;;
@@ -334,6 +398,10 @@ case "$cmd" in
     fi
     bind_saved ""
     ;;
+  reconnect-saved)
+    # MAC de /opt/lextel/config.json. Não reescreve o arquivo.
+    reconnect_saved
+    ;;
   release)
     rfcomm release "$RFCOMM_N" 2>/dev/null || true
     echo "OK release"
@@ -345,7 +413,7 @@ case "$cmd" in
     echo "OK disconnect $mac"
     ;;
   *)
-    echo "ERR usage: lextel-bt scan|devices|pair|paired|channel|bind|reconnect|release|disconnect" >&2
+    echo "ERR usage: lextel-bt scan|devices|pair|paired|channel|bind|reconnect|reconnect-saved|release|disconnect" >&2
     exit 1
     ;;
 esac

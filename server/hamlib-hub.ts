@@ -247,6 +247,27 @@ function isPollCommand(command: string) {
   return c === "f" || c === "m" || c === "t" || c === "v" || c === "s" || c === "l";
 }
 
+function isSmeterPoll(command: string) {
+  return /^\\?get_level\s+strength\b/i.test(command.trim());
+}
+
+/**
+ * STRENGTH a 6 Hz não entra se a faixa está ocupada: o tick é pulado.
+ * `f` / `m` / `t` podem ficar no único lugar atrás da leitura atual, no mesmo
+ * socket. Segundo poll, ou fila já com alguém, não entra — não abre outro TCP.
+ */
+export function rigCommandAdmission(
+  command: string,
+  laneBusy: boolean,
+  queueLength: number,
+): "ok" | "ocupado" | "fila cheia" {
+  if (isPollCommand(command) && (laneBusy || queueLength > 0)) {
+    if (isSmeterPoll(command) || queueLength > 0) return "ocupado";
+  }
+  if (!isPollCommand(command) && queueLength >= 4) return "fila cheia";
+  return "ok";
+}
+
 function settle(job: RigJob, value: RigReply) {
   if (job.settled) return;
   job.settled = true;
@@ -369,20 +390,27 @@ function ensureSock(lane: RigLane): Promise<void> {
 async function runJob(lane: RigLane, job: RigJob) {
   lane.lines = [];
   lane.buf = "";
+  // Marca a leitura no ar antes do TCP. O próximo poll (S-meter a 6 Hz)
+  // vê a faixa ocupada e não entra na fila enquanto esta não fechar.
+  lane.current = job;
   try {
     await ensureSock(lane);
   } catch (err) {
+    if (lane.current === job) lane.current = null;
     settle(job, { ok: false, reply: "", error: err instanceof Error ? err.message : String(err) });
     return;
   }
   if (!lane.sock) {
+    if (lane.current === job) lane.current = null;
     settle(job, { ok: false, reply: "", error: "sem socket" });
     return;
   }
   await new Promise<void>((done) => {
     lane.txnDone = done;
     lane.current = job;
-    // O poll da UI é 450 ms. Este timer só solta o HTTP; não fecha o socket.
+    // O poll geral da UI é 450 ms. O S-meter pede STRENGTH à parte (~167 ms)
+    // e, com a faixa ocupada, recebe "ocupado" sem segundo socket.
+    // Este timer só solta o HTTP; não fecha o socket.
     // Fechar aos 2,5 s deixa CLOSE-WAIT enquanto o rigctld ainda está no CI-V
     // e o próximo poll abre outro TCP. Uma leitura por vez.
     lane.caller = setTimeout(() => {
@@ -428,11 +456,12 @@ export function hubRigctl(
   const cmd = command.trim().endsWith("\n") ? command.trim() : `${command.trim()}\n`;
   const lane = laneFor(host, listenPort);
   return new Promise((resolve) => {
-    if (isPollCommand(cmd) && (lane.current || lane.queue.length > 0)) {
+    const admission = rigCommandAdmission(cmd, Boolean(lane.current) || lane.pumping, lane.queue.length);
+    if (admission === "ocupado") {
       resolve({ ok: false, reply: "", error: "ocupado" });
       return;
     }
-    if (!isPollCommand(cmd) && lane.queue.length >= 4) {
+    if (admission === "fila cheia") {
       resolve({ ok: false, reply: "", error: "fila cheia" });
       return;
     }

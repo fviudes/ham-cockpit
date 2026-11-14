@@ -440,7 +440,7 @@ export const HAMLIB_SERIAL_RADIOS: EquipmentRadio[] = [
       { kind: "usb-serial", preferred: true, auth: "none", defaultBaud: 115200, hamlibReady: true },
     ],
     capabilities: CAP,
-    notes: "CI-V USB 115200 (a capabilidade 4.6.5 lista serial_rate_max 19200; a porta USB da estação é 115200). Endereço padrão 0xA4. Standby = CI-V 0x18 0x02.",
+    notes: "CI-V USB 115200 (a capabilidade 4.6.5 lista serial_rate_max 19200; a porta USB da estação é 115200). Endereço padrão 0xA4. Standby = 1A 05 0073 em 01 e CI-V 0x18 0x00.",
   },
   {
     id: "icom-ic-706",

@@ -461,6 +461,10 @@ export async function icomLanCmd(
   cmd: string,
   body: Record<string, unknown> = {},
 ): Promise<{ ok: boolean; error?: string; reply?: unknown }> {
+  if (cmd === "smeter") {
+    if (!rig || phase !== "ready") return { ok: true, reply: { skipped: true } };
+    return { ok: true, reply: await readLanSmeter() };
+  }
   if (!rig || phase !== "ready") {
     return { ok: false, error: "Icom LAN não conectado" };
   }
@@ -522,11 +526,20 @@ export async function icomLanCmd(
       }
       case "setPower":
       case "power": {
-        // CI-V 0x18 (icom_defs.h 4.6.5): 0x01 on, 0x02 standby, 0x00 off.
-        // standby só quando o cliente marca o modelo; senão é desligar de verdade.
         const on = Boolean(body.on ?? body.power ?? body.value);
-        const byte = on ? 0x01 : body.standby === true ? 0x02 : 0x00;
-        rig.sendCiv(civPayload(0x18, byte));
+        if (on) {
+          rig.sendCiv(civPayload(0x18, 0x01));
+          return { ok: true };
+        }
+        // IC-705 (3085): 0x18 0x02 é NAK. 0073=01 e depois 0x18 0x00 = standby.
+        if (body.standby === true && hamlibModel === 3085) {
+          rig.sendCiv(civPayload(0x1a, 0x05, 0x00, 0x73, 0x01));
+          await new Promise((r) => setTimeout(r, 80));
+          rig.sendCiv(civPayload(0x18, 0x00));
+          return { ok: true };
+        }
+        // IC-7100 continua no 0x02. Os outros Icom desligam com 0x00.
+        rig.sendCiv(civPayload(0x18, body.standby === true ? 0x02 : 0x00));
         return { ok: true };
       }
       case "readFreq": {
@@ -645,8 +658,57 @@ function parseAgcFrame(frame: Buffer): "OFF" | "FAST" | "MID" | "SLOW" | undefin
   return undefined;
 }
 
-/** Poll rotativo: freq/modo/PTT/S-meter sempre; filtros e VFO B em cadência menor. */
+/** Um CI-V por vez. O S-meter a 6 Hz não entra no meio do poll. */
+let civHeld = false;
+
+function releaseCiv() {
+  civHeld = false;
+}
+
+/** waitMs 0: pula na hora. O poll espera a leitura curta do medidor acabar. */
+async function holdCiv(waitMs: number): Promise<boolean> {
+  const start = Date.now();
+  for (;;) {
+    if (!civHeld) {
+      civHeld = true;
+      return true;
+    }
+    if (waitMs <= 0 || Date.now() - start >= waitMs) return false;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
+
+/** Só 15 02. Se o poll geral está no CI-V, não manda outro quadro. */
+async function readLanSmeter(): Promise<{ smeter?: number; skipped?: boolean }> {
+  if (!(await holdCiv(0))) return { skipped: true };
+  try {
+    const meterFrame = await askCivReply(
+      (f) => f.length >= 9 && f[4] === 0x15 && f[5] === 0x02,
+      [0x15, 0x02],
+      320,
+    );
+    if (!meterFrame) return { skipped: true };
+    const raw = bcdMeterRaw(meterFrame[6]!, meterFrame[7]!);
+    return { smeter: civRawToUiSMeter(raw) };
+  } finally {
+    releaseCiv();
+  }
+}
+
+/** Poll rotativo: freq/modo/PTT no ritmo antigo. O S-meter do menu usa `smeter`. */
 async function pollLanTelemetry(tick: number): Promise<LanTelemetry> {
+  const control = rig;
+  const out: LanTelemetry = {};
+  if (!control || phase !== "ready") return out;
+  if (!(await holdCiv(500))) return out;
+  try {
+    return await pollLanTelemetryHeld(tick);
+  } finally {
+    releaseCiv();
+  }
+}
+
+async function pollLanTelemetryHeld(tick: number): Promise<LanTelemetry> {
   const control = rig;
   const out: LanTelemetry = {};
   if (!control || phase !== "ready") return out;

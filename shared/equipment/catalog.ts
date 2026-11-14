@@ -49,7 +49,7 @@ const ic705 = overlay(
     },
     { ...LAN, notes: "WLAN do IC-705. Gateway para 127.0.0.1:45002 e rigctld -m 3085." },
   ],
-  "Endereço CI-V padrão 0xA4. Standby confirmado: CI-V 0x18 0x02 (S_PWR_STDBY). Power off real é 0x00.",
+  "Endereço CI-V padrão 0xA4. Standby: item 1A 05 0073 = 01 e quadro 0x18 0x00. O 0x18 0x02 volta NAK.",
 );
 
 const ic7610 = overlay("icom-ic-7610", [

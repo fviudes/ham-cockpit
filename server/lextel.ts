@@ -861,7 +861,10 @@ function attachFd(path: string) {
   openTimer = setTimeout(() => {
     if (opened || stream !== rs) return;
     error = `MS-2000 ${saved.addr || "salvo"} sem resposta no SPP. Nova tentativa, sem desligar o Bluetooth.`;
-    rfcommStale = true;
+    // O prazo estourou com o bind ainda de pé (clean ou config). Pedir
+    // rebind aqui faz o helper soltar esse nó, o open devolve ENODEV e o
+    // console entra em retry eterno. Só ENODEV marca o nó como ausente.
+    rfcommStale = false;
     opening = false;
     phase = "connecting";
     closeStream();
@@ -1239,6 +1242,8 @@ async function lextelConnectBody(body: { addr?: string; pin?: string; name?: str
     saved.addr = addr.toUpperCase();
     saved.name = saved.name || listed?.name || "Monitor Station";
     persist();
+    // rebind só quando o open anterior devolveu ENODEV (o nó sumiu).
+    // clean do mesmo MAC não é link morto: o helper tem de manter esse bind.
     await runHelper(["bind", addr, saved.pin, String(ch), rfcommStale ? "rebind" : ""], 12_000);
     attach(RFCOMM);
   } catch (err) {
@@ -1251,7 +1256,9 @@ async function lextelConnectBody(body: { addr?: string; pin?: string; name?: str
     } else {
       error = msg;
     }
-    rfcommStale = true;
+    // Helper ocupado ou sem controlador: o bind clean continua. Marcar
+    // stale faria o próximo bind pedir rebind e soltar o nó.
+    rfcommStale = !helperBusy(msg) && !noController(msg) && /ENODEV|nao apareceu|não apareceu/i.test(msg);
     closeStream();
     if (wantOpen) {
       phase = "connecting";

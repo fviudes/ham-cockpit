@@ -1,5 +1,6 @@
 /** Icom IC-705 CI-V over BLE — GATT 14cf8001 / char 14cf8002, handshake 0x61–0x64. */
 import { civRawToUiSMeter } from "@shared/smeter";
+import { publishSmeter } from "./smeter-bus";
 
 export const IC705_SVC = "14cf8001-1ec2-d408-1b04-2eb270f14203";
 export const IC705_CHAR = "14cf8002-1ec2-d408-1b04-2eb270f14203";
@@ -195,6 +196,10 @@ class Ic705BleLink {
   private pollTimer = 0;
   private pollN = 0;
   private lastPtt = false;
+  /** Próximo comando do poll de 220 ms. O S-meter cede a vez em vez de empilhar CI-V. */
+  private nextPollAt = 0;
+  /** Não manda 15 02 em cima de um quadro que ainda não teve tempo de voltar. */
+  private laneUntil = 0;
   private granted: BtDevice | null = null;
   private wantOpen = false;
   private autoOpts: NonNullable<Parameters<Ic705BleLink["connect"]>[0]> = {};
@@ -422,6 +427,20 @@ class Ic705BleLink {
     await this.sendCiv(this.frame(...body));
   }
 
+  /**
+   * Só o S-meter (15 02). Falso se o poll de frequência/modo/PTT está no ar
+   * ou prestes a disparar — esse poll continua em 220 ms.
+   */
+  requestSmeter(): boolean {
+    if (!this.connected || this.hsBusy || this.attaching) return false;
+    const now = Date.now();
+    if (now < this.laneUntil) return false;
+    if (this.pollTimer && this.nextPollAt - now < 40 && this.nextPollAt >= now - 10) return false;
+    this.laneUntil = now + 45;
+    void this.ask(0x15, 0x02);
+    return true;
+  }
+
   /** 07 00 = VFO A, 07 01 = VFO B (IC-705 CI-V). */
   async selectVfo(which: "A" | "B") {
     await this.ask(0x07, which === "B" ? 0x01 : 0x00);
@@ -440,11 +459,17 @@ class Ic705BleLink {
   }
 
   /**
-   * CI-V 0x18 (Hamlib 4.6.5 icom_defs.h): 0x01 power on, 0x02 standby, 0x00 power off.
-   * O IC-705 aceita standby. O botão power off manda 0x02, não 0x00.
+   * Power off: 0x18 0x02 é NAK no IC-705. O guia CI-V desliga com 0x18 0x00,
+   * e o item 1A 05 0073 = 01 faz esse desligar ser standby (não shutdown).
    */
   async setPower(on: boolean) {
-    await this.ask(0x18, on ? 0x01 : 0x02);
+    if (on) {
+      await this.ask(0x18, 0x01);
+      return;
+    }
+    await this.ask(0x1a, 0x05, 0x00, 0x73, 0x01);
+    await delay(80);
+    await this.ask(0x18, 0x00);
   }
 
   /** 26 00 <mode> <data> <FIL1> — data mode needs cmd 26, DV is 0x17. */
@@ -679,7 +704,13 @@ class Ic705BleLink {
   }
 
   private async pollTick() {
+    this.nextPollAt = Date.now() + 220;
     if (!this.gatt?.connected || this.hsBusy || this.attaching) return;
+    // O S-meter rápido segurou o CI-V: espera essa leitura, sem mandar outro quadro por cima.
+    const wait = this.laneUntil - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    if (!this.gatt?.connected || this.hsBusy || this.attaching) return;
+    this.laneUntil = Date.now() + 45;
     const n = this.pollN++;
     if (this.lastPtt) {
       const seq = n % 4;
@@ -795,6 +826,7 @@ class Ic705BleLink {
       }
     } else if (cmd === 0x15 && data.length >= 3 && data[0] === 0x02) {
       patch.smeter = sFromLevel(bcd2(data[1]!, data[2]!));
+      publishSmeter(patch.smeter);
     } else if (cmd === 0x15 && data.length >= 3 && data[0] === 0x11) {
       patch.po = poFromLevel(bcd2(data[1]!, data[2]!));
     } else if (cmd === 0x15 && data.length >= 3 && data[0] === 0x12) {

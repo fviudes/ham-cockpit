@@ -5,7 +5,19 @@
  * Geometria do arco S: calibration.txt da skin (centro 246,490, 16 pontos
  * de S0 a S9+60). Agulha só se move com leitura real do rádio; sem sinal
  * fica no batente esquerdo (S0), sem número de dBm.
+ *
+ * A leitura do ponteiro é só o nível (~6 Hz). Frequência, modo e o resto
+ * do menu continuam no poll de 450 ms.
  */
+import { useEffect, useRef, useState } from "react";
+import { SMETER_POLL_MS, runSmeterPoll } from "@shared/smeter";
+import { ic705Ble } from "./ic705-ble";
+import { pollPrimarySmeter } from "./radio-cmd";
+import { publishSmeter, subscribeSmeter } from "./smeter-bus";
+import { useConsole } from "./state";
+
+/** O painel VFO acompanha o medidor no ritmo antigo (~1 s), não a 6 Hz. */
+const SMETER_STATE_MS = 900;
 
 const CX = 246;
 const CY = 490;
@@ -103,24 +115,129 @@ function Ticks({
   return <>{lines}</>;
 }
 
-export function HeaderSMeter({ reading }: { reading: number | null }) {
-  const angle = needleAngle(reading);
+function useSmoothedAngle(reading: number | null) {
+  const target = needleAngle(reading);
+  const shown = useRef(target);
+  const targetRef = useRef(target);
+  targetRef.current = target;
+  const [angle, setAngle] = useState(target);
+
+  useEffect(() => {
+    const rest = needleAngle(null);
+    if (reading == null) {
+      shown.current = rest;
+      setAngle(rest);
+      return;
+    }
+    const reduce =
+      typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
+      shown.current = targetRef.current;
+      setAngle(targetRef.current);
+      return;
+    }
+    let raf = 0;
+    let last = performance.now();
+    const step = (now: number) => {
+      const dest = targetRef.current;
+      const dt = Math.min(48, now - last);
+      last = now;
+      const k = 1 - Math.exp(-dt / 70);
+      const next = shown.current + (dest - shown.current) * k;
+      const settled = Math.abs(next - dest) < 0.03;
+      shown.current = settled ? dest : next;
+      setAngle(shown.current);
+      if (!settled) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [reading, target]);
+
+  return angle;
+}
+
+function Needle({ reading }: { reading: number | null }) {
+  const angle = useSmoothedAngle(reading);
   const [tipX, tipY] = polar(angle, 468);
+  return (
+    <line
+      x1={CX}
+      y1={CY}
+      x2={tipX}
+      y2={tipY}
+      stroke="#f7f7f7"
+      strokeWidth={2.4}
+      strokeLinecap="round"
+    />
+  );
+}
+
+function useLiveSmeter(live: boolean): number | null {
+  const { s, setS } = useConsole();
+  const radiosRef = useRef(s.radios.items);
+  radiosRef.current = s.radios.items;
+  const [reading, setReading] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!live) {
+      setReading(null);
+      return;
+    }
+    let lastState = 0;
+    return subscribeSmeter((value) => {
+      setReading(value);
+      const now = Date.now();
+      if (now - lastState < SMETER_STATE_MS) return;
+      lastState = now;
+      setS((prev) => (prev.smeter === value ? prev : { ...prev, smeter: value }));
+    });
+  }, [live, setS]);
+
+  useEffect(() => {
+    if (!live) return;
+    const gate = { busy: false };
+    let stopped = false;
+    const tick = () => {
+      if (stopped) return;
+      void runSmeterPoll(gate, () => {
+        if (stopped) return Promise.resolve(null);
+        return pollPrimarySmeter(radiosRef.current, {
+          bleReady: ic705Ble.connected,
+          hamlibPort: 4532,
+        });
+      }).then((value) => {
+        if (stopped || value == null) return;
+        publishSmeter(value);
+      });
+    };
+    const id = window.setInterval(tick, SMETER_POLL_MS);
+    tick();
+    return () => {
+      stopped = true;
+      window.clearInterval(id);
+    };
+  }, [live]);
+
+  return live ? reading : null;
+}
+
+export function HeaderSMeter({ live }: { live: boolean }) {
+  const reading = useLiveSmeter(live);
   const a0 = S_ANGLES[0]!;
   const a9 = S_ANGLES[9]!;
   const aEnd = S_ANGLES[15]!;
-  const live = reading != null && Number.isFinite(reading);
+  const hasReading = reading != null && Number.isFinite(reading);
 
   return (
     <div
       className="h-full shrink-0 overflow-hidden rounded-[3px] bg-black"
       style={{ aspectRatio: "478 / 200" }}
       role="meter"
-      aria-label={live ? "Medidor S" : "Medidor S em repouso"}
+      aria-label={hasReading ? "Medidor S" : "Medidor S em repouso"}
       aria-valuemin={0}
       aria-valuemax={12}
-      aria-valuenow={live ? Math.round(reading * 10) / 10 : undefined}
-      aria-valuetext={live ? undefined : "sem sinal"}
+      aria-valuenow={hasReading && reading != null ? Math.round(reading * 10) / 10 : undefined}
+      aria-valuetext={hasReading ? undefined : "sem sinal"}
     >
       <svg viewBox="0 0 478 200" className="h-full w-full" aria-hidden="true">
         <path d={arcPath(449, a0, a9)} stroke={WHITE} strokeWidth={15} fill="none" />
@@ -205,15 +322,7 @@ export function HeaderSMeter({ reading }: { reading: number | null }) {
           VD
         </text>
 
-        <line
-          x1={CX}
-          y1={CY}
-          x2={tipX}
-          y2={tipY}
-          stroke="#f7f7f7"
-          strokeWidth={2.4}
-          strokeLinecap="round"
-        />
+        <Needle reading={reading} />
       </svg>
     </div>
   );
