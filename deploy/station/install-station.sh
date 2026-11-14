@@ -578,6 +578,64 @@ network:
 EOF
   chmod 600 /etc/netplan/99-ham-cockpit-nm.yaml
 fi
+# LAN no DHCP do roteador: client-id = MAC (option 61) e hostname (option 12).
+# Sem o MAC, alguns roteadores não listam o Pi entre os IPs concedidos.
+hn="$(tr -d ' \t\r\n' </etc/hostname 2>/dev/null || true)"
+[[ -n "$hn" && "$hn" != "localhost" ]] || hn=ham-cockpit
+cat >/etc/netplan/60-ham-cockpit-dhcp.yaml <<EOF
+network:
+  version: 2
+  ethernets:
+    eth0:
+      dhcp4: true
+      optional: true
+      dhcp4-overrides:
+        send-hostname: true
+        hostname: "${hn}"
+      dhcp-identifier: mac
+      networkmanager:
+        passthrough:
+          ipv4.dhcp-client-id: "mac"
+          ipv4.dhcp-send-hostname: "true"
+          ipv4.dhcp-hostname: "${hn}"
+    end0:
+      dhcp4: true
+      optional: true
+      dhcp4-overrides:
+        send-hostname: true
+        hostname: "${hn}"
+      dhcp-identifier: mac
+      networkmanager:
+        passthrough:
+          ipv4.dhcp-client-id: "mac"
+          ipv4.dhcp-send-hostname: "true"
+          ipv4.dhcp-hostname: "${hn}"
+    eno1:
+      dhcp4: true
+      optional: true
+      dhcp4-overrides:
+        send-hostname: true
+        hostname: "${hn}"
+      dhcp-identifier: mac
+      networkmanager:
+        passthrough:
+          ipv4.dhcp-client-id: "mac"
+          ipv4.dhcp-send-hostname: "true"
+          ipv4.dhcp-hostname: "${hn}"
+    enp1s0:
+      dhcp4: true
+      optional: true
+      dhcp4-overrides:
+        send-hostname: true
+        hostname: "${hn}"
+      dhcp-identifier: mac
+      networkmanager:
+        passthrough:
+          ipv4.dhcp-client-id: "mac"
+          ipv4.dhcp-send-hostname: "true"
+          ipv4.dhcp-hostname: "${hn}"
+EOF
+chmod 600 /etc/netplan/60-ham-cockpit-dhcp.yaml
 # País / powersave — sem REGDOMAIN o AP do Pi falha em silêncio com frequência.
 cat >/etc/NetworkManager/conf.d/90-ham-cockpit-wifi.conf <<'EOF'
 [device]

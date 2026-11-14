@@ -4,6 +4,7 @@ import { DEFAULT_PASS, DEFAULT_USER, type I18nKey } from "@/console/i18n";
 import { resolvePrimaryRoute, sendPrimaryCmd } from "@/console/radio-cmd";
 import { ConsoleProvider, useConsole } from "@/console/state";
 import { SVC_LABEL, serviceLive } from "@/console/services-ui";
+import { HeaderSMeter } from "@/console/header-smeter";
 import { LangToggle, UpdatesMenu, UserMenu } from "@/console/widgets";
 import { RadioPage } from "@/console/radio";
 import { ManualPage } from "@/console/manual";
@@ -363,6 +364,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
   const liveRadio = s.radios.items.find((r) => r.connected) || primaryRadio;
   const bleReady = s.ic705.phase === "ready" && s.ic705.ble;
   const route = resolvePrimaryRoute(s.radios.items, { bleReady });
+  const liveSignal = route.live && route.transport !== "none";
   const gattUp = s.ic705.phase === "ready" || s.ic705.civ;
   const makerLabel = (r: typeof liveRadio) =>
     !r ? "" : r.maker === "tentec" ? "Ten-Tec" : r.maker[0]!.toUpperCase() + r.maker.slice(1);
@@ -578,11 +580,13 @@ function Shell({ onLogout }: { onLogout: () => void }) {
               {open ? <X size={18} /> : <Menu size={18} />}
             </button>
           ) : null}
-          <div className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] grid-rows-[2rem_2rem] gap-x-2 gap-y-1">
+          <div className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] grid-rows-[2.85rem_2.85rem] gap-x-2 gap-y-1">
+            <div className="row-span-2 flex h-full min-h-0 items-stretch gap-1.5">
+            <HeaderSMeter reading={liveSignal ? s.smeter : null} />
             <div
               ref={headerFreqRef}
               title={tx("freqWheel")}
-              className="lcd-bezel row-span-2 flex h-full min-h-0 w-max cursor-ns-resize flex-col items-stretch justify-center gap-1 px-2.5"
+              className="lcd-bezel flex h-full min-h-0 w-max cursor-ns-resize flex-col items-stretch justify-center gap-1 px-2.5"
             >
               <p className="flex items-baseline justify-center gap-1.5 whitespace-nowrap leading-none">
                 <LcdDigits text={vfoKhz} />
@@ -593,6 +597,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
                 <LcdLamp label={vfoMode} tone="amber" />
                 <LcdLamp label={s.ptt ? tx("tx") : tx("rx")} tone={s.ptt ? "tx" : "rx"} />
               </div>
+            </div>
             </div>
             <HeaderServiceRows
               chips={headerChips}
