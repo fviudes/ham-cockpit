@@ -1,5 +1,4 @@
 const pt = {
-  air: "Enable Tx fica ligado e manda o áudio da mensagem em cada período até o 73 (Tx6) sair por completo. Halt Tx solta na hora. Sair desta página não corta o ciclo que já está no ar.",
   airShort: "Até o 73",
   bandActivity: "Atividade da banda",
   rxFreq: "Frequência de Rx",
@@ -10,12 +9,10 @@ const pt = {
   colDt: "DT",
   colHz: "Hz",
   colMsg: "Mensagem",
-  waterfall: "Cascata de áudio",
   waterfallEmpty: "Sem áudio. A cascata fica vazia.",
   waterfallWait: "Agrupando os espectros. A faixa aparece a cada N Avg.",
   waterfallHint: "A cascata e a decodificação seguem enquanto a escuta estiver ligada, mesmo fora desta página.",
   band: "Banda",
-  bandHint: "Habilitar FT8 guarda a frequência e o modo, põe o rádio em DATA e sintoniza o dial desta banda. Desabilitar devolve os dois. Não chaveia o PTT. A escuta continua em outro menu.",
   ft8On: "Habilitar FT8",
   ft8Off: "Desabilitar FT8",
   ft8Fail: "O rádio não entrou em DATA. A escuta não começou.",
@@ -211,7 +208,6 @@ const pt = {
 };
 
 const en: { [K in keyof typeof pt]: string } = {
-  air: "Enable Tx stays on and sends the message audio each period until the 73 (Tx6) has gone out in full. Halt Tx releases immediately. Leaving this page does not cut the cycle already on the air.",
   airShort: "Until the 73",
   bandActivity: "Band activity",
   rxFreq: "Rx frequency",
@@ -222,12 +218,10 @@ const en: { [K in keyof typeof pt]: string } = {
   colDt: "DT",
   colHz: "Hz",
   colMsg: "Message",
-  waterfall: "Audio waterfall",
   waterfallEmpty: "No audio. The waterfall stays empty.",
   waterfallWait: "Averaging spectra. A stripe appears every N Avg.",
   waterfallHint: "The waterfall and the decoder keep going while listening is on, even away from this page.",
   band: "Band",
-  bandHint: "Enable FT8 saves the frequency and mode, puts the radio in DATA and tunes this band's dial. Disable restores both. It does not key PTT. Listening continues on another menu.",
   ft8On: "Enable FT8",
   ft8Off: "Disable FT8",
   ft8Fail: "The radio did not enter DATA. Listening did not start.",

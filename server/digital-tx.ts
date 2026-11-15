@@ -217,8 +217,15 @@ async function playOnCodec(device: string, pcm: Buffer, timeoutMs: number, gen: 
   }
 }
 
+/** PTT e leitura de PTT passam na frente da fila do Hamlib e esperam o CI-V (o poll do waterfall não segura). */
+const PTT_TIMEOUT_MS = 2500;
+
+function rigPtt(port: number, command: string) {
+  return hubRigctl(port, command, "127.0.0.1", PTT_TIMEOUT_MS, true);
+}
+
 async function setPtt(port: number, on: boolean) {
-  const reply = await hubRigctl(port, `T ${on ? 1 : 0}`);
+  const reply = await rigPtt(port, `T ${on ? 1 : 0}`);
   console.log(`[digital] PTT ${on ? 1 : 0} porta ${port} ok=${reply.ok} ${reply.error || ""}`.trim());
   if (!reply.ok) throw new Error(reply.error || "ptt");
 }
@@ -235,7 +242,7 @@ function pttBit(reply: string): string {
 /** O IC-705 às vezes executa o PTT e o rigctld responde RPRT -5. A leitura `t` decide. */
 async function readPtt(port: number): Promise<string> {
   for (let i = 0; i < 3; i++) {
-    const reply = await hubRigctl(port, "t");
+    const reply = await rigPtt(port, "t");
     const bit = pttBit(reply.reply || "");
     if (bit) return bit;
     await new Promise((r) => setTimeout(r, 250));
@@ -244,7 +251,7 @@ async function readPtt(port: number): Promise<string> {
 }
 
 async function readPttOnce(port: number): Promise<string> {
-  const reply = await hubRigctl(port, "t");
+  const reply = await rigPtt(port, "t");
   return pttBit(reply.reply || "");
 }
 
@@ -326,6 +333,8 @@ async function run(current: Job) {
     if (cancelled(gen)) throw new Error("halt");
     current.phase = "audio";
     const playTask = playOnCodec(device, play, Math.ceil(plan.txEnd * 1000) + 4000, gen);
+    // O erro do aplay chega no await abaixo; aqui só evita rejeição solta durante o PTT.
+    playTask.catch(() => undefined);
     if (cancelled(gen)) throw new Error("halt");
     await raisePtt(current.port);
     keyed = true;
@@ -421,7 +430,7 @@ export async function haltDigitalTx() {
   if (job.phase === "wait" || job.phase === "ptt" || job.phase === "audio") job.phase = "halt";
   if (!keyed) return;
   try {
-    await hubRigctl(port, "T 0");
+    await rigPtt(port, "T 0");
   } catch {
     /* o finally do ciclo também solta */
   }

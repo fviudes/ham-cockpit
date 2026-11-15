@@ -214,6 +214,7 @@ export function DigitalPage() {
   useEffect(() => {
     publishDigitalTx({
       armed: state.enable && Boolean(planned.trim()) && planned.trim().toUpperCase() !== "TUNE",
+      armId: state.armId,
       slot: state.next,
       mode: state.mode,
       even: state.txEven,
@@ -222,7 +223,7 @@ export function DigitalPage() {
       port: s.wlg.hamlibPort || 4532,
       level: txLevel,
     });
-  }, [state.enable, state.next, state.mode, state.txEven, planned, state.txHz, txLevel, s.wlg.hamlibPort]);
+  }, [state.enable, state.armId, state.next, state.mode, state.txEven, planned, state.txHz, txLevel, s.wlg.hamlibPort]);
 
   useEffect(() => {
     return onDigitalTx(
@@ -521,7 +522,7 @@ export function DigitalPage() {
         <p className="mt-1 text-[11px] text-[#8ea0b3]">{decodeWord}</p>
       </Panel>
 
-      <div className="mb-2 grid gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      <div className="mb-2 grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <Panel className={DIG_PANEL}>
           <PanelTitle>{t("bandActivity")}</PanelTitle>
           <DecodeTable
@@ -560,7 +561,7 @@ export function DigitalPage() {
         </Panel>
       </div>
 
-      <div className="mb-2 grid gap-2 xl:grid-cols-[minmax(0,5fr)_minmax(0,8fr)]">
+      <div className="mb-2 grid gap-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <Panel className={DIG_PANEL}>
           <div className="mb-3 flex gap-1 overflow-x-auto">
             <Chip active={tab === "tx"} onClick={() => setTab("tx")}>

@@ -4,6 +4,8 @@ export type TxDone = { ok: boolean; message: string; error: string; slot: TxId }
 
 export type TxLive = {
   armed: boolean;
+  /** Sobe a cada Enable TX e a cada duplo clique. Congela a mensagem daquele clique. */
+  armId: number;
   slot: TxId;
   mode: DigMode;
   even: boolean;
@@ -15,6 +17,7 @@ export type TxLive = {
 
 const idle: TxLive = {
   armed: false,
+  armId: 0,
   slot: 6,
   mode: "FT8",
   even: false,
@@ -99,13 +102,18 @@ function wait(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitUnlessUser(ms: number) {
+/** Novo Enable TX ou duplo clique antes do áudio: troca a mensagem que ainda não saiu. */
+function rearmed(snap: TxLive) {
+  return live.armed && live.armId !== snap.armId;
+}
+
+async function waitUnlessUser(ms: number, snap: TxLive) {
   const end = Date.now() + Math.max(0, ms);
   while (Date.now() < end) {
-    if (stopUser) return false;
+    if (stopUser || rearmed(snap)) return false;
     await wait(Math.min(200, end - Date.now()));
   }
-  return !stopUser;
+  return !stopUser && !rearmed(snap);
 }
 
 async function oneCycle(snap: TxLive): Promise<TxDone> {
@@ -134,7 +142,7 @@ async function oneCycle(snap: TxLive): Promise<TxDone> {
   if (!res.ok || !body?.ok) return fail(body?.error || "tx");
   const spent = performance.now() - t0;
   const remain = (body.startInMs ?? 0) - spent;
-  if (!(await waitUnlessUser(remain))) return fail("halt");
+  if (!(await waitUnlessUser(remain, snap))) return fail(stopUser ? "halt" : "rearm");
   for (let i = 0; i < 160 && !stopUser; i++) {
     await wait(400);
     if (stopUser) return fail("halt");
@@ -143,6 +151,7 @@ async function oneCycle(snap: TxLive): Promise<TxDone> {
       .catch(() => null)) as { phase?: string; message?: string; error?: string } | null;
     const phase = status?.phase || "";
     if (phase) emitPhase(phase);
+    if (phase === "wait" && rearmed(snap)) return fail("rearm");
     if (phase === "done" || phase === "error" || phase === "halt") {
       return {
         ok: phase === "done",
@@ -164,11 +173,15 @@ async function runLoop() {
       await wait(400);
       continue;
     }
+    if (result.error === "rearm") continue;
     emitDone(result);
     if (!result.ok) {
       await wait(1000);
       continue;
     }
+    // O React publica o próximo Tx (armId) depois do emitDone. Sem esta pausa o laço lê o texto velho.
+    await wait(120);
+    if (stopUser || !live.armed) return;
     if (snap.slot === 6 && result.ok) {
       if (shouldHaltTx("cycle6", "done")) releaseDigitalTx();
       return;

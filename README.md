@@ -121,7 +121,7 @@ USB e Bluetooth não precisam de conversor. RS232 de PC (±12 V) precisa de MAX3
 - **PC Audio** — botão no topo. Toca neste computador o codec USB do rádio ligado no Pi. Bluetooth e a rede do rádio não levam esse som.
 - **Wavelog** — logbook em :8086. Pacote UDP no Gate vira contato.
 - **Logs / Terminal** — diário filtrável e shell root no Pi.
-- **Admin → Atualização** — card **Ham Cockpit** compara a versão instalada com [`update/version.json`](update/version.json) na branch `main`. A imagem do cartão permanece na base 0.1.10; o console publicado nesse canal está na 0.1.10.08 e não exige regravar o cartão. Os outros cards são Ubuntu, ser2net, Hamlib, Wavelog e WaveLogGate.
+- **Admin → Atualização** — card **Ham Cockpit** compara a versão instalada com [`update/version.json`](update/version.json) na branch `main`. A imagem do cartão permanece na base 0.1.10; o console publicado nesse canal está na 0.1.10.09 e não exige regravar o cartão. Os outros cards são Ubuntu, ser2net, Hamlib, Wavelog e WaveLogGate.
 - **Admin → Backup** — restore devolve a estação à data/hora do arquivo; o que veio depois se perde.
 
 Idioma PT/EN no canto do console. O **Manual** completo (com diagramas) está em Sistema → Manual. Catálogo de rádios (Icom, Kenwood, Yaesu, Flex, Ten-Tec, Xiegu, Hermes Lite 2, Anan — protocolos, portas, Hamlib): documentação do site em `/docs#equipamentos` e Manual → **Rádios suportados**; resumo em [`docs/equipamentos.md`](docs/equipamentos.md).
@@ -153,4 +153,4 @@ Guia: [`docs/versionamento.md`](docs/versionamento.md).
 
 ---
 
-Ham Cockpit imagem 0.1.10 · console 0.1.10.08 · Raspberry Pi 3 / 4 / 5 · Ubuntu Server 24.04 LTS
+Ham Cockpit imagem 0.1.10 · console 0.1.10.09 · Raspberry Pi 3 / 4 / 5 · Ubuntu Server 24.04 LTS

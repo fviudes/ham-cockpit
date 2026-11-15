@@ -265,6 +265,11 @@ function isPollCommand(command: string) {
   return c === "f" || c === "m" || c === "t" || c === "v" || c === "s" || c === "l";
 }
 
+/** `T 1` / `T 0`: chaveamento. Entra na frente da fila quando vem com preempt. */
+function isPttCommand(command: string) {
+  return /^T\s+[01]$/.test(command.trim());
+}
+
 function isSmeterPoll(command: string) {
   return /^\\?get_level\s+strength\b/i.test(command.trim());
 }
@@ -716,7 +721,8 @@ export function hubRigctl(
       },
     };
     // O dB é o próximo, na frente de f/m/t que só estavam esperando.
-    if (!preempt && isSmeterPoll(cmd)) lane.queue.unshift(job);
+    // PTT do TX digital não espera atrás de f/m/t nem de outro comando.
+    if ((!preempt && isSmeterPoll(cmd)) || (preempt && isPttCommand(cmd))) lane.queue.unshift(job);
     else lane.queue.push(job);
     pump(lane);
   });

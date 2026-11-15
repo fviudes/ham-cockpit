@@ -443,4 +443,32 @@ describe("modos digitais", () => {
     expect(nextTxSlot(start + 1000, "FT8", true)).toBe(start + 30_000);
     expect(nextTxSlot(start, "FT8", false)).toBe(start + 15_000);
   });
+
+  it("os textos removidos não existem mais nem na cópia nem na tela", () => {
+    const copy = readFileSync(new URL("../client/src/console/digital-modes-copy.ts", import.meta.url), "utf8");
+    const src = readFileSync(new URL("../client/src/console/digital-modes.tsx", import.meta.url), "utf8");
+    expect(copy).not.toContain("Enable Tx fica ligado");
+    expect(copy).not.toContain("Habilitar FT8 guarda");
+    expect(copy).not.toContain("Cascata de áudio");
+    expect(copy).not.toContain("Audio waterfall");
+    expect(src).not.toContain('PanelTitle>{t("waterfall")');
+    expect(src).toContain("lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]");
+    expect(src).toContain("xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]");
+  });
+
+  it("o TX congela a mensagem do clique e o PTT passa na frente da fila do Hamlib", () => {
+    const client = readFileSync(new URL("../client/src/console/digital-tx.ts", import.meta.url), "utf8");
+    const server = readFileSync(new URL("../server/digital-tx.ts", import.meta.url), "utf8");
+    const hub = readFileSync(new URL("../server/hamlib-hub.ts", import.meta.url), "utf8");
+    expect(client).toContain("armId");
+    expect(client).toContain('fail(stopUser ? "halt" : "rearm")');
+    expect(client).toContain('if (result.error === "rearm") continue;');
+    expect(server).toContain("hubRigctl(port, command, \"127.0.0.1\", PTT_TIMEOUT_MS, true)");
+    expect(server).not.toMatch(/hubRigctl\(port, "t"\)/);
+    expect(server).not.toContain('hubRigctl(port, "T 0")');
+    expect(server).toContain("playTask.catch(() => undefined)");
+    expect(hub).toContain("preempt && isPttCommand(cmd)");
+    expect(shouldHaltTx("cleanup", "audio")).toBe(false);
+    expect(shouldHaltTx("user", "audio")).toBe(true);
+  });
 });
