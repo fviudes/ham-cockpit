@@ -5,17 +5,18 @@ import { resolvePrimaryRoute, sendPrimaryCmd } from "./radio-cmd";
 import { ic705Ble } from "./ic705-ble";
 import { subscribeScope } from "./scope-bus";
 import { useConsole } from "./state";
+import { spectrumColumns } from "./digital-spectrum";
 import {
-  centeredSpan,
   FRAME_MS,
   freqTicks,
   holdSweepInterval,
   clickedTuneHz,
   hzAtClick,
   mhzLabel,
+  PANEL_SPAN_HZ,
+  PANEL_SPAN_STEPS_HZ,
+  panelView,
   sampleAt,
-  scopeMissesView,
-  scopeOffCenter,
   sweepIntervalMs,
   timeMarks,
   waterfallBands,
@@ -59,17 +60,53 @@ function layoutX(canvas: HTMLCanvasElement, clientX: number): number | null {
 }
 
 type Trace = { bins: Uint8Array; at: number; startHz: number; endHz: number };
+
+/** Bloco de 2048 amostras. O FFT do painel cobre a largura selecionada, não 0–3000 Hz. */
+function pcmBlock(pcm: Int16Array): Int16Array {
+  const n = 2048;
+  if (pcm.length === n) return pcm;
+  const out = new Int16Array(n);
+  const src = pcm.length > n ? pcm.subarray(pcm.length - n) : pcm;
+  out.set(src, n - src.length);
+  return out;
+}
+
+/** Um bin por raia do FFT de 2048 pontos. A contagem acompanha a largura do painel. */
+function panelBinCount(spanHz: number): number {
+  const binHz = 48_000 / 2048;
+  return Math.max(8, Math.round(Math.max(1, spanHz) / binHz));
+}
+
+/** 0 Hz do codec fica no VFO. O que passa da borda da largura selecionada fica de fora. */
+function audioSweep(pcm: Int16Array, tune: number, spanHz: number): ScopeSweep {
+  const view = panelView(tune, spanHz);
+  const span = Math.max(1, view.endHz - view.startHz);
+  const columns = panelBinCount(span);
+  const audioLimit = Math.min(span / 2, 24_000);
+  const audioCols = Math.max(8, Math.round((audioLimit / span) * columns));
+  const audio = spectrumColumns(pcmBlock(pcm), 48_000, 0, Math.max(200, audioLimit), audioCols);
+  const bins = new Uint8Array(columns);
+  for (let i = 0; i < audio.length; i++) {
+    const audioHz = (audioLimit * (i + 0.5)) / audio.length;
+    const rf = tune + audioHz;
+    if (rf < view.startHz || rf > view.endHz) continue;
+    const col = Math.min(columns - 1, Math.floor(((rf - view.startHz) / span) * columns));
+    const v = Math.round((audio[i] ?? 0) * 255);
+    if (v > (bins[col] ?? 0)) bins[col] = v;
+  }
+  return { startHz: view.startHz, endHz: view.endHz, mode: 0, bins, oor: false };
+}
 type Atlas = { key: string; canvas: HTMLCanvasElement };
 
 /** Uma linha de espectro por varredura. Cada linha fica no próprio startHz/endHz. */
-function buildAtlas(rows: Trace[], tuneHz: number, plotPx: number): HTMLCanvasElement {
+function buildAtlas(rows: Trace[], tuneHz: number, spanHz: number, plotPx: number): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, plotPx);
   canvas.height = Math.max(1, rows.length);
   const actx = canvas.getContext("2d");
   if (!actx || !rows.length) return canvas;
   const latest = rows[0]!;
-  const view = centeredSpan(latest, tuneHz);
+  const view = panelView(tuneHz, spanHz);
   const span = Math.max(1, view.endHz - view.startHz);
   const img = actx.createImageData(canvas.width, canvas.height);
   const data = img.data;
@@ -99,6 +136,7 @@ function paint(
   canvas: HTMLCanvasElement,
   rows: Trace[],
   tuneHz: number,
+  spanHz: number,
   atlasRef: { current: Atlas | null },
   sweepMsRef: { current: number },
   gen: number,
@@ -122,7 +160,7 @@ function paint(
   const fallTop = specH + BAR_H;
   const fallH = Math.max(0, h - fallTop);
   const edge = rows[0] && rows[0].endHz > rows[0].startHz ? rows[0] : null;
-  const view = edge ? centeredSpan(edge, tuneHz) : null;
+  const view = edge ? panelView(tuneHz, spanHz) : null;
   const span = view ? view.endHz - view.startHz : 1;
   const times = rows.map((row) => row.at);
   const intervalMs = holdSweepInterval(rows.length > 1 ? sweepMsRef.current : 0, sweepIntervalMs(times));
@@ -137,9 +175,9 @@ function paint(
   if (fallH > 0 && rows.length && view && edge) {
     const fallPx = Math.max(1, Math.round(fallH * dpr));
     const rowPx = fallPx / HISTORY;
-    const key = `${plotPx}|${tuneHz}|${gen}`;
+    const key = `${plotPx}|${tuneHz}|${spanHz}|${gen}`;
     if (!atlasRef.current || atlasRef.current.key !== key) {
-      atlasRef.current = { key, canvas: buildAtlas(rows, tuneHz, plotPx) };
+      atlasRef.current = { key, canvas: buildAtlas(rows, tuneHz, spanHz, plotPx) };
     }
     const bands = waterfallBands(times, intervalMs, rowPx, now, fallPx);
     const fallTopPx = Math.round(fallTop * dpr);
@@ -221,6 +259,9 @@ export function WaterfallViz() {
   const genRef = useRef(0);
   const tuneRef = useRef(0);
   tuneRef.current = s.vfo === "B" ? s.freqB : s.freq;
+  const [spanHz, setSpanHz] = useState(PANEL_SPAN_HZ);
+  const spanRef = useRef(spanHz);
+  spanRef.current = spanHz;
   const [live, setLive] = useState(false);
   const [serialFail, setSerialFail] = useState(false);
   const route = resolvePrimaryRoute(s.radios.items, {
@@ -252,11 +293,10 @@ export function WaterfallViz() {
     let raf = 0;
     let last = 0;
     let running = true;
-    let followAt = 0;
     let socket: WebSocket | null = null;
     const draw = () => {
       if (!canvas) return;
-      paint(canvas, rowsRef.current, tuneRef.current, atlasRef, sweepMsRef, genRef.current, Date.now());
+      paint(canvas, rowsRef.current, tuneRef.current, spanRef.current, atlasRef, sweepMsRef, genRef.current, Date.now());
     };
     const loop = (ts: number) => {
       if (!running) return;
@@ -266,16 +306,6 @@ export function WaterfallViz() {
       draw();
     };
     raf = requestAnimationFrame(loop);
-    const askFollow = (span: boolean) => {
-      const now = Date.now();
-      if (now - followAt < 1200) return;
-      followAt = now;
-      if (via === "ble") {
-        void (span ? ic705Ble.widenScope() : ic705Ble.centerScope());
-        return;
-      }
-      if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: span ? "span" : "center" }));
-    };
     const onSweep = (sweep: ScopeSweep) => {
       const next = rowsRef.current;
       next.unshift({
@@ -287,12 +317,28 @@ export function WaterfallViz() {
       if (next.length > HISTORY) next.pop();
       genRef.current += 1;
       setLive(true);
-      const tune = tuneRef.current;
-      if (scopeMissesView(sweep, tune)) askFollow(true);
-      else if (scopeOffCenter(sweep, tune)) askFollow(false);
     };
 
     let stop = () => {};
+    let audio: WebSocket | null = null;
+    let lastAudio = 0;
+    try {
+      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+      audio = new WebSocket(`${proto}//${window.location.host}/ws/radio-audio`);
+      audio.binaryType = "arraybuffer";
+      audio.addEventListener("message", (event) => {
+        if (!(event.data instanceof ArrayBuffer) || event.data.byteLength < 2) return;
+        const now = Date.now();
+        if (now - lastAudio < 80) return;
+        lastAudio = now;
+        const bytes = event.data.byteLength - (event.data.byteLength % 2);
+        const pcm = new Int16Array(event.data.slice(0, bytes));
+        const tune = tuneRef.current > 0 ? tuneRef.current : 14_074_000;
+        onSweep(audioSweep(pcm, tune, spanRef.current));
+      });
+    } catch {
+      audio = null;
+    }
     if (via === "ble") {
       const unsub = subscribeScope(onSweep);
       let alive = true;
@@ -346,6 +392,7 @@ export function WaterfallViz() {
       running = false;
       cancelAnimationFrame(raf);
       stop();
+      audio?.close();
     };
   }, [feed]);
 
@@ -355,7 +402,7 @@ export function WaterfallViz() {
     if (!canvas || !edge || edge.endHz <= edge.startHz) return;
     const x = layoutX(canvas, event.clientX);
     if (x == null) return;
-    const view = centeredSpan(edge, tuneRef.current);
+    const view = panelView(tuneRef.current, spanRef.current);
     const hz = hzAtClick(x, canvas.clientWidth, view, GUTTER);
     if (hz == null) return;
     const next = clickedTuneHz(hz);
@@ -383,9 +430,31 @@ export function WaterfallViz() {
     event.currentTarget.style.cursor = cursor;
   };
 
+  const view = panelView(tuneRef.current, spanHz);
   return (
     <>
-      <PanelTitle>{tx("panelWaterfall")}</PanelTitle>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <PanelTitle>{tx("panelWaterfall")}</PanelTitle>
+        <label className="flex items-center gap-1 text-[10px] tracking-wide text-[#8ea0b3] uppercase">
+          Largura
+          <select
+            aria-label="Largura"
+            className="h-6 rounded border border-[#1c2a32] bg-[#0b1520] px-1 font-['IBM_Plex_Mono'] text-[11px] normal-case text-[#e8eef4]"
+            value={spanHz}
+            data-span-hz={spanHz}
+            data-start-hz={view.startHz}
+            data-end-hz={view.endHz}
+            data-bins={panelBinCount(view.endHz - view.startHz)}
+            onChange={(event) => setSpanHz(Number(event.target.value))}
+          >
+            {PANEL_SPAN_STEPS_HZ.map((hz) => (
+              <option key={hz} value={hz}>
+                {hz >= 1_000_000 ? "1000 kHz" : `${hz / 1000} kHz`}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       <div
         className="relative h-64 overflow-hidden bg-[#05080c]"
         title={tx("waterfallTune")}

@@ -62,6 +62,10 @@ export function consoleSessionCookie(token: string): string {
   return `${COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${MAX_AGE_SEC}`;
 }
 
+export function consoleSessionClearCookie(): string {
+  return `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
+}
+
 export function consoleSessionOk(cookieHeader: string | undefined | null): boolean {
   if (!cookieHeader) return false;
   const raw = cookieHeader

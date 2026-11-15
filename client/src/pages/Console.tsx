@@ -14,6 +14,7 @@ import { Ser2netPage } from "@/console/ser2net";
 import { WizardPage } from "@/console/wizard";
 import { WavelogPage } from "@/console/wavelog";
 import { MmdvmPage } from "@/console/mmdvm";
+import { AUTH_KEY, AUTH_USER_KEY, POST_LOGIN_KEY, onConsoleSessionExpired } from "@/console/console-auth";
 import { DigitalPage } from "@/console/digital-modes";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
@@ -43,11 +44,6 @@ import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 
 import { useLocation } from "wouter";
 import { APP_LOGO, APP_VERSION } from "@shared/brand";
 import { licenseGateOf, licenseMenusOpen, type LicenseGate } from "@shared/license";
-
-const AUTH_KEY = "hamcockpit.auth";
-const AUTH_USER_KEY = "hamcockpit.user";
-/** Após login, sempre aterrissa em /console/license uma vez. */
-const POST_LOGIN_KEY = "hamcockpit.postLogin";
 
 type PageId =
   | "wizard"
@@ -246,11 +242,32 @@ const PAGES: Record<PageId, ComponentType> = {
 
 export default function Console() {
   const [authed, setAuthed] = useState(() => sessionStorage.getItem(AUTH_KEY) === "1");
+  useEffect(() => {
+    const drop = () => {
+      sessionStorage.removeItem(AUTH_KEY);
+      sessionStorage.removeItem(AUTH_USER_KEY);
+      sessionStorage.removeItem(POST_LOGIN_KEY);
+      setAuthed(false);
+    };
+    const stop = onConsoleSessionExpired(drop);
+    if (sessionStorage.getItem(AUTH_KEY) === "1") {
+      void (async () => {
+        try {
+          const r = await fetch("/api/console/session", { credentials: "same-origin" });
+          if (r.status === 401) drop();
+        } catch {
+          /* sem rede: mantém a tela */
+        }
+      })();
+    }
+    return stop;
+  }, []);
   return (
     <ConsoleProvider active={authed}>
       {authed ? (
         <Shell
           onLogout={() => {
+            void fetch("/api/console/session", { method: "DELETE", credentials: "same-origin" });
             sessionStorage.removeItem(AUTH_KEY);
             sessionStorage.removeItem(AUTH_USER_KEY);
             sessionStorage.removeItem(POST_LOGIN_KEY);

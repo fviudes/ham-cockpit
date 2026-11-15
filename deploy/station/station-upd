@@ -315,6 +315,8 @@ PY
 }
 
 schedule_console_restart() {
+  # Só o ham-cockpit. ser2net e rigctld saudáveis ficam: reiniciar o
+  # rigctld aqui derruba a sessão CI-V que o tap acabou de abrir.
   # Fora do cgroup do console — senão o apply morre com código nulo.
   # sleep 4: Node devolve 100% + 1–2 polls (500 ms) antes do restart cortar o HTTP.
   if command -v systemd-run >/dev/null 2>&1; then

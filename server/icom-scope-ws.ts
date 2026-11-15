@@ -8,7 +8,7 @@ import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
 import { ScopeAssembler, civScopeOn, scopePayload, type ScopeSweep } from "../shared/icom-scope";
-import { onSerialScopeFrame, onSerialScopeRevive, serialScopeCenter, serialScopeOutput, serialScopeReady, serialScopeSpan } from "./civ-scope-tap";
+import { onSerialScopeFrame, onSerialScopeRevive, serialScopeCenter, serialScopeReady, serialScopeSpan } from "./civ-scope-tap";
 import { consoleSessionOk } from "./console-session";
 import { subscribeScopeFrame } from "./icom-scope-hub";
 import { icomLanCmd } from "./icom-lan";
@@ -21,6 +21,7 @@ const lanClients = new Set<WebSocket>();
 const serialClients = new Set<WebSocket>();
 let scopeOn = false;
 let serialOn = false;
+let serialOffTimer: ReturnType<typeof setTimeout> | null = null;
 let unlisten: (() => void) | null = null;
 let unlistenSerial: (() => void) | null = null;
 let serialAsmLogged = false;
@@ -117,13 +118,26 @@ function setSerialScope(on: boolean) {
   }
   if (on && !serialScopeReady()) return { ok: false as const, error: "tap" };
   ensureSerialListen();
-  if (serialOn === on) {
-    if (on) serialScopeOutput(true);
+  if (on) {
+    if (serialOffTimer) {
+      clearTimeout(serialOffTimer);
+      serialOffTimer = null;
+    }
+    if (serialOn) return { ok: true as const };
+    serialAsm.reset();
+    serialOn = true;
     return { ok: true as const };
   }
-  serialAsm.reset();
-  serialOn = on;
-  serialScopeOutput(on);
+  // O navegador fecha o card quando o console reinicia e abre de novo.
+  // OFF imediato manda 27 11 no CI-V; o ON seguinte disputa o f/m e os dois caem.
+  if (serialOffTimer) return { ok: true as const };
+  serialOffTimer = setTimeout(() => {
+    serialOffTimer = null;
+    if (serialClients.size > 0) return;
+    serialOn = false;
+    serialAsm.reset();
+  }, 4000);
+  serialOffTimer.unref?.();
   return { ok: true as const };
 }
 
@@ -131,8 +145,14 @@ async function bind(ws: WebSocket, via: string) {
   if (via === "serial") {
     serialClients.add(ws);
     const result = await setSerialScope(true);
-    if (!result.ok) sendJson(ws, { type: "error", reason: result.error || "serial" });
-    else sendJson(ws, { type: "ready", via: "serial" });
+    if (!result.ok) {
+      sendJson(ws, { type: "error", reason: result.error || "serial" });
+      if (result.error === "tap") {
+        setTimeout(() => {
+          if (serialClients.has(ws)) void setSerialScope(true);
+        }, 1500);
+      }
+    } else sendJson(ws, { type: "ready", via: "serial" });
     ws.on("message", (data) => {
       const ask = readScopeAsk(data);
       if (ask) askScopeCenter("serial", ask === "span");

@@ -10,7 +10,7 @@ import { currentSerialHamlib, radiosConnect, radiosDisconnect, radiosMarkBle, ra
 import { hamlibCtl, loadSer2net, probeHamlibNet, saveSer2net } from "./ser2net-store";
 import { attachRadioAudio } from "./radio-audio";
 import { decodeSlot } from "./digital-decode";
-import { digitalRxCommand, digitalRxSnapshot } from "./digital-rx";
+import { digitalRxCommand, digitalRxSnapshot, digitalWaterfallSince } from "./digital-rx";
 import { haltDigitalTx, scheduleDigitalTx, txSnapshot } from "./digital-tx";
 import { attachScopeWs } from "./icom-scope-ws";
 import { attachTerminal } from "./term";
@@ -70,7 +70,7 @@ import {
 } from "./hamlib-hub";
 import { icomLanCmd, icomLanStatus } from "./icom-lan";
 import { registerLicenseRoutes } from "./license";
-import { consoleSessionCookie, consoleSessionOk, consoleSessionToken } from "./console-session";
+import { consoleSessionClearCookie, consoleSessionCookie, consoleSessionOk, consoleSessionToken } from "./console-session";
 import { supportVpnSet, supportVpnStatus } from "./support-vpn";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -438,7 +438,7 @@ async function startServer() {
         res.status(400).json({ ok: false, error: "command obrigatório" });
         return;
       }
-      const out = await hubRigctl(port, command, host);
+      const out = await hubRigctl(port, command, host, 900);
       // ocupado/timeout é fila, não queda do Node. 502 faz o nginx e a UI
       // trata o console como morto a cada poll de 450 ms.
       const queued = out.error === "ocupado" || out.error === "timeout" || out.error === "fila cheia";
@@ -489,8 +489,17 @@ async function startServer() {
       hz: Number(req.body?.hz),
       band: String(req.body?.band ?? ""),
       dialId: String(req.body?.dialId ?? ""),
+      n: Number(req.body?.n),
     });
     res.status(out.ok ? 200 : 409).json(out);
+  });
+  app.get("/api/digital/waterfall", (req, res) => {
+    if (!consoleSessionOk(req.headers.cookie)) {
+      res.status(401).json({ ok: false, gen: 0, stripes: [] });
+      return;
+    }
+    const after = Number(req.query.after);
+    res.json(digitalWaterfallSince(Number.isFinite(after) ? after : 0));
   });
   app.get("/api/digital/clock", (req, res) => {
     if (!consoleSessionOk(req.headers.cookie)) {
@@ -542,7 +551,7 @@ async function startServer() {
         res.status(200).json({ ok: false, reply: "", error: "porta inválida" });
         return;
       }
-      const out = await hubRigctl(port, "\\get_level STRENGTH", host, 1000);
+      const out = await hubRigctl(port, "\\get_level STRENGTH", host, 200);
       res.status(200).json(out);
     } catch (err) {
       res.status(200).json({ ok: false, reply: "", error: String(err) });
@@ -882,6 +891,17 @@ async function startServer() {
       return;
     }
     res.setHeader("Set-Cookie", consoleSessionCookie(token));
+    res.json({ ok: true });
+  });
+  app.get("/api/console/session", (req, res) => {
+    if (!consoleSessionOk(req.headers.cookie)) {
+      res.status(401).json({ ok: false });
+      return;
+    }
+    res.json({ ok: true });
+  });
+  app.delete("/api/console/session", (_req, res) => {
+    res.setHeader("Set-Cookie", consoleSessionClearCookie());
     res.json({ ok: true });
   });
 

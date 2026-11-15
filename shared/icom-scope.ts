@@ -58,8 +58,8 @@ export function scopeCenterFrame(to: number): Uint8Array {
  * Largura total do scope em modo centro.
  * Hamlib 4.6.5, rigs/icom/ic7300.c, caps do IC-705 (`spectrum_spans`):
  * 5, 10, 20, 50, 100, 200, 500 e 1000 kHz. Não há 300 kHz.
- * 500 kHz (±250 kHz) é o passo que cobre 150 kHz de cada lado.
- * O card continua mostrando só ±150 kHz.
+ * 500 kHz (±250 kHz) é o passo que o card do painel usa como largura padrão.
+ * O seletor Largura do card escolhe o passo; o eixo acompanha essa largura.
  */
 export const SCOPE_SPAN_HZ = 500_000;
 

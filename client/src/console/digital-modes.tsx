@@ -1,9 +1,23 @@
-import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
+import {
+  compactStepMs,
+  compactStripes,
+  stickToBottom,
+  stickToNewest,
+  stripeFromJson,
+  trimStripes,
+  viewNorm,
+  WF_COMPACT,
+  WF_ROW_PX,
+  type FallPayload,
+  type FallStripe,
+} from "@shared/digital-waterfall";
+import { expireConsoleSession } from "./console-auth";
 import { useConsole } from "./state";
 import { Chip, ConsoleInput, ConsoleSelect, Field, GhostBtn, PageHead, Panel, PanelTitle } from "./widgets";
 import { digTx, type DigKey } from "./digital-modes-copy";
 import { graphView, useDigitalListen, type ListenPhase } from "./digital-listen";
-import { useDigitalTx } from "./digital-tx";
+import { onDigitalTx, publishDigitalTx, releaseDigitalTx, setDigitalTxPage } from "./digital-tx";
 import {
   DIGITAL_STORE_KEY,
   alertHits,
@@ -15,9 +29,10 @@ import {
   digReducer,
   formatDialMhz,
   formatVfoMhz,
+  applyLiveContact,
   fromPrefs,
+  rememberContact,
   hopBands,
-  isGrid,
   leftRows,
   localPhase,
   macroPreview,
@@ -59,15 +74,18 @@ const INK: Record<Ink, string> = {
   red: "text-[#f87171]",
 };
 
+/** Cards mais agrupados na página digital (borda e padding reduzidos). */
+const DIG_PANEL = "mb-2 rounded-lg border border-[rgba(79,195,247,0.08)] bg-[#0b1520] p-2";
+
 type Tab = "tx" | "filter" | "prefix" | "states" | "ignore" | "alerts" | "others";
 const SET_TABS = ["general", "radio", "audio", "macros", "reporting", "frequencies", "colors", "advanced", "z"] as const;
 type SetTab = (typeof SET_TABS)[number];
 
 function loadState(): DigState {
   try {
-    return fromPrefs(JSON.parse(localStorage.getItem(DIGITAL_STORE_KEY) || "null"));
+    return applyLiveContact(fromPrefs(JSON.parse(localStorage.getItem(DIGITAL_STORE_KEY) || "null")));
   } catch {
-    return fromPrefs(null);
+    return applyLiveContact(fromPrefs(null));
   }
 }
 
@@ -85,7 +103,6 @@ export function DigitalPage() {
   const [dbfs, setDbfs] = useState(-120);
   const [decodeInfo, setDecodeInfo] = useState<{ ran: boolean; count: number } | null>(null);
   const specRef = useRef<Float32Array | null>(null);
-  const txFreeze = useRef("");
   const ready = useRef(false);
   const seeded = useRef(false);
   const [txHold, setTxHold] = useState(false);
@@ -96,6 +113,8 @@ export function DigitalPage() {
   const [rxBusy, setRxBusy] = useState(false);
   const [rxError, setRxError] = useState("");
   const [dialId, setDialId] = useState("");
+  const [stripes, setStripes] = useState<FallStripe[]>([]);
+  const [fallGen, setFallGen] = useState(0);
   const rxPending = useRef(false);
 
   const vfo = s.vfo === "B" ? "B" : "A";
@@ -123,6 +142,7 @@ export function DigitalPage() {
     graph: span,
     specRef,
     spectrumOnly: true,
+    meterOnly: true,
     onLevel: (next, db) => {
       setLevel(next);
       setDbfs(db);
@@ -137,6 +157,7 @@ export function DigitalPage() {
   const applyRx = (snap: RxSnap) => {
     const on = Boolean(snap.enabled);
     setRxOn(on);
+    if (on) setRxError("");
     const phase: ListenPhase = snap.phase === "on" || snap.phase === "busy" || snap.phase === "none" || snap.phase === "auth" ? snap.phase : "off";
     setRxPhase(phase);
     if (snap.decode !== undefined) setDecodeInfo(snap.decode ?? null);
@@ -160,6 +181,10 @@ export function DigitalPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+      if (res.status === 401) {
+        expireConsoleSession();
+        return;
+      }
       const snap = (await res.json().catch(() => null)) as RxSnap | null;
       if (!snap) {
         setRxError(t("ft8Fail"));
@@ -175,31 +200,46 @@ export function DigitalPage() {
     }
   };
 
-  const call = state.myCall.trim().toUpperCase();
-  const grid = isGrid(state.myGrid) ? state.myGrid.trim().toUpperCase() : "";
-  const typed = planned.trim();
-  const txMessage = call && typed.toUpperCase().includes(call) ? typed : call ? ["CQ", call, grid].filter(Boolean).join(" ") : "";
   const txLevel = state.txPower > 0 ? Math.min(0.8, Math.max(0.15, state.txPower / 100)) : 0.5;
-  if (state.enable && txMessage && !txFreeze.current) txFreeze.current = txMessage;
-  if (!state.enable) txFreeze.current = "";
 
-  useDigitalTx({
-    armed: state.enable && Boolean(txFreeze.current),
-    mode: state.mode,
-    even: state.txEven,
-    message: txFreeze.current,
-    audioHz: state.txHz,
-    port: s.wlg.hamlibPort || 4532,
-    level: txLevel,
-    onCapture: (on) => setTxHold(!on),
-    onPhase: setTxPhase,
-    onDone: (info) => {
-      setTxSent(info.message);
-      setTxPhase(info.ok ? "done" : info.error || "error");
-      dispatch({ type: "last", text: info.message });
-      dispatch({ type: "halt" });
-    },
-  });
+  useEffect(() => {
+    rememberContact(state);
+  }, [state]);
+
+  useEffect(() => {
+    setDigitalTxPage(true);
+    return () => setDigitalTxPage(false);
+  }, []);
+
+  useEffect(() => {
+    publishDigitalTx({
+      armed: state.enable && Boolean(planned.trim()) && planned.trim().toUpperCase() !== "TUNE",
+      slot: state.next,
+      mode: state.mode,
+      even: state.txEven,
+      message: planned.trim(),
+      audioHz: state.txHz,
+      port: s.wlg.hamlibPort || 4532,
+      level: txLevel,
+    });
+  }, [state.enable, state.next, state.mode, state.txEven, planned, state.txHz, txLevel, s.wlg.hamlibPort]);
+
+  useEffect(() => {
+    return onDigitalTx(
+      (phase) => {
+        setTxPhase(phase);
+        setTxHold(phase === "wait" || phase === "audio" || phase === "ptt");
+      },
+      (info) => {
+        setTxHold(false);
+        setTxSent(info.message);
+        setTxPhase(info.ok ? "done" : info.error || "error");
+        if (!info.ok) return;
+        dispatch({ type: "last", text: info.message });
+        dispatch({ type: "txSent" });
+      },
+    );
+  }, []);
 
   useEffect(() => {
     if (!state.monitor) dispatch({ type: "patch", patch: { monitor: true } });
@@ -210,6 +250,10 @@ export function DigitalPage() {
     const pull = async () => {
       try {
         const res = await fetch("/api/digital/rx", { credentials: "same-origin" });
+        if (res.status === 401) {
+          expireConsoleSession();
+          return;
+        }
         if (!res.ok || stop) return;
         const snap = (await res.json()) as RxSnap;
         if (!stop) applyRef.current(snap);
@@ -219,6 +263,67 @@ export function DigitalPage() {
     };
     void pull();
     const id = window.setInterval(() => void pull(), 1000);
+    return () => {
+      stop = true;
+      window.clearInterval(id);
+    };
+  }, []);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    void fetch("/api/digital/rx", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ op: "navg", n: state.graphAvg }),
+      signal: ctrl.signal,
+    }).catch(() => undefined);
+    return () => ctrl.abort();
+  }, [state.graphAvg]);
+
+  useEffect(() => {
+    let stop = false;
+    let after = 0;
+    let gen = 0;
+    let busy = false;
+    const pull = async () => {
+      if (busy || stop) return;
+      busy = true;
+      let restart = false;
+      try {
+        const res = await fetch(`/api/digital/waterfall?after=${after}`, { credentials: "same-origin" });
+        if (res.status === 401) {
+          expireConsoleSession();
+          return;
+        }
+        if (!res.ok || stop) return;
+        const body = (await res.json()) as FallPayload;
+        if (stop || !body || !Array.isArray(body.stripes)) return;
+        if (gen !== 0 && body.gen !== gen) {
+          gen = 0;
+          after = 0;
+          setStripes([]);
+          setFallGen(body.gen);
+          restart = true;
+        } else {
+          gen = body.gen;
+          setFallGen(body.gen);
+          const fresh = body.stripes.map((row) => stripeFromJson(row)).filter((row): row is FallStripe => row != null);
+          if (after === 0) {
+            if (fresh.length) setStripes(trimStripes(fresh, Date.now()));
+          } else if (fresh.length) setStripes((prev) => trimStripes([...prev, ...fresh], Date.now()));
+          const last = body.stripes[body.stripes.length - 1];
+          if (last && Number.isFinite(last.seq)) after = last.seq;
+        }
+      } catch {
+        /* a leitura seguinte tenta de novo */
+      } finally {
+        busy = false;
+        if (restart && !stop) void pull();
+      }
+    };
+    void pull();
+    const id = window.setInterval(() => void pull(), 400);
     return () => {
       stop = true;
       window.clearInterval(id);
@@ -328,9 +433,7 @@ export function DigitalPage() {
         }
       />
 
-      <p className="mb-4 rounded-lg border border-[rgba(255,179,0,0.35)] bg-[rgba(255,179,0,0.08)] px-3 py-2 text-sm text-[#ffd27a]">{t("air")}</p>
-
-      <Panel className="mb-4 p-3">
+      <Panel className={DIG_PANEL}>
         <div className="flex flex-wrap items-center gap-3 font-['IBM_Plex_Mono'] text-xs">
           <Readout k={t("vfoHint")} v={`${band} · ${formatVfoMhz(hz)} MHz · ${radioMode} · VFO ${vfo}`} />
           {s.split ? <Readout k={t("splitOn")} v={formatVfoMhz(otherHz)} tone="green" /> : <Readout k={t("splitOff")} v="—" />}
@@ -357,12 +460,10 @@ export function DigitalPage() {
           </div>
           <Readout k={t("rxAudio")} v={listenWord} tone={rxPhase === "on" ? "green" : undefined} />
         </div>
-        <p className="mt-2 text-[11px] text-[#5d7184]">{t("bandHint")}</p>
         {rxError ? <p className="mt-1 text-[11px] text-[#f87171]">{rxError}</p> : null}
       </Panel>
 
-      <Panel className="mb-4 p-3">
-        <PanelTitle>{t("waterfall")}</PanelTitle>
+      <Panel className={DIG_PANEL}>
         <div className="mb-3 flex flex-wrap items-end gap-3">
           <Mini label={t("start")}>
             <Num value={state.graphStart} onChange={(n) => dispatch({ type: "patch", patch: { graphStart: n } })} />
@@ -402,21 +503,26 @@ export function DigitalPage() {
           </Mini>
         </div>
         <Waterfall
+          stripes={stripes}
+          revision={fallGen}
           start={span.start}
           end={span.end}
+          gain={state.graphGain}
+          zero={state.graphZero}
+          flatten={state.graphFlatten}
+          spec={state.graphSpec}
           palette={state.graphPalette}
           rx={state.rxHz}
           tx={state.txHz}
-          emptyLabel={t("waterfallEmpty")}
-          live={rxPhase === "on"}
-          specRef={specRef}
+          emptyLabel={rxOn && stripes.length === 0 ? t("waterfallWait") : t("waterfallEmpty")}
           onPick={(hzPick) => dispatch({ type: "graph", hz: hzPick, moveTx: !state.holdTx })}
         />
-        <p className="mt-2 text-[11px] text-[#8ea0b3]">{decodeWord}</p>
+        <p className="mt-2 text-[11px] text-[#8ea0b3]">{t("waterfallHint")}</p>
+        <p className="mt-1 text-[11px] text-[#8ea0b3]">{decodeWord}</p>
       </Panel>
 
-      <div className="mb-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <Panel className="p-3">
+      <div className="mb-2 grid gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <Panel className={DIG_PANEL}>
           <PanelTitle>{t("bandActivity")}</PanelTitle>
           <DecodeTable
             rows={left}
@@ -425,12 +531,13 @@ export function DigitalPage() {
             ink={(row) => rowInk(row, state, band)}
             highlight={state.highlightDx ? state.dxCall : ""}
             onRow={(row) => dispatch({ type: "double", row })}
+            follow
           />
           <p className="mt-2 text-[11px] text-[#8ea0b3]">
             {t("candidates")}: {pick ? pick.message : t("none")} · {picks.length}
           </p>
         </Panel>
-        <Panel className="p-3">
+        <Panel className={DIG_PANEL}>
           <PanelTitle>{t("rxFreq")}</PanelTitle>
           <label className="mb-2 flex items-center gap-2 text-[11px] text-[#8ea0b3]">
             {t("rxWidth")}
@@ -453,8 +560,8 @@ export function DigitalPage() {
         </Panel>
       </div>
 
-      <div className="mb-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
-        <Panel className="p-3">
+      <div className="mb-2 grid gap-2 xl:grid-cols-[minmax(0,5fr)_minmax(0,8fr)]">
+        <Panel className={DIG_PANEL}>
           <div className="mb-3 flex gap-1 overflow-x-auto">
             <Chip active={tab === "tx"} onClick={() => setTab("tx")}>
               Tx1–Tx6
@@ -480,7 +587,7 @@ export function DigitalPage() {
           </div>
           {tab === "tx" ? (
             <div>
-              <div className="mb-1 grid grid-cols-[64px_64px_minmax(0,1fr)] gap-2 text-[10px] tracking-wide text-[#5d7184] uppercase">
+              <div className="mb-1 grid grid-cols-[44px_36px_minmax(0,1fr)] gap-1 text-[10px] tracking-wide text-[#5d7184] uppercase">
                 <span>{t("next")}</span>
                 <span>{t("now")}</span>
                 <span>Tx</span>
@@ -488,7 +595,7 @@ export function DigitalPage() {
               {([1, 2, 3, 4, 5, 6] as TxId[]).map((n) => (
                 <div
                   key={n}
-                  className="mb-1 grid grid-cols-[64px_64px_minmax(0,1fr)] items-center gap-2"
+                  className="mb-0.5 grid grid-cols-[44px_36px_minmax(0,1fr)] items-center gap-1"
                   onDoubleClick={() => n === 5 && dispatch({ type: "rr73" })}
                 >
                   <label className="flex items-center gap-1 text-[11px] text-[#8ea0b3]">
@@ -605,10 +712,10 @@ export function DigitalPage() {
           ) : null}
         </Panel>
 
-        <Panel className="p-3">
-          <div className="flex flex-wrap gap-2">
-            <Toggle on={state.autoCq} label={t("autoCq")} title={t("air")} tone="amber" onClick={() => dispatch({ type: "autoCq" })} />
-            <Toggle on={state.autoCall} label={t("autoCall")} title={t("air")} tone="amber" onClick={() => dispatch({ type: "autoCall" })} />
+        <Panel className={DIG_PANEL}>
+          <div className="flex flex-wrap gap-1.5">
+            <Toggle on={state.autoCq} label={t("autoCq")} title={t("airShort")} tone="amber" onClick={() => dispatch({ type: "autoCq" })} />
+            <Toggle on={state.autoCall} label={t("autoCall")} title={t("airShort")} tone="amber" onClick={() => dispatch({ type: "autoCall" })} />
             <Toggle on={state.holdTx} label={t("hold")} title={t("holdHint")} onClick={() => dispatch({ type: "hold" })} />
             <Toggle
               on={state.txEven}
@@ -669,27 +776,36 @@ export function DigitalPage() {
                 {t("deep")}
               </Chip>
             </div>
-            <Toggle on={state.enable} label={t("enable")} title={t("air")} tone="amber" onClick={() => dispatch({ type: "toggleEnable", periodIndex: period.index })} />
+            <Toggle
+              on={state.enable}
+              label={t("enable")}
+              title={t("airShort")}
+              tone="amber"
+              onClick={() => {
+                if (state.enable) releaseDigitalTx();
+                dispatch({ type: "toggleEnable", periodIndex: period.index });
+              }}
+            />
             <button
               type="button"
               onClick={() => {
+                releaseDigitalTx();
                 dispatch({ type: "halt" });
-                void fetch("/api/digital/halt", { method: "POST", credentials: "same-origin" });
               }}
               className="h-8 rounded-md border border-[#ef4444]/50 px-2.5 text-[11px] font-semibold text-[#f87171] hover:bg-[#ef4444]/10"
             >
               {t("halt")}
             </button>
             <Toggle on={state.tune} label={t("tune")} title={t("tuneHint")} tone="amber" onClick={() => dispatch({ type: "tune" })} />
-            <Toggle on={state.pounce} label={t("pounce")} title={t("air")} tone="amber" onClick={() => dispatch({ type: "pounce" })} />
+            <Toggle on={state.pounce} label={t("pounce")} title={t("airShort")} tone="amber" onClick={() => dispatch({ type: "pounce" })} />
             <GhostBtn onClick={() => dispatch({ type: "generate" })}>{t("gen")}</GhostBtn>
           </div>
           <p className="mt-3 text-[11px] leading-relaxed text-[#5d7184]">{t("genHint")}</p>
         </Panel>
       </div>
 
-      <Panel className="p-3">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 font-['IBM_Plex_Mono'] text-[11px]">
+      <Panel className={DIG_PANEL}>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 font-['IBM_Plex_Mono'] text-[11px]">
           <span className={phase === "rx" ? "text-[#4fc3f7]" : "text-[#ffb300]"}>{statusWord}</span>
           <span className="text-[#8ea0b3]">{state.mode}</span>
           <span className="text-[#ffb300]">{t("airShort")}</span>
@@ -1104,6 +1220,7 @@ function DecodeTable({
   highlight,
   onRow,
   compact,
+  follow,
 }: {
   rows: DecodeRow[];
   empty: string;
@@ -1112,9 +1229,27 @@ function DecodeTable({
   highlight: string;
   onRow: (row: DecodeRow) => void;
   compact?: boolean;
+  follow?: boolean;
 }) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const stick = useRef(true);
+  useLayoutEffect(() => {
+    if (!follow) return;
+    const el = scroller.current;
+    if (!el || !stick.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, [follow, rows]);
   return (
-    <div className={`overflow-auto rounded-md border border-[rgba(79,195,247,0.12)] bg-[#071018] ${compact ? "max-h-52" : "max-h-64"}`}>
+    <div
+      ref={scroller}
+      data-band-activity={follow ? "1" : undefined}
+      onScroll={(e) => {
+        if (!follow) return;
+        const el = e.currentTarget;
+        stick.current = stickToBottom(el.scrollTop, el.scrollHeight, el.clientHeight);
+      }}
+      className={`overflow-auto rounded-md border border-[rgba(79,195,247,0.12)] bg-[#071018] ${compact ? "max-h-52" : "max-h-64"}`}
+    >
       <table className="w-full border-collapse text-left font-['IBM_Plex_Mono'] text-[11px]">
         <thead className="sticky top-0 bg-[#0b1520] text-[10px] tracking-wide text-[#ffb300] uppercase">
           <tr>
@@ -1165,130 +1300,188 @@ function spectrumInk(norm: number, palette: PaletteId): [number, number, number]
 }
 
 function Waterfall({
+  stripes,
+  revision,
   start,
   end,
+  gain,
+  zero,
+  flatten,
+  spec,
   palette,
   rx,
   tx,
   emptyLabel,
-  live,
-  specRef,
   onPick,
 }: {
+  stripes: FallStripe[];
+  revision: number;
   start: number;
   end: number;
+  gain: number;
+  zero: number;
+  flatten: boolean;
+  spec: number;
   palette: PaletteId;
   rx: number;
   tx: number;
   emptyLabel: string;
-  live: boolean;
-  specRef: { current: Float32Array | null };
   onPick: (hz: number) => void;
 }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  const rowsRef = useRef<Float32Array[]>([]);
-  const liveRef = useRef(false);
-  useEffect(() => {
-    const canvas = ref.current;
-    if (!canvas) return;
-    let frame = 0;
+  const scroller = useRef<HTMLDivElement>(null);
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const scaleRef = useRef<HTMLCanvasElement>(null);
+  const paintRef = useRef<() => void>(() => undefined);
+  const stick = useRef(true);
+  const prevLen = useRef(0);
+  const prevRev = useRef(revision);
+  const rows = useMemo(() => compactStripes(stripes), [stripes]);
+  const cycles = rows.reduce((n, row) => n + row.cuts.length, 0);
+  const stepMs = useMemo(() => compactStepMs(stripes), [stripes]);
+
+  useLayoutEffect(() => {
+    const box = scroller.current;
     const paint = () => {
-      const node = ref.current;
-      if (!node) return;
-      if (!live) {
-        rowsRef.current = [];
-        liveRef.current = false;
-        specRef.current = null;
-      }
-      const spec = live ? specRef.current : null;
-      if (spec) {
-        specRef.current = null;
-        rowsRef.current.unshift(spec);
-        if (rowsRef.current.length > 96) rowsRef.current.pop();
-        liveRef.current = true;
-      }
-      const w = node.clientWidth || 320;
-      const h = node.clientHeight || 168;
-      node.width = Math.max(1, Math.floor(w));
-      node.height = Math.max(1, Math.floor(h));
+      const view = scroller.current;
+      const node = canvas.current;
+      const scale = scaleRef.current;
+      if (!view || !node) return;
+      const w = Math.max(1, Math.floor(view.clientWidth || 320));
+      const h = Math.max(1, Math.floor(view.clientHeight || 256));
+      node.width = w;
+      node.height = h;
       const ctx = node.getContext("2d");
       if (!ctx) return;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = "#03080d";
       ctx.fillRect(0, 0, w, h);
-      const plotH = Math.max(1, h - 18);
-      const rows = rowsRef.current;
-      if (rows.length) {
-        const img = ctx.createImageData(Math.max(1, Math.floor(w)), plotH);
+      const scroll = view.scrollTop;
+      const n = rows.length;
+      const first = Math.max(0, Math.floor(scroll / WF_ROW_PX) - 1);
+      const last = Math.min(n, Math.ceil((scroll + h) / WF_ROW_PX) + 1);
+      if (n) {
+        const img = ctx.createImageData(w, h);
         const data = img.data;
-        const rowH = plotH / 96;
-        for (let y = 0; y < plotH; y++) {
-          const row = rows[Math.min(rows.length - 1, Math.floor(y / rowH))];
-          if (!row) continue;
-          for (let x = 0; x < img.width; x++) {
-            const col = row[Math.min(row.length - 1, Math.floor((x / img.width) * row.length))] ?? 0;
-            const [r, g, b] = spectrumInk(col, palette);
-            const p = (y * img.width + x) * 4;
-            data[p] = r;
-            data[p + 1] = g;
-            data[p + 2] = b;
+        const viewArgs = { startHz: start, endHz: end, gain, zero, flatten, spec };
+        const lines: number[] = [];
+        for (let i = first; i < last; i++) {
+          const stripe = rows[n - 1 - i];
+          if (!stripe) continue;
+          const norm = viewNorm(stripe.cols, viewArgs, w);
+          const yTop = i * WF_ROW_PX - scroll;
+          const y0 = Math.max(0, Math.floor(yTop));
+          const y1 = Math.min(h, Math.ceil(yTop + WF_ROW_PX));
+          for (let py = y0; py < y1; py++) {
+            for (let x = 0; x < w; x++) {
+              const [r, g, b] = spectrumInk(norm[x] ?? 0, palette);
+              const p = (py * w + x) * 4;
+              data[p] = r;
+              data[p + 1] = g;
+              data[p + 2] = b;
+              data[p + 3] = 255;
+            }
+          }
+          for (const cut of stripe.cuts) lines.push(yTop + cut * WF_ROW_PX);
+        }
+        for (const cy0 of lines) {
+          const py = Math.round(cy0);
+          if (py < 0 || py >= h) continue;
+          for (let x = 0; x < w; x++) {
+            const p = (py * w + x) * 4;
+            data[p] = 255;
+            data[p + 1] = 179;
+            data[p + 2] = 0;
             data[p + 3] = 255;
           }
         }
         ctx.putImageData(img, 0, 0);
       }
-      ctx.strokeStyle = "rgba(79,195,247,0.2)";
-      ctx.fillStyle = "#5d7184";
-      ctx.font = "11px IBM Plex Mono, ui-monospace, monospace";
-      const span = Math.max(1, end - start);
-      for (let i = 0; i <= 6; i++) {
-        const x = (w * i) / 6;
-        ctx.beginPath();
-        ctx.moveTo(x, h - 18);
-        ctx.lineTo(x, h);
-        ctx.stroke();
-        const markHz = Math.round(start + (span * i) / 6);
-        ctx.fillText(String(markHz), Math.min(w - 40, Math.max(2, x + 2)), h - 4);
-      }
-      const line = (hz: number, color: string) => {
+      const spanHz = Math.max(1, end - start);
+      const mark = (hz: number, color: string) => {
         if (hz < start || hz > end) return;
-        const x = ((hz - start) / span) * w;
+        const x = ((hz - start) / spanHz) * w;
         ctx.strokeStyle = color;
         ctx.beginPath();
-        ctx.moveTo(x, 8);
-        ctx.lineTo(x, h - 18);
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
         ctx.stroke();
       };
-      line(rx, palette === "amber" ? "#ffb300" : "#4fc3f7");
-      line(tx, "#ffb300");
-      if (!liveRef.current) {
+      mark(rx, palette === "amber" ? "#ffb300" : "#4fc3f7");
+      mark(tx, "#ffb300");
+      if (!n) {
         ctx.fillStyle = "#5d7184";
+        ctx.font = "11px IBM Plex Mono, ui-monospace, monospace";
         ctx.fillText(emptyLabel, 8, 18);
       }
+      if (!scale) return;
+      scale.width = w;
+      scale.height = 18;
+      const axis = scale.getContext("2d");
+      if (!axis) return;
+      axis.fillStyle = "#03080d";
+      axis.fillRect(0, 0, w, 18);
+      axis.strokeStyle = "rgba(79,195,247,0.2)";
+      axis.fillStyle = "#5d7184";
+      axis.font = "11px IBM Plex Mono, ui-monospace, monospace";
+      for (let i = 0; i <= 6; i++) {
+        const x = (w * i) / 6;
+        axis.beginPath();
+        axis.moveTo(x, 0);
+        axis.lineTo(x, 6);
+        axis.stroke();
+        const markHz = Math.round(start + (spanHz * i) / 6);
+        axis.fillText(String(markHz), Math.min(w - 40, Math.max(2, x + 2)), 16);
+      }
     };
-    const tick = () => {
-      paint();
-      frame = window.requestAnimationFrame(tick);
-    };
-    frame = window.requestAnimationFrame(tick);
-    const obs = new ResizeObserver(paint);
-    obs.observe(canvas);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      obs.disconnect();
-    };
-  }, [start, end, palette, rx, tx, emptyLabel, live, specRef]);
+    paintRef.current = paint;
+    if (box) {
+      if (revision !== prevRev.current) {
+        prevRev.current = revision;
+        prevLen.current = rows.length;
+        stick.current = true;
+        box.scrollTop = 0;
+      } else {
+        const added = rows.length - prevLen.current;
+        prevLen.current = rows.length;
+        if (added > 0 && !stick.current) box.scrollTop += added * WF_ROW_PX;
+        if (stick.current) box.scrollTop = 0;
+      }
+    }
+    paint();
+    const obs = new ResizeObserver(() => paintRef.current());
+    if (box) obs.observe(box);
+    return () => obs.disconnect();
+  }, [rows, revision, start, end, gain, zero, flatten, spec, palette, rx, tx, emptyLabel]);
 
   return (
-    <canvas
-      ref={ref}
-      className="h-44 w-full rounded-md border border-[rgba(79,195,247,0.14)] bg-[#03080d]"
-      onClick={(e) => {
-        const rect = e.currentTarget.getBoundingClientRect();
-        const hz = start + ((e.clientX - rect.left) / Math.max(1, rect.width)) * Math.max(1, end - start);
-        onPick(hz);
-      }}
-    />
+    <div>
+      <div
+        ref={scroller}
+        data-waterfall="1"
+        data-stripes={rows.length}
+        data-cycles={cycles}
+        data-compact={WF_COMPACT}
+        data-step-ms={stepMs ?? ""}
+        className="h-64 overflow-y-auto rounded-md border border-[rgba(79,195,247,0.14)] bg-[#03080d]"
+        onScroll={(e) => {
+          stick.current = stickToNewest(e.currentTarget.scrollTop);
+          paintRef.current();
+        }}
+      >
+        <div style={{ height: Math.max(256, rows.length * WF_ROW_PX) }}>
+          <canvas
+            ref={canvas}
+            className="sticky top-0 block h-64 w-full"
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const hz = start + ((e.clientX - rect.left) / Math.max(1, rect.width)) * Math.max(1, end - start);
+              onPick(hz);
+            }}
+          />
+        </div>
+      </div>
+      <canvas ref={scaleRef} className="mt-1 h-[18px] w-full" />
+    </div>
   );
 }
 

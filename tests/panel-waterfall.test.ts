@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { addTile, defaultTiles } from "../client/src/console/panel-layout";
 import {
   centeredSpan,
+  panelView,
+  PANEL_SPAN_HZ,
   FRAME_MS,
   freqTicks,
   clickedTuneHz,
@@ -23,6 +25,20 @@ describe("card do waterfall no painel", () => {
     const tile = next.find((item) => item.id === "waterfall");
     expect(tile?.w).toBe(12);
     expect(next).toHaveLength(base.length + 1);
+  });
+});
+
+describe("largura selecionada no painel", () => {
+  it("usa o span do painel, não a janela fixa de ±150 kHz nem 0–3000 Hz", () => {
+    const tune = 7_100_000;
+    const wide = panelView(tune, PANEL_SPAN_HZ);
+    expect(wide.endHz - wide.startHz).toBe(500_000);
+    expect((wide.startHz + wide.endHz) / 2).toBe(tune);
+    const narrow = panelView(tune, 100_000);
+    expect(narrow.startHz).toBe(7_050_000);
+    expect(narrow.endHz).toBe(7_150_000);
+    expect(narrow.endHz - narrow.startHz).not.toBe(300_000);
+    expect(narrow.endHz - narrow.startHz).not.toBe(3_000);
   });
 });
 

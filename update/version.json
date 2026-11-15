@@ -1,8 +1,8 @@
 {
-  "version": "0.1.10.07",
+  "version": "0.1.10.08",
   "channel": "main",
-  "file": "ham-cockpit-0.1.10.07.tgz",
-  "sha256": "7f801c9cf71bfecbf556bf8abf4bb1b33ebe8a4aaed68d008807d001ae729e5a",
-  "bytes": 5116067,
-  "notes": "Ham Cockpit v0.1.10.07 — Habilitar FT8 guarda a frequência e o modo, põe o IC-705 em DATA (PKTUSB), sintoniza o dial e decodifica. A escuta continua em outro menu. Desabilitar devolve os dois e para a captura. A cascata fica acima das listas e o TX manda o tom inteiro depois de 0,5 s de silêncio.\n\nA OTA não sobrescreve rádios, INI, services.json, Lextel, SPE nem a escolha da VPN."
+  "file": "ham-cockpit-0.1.10.08.tgz",
+  "sha256": "d319ba09d4d6db24b6fe42e5363cc3ddbebc9bfc1a660154916aecafaf7cdeed",
+  "bytes": 5122608,
+  "notes": "Ham Cockpit v0.1.10.08 — TX com PTT junto ao aplay; Enable TX segue até o 73; layout digital mais compacto; cascata FT8 e painel com faixa correta; S-meter em tempo real.\n\nA OTA não sobrescreve rádios, INI, services.json, Lextel, SPE nem a escolha da VPN."
 }

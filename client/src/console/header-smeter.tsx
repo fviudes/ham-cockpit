@@ -6,12 +6,12 @@
  * de S0 a S9+60). Agulha só se move com leitura real do rádio; sem sinal
  * fica no batente esquerdo (S0), sem número de dBm.
  *
- * A leitura do ponteiro é só o nível. O desenho sobe e desce a 60 quadros/s;
- * a leitura no rádio continua no poll rápido e, se estiver ocupada, é pulada.
- * Frequência, modo e o resto do menu continuam no poll de 450 ms.
+ * O ponteiro guarda o último dB e pinta a cada quadro. Há uma só leitura
+ * de STRENGTH no ar; a próxima sai quando essa volta. Frequência e modo
+ * continuam no poll de 450 ms.
  */
 import { useEffect, useRef, useState } from "react";
-import { SMETER_POLL_MS, runSmeterPoll } from "@shared/smeter";
+import { nextSmeterWaitMs } from "@shared/smeter";
 import { useEasedNumber } from "./smeter-motion";
 import { ic705Ble } from "./ic705-ble";
 import { pollPrimarySmeter } from "./radio-cmd";
@@ -157,26 +157,27 @@ function useLiveSmeter(live: boolean): number | null {
 
   useEffect(() => {
     if (!live) return;
-    const gate = { busy: false };
     let stopped = false;
-    const tick = () => {
-      if (stopped) return;
-      void runSmeterPoll(gate, () => {
-        if (stopped) return Promise.resolve(null);
-        return pollPrimarySmeter(radiosRef.current, {
-          bleReady: ic705Ble.connected,
-          hamlibPort: 4532,
-        });
-      }).then((value) => {
-        if (stopped || value == null) return;
-        publishSmeter(value);
-      });
+    const run = async () => {
+      while (!stopped) {
+        let value: number | null = null;
+        try {
+          value = await pollPrimarySmeter(radiosRef.current, {
+            bleReady: ic705Ble.connected,
+            hamlibPort: 4532,
+          });
+        } catch {
+          value = null;
+        }
+        if (stopped) return;
+        if (value != null) publishSmeter(value);
+        const wait = nextSmeterWaitMs(value != null);
+        if (wait > 0) await new Promise((resolve) => window.setTimeout(resolve, wait));
+      }
     };
-    const id = window.setInterval(tick, SMETER_POLL_MS);
-    tick();
+    void run();
     return () => {
       stopped = true;
-      window.clearInterval(id);
     };
   }, [live]);
 

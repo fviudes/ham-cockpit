@@ -594,6 +594,7 @@ enable_units sshd.service
 enable_units docker.service docker.socket nginx.service NetworkManager.service avahi-daemon.service
 enable_units ham-cockpit.target ham-cockpit.service ham-cockpit-ap.service first-boot.service
 enable_units ham-cockpit-watch.timer
+# Enable só. Unidade já ativa não é reiniciada: o restart derruba o CI-V.
 enable_units ser2net.service 'rigctld@ic705.service' wavelog.service waveloggate.service
 # Hamlib do Ubuntu 4.5.5 abre UDP no Icom e o CI-V morre. SPE é RFC2217 na
 # 4001 e o rádio é TCP cru na 4002. ampctld do SPE fica desligado.

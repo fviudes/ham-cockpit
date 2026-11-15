@@ -3,29 +3,41 @@
 function fftInPlace(re: Float32Array, im: Float32Array): void {
   const n = re.length;
   if (n <= 1) return;
-  const half = n >> 1;
-  const evenRe = new Float32Array(half);
-  const evenIm = new Float32Array(half);
-  const oddRe = new Float32Array(half);
-  const oddIm = new Float32Array(half);
-  for (let i = 0; i < half; i++) {
-    evenRe[i] = re[i * 2]!;
-    evenIm[i] = im[i * 2]!;
-    oddRe[i] = re[i * 2 + 1]!;
-    oddIm[i] = im[i * 2 + 1]!;
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) {
+      const tr = re[i]!;
+      re[i] = re[j]!;
+      re[j] = tr;
+      const ti = im[i]!;
+      im[i] = im[j]!;
+      im[j] = ti;
+    }
   }
-  fftInPlace(evenRe, evenIm);
-  fftInPlace(oddRe, oddIm);
-  for (let k = 0; k < half; k++) {
-    const ang = (-2 * Math.PI * k) / n;
-    const wRe = Math.cos(ang);
-    const wIm = Math.sin(ang);
-    const tRe = wRe * oddRe[k]! - wIm * oddIm[k]!;
-    const tIm = wRe * oddIm[k]! + wIm * oddRe[k]!;
-    re[k] = evenRe[k]! + tRe;
-    im[k] = evenIm[k]! + tIm;
-    re[k + half] = evenRe[k]! - tRe;
-    im[k + half] = evenIm[k]! - tIm;
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = (-2 * Math.PI) / len;
+    const wlenRe = Math.cos(ang);
+    const wlenIm = Math.sin(ang);
+    const half = len >> 1;
+    for (let i = 0; i < n; i += len) {
+      let wRe = 1;
+      let wIm = 0;
+      for (let k = 0; k < half; k++) {
+        const even = i + k;
+        const odd = even + half;
+        const tRe = wRe * re[odd]! - wIm * im[odd]!;
+        const tIm = wRe * im[odd]! + wIm * re[odd]!;
+        re[odd] = re[even]! - tRe;
+        im[odd] = im[even]! - tIm;
+        re[even] = re[even]! + tRe;
+        im[even] = im[even]! + tIm;
+        const nextRe = wRe * wlenRe - wIm * wlenIm;
+        wIm = wRe * wlenIm + wIm * wlenRe;
+        wRe = nextRe;
+      }
+    }
   }
 }
 
@@ -46,6 +58,36 @@ function percentile(values: Float32Array, p: number): number {
   return sorted[idx] ?? -120;
 }
 
+/** Pico linear de cada coluna. Zero se o bloco não for uma FFT. */
+export function spectrumPeak(
+  pcm: Int16Array,
+  sampleRate: number,
+  startHz: number,
+  endHz: number,
+  columns: number,
+): Float32Array {
+  const n = pcm.length;
+  const cols = new Float32Array(Math.max(1, columns));
+  if (n < 16 || (n & (n - 1)) !== 0) return cols;
+  const time = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const w = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (n - 1)));
+    time[i] = ((pcm[i] ?? 0) / 32768) * w;
+  }
+  const mag = fftMag(time);
+  const span = Math.max(1, endHz - startHz);
+  for (let c = 0; c < cols.length; c++) {
+    const hz0 = startHz + (span * c) / cols.length;
+    const hz1 = startHz + (span * (c + 1)) / cols.length;
+    const i0 = Math.max(1, Math.floor((hz0 * n) / sampleRate));
+    const i1 = Math.min(mag.length - 1, Math.ceil((hz1 * n) / sampleRate));
+    let peak = 0;
+    for (let i = i0; i <= i1; i++) if (mag[i]! > peak) peak = mag[i]!;
+    cols[c] = peak;
+  }
+  return cols;
+}
+
 /**
  * Colunas 0..1 entre startHz e endHz. Silêncio digital (PCM zerado) fica em zero.
  * O piso acompanha o ruído do trecho para a cascata mostrar o áudio que chegou.
@@ -63,24 +105,12 @@ export function spectrumColumns(
 ): Float32Array {
   const n = pcm.length;
   const cols = new Float32Array(Math.max(1, columns));
+  const peak = spectrumPeak(pcm, sampleRate, startHz, endHz, columns);
   if (n < 16 || (n & (n - 1)) !== 0) return cols;
-  const time = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const w = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (n - 1)));
-    time[i] = ((pcm[i] ?? 0) / 32768) * w;
-  }
-  const mag = fftMag(time);
-  const span = Math.max(1, endHz - startHz);
   const db = new Float32Array(cols.length);
   let loud = -240;
   for (let c = 0; c < cols.length; c++) {
-    const hz0 = startHz + (span * c) / cols.length;
-    const hz1 = startHz + (span * (c + 1)) / cols.length;
-    const i0 = Math.max(1, Math.floor((hz0 * n) / sampleRate));
-    const i1 = Math.min(mag.length - 1, Math.ceil((hz1 * n) / sampleRate));
-    let peak = 0;
-    for (let i = i0; i <= i1; i++) if (mag[i]! > peak) peak = mag[i]!;
-    const value = 20 * Math.log10(peak / (n / 2) + 1e-12) + gainDb;
+    const value = 20 * Math.log10((peak[c] ?? 0) / (n / 2) + 1e-12) + gainDb;
     db[c] = value;
     if (value > loud) loud = value;
   }

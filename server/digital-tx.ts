@@ -35,11 +35,17 @@ type Job = {
   ptt: boolean;
   error: string;
   startAt: number;
+  gen: number;
 };
 
 let job: Job | null = null;
-let stop = false;
+let generation = 0;
+let haltedGen = -1;
 let player: ChildProcess | null = null;
+
+function cancelled(gen: number): boolean {
+  return gen !== generation || haltedGen === gen;
+}
 
 function encodeBin(): string {
   return process.env.FTX_ENCODE || "/opt/ham-cockpit/bin/ftx-encode";
@@ -57,10 +63,10 @@ export function txSnapshot(): TxSnapshot {
   };
 }
 
-function sleepUntil(at: number): Promise<void> {
+function sleepUntil(at: number, gen: number): Promise<void> {
   return new Promise((resolve) => {
     const tick = () => {
-      if (stop || Date.now() >= at) {
+      if (cancelled(gen) || Date.now() >= at) {
         resolve();
         return;
       }
@@ -165,7 +171,7 @@ async function encodeTone(mode: SlotMode, hz: number, message: string): Promise<
   }
 }
 
-function playRaw(device: string, pcm: Buffer, timeoutMs: number): Promise<void> {
+function playRaw(device: string, pcm: Buffer, timeoutMs: number, gen: number): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn("aplay", ["-D", device, "-f", "S16_LE", "-r", "48000", "-c", "1", "-t", "raw", "-q"], {
       stdio: ["pipe", "ignore", "pipe"],
@@ -176,13 +182,13 @@ function playRaw(device: string, pcm: Buffer, timeoutMs: number): Promise<void> 
     child.stderr.on("data", (chunk: Buffer) => err.push(chunk));
     child.on("error", (error) => {
       clearTimeout(timer);
-      player = null;
+      if (player === child) player = null;
       reject(error);
     });
     child.on("close", (code) => {
       clearTimeout(timer);
       if (player === child) player = null;
-      if (stop || code === 0) resolve();
+      if (cancelled(gen) || code === 0) resolve();
       else reject(new Error(Buffer.concat(err).toString("utf8").trim() || `aplay ${code}`));
     });
     child.stdin.on("error", () => undefined);
@@ -196,18 +202,18 @@ async function playbackDevice(): Promise<string> {
   return `plughw:${hit.card},${hit.device}`;
 }
 
-async function playOnCodec(device: string, pcm: Buffer, timeoutMs: number) {
+async function playOnCodec(device: string, pcm: Buffer, timeoutMs: number, gen: number) {
   console.log(`[digital] aplay ${device} ${pcm.length} bytes`);
   try {
-    await playRaw(device, pcm, timeoutMs);
+    await playRaw(device, pcm, timeoutMs, gen);
   } catch (err) {
     const last = err instanceof Error ? err.message : String(err);
     console.log(`[digital] aplay ${device} falhou: ${last}`);
-    if (stop) return;
+    if (cancelled(gen)) return;
     const hw = device.replace("plughw:", "hw:");
     if (hw === device) throw err instanceof Error ? err : new Error(last);
     console.log(`[digital] aplay ${hw} ${pcm.length} bytes`);
-    await playRaw(hw, pcm, timeoutMs);
+    await playRaw(hw, pcm, timeoutMs, gen);
   }
 }
 
@@ -237,21 +243,29 @@ async function readPtt(port: number): Promise<string> {
   return "";
 }
 
+async function readPttOnce(port: number): Promise<string> {
+  const reply = await hubRigctl(port, "t");
+  return pttBit(reply.reply || "");
+}
+
+/** Um T 1. Se o CI-V não confirmar, não manda outro chaveamento. */
 async function raisePtt(port: number) {
-  let last = "ptt";
-  for (let i = 0; i < 3; i++) {
-    try {
-      await setPtt(port, true);
-      return;
-    } catch (err) {
-      last = err instanceof Error ? err.message : String(err);
-    }
-    if ((await readPtt(port)) === "1") {
+  try {
+    await setPtt(port, true);
+    return;
+  } catch (err) {
+    const bit = await readPttOnce(port);
+    if (bit === "1") {
       console.log(`[digital] PTT 1 porta ${port} leitura t=1`);
       return;
     }
+    try {
+      await setPtt(port, false);
+    } catch {
+      /* uma soltura; sem novo T 1 */
+    }
+    throw err instanceof Error ? err : new Error("ptt");
   }
-  throw new Error(last);
 }
 
 async function dropPtt(port: number) {
@@ -271,12 +285,12 @@ async function dropPtt(port: number) {
 }
 
 /** Solta o arecord e só devolve o instante do slot se o codec já estiver livre. */
-async function codecReady(slot: number, mode: SlotMode, even: boolean): Promise<number> {
+async function codecReady(slot: number, mode: SlotMode, even: boolean, gen: number): Promise<number> {
   holdRadioCapture(true);
   let target = slot;
   for (let attempt = 0; attempt < 3; attempt++) {
-    await sleepUntil(target - 2000);
-    if (stop) throw new Error("halt");
+    await sleepUntil(target - 2000, gen);
+    if (cancelled(gen)) throw new Error("halt");
     holdRadioCapture(true);
     await waitCaptureClear(1500);
     if (await arecordLive()) {
@@ -284,7 +298,8 @@ async function codecReady(slot: number, mode: SlotMode, even: boolean): Promise<
       target = nextTxSlot(target + 1000, mode, even);
       continue;
     }
-    await sleepUntil(target);
+    await sleepUntil(target, gen);
+    if (cancelled(gen)) throw new Error("halt");
     const late = Date.now() - target;
     if (late > 80) {
       console.log(`[digital] slot perdido por ${late} ms; não corta a onda`);
@@ -297,33 +312,40 @@ async function codecReady(slot: number, mode: SlotMode, even: boolean): Promise<
 }
 
 async function run(current: Job) {
+  const gen = current.gen;
   let keyed = false;
   try {
     const play = current.play;
     const plan = playbackPlan(current.mode);
     const device = await playbackDevice();
+    if (cancelled(gen)) throw new Error("halt");
     current.phase = "wait";
     console.log(`[digital] TX ${current.mode} "${current.message}" onda ${play.length} bytes ${waveHead(current.mode, play)}`);
-    const slot = await codecReady(current.startAt, current.mode, current.even);
+    const slot = await codecReady(current.startAt, current.mode, current.even, gen);
     current.startAt = slot;
-    if (stop) throw new Error("halt");
-    keyed = true;
+    if (cancelled(gen)) throw new Error("halt");
     current.phase = "audio";
-    const playTask = playOnCodec(device, play, Math.ceil(plan.txEnd * 1000) + 4000);
-    void playTask.catch(() => undefined);
+    const playTask = playOnCodec(device, play, Math.ceil(plan.txEnd * 1000) + 4000, gen);
+    if (cancelled(gen)) throw new Error("halt");
     await raisePtt(current.port);
+    keyed = true;
     current.ptt = true;
+    if (cancelled(gen)) throw new Error("halt");
     await playTask;
-    if (stop) throw new Error("halt");
-    await sleepUntil(slot + plan.pttDrop * 1000);
+    if (cancelled(gen)) throw new Error("halt");
+    await sleepUntil(slot + plan.pttDrop * 1000, gen);
+    if (cancelled(gen)) throw new Error("halt");
     current.phase = "done";
     console.log(`[digital] TX concluído "${current.message}"`);
   } catch (err) {
     const text = err instanceof Error ? err.message : String(err);
-    current.phase = stop || text === "halt" ? "halt" : "error";
-    current.error = text === "halt" ? "" : text;
-    console.log(`[digital] TX ${current.phase} ${current.error}`.trim());
+    if (current.gen === generation) {
+      current.phase = cancelled(gen) || text === "halt" ? "halt" : "error";
+      current.error = text === "halt" ? "" : text;
+    }
+    console.log(`[digital] TX ${text === "halt" ? "halt" : "error"} ${text === "halt" ? "" : text}`.trim());
   } finally {
+    if (generation !== gen) return;
     if (player) {
       player.kill("SIGTERM");
       player = null;
@@ -351,7 +373,7 @@ export async function scheduleDigitalTx(input: {
 }): Promise<{ ok: boolean; error?: string; startInMs?: number; message?: string }> {
   const message = input.message.trim().replace(/\s+/g, " ");
   if (!message || message.length > 40) return { ok: false, error: "mensagem" };
-  if (job && (job.phase === "wait" || job.phase === "ptt" || job.phase === "audio")) return { ok: false, error: "ocupado" };
+  if (job && (job.phase === "ptt" || job.phase === "audio")) return { ok: false, error: "ocupado" };
   if (!existsSync(encodeBin())) return { ok: false, error: "no-modem" };
   const audioHz = Number.isFinite(input.audioHz) ? Math.max(200, Math.min(3000, input.audioHz)) : 1500;
   const port = Number.isFinite(input.port) && input.port > 0 ? Math.round(input.port) : 4532;
@@ -363,8 +385,10 @@ export async function scheduleDigitalTx(input: {
     const text = err instanceof Error ? err.message : String(err);
     return { ok: false, error: text || "encode" };
   }
-  if (job && (job.phase === "wait" || job.phase === "ptt" || job.phase === "audio")) return { ok: false, error: "ocupado" };
-  stop = false;
+  if (job && (job.phase === "ptt" || job.phase === "audio")) return { ok: false, error: "ocupado" };
+  generation += 1;
+  const gen = generation;
+  haltedGen = -1;
   const slot = nextTxSlot(Date.now(), input.mode, input.even);
   job = {
     mode: input.mode,
@@ -378,25 +402,29 @@ export async function scheduleDigitalTx(input: {
     ptt: false,
     error: "",
     startAt: slot,
+    gen,
   };
   void run(job);
   return { ok: true, startInMs: Math.max(0, slot - Date.now()), message };
 }
 
 export async function haltDigitalTx() {
-  stop = true;
-  if (player) {
+  const gen = generation;
+  haltedGen = gen;
+  if (player && job?.gen === gen) {
     player.kill("SIGTERM");
     player = null;
   }
-  const port = job?.port || 4532;
-  if (job && (job.phase === "wait" || job.phase === "ptt" || job.phase === "audio")) job.phase = "halt";
-  if (job?.ptt || job?.phase === "halt") {
-    try {
-      await hubRigctl(port, "T 0");
-    } catch {
-      /* o finally do ciclo também solta */
-    }
-    if (job) job.ptt = false;
+  if (!job || job.gen !== gen) return;
+  const keyed = job.ptt;
+  const port = job.port;
+  if (job.phase === "wait" || job.phase === "ptt" || job.phase === "audio") job.phase = "halt";
+  if (!keyed) return;
+  try {
+    await hubRigctl(port, "T 0");
+  } catch {
+    /* o finally do ciclo também solta */
   }
+  if (generation !== gen || job?.gen !== gen) return;
+  job.ptt = false;
 }

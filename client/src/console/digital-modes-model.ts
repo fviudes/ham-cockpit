@@ -64,6 +64,8 @@ export type DigState = {
   autoCq: boolean;
   autoCall: boolean;
   enable: boolean;
+  /** Sobe a cada armação. O cliente congela a mensagem deste clique, não a anterior. */
+  armId: number;
   tune: boolean;
   pounce: boolean;
   monitor: boolean;
@@ -180,6 +182,7 @@ export type DigAction =
   | { type: "wd" }
   | { type: "note"; note: DigState["note"] }
   | { type: "last"; text: string }
+  | { type: "txSent" }
   | { type: "log"; at: string; band: string }
   | { type: "freq"; id: string; mhz: string }
   | { type: "resetFreqs" }
@@ -397,6 +400,7 @@ export function createDigState(): DigState {
     autoCq: false,
     autoCall: false,
     enable: false,
+    armId: 0,
     tune: false,
     pounce: false,
     monitor: true,
@@ -452,7 +456,7 @@ export function createDigState(): DigState {
     graphStart: 100,
     graphBins: 2,
     graphPalette: "cyan",
-    graphAvg: 1,
+    graphAvg: 5,
     graphFlatten: false,
     graphGain: 0,
     graphZero: 0,
@@ -734,6 +738,10 @@ function applyRow(s: DigState, row: DecodeRow, answer: boolean): DigState {
     txEven: s.txEvenLocked ? s.txEven : !row.even,
     holdTx: s.fh === "fox" ? true : s.holdTx,
     next: answer ? 2 : s.next,
+    enable: answer ? true : s.enable,
+    armId: answer ? s.armId + 1 : s.armId,
+    finishPeriod: answer ? null : s.finishPeriod,
+    autoCq: answer ? false : s.autoCq,
     note: "",
   };
 }
@@ -768,6 +776,83 @@ export function plannedText(s: DigState): string {
   if (s.tune) return "Tune";
   if (s.autoCq && s.next === 6) return s.tx[1];
   return s.tx[s.next];
+}
+
+/** O contato só encerra depois que o Tx6 (73) foi transmitido. RR73 não desliga. */
+export function afterTxSent(s: DigState): DigState {
+  if (!s.enable) return s;
+  if (s.next === 6) return { ...haltState(s), note: "" };
+  return { ...s, enable: true, armId: s.armId + 1, finishPeriod: null };
+}
+
+/** A resposta do correspondente avança o texto. O Enable TX continua ligado. */
+export function advanceOnReply(s: DigState, message: string): DigState {
+  if (!s.enable) return s;
+  const dx = s.dxCall.trim().toUpperCase();
+  const me = s.myCall.trim().toUpperCase();
+  if (!dx || !me) return s;
+  const tokens = message.trim().toUpperCase().split(/\s+/).filter(Boolean);
+  if (tokens[0] !== me || !tokens.includes(dx)) return s;
+  const last = tokens[tokens.length - 1] || "";
+  let next: TxId = s.next;
+  if (last === "73" || last === "RR73" || last === "RRR") {
+    if (s.next < 6) next = 6;
+  } else if (/^R[+-]?\d{1,2}$/.test(last)) {
+    if (s.next < 5) next = 5;
+  } else if (/^[+-]?\d{1,2}$/.test(last)) {
+    if (s.next < 3) next = 3;
+  } else {
+    return s;
+  }
+  if (next === s.next) return s;
+  return { ...s, next, enable: true, armId: s.armId + 1, finishPeriod: null };
+}
+
+/**
+ * Halt no meio do áudio só quando o operador desliga.
+ * Sair da página ou o efeito limpar a dependência não corta o ciclo.
+ * O 73 só solta depois que o áudio desse ciclo terminou.
+ */
+export function shouldHaltTx(
+  reason: "cleanup" | "user" | "cycle6",
+  phase: "wait" | "audio" | "ptt" | "done" | "idle",
+): boolean {
+  if (reason === "cleanup") return false;
+  if (reason === "user") return true;
+  return phase === "done" || phase === "idle";
+}
+
+let liveContact: DigState | null = null;
+
+/** Memória da página, não o localStorage. Sair do menu não apaga o contato aberto. */
+export function rememberContact(s: DigState) {
+  liveContact = s.enable ? s : null;
+}
+
+export function recallContact(): DigState | null {
+  return liveContact?.enable ? liveContact : null;
+}
+
+export function applyLiveContact(base: DigState): DigState {
+  const live = recallContact();
+  if (!live) return base;
+  return {
+    ...base,
+    enable: true,
+    armId: live.armId,
+    next: live.next,
+    tx: live.tx,
+    dxCall: live.dxCall,
+    dxGrid: live.dxGrid,
+    report: live.report,
+    myCall: live.myCall || base.myCall,
+    myGrid: live.myGrid || base.myGrid,
+    txHz: live.txHz,
+    txEven: live.txEven,
+    txEvenLocked: live.txEvenLocked,
+    holdTx: live.holdTx,
+    mode: live.mode,
+  };
 }
 
 export function nowIndex(s: DigState, even: boolean): TxId | null {
@@ -825,6 +910,13 @@ function pounceRow(s: DigState): DecodeRow | null {
   return pickCandidate(hits, s.priority);
 }
 
+function withReplies(s: DigState, rows: DecodeRow[]): DigState {
+  if (!s.enable) return s;
+  let n = s;
+  for (const row of rows) n = advanceOnReply(n, row.message);
+  return n;
+}
+
 export function digReducer(state: DigState, action: DigAction): DigState {
   switch (action.type) {
     case "autoCq": {
@@ -857,7 +949,7 @@ export function digReducer(state: DigState, action: DigAction): DigState {
     }
     case "toggleEnable": {
       if (state.enable) return { ...state, enable: false, finishPeriod: action.periodIndex };
-      return { ...state, enable: true, finishPeriod: null, note: "" };
+      return { ...state, enable: true, armId: state.armId + 1, finishPeriod: null, note: "" };
     }
     case "stop": {
       const was = state.enable || state.autoCq || state.autoCall || state.tune;
@@ -987,6 +1079,8 @@ export function digReducer(state: DigState, action: DigAction): DigState {
       return { ...state, note: action.note };
     case "last":
       return state.lastText === action.text ? state : { ...state, lastText: action.text };
+    case "txSent":
+      return afterTxSent(state);
     case "log": {
       const call = state.dxCall.trim().toUpperCase();
       if (!call) return state;
@@ -1013,12 +1107,12 @@ export function digReducer(state: DigState, action: DigAction): DigState {
     case "heard": {
       const fresh = action.rows.filter((row) => row.message.trim() && !row.message.startsWith("Error ["));
       if (!fresh.length) return state;
-      return { ...state, rows: [...state.rows, ...fresh].slice(-300) };
+      return withReplies({ ...state, rows: [...state.rows, ...fresh].slice(-300) }, fresh);
     }
     case "syncRows": {
       const rows = action.rows.filter((row) => row.message.trim()).slice(-300);
       if (rows.length === state.rows.length && rows.every((row, i) => row.id === state.rows[i]?.id)) return state;
-      return { ...state, rows };
+      return withReplies({ ...state, rows }, rows);
     }
     case "patch": {
       const next = { ...state, ...action.patch, acceptUdp: false as const, audioRx: 0 as const, rows: state.rows };
@@ -1225,7 +1319,7 @@ export function fromPrefs(raw: unknown, licenseCall = ""): DigState {
   base.graphStart = Math.max(0, Math.min(5000, Math.round(num("graphStart", 100))));
   base.graphBins = Math.max(1, Math.min(16, Math.round(num("graphBins", 2))));
   base.graphPalette = o.graphPalette === "amber" || o.graphPalette === "mix" ? o.graphPalette : "cyan";
-  base.graphAvg = Math.max(1, Math.min(99, Math.round(num("graphAvg", 1))));
+  base.graphAvg = Math.max(1, Math.min(99, Math.round(num("graphAvg", 5))));
   base.graphFlatten = bool("graphFlatten", false);
   base.graphGain = num("graphGain", 0);
   base.graphZero = num("graphZero", 0);

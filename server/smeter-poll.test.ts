@@ -1,9 +1,10 @@
+import { createServer, type AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   SMETER_DT_CAP_MS,
   SMETER_FRAME_MS,
-  SMETER_POLL_MS,
   hamlibStrengthToUiSMeter,
+  nextSmeterWaitMs,
   parseHamlibStrength,
   runSmeterPoll,
   stepSmeter,
@@ -44,18 +45,17 @@ afterEach(() => {
 });
 
 describe("S-meter rápido", () => {
-  it("tenta 60 vezes por segundo", () => {
-    expect(SMETER_POLL_MS).toBe(17);
-    expect(SMETER_POLL_MS).toBe(Math.round(1000 / 60));
-    expect(1000 / SMETER_POLL_MS).toBeGreaterThan(58);
-    expect(1000 / SMETER_POLL_MS).toBeLessThan(62);
+  it("a leitura seguinte espera a anterior e ocupado não vira rajada", () => {
+    expect(nextSmeterWaitMs(true)).toBe(0);
+    expect(nextSmeterWaitMs(false)).toBeGreaterThanOrEqual(100);
+    expect(nextSmeterWaitMs(false)).toBeLessThanOrEqual(250);
   });
 
-  it("desenha a 60 quadros por segundo", () => {
-    expect(SMETER_FRAME_MS).toBe(17);
-    expect(SMETER_FRAME_MS).toBe(Math.round(1000 / 60));
-    expect(1000 / SMETER_FRAME_MS).toBeGreaterThan(58);
-    expect(1000 / SMETER_FRAME_MS).toBeLessThan(62);
+  it("desenha na casa de 30 quadros por segundo", () => {
+    expect(SMETER_FRAME_MS).toBe(33);
+    expect(SMETER_FRAME_MS).toBe(Math.round(1000 / 30));
+    expect(1000 / SMETER_FRAME_MS).toBeGreaterThan(28);
+    expect(1000 / SMETER_FRAME_MS).toBeLessThan(32);
   });
 
   it("um quadro não fecha o salto e a curva é simétrica", () => {
@@ -139,12 +139,18 @@ describe("S-meter rápido", () => {
 
 describe("fila do Hamlib", () => {
   it("não admite outro STRENGTH com a faixa ocupada", () => {
-    expect(rigCommandAdmission("\\get_level STRENGTH", true, 0)).toBe("ocupado");
+    expect(rigCommandAdmission("\\get_level STRENGTH", true, 0, "unknown", false, "\\get_level STRENGTH")).toBe("ocupado");
+    expect(rigCommandAdmission("\\get_level STRENGTH", true, 0, "unknown", false, "f")).toBe("ok");
     expect(rigCommandAdmission("f", true, 0)).toBe("ok");
-    expect(rigCommandAdmission("f", false, 1)).toBe("ocupado");
+    expect(rigCommandAdmission("f", false, 1)).toBe("ok");
+    expect(rigCommandAdmission("f", false, 2)).toBe("ocupado");
+    expect(rigCommandAdmission("f", false, 3)).toBe("ocupado");
     expect(rigCommandAdmission("f", false, 0)).toBe("ok");
     expect(rigCommandAdmission("F 7100000", true, 0)).toBe("ok");
     expect(rigCommandAdmission("F 7100000", false, 4)).toBe("fila cheia");
+    expect(rigCommandAdmission("f", true, 1, "unknown", true)).toBe("ok");
+    expect(rigCommandAdmission("M PKTUSB 0", true, 1, "unknown", true)).toBe("ok");
+    expect(rigCommandAdmission("F 14074000", false, 4, "unknown", true)).toBe("fila cheia");
   });
 
   it("standby pula f e STRENGTH e deixa o ligar passar", () => {
@@ -199,5 +205,239 @@ describe("fila do Hamlib", () => {
     expect(Date.now() - started).toBeLessThan(150);
     expect(second).toEqual({ ok: false, reply: "", error: "ocupado" });
     await first;
+  });
+
+  it("STRENGTH fecha no dB e não espera o RPRT atrasado", async () => {
+    const sockets: import("node:net").Socket[] = [];
+    const server = createServer((sock) => {
+      sockets.push(sock);
+      let buf = "";
+      sock.on("data", (chunk) => {
+        buf += chunk.toString();
+        while (buf.includes("\n")) {
+          const nl = buf.indexOf("\n");
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (/strength/i.test(line)) {
+            sock.write("-18\n");
+            setTimeout(() => sock.write("RPRT 0\n"), 700);
+          }
+        }
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const started = Date.now();
+      const meter = await hubRigctl(port, "\\get_level STRENGTH", "127.0.0.1", 2000);
+      expect(Date.now() - started).toBeLessThan(500);
+      expect(meter.ok).toBe(true);
+      expect(meter.reply).toContain("-18");
+    } finally {
+      for (const sock of sockets) sock.destroy();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it("RPRT no mesmo pacote da leitura não segura o S-meter", async () => {
+    const sockets: import("node:net").Socket[] = [];
+    const server = createServer((sock) => {
+      sockets.push(sock);
+      let buf = "";
+      sock.on("data", (chunk) => {
+        buf += chunk.toString();
+        while (buf.includes("\n")) {
+          const nl = buf.indexOf("\n");
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (line === "f") sock.write("28074000\nRPRT 0\n");
+          else if (/strength/i.test(line)) sock.write("-18\nRPRT 0\n");
+        }
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const freq = await hubRigctl(port, "f", "127.0.0.1", 1000);
+      await new Promise((r) => setTimeout(r, 30));
+      const started = Date.now();
+      const meter = await hubRigctl(port, "\\get_level STRENGTH", "127.0.0.1", 1000);
+      expect(Date.now() - started).toBeLessThan(800);
+      expect(freq.ok).toBe(true);
+      expect(freq.reply).toContain("28074000");
+      expect(meter).toMatchObject({ ok: true });
+      expect(meter.reply).toContain("-18");
+    } finally {
+      for (const sock of sockets) sock.destroy();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it("escrita da escuta passa na frente do poll e o rigctld responde", async () => {
+    const seen: string[] = [];
+    const sockets: import("node:net").Socket[] = [];
+    const server = createServer((sock) => {
+      sockets.push(sock);
+      let buf = "";
+      sock.on("data", (chunk) => {
+        buf += chunk.toString();
+        while (buf.includes("\n")) {
+          const nl = buf.indexOf("\n");
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          seen.push(line);
+          if (line.startsWith("F")) sock.write("RPRT 0\n");
+        }
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const port = (server.address() as AddressInfo).port;
+    const held = hubRigctl(port, "f", "127.0.0.1", 500);
+    await new Promise((r) => setTimeout(r, 60));
+    const queued = hubRigctl(port, "m", "127.0.0.1", 500);
+    const write = hubRigctl(port, "F 14074000", "127.0.0.1", 3000, true);
+    try {
+      expect(await queued).toEqual({ ok: false, reply: "", error: "ocupado" });
+      const out = await write;
+      expect(out.ok).toBe(true);
+      expect(seen).toContain("F 14074000");
+      expect(seen).not.toContain("m");
+      await held;
+    } finally {
+      for (const sock of sockets) sock.destroy();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it("f toma o lugar do poll na fila e o rigctld responde", async () => {
+    const seen: string[] = [];
+    const sockets: import("node:net").Socket[] = [];
+    const server = createServer((sock) => {
+      sockets.push(sock);
+      let buf = "";
+      sock.on("data", (chunk) => {
+        buf += chunk.toString();
+        while (buf.includes("\n")) {
+          const nl = buf.indexOf("\n");
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          seen.push(line);
+          if (line === "f") sock.write("7074000\nRPRT 0\n");
+          else if (line === "m") sock.write("PKTUSB\n2400\nRPRT 0\n");
+        }
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const port = (server.address() as AddressInfo).port;
+    const held = hubRigctl(port, "\\get_level STRENGTH", "127.0.0.1", 400);
+    await new Promise((r) => setTimeout(r, 40));
+    const queued = hubRigctl(port, "m", "127.0.0.1", 800);
+    const freq = hubRigctl(port, "f", "127.0.0.1", 1500);
+    try {
+      const mode = await queued;
+      const out = await freq;
+      expect(mode.ok).toBe(true);
+      expect(mode.reply).toContain("PKTUSB");
+      expect(out.ok).toBe(true);
+      expect(out.reply).toContain("7074000");
+      expect(seen).toContain("f");
+      expect(seen).toContain("m");
+      await held;
+    } finally {
+      for (const sock of sockets) sock.destroy();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it("t sem RPRT não segura a faixa", async () => {
+    const sockets: import("node:net").Socket[] = [];
+    const server = createServer((sock) => {
+      sockets.push(sock);
+      sock.on("data", (chunk) => {
+        if (chunk.toString().includes("t")) sock.write("0\n");
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const port = (server.address() as AddressInfo).port;
+    try {
+      const started = Date.now();
+      const out = await hubRigctl(port, "t", "127.0.0.1", 900);
+      expect(Date.now() - started).toBeLessThan(400);
+      expect(out.ok).toBe(true);
+      expect(out.reply).toContain("0");
+    } finally {
+      for (const sock of sockets) sock.destroy();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it("f segue o S-meter quando o dB chega e não espera o RPRT", async () => {
+    const sockets: import("node:net").Socket[] = [];
+    const server = createServer((sock) => {
+      sockets.push(sock);
+      let buf = "";
+      sock.on("data", (chunk) => {
+        buf += chunk.toString();
+        while (buf.includes("\n")) {
+          const nl = buf.indexOf("\n");
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (/strength/i.test(line)) sock.write("-18\n");
+          else if (line === "f") sock.write("28074000\nRPRT 0\n");
+        }
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const port = (server.address() as AddressInfo).port;
+    const held = hubRigctl(port, "\\get_level STRENGTH", "127.0.0.1", 2000);
+    await new Promise((r) => setTimeout(r, 40));
+    try {
+      const started = Date.now();
+      const freq = await hubRigctl(port, "f", "127.0.0.1", 1500);
+      const meter = await held;
+      expect(Date.now() - started).toBeLessThan(800);
+      expect(meter.ok).toBe(true);
+      expect(meter.reply).toContain("-18");
+      expect(freq.ok).toBe(true);
+      expect(freq.reply).toContain("28074000");
+    } finally {
+      for (const sock of sockets) sock.destroy();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it("STRENGTH passa na frente de um f que só está esperando", async () => {
+    const sockets: import("node:net").Socket[] = [];
+    const server = createServer((sock) => {
+      sockets.push(sock);
+      let buf = "";
+      sock.on("data", (chunk) => {
+        buf += chunk.toString();
+        while (buf.includes("\n")) {
+          const nl = buf.indexOf("\n");
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (line === "f") sock.write("7074000\nRPRT 0\n");
+          else if (/strength/i.test(line)) sock.write("-16\nRPRT 0\n");
+        }
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
+    const port = (server.address() as AddressInfo).port;
+    const first = hubRigctl(port, "f", "127.0.0.1", 1000);
+    await new Promise((r) => setTimeout(r, 30));
+    const queued = hubRigctl(port, "f", "127.0.0.1", 1000);
+    try {
+      const started = Date.now();
+      const meter = await hubRigctl(port, "\\get_level STRENGTH", "127.0.0.1", 1000);
+      expect(Date.now() - started).toBeLessThan(500);
+      expect(meter.ok).toBe(true);
+      expect(meter.reply).toContain("-16");
+      expect((await first).ok).toBe(true);
+      expect((await queued).ok).toBe(true);
+    } finally {
+      for (const sock of sockets) sock.destroy();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });

@@ -387,12 +387,12 @@ export function ManualPage() {
             ]}
           />
           <P
-            pt="O card Waterfall mostra o espectro em cima, a barra de frequências no meio e a cachoeira embaixo. A escala de tempo fica à direita, fora do gráfico. A linha vertical da frequência do rádio permanece no centro: ao girar o VFO a linha fica e o gráfico se desloca. A faixa visível tem 300 kHz, 150 kHz de cada lado dessa linha."
-            en="The Waterfall card shows the spectrum on top, the frequency bar in the middle and the waterfall below. The time scale sits on the right, outside the graph. The vertical line of the radio frequency stays in the center: turning the VFO keeps the line in place and the graph shifts. The visible span is 300 kHz, 150 kHz on each side of that line."
+            pt="O card Waterfall mostra o espectro em cima, a barra de frequências no meio e a cachoeira embaixo. A escala de tempo fica à direita, fora do gráfico. A linha vertical da frequência do rádio permanece no centro: ao girar o VFO a linha fica e o gráfico se desloca. O seletor Largura define a faixa: o eixo e a cascata vão do início ao fim dessa largura, com o VFO no meio. O padrão é 500 kHz."
+            en="The Waterfall card shows the spectrum on top, the frequency bar in the middle and the waterfall below. The time scale sits on the right, outside the graph. The vertical line of the radio frequency stays in the center: turning the VFO keeps the line in place and the graph shifts. The Span selector sets the range: the axis and the waterfall run from the start to the end of that width, with the VFO in the middle. The default is 500 kHz."
           />
           <P
-            pt="O IC-705 não tem passo de 300 kHz. No Hamlib 4.6.5 os passos desse rádio são 5, 10, 20, 50, 100, 200, 500 e 1000 kHz. A estação pede o passo de 500 kHz (250 kHz para cada lado) e o card mostra só a janela de 150 kHz para cada lado."
-            en="The IC-705 has no 300 kHz span step. In Hamlib 4.6.5 that radio's steps are 5, 10, 20, 50, 100, 200, 500 and 1000 kHz. The station asks for the 500 kHz step (250 kHz each side) and the card shows only the 150 kHz window on each side."
+            pt="No Hamlib 4.6.5 os passos de span do IC-705 são 5, 10, 20, 50, 100, 200, 500 e 1000 kHz. O seletor Largura usa esses passos. A escuta FT8 não troca essa faixa pela janela de 0–3000 Hz: o card continua na largura escolhida no painel."
+            en="In Hamlib 4.6.5 the IC-705 span steps are 5, 10, 20, 50, 100, 200, 500 and 1000 kHz. The Span selector uses those steps. FT8 listen does not replace that range with the 0–3000 Hz window: the card stays on the width chosen on the panel."
           />
           <P
             pt="O espectro CI-V está previsto para o IC-705, o IC-7300, o IC-7300MK2, o IC-7610, o IC-9700, o IC-905 e o IC-7760. No cabo, marque Waterfall na aba Rádio e salve: o Hamlib reinicia e o card passa a receber a varredura do IC-705, do IC-7300, do IC-7610, do IC-9700, do IC-905 e do IC-7760. O IC-7300MK2 entra nessa lista, mas o Hamlib 4.6.5 não tem modelo para ele, então no cabo o card não recebe a varredura: use a rede. Na rede, a lista é a mesma menos o IC-7300. No Bluetooth, só o IC-705. Rede e Bluetooth não usam a caixa Waterfall."

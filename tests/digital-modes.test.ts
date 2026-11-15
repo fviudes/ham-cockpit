@@ -9,8 +9,12 @@ import {
   dialsForMode,
   digReducer,
   formatDialMhz,
+  afterTxSent,
+  applyLiveContact,
   fromPrefs,
   isCqMessage,
+  rememberContact,
+  shouldHaltTx,
   leftRows,
   periodAt,
   pickCandidate,
@@ -105,12 +109,78 @@ describe("modos digitais", () => {
     expect(s.tx[2]).toBe("K1ABC PU2ABC GG68");
     expect(s.tx[3]).toContain("-9");
     expect(s.next).toBe(2);
+    expect(s.enable).toBe(true);
+    expect(plannedText(s)).toBe("K1ABC PU2ABC GG68");
     s = digReducer({ ...s, holdTx: false, txEvenLocked: true, txEven: true }, {
       type: "double",
       row: row({ id: "b", message: "CQ K1ABC FN42", hz: 900, even: true }),
     });
     expect(s.txHz).toBe(900);
     expect(s.txEven).toBe(true);
+  });
+
+  it("o contato permanece até o 73 e o halt de limpeza não corta o áudio", () => {
+    let s = { ...createDigState(), myCall: "PU2ABC", myGrid: "GG68" };
+    s = digReducer(s, {
+      type: "double",
+      row: row({ id: "a", message: "CQ K1ABC FN42", db: -9, hz: 800, even: true }),
+    });
+    expect(s.enable).toBe(true);
+    expect(s.next).toBe(2);
+    expect(plannedText(s)).toBe("K1ABC PU2ABC GG68");
+
+    s = digReducer(s, { type: "txSent" });
+    expect(s.enable).toBe(true);
+    expect(s.next).toBe(2);
+
+    s = digReducer(s, { type: "syncRows", rows: [row({ id: "rpt", message: "PU2ABC K1ABC -10" })] });
+    expect(s.enable).toBe(true);
+    expect(s.next).toBe(3);
+    expect(plannedText(s)).toContain("-9");
+
+    s = digReducer(s, { type: "txSent" });
+    expect(s.enable).toBe(true);
+    expect(s.next).toBe(3);
+
+    s = digReducer(s, { type: "heard", rows: [row({ id: "rog", message: "PU2ABC K1ABC R-12" })] });
+    expect(s.enable).toBe(true);
+    expect(s.next).toBe(5);
+    expect(plannedText(s)).toBe("K1ABC PU2ABC RRR");
+
+    s = digReducer(s, { type: "txSent" });
+    expect(s.enable).toBe(true);
+    expect(plannedText(s)).toContain("RRR");
+
+    s = digReducer(s, { type: "syncRows", rows: [row({ id: "rr", message: "PU2ABC K1ABC RR73" })] });
+    expect(s.enable).toBe(true);
+    expect(s.next).toBe(6);
+    expect(plannedText(s)).toBe("K1ABC PU2ABC 73");
+
+    s = digReducer(s, { type: "txSent" });
+    expect(s.enable).toBe(false);
+    expect(s.tune).toBe(false);
+
+    expect(shouldHaltTx("cleanup", "audio")).toBe(false);
+    expect(shouldHaltTx("cleanup", "ptt")).toBe(false);
+    expect(shouldHaltTx("cleanup", "wait")).toBe(false);
+    expect(shouldHaltTx("cycle6", "audio")).toBe(false);
+    expect(shouldHaltTx("cycle6", "ptt")).toBe(false);
+    expect(shouldHaltTx("cycle6", "done")).toBe(true);
+    expect(shouldHaltTx("user", "audio")).toBe(true);
+    expect(shouldHaltTx("user", "wait")).toBe(true);
+
+    rememberContact(s);
+    expect(applyLiveContact(fromPrefs({ enable: true, next: 1 })).enable).toBe(false);
+    const open = digReducer(createDigState(), {
+      type: "double",
+      row: row({ id: "b", message: "CQ K1ABC FN42", db: -9, hz: 800, even: true }),
+    });
+    const mid = { ...digReducer(open, { type: "txSent" }), next: 4 as const };
+    rememberContact(mid);
+    const back = applyLiveContact(fromPrefs({ enable: true, next: 1 }));
+    expect(back.enable).toBe(true);
+    expect(back.next).toBe(4);
+    rememberContact({ ...createDigState(), enable: false });
   });
 
   it("CQ only e Treat 73 filtram a lista da esquerda", () => {
@@ -265,7 +335,7 @@ describe("modos digitais", () => {
 
   it("a cascata fica acima das duas listas e habilitar não chaveia PTT", () => {
     const src = readFileSync(new URL("../client/src/console/digital-modes.tsx", import.meta.url), "utf8");
-    const waterfall = src.indexOf('t("waterfall")');
+    const waterfall = src.indexOf("<Waterfall");
     const band = src.indexOf('t("bandActivity")');
     const rx = src.indexOf('t("rxFreq")');
     const select = src.indexOf('aria-label={t("band")}');
@@ -280,8 +350,14 @@ describe("modos digitais", () => {
     expect(button).toBeGreaterThan(0);
     expect(button).toBeLessThan(settings);
     expect(src).toContain('t("ft8Off")');
+    expect(src).not.toContain('t("air")}');
+    expect(src).not.toContain('t("bandHint")');
     expect(src).not.toContain('type: "setPtt"');
     expect(src).not.toContain('mode: "USB"');
+    expect(src).toContain("expireConsoleSession()");
+    const denied = src.indexOf("res.status === 401");
+    expect(denied).toBeGreaterThan(0);
+    expect(src.slice(denied, denied + 80)).not.toContain("ft8Fail");
   });
 
   it("o modo DATA medido no rigctld é PKTUSB e desabilitar restaura", () => {

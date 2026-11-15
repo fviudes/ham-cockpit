@@ -39,11 +39,20 @@ type Tap = {
   up: Socket | null;
   upRest: Uint8Array;
   chain: Promise<void>;
+  /** Até este instante o rigctld está esperando resposta. Fora disso o byte não entra no socket dele. */
+  replyUntil: number;
+  deferred: Uint8Array[] | null;
+  replyTimer: ReturnType<typeof setTimeout> | null;
+  /** Espectro pausado só enquanto o comando do rigctld ocupa o CI-V. */
+  heldScope: boolean;
+  holdTimer: ReturnType<typeof setTimeout> | null;
 };
 
 let tap: Tap | null = null;
 let onFrame: ((frame: Uint8Array) => void) | null = null;
 let onRevive: (() => void) | null = null;
+let rigQuiet = false;
+let outputWanted = false;
 
 export function onSerialScopeRevive(fn: () => void): () => void {
   onRevive = fn;
@@ -72,53 +81,76 @@ function scopeTx(state: Tap, on: boolean): Uint8Array[] {
   return frames;
 }
 
-function sendFrames(state: Tap, frames: Uint8Array[]): boolean {
+function writeFrames(state: Tap, frames: Uint8Array[]): boolean {
   const sock = state.up;
   if (!sock || sock.destroyed) return false;
   for (const frame of frames) writeUp(state, Buffer.from(frame));
   return true;
 }
 
-function rearmScope(state: Tap, why: string, force = false): void {
-  if (!state.output) return;
-  const now = Date.now();
-  if (!force && now - state.armedAt < SCOPE_WAKE_MS) return;
-  const frames = scopeTx(state, true);
-  if (!sendFrames(state, frames)) return;
-  state.armedAt = now;
-  state.samples = 0;
-  const hex = frames.map((frame) => Buffer.from(frame).toString("hex")).join(" ");
-  console.log(`civ-scope-tap: ${why}; religando espectro ${hex}`);
-  onRevive?.();
+function flushDeferred(state: Tap) {
+  if (Date.now() < state.replyUntil) return;
+  const frames = state.deferred;
+  state.deferred = null;
+  if (!frames?.length) return;
+  writeFrames(state, frames);
+}
+
+/** O rigctld só consome o CI-V enquanto há um comando dele no ar. */
+function noteRigCommand(state: Tap) {
+  // O IC-705 passa de 1,5 s quando o espectro acabou de sair do barramento.
+  // Janela curta engole o quadro e o Hamlib devolve timeout.
+  const waitMs = 5000;
+  state.replyUntil = Date.now() + waitMs;
+  if (state.replyTimer) clearTimeout(state.replyTimer);
+  state.replyTimer = setTimeout(() => {
+    state.replyTimer = null;
+    if (tap === state) flushDeferred(state);
+  }, waitMs);
+  state.replyTimer.unref?.();
+}
+
+function sendFrames(state: Tap, frames: Uint8Array[]): boolean {
+  if (Date.now() < state.replyUntil) {
+    state.deferred = frames;
+    return true;
+  }
+  return writeFrames(state, frames);
+}
+
+function rearmScope(_state: Tap, _why: string, _force = false): void {
+  // 27 10/27 11 no meio do f/m deixa o CI-V mudo e o chip fica vermelho.
+}
+
+function applyScopeOutput(on: boolean): void {
+  if (!tap || tap.output === on) return;
+  tap.output = on;
+  tap.pendingOff = false;
+  if (on) tap.armedAt = Date.now();
 }
 
 export function serialScopeOutput(on: boolean): void {
-  if (!tap) return;
-  tap.output = on;
-  tap.sawScope = false;
-  tap.samples = 0;
-  const frames = scopeTx(tap, on);
-  const hex = frames.map((frame) => Buffer.from(frame).toString("hex")).join(" ");
-  console.log(`civ-scope-tap: saída do espectro ${on ? "ligada" : "desligada"} ${hex}`);
-  if (on) tap.pendingOff = false;
-  else tap.pendingOff = true;
-  if (!sendFrames(tap, frames)) return;
-  if (on) tap.armedAt = Date.now();
-  else tap.pendingOff = false;
+  outputWanted = on;
+  if (rigQuiet && on) return;
+  applyScopeOutput(on);
 }
 
-/** 27 14 0000: o scope em modo centro acompanha o VFO. */
-export function serialScopeCenter(): void {
-  if (!tap) return;
-  writeUp(tap, Buffer.from(scopeCenterFrame(tap.civ)));
+/** O FT8 não manda 27 11. Desligar o espectro no CI-V é o que deixa o chip vermelho. */
+export async function withSerialScopeQuiet<T>(fn: () => Promise<T>): Promise<T> {
+  if (rigQuiet) return fn();
+  rigQuiet = true;
+  try {
+    return await fn();
+  } finally {
+    rigQuiet = false;
+  }
 }
 
-/** 27 14 e 27 15: modo centro com o passo de ±250 kHz. */
-export function serialScopeSpan(): void {
-  if (!tap) return;
-  writeUp(tap, Buffer.from(scopeCenterFrame(tap.civ)));
-  writeUp(tap, Buffer.from(scopeSpanFrame(tap.civ)));
-}
+/** O card pede centro a cada varredura. Esse 27 14 no CI-V derruba o f/m. */
+export function serialScopeCenter(): void {}
+
+/** O mesmo para o passo. O 27 00 que o rádio já manda continua no waterfall. */
+export function serialScopeSpan(): void {}
 
 function writeUp(state: Tap, buf: Buffer): void {
   state.chain = state.chain.then(
@@ -129,7 +161,22 @@ function writeUp(state: Tap, buf: Buffer): void {
           resolve();
           return;
         }
-        sock.write(buf, () => resolve());
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          clearTimeout(timer);
+          resolve();
+        };
+        // O callback atrasa quando o ser2net não drena. Fechar aqui derruba
+        // a sessão TCP (o daemon continua active) e o CI-V/waterfall morrem
+        // até o próximo reconnect — e o ciclo recomeça.
+        const timer = setTimeout(() => finish(), 1500);
+        try {
+          sock.write(buf, finish);
+        } catch {
+          finish();
+        }
       }),
   );
 }
@@ -171,18 +218,10 @@ function connectUp(state: Tap): void {
     state.upSince = Date.now();
     state.lastRxAt = 0;
     state.upDelay = 200;
-    if (state.output) {
-      rearmScope(state, "upstream reconectou", true);
-      return;
-    }
-    if (state.pendingOff && sendFrames(state, scopeTx(state, false))) {
-      state.pendingOff = false;
-      console.log("civ-scope-tap: upstream reconectou; espectro desligado");
-    }
+    state.pendingOff = false;
   });
   sock.on("data", (chunk: Buffer) => {
     const now = Date.now();
-    const woke = scopeRadioWoke(state.lastRxAt, state.upSince, now);
     state.lastRxAt = now;
     const pending = new Uint8Array(state.upRest.length + chunk.length);
     pending.set(state.upRest, 0);
@@ -199,19 +238,12 @@ function connectUp(state: Tap): void {
       onFrame?.(frame);
     }
     const down = state.down;
-    if (down && !down.destroyed && peeled.forward.length) down.write(Buffer.from(peeled.forward));
-    const freq = isCivFrequencyReply(peeled.forward);
-    if (state.output && (woke || freq) && scopeOutputStale(state.lastScopeAt, state.armedAt, now)) {
-      rearmScope(state, freq ? "frequência CI-V sem espectro" : "rádio respondeu após silêncio");
-    } else if (!state.output && state.pendingOff && (woke || freq) && sendFrames(state, scopeTx(state, false))) {
-      state.pendingOff = false;
-      console.log("civ-scope-tap: rádio respondeu; espectro desligado");
-    }
+    const rigWaiting = now < state.replyUntil;
+    if (down && !down.destroyed && peeled.forward.length && rigWaiting) down.write(Buffer.from(peeled.forward));
   });
   sock.on("error", () => {
-    if (state.up !== sock) return;
-    dropUp(state);
-    scheduleUp(state);
+    // Erro de escrita não fecha a sessão. dropUp aqui derruba o TCP do
+    // ser2net (o daemon continua active) e o chip fica vermelho.
   });
   sock.on("close", () => {
     if (state.up !== sock) return;
@@ -285,12 +317,25 @@ function openTap(row: StationRadio, endpoint: { host: string; port: number }): P
               prev.removeAllListeners();
               prev.destroy();
             }
-            down.on("data", (chunk: Buffer) => writeUp(state, chunk));
+            down.on("data", (chunk: Buffer) => {
+              noteRigCommand(state);
+              // O f/m sai na hora. 27 11 antes e 27 10 depois deixam o chip
+              // verde por um instante e vermelho no comando seguinte.
+              const up = state.up;
+              if (!up || up.destroyed) return;
+              try {
+                up.write(chunk);
+              } catch {
+                /* o close trata a sessão */
+              }
+            });
             down.on("error", () => undefined);
+            down.resume();
             down.on("close", () => {
               if (state.down !== down) return;
               state.down = null;
-              dropUp(state);
+              // O rigctld pisca a 4012. A sessão com o ser2net fica: senão
+              // o TTY cai junto e a 4012 volta a LISTEN sem rádio.
             });
             if (!state.up) connectUp(state);
           } catch (err) {
@@ -318,6 +363,11 @@ function openTap(row: StationRadio, endpoint: { host: string; port: number }): P
           up: null,
           upRest: new Uint8Array(),
           chain: Promise.resolve(),
+          replyUntil: 0,
+          deferred: null,
+          replyTimer: null,
+          heldScope: false,
+          holdTimer: null,
         };
         server.once("error", reject);
         server.listen(CIV_SCOPE_TAP_PORT, CIV_SCOPE_TAP_HOST, () => {
@@ -340,9 +390,25 @@ export async function prepareSerialScopeTap(): Promise<boolean> {
   return true;
 }
 
-/** Deixa a 4012 no estado do rádio e só reinicia o rigctld quando a porta discada precisa mudar. */
+/** O rigctld tem TCP estabelecido na 4012. CLOSE-WAIT e LISTEN não contam. */
+function tapHasRig(): boolean {
+  if (process.platform !== "linux") return false;
+  try {
+    const port = CIV_SCOPE_TAP_PORT.toString(16).toUpperCase().padStart(4, "0");
+    const text = readFileSync("/proc/net/tcp", "utf8");
+    for (const line of text.split("\n")) {
+      const parts = line.trim().split(/\s+/);
+      const local = (parts[1] || "").toUpperCase();
+      const st = parts[3] || "";
+      if (local.endsWith(`:${port}`) && st === "01") return true;
+    }
+  } catch {
+    /* sem /proc */
+  }
+  return false;
+}
+
+/** Abre o tap. Não reinicia o rigctld: o processo de 13:51 segue na 4012. */
 export async function syncSerialScopeTap(): Promise<void> {
-  const listening = await prepareSerialScopeTap();
-  const onTap = await rigctldUsesTap();
-  if (listening !== onTap) await hamlibCtl("start");
+  await prepareSerialScopeTap();
 }

@@ -15,7 +15,7 @@ import { attachRadioAudio } from "./server/radio-audio";
 import { attachScopeWs } from "./server/icom-scope-ws";
 import { attachTerminal } from "./server/term";
 import { createUser, deleteUser, listUsers, sshStatus } from "./server/users";
-import { consoleSessionCookie, consoleSessionOk, consoleSessionToken } from "./server/console-session";
+import { consoleSessionClearCookie, consoleSessionCookie, consoleSessionOk, consoleSessionToken } from "./server/console-session";
 import { supportVpnSet, supportVpnStatus } from "./server/support-vpn";
 import { wavelogDatabase, wavelogDbUpdate, wavelogDown, wavelogStatus, wavelogUp } from "./server/wavelog-status";
 import { wlgDown, wlgStatus, wlgUp } from "./server/wlg-status";
@@ -261,6 +261,14 @@ function vitePluginSupportVpn(): Plugin {
             const token = consoleSessionToken(String(body.user || ""), String(body.password || ""));
             if (!token) return sendJson(res, 401, { ok: false, error: "auth" });
             return sendJson(res, 200, { ok: true }, { "Set-Cookie": consoleSessionCookie(token) });
+          }
+          if (req.method === "GET" && url === "/api/console/session") {
+            const cookie = Array.isArray(req.headers.cookie) ? req.headers.cookie.join(";") : req.headers.cookie;
+            if (!consoleSessionOk(cookie)) return sendJson(res, 401, { ok: false });
+            return sendJson(res, 200, { ok: true });
+          }
+          if (req.method === "DELETE" && url === "/api/console/session") {
+            return sendJson(res, 200, { ok: true }, { "Set-Cookie": consoleSessionClearCookie() });
           }
           const cookie = Array.isArray(req.headers.cookie) ? req.headers.cookie.join(";") : req.headers.cookie;
           if (!consoleSessionOk(cookie)) return sendJson(res, 401, { ok: false, error: "auth" });

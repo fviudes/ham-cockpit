@@ -551,7 +551,8 @@ ensure_hamlib_spe() {
   # o ser2net: um reload derruba as duas sessões.
   systemctl disable --now ampctld@spe.service >/dev/null 2>&1 || true
   # Não restart a cada OTA se already active (evita churn sob carga).
-  # O wrapper do IC-705 reinicia quando o arquivo muda: senão o processo
+  # Console novo não é motivo: o tap escuta de novo e o rigctld redisca.
+  # O wrapper do IC-705 reinicia só quando o arquivo muda: senão o processo
   # velho continua na porta de outro acessório (SPE na 4001).
   for u in 'rigctld@ic705.service'; do
     [[ -f "/etc/systemd/system/$u" ]] || continue

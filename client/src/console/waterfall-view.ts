@@ -1,7 +1,28 @@
 export type HzEdge = { startHz: number; endHz: number };
 
-/** Metade da janela do card: 150 kHz para cada lado da linha do VFO. */
+/** Metade da janela antiga do card: 150 kHz para cada lado da linha do VFO. */
 export const WATERFALL_HALF_HZ = 150_000;
+
+/**
+ * Passos de largura do IC-705 (Hamlib `spectrum_spans`), em Hz totais.
+ * O scope da estação pede 500 kHz. O card não pode ficar preso em ±150 kHz.
+ */
+export const PANEL_SPAN_STEPS_HZ = [5_000, 10_000, 20_000, 50_000, 100_000, 200_000, 500_000, 1_000_000] as const;
+
+/** Largura configurada do scope: 500 kHz, não a janela fixa de 300 kHz. */
+export const PANEL_SPAN_HZ = 500_000;
+
+export function panelSpanHz(spanHz: number): number {
+  const n = Math.round(spanHz);
+  return (PANEL_SPAN_STEPS_HZ as readonly number[]).includes(n) ? n : PANEL_SPAN_HZ;
+}
+
+/** O VFO fica no centro. A vista tem exatamente a largura selecionada no painel. */
+export function panelView(tuneHz: number, spanHz: number): HzEdge {
+  const span = panelSpanHz(spanHz);
+  const center = tuneHz > 0 ? tuneHz : 0;
+  return { startHz: center - span / 2, endHz: center + span / 2 };
+}
 
 /**
  * A linha do VFO fica no centro. A vista é sempre tune ± 150 kHz,

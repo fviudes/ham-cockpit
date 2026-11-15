@@ -33,6 +33,8 @@ export function useDigitalListen(opts: {
   onDecode: (info: { ran: boolean; count: number } | null) => void;
   /** A decodificação fica no servidor. Aqui só a cascata e o medidor. */
   spectrumOnly?: boolean;
+  /** A cascata agrupada fica no servidor. Aqui só o medidor. */
+  meterOnly?: boolean;
 }) {
   const optsRef = useRef(opts);
   optsRef.current = opts;
@@ -130,6 +132,10 @@ export function useDigitalListen(opts: {
       if (now - lastLevel > 120) {
         lastLevel = now;
         optsRef.current.onLevel(level, db);
+      }
+      if (optsRef.current.meterOnly) {
+        if (!optsRef.current.spectrumOnly) takePeriod(now);
+        return;
       }
       for (let i = 0; i < pcm.length; i++) {
         hold[fill++] = pcm[i] ?? 0;

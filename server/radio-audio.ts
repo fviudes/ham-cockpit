@@ -225,13 +225,8 @@ async function bindRadioAudio(ws: WebSocket) {
     ws.close();
     return;
   }
-  if (digitalWanted || captureKind === "digital") {
+  if (digitalWanted || captureKind === "digital" || capture) {
     attachTap(ws);
-    return;
-  }
-  if (capture || captureReserved) {
-    sendJson(ws, { type: "error", reason: "busy" });
-    ws.close();
     return;
   }
   captureReserved = ws;
