@@ -867,6 +867,7 @@ export default function AdminPortalPage() {
                       </button>
                     </div>
                     {p.missing.length ? <p className="mt-2 text-xs text-amber-400">Faltam: {p.missing.join(", ")}</p> : null}
+                    {p.id === "pix" ? <p className="mt-2 text-xs text-[#94a3b8]">{t(ADM.pixProviderHint)}</p> : null}
                   </div>
                 ))}
               </div>
@@ -891,6 +892,17 @@ export default function AdminPortalPage() {
                         <td className="px-3 py-2">{p.status}</td>
                         <td className="px-3 py-2">
                           {p.currency} {(p.amount_cents / 100).toFixed(2)}
+                          {p.provider === "pix" && p.status === "pending" ? (
+                            <button
+                              type="button"
+                              className="ml-2 rounded border border-emerald-500/40 px-2 py-0.5 text-xs text-emerald-400"
+                              onClick={() =>
+                                void api(`/api/admin/payments/${p.id}/confirm-pix`, { method: "POST", csrf, body: "{}" }).then(() => refresh())
+                              }
+                            >
+                              {t(ADM.confirmPix)}
+                            </button>
+                          ) : null}
                         </td>
                       </tr>
                     ))}

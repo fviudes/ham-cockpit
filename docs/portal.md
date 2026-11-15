@@ -35,8 +35,8 @@ pnpm exec vite preview --config vite.config.portal.ts --port 4173
   (versão de 3 partes, arquivo, tamanho, data). Sem rede, usa o arquivo `VERSION` como reserva.
 - No navegador, a página também consulta a API pública de releases. Assim, uma imagem nova aparece
   mesmo antes do próximo deploy. Nenhuma chave secreta vai para o front.
-- O link de baixar a imagem fica **desativado**, com o selo "Em desenvolvimento".
-  Para liberar, edite `client/src/pages/Download.tsx`.
+- O botão **Baixar a imagem** em `/download` aponta para o `.img.xz` no GitHub Release (ou para a
+  página do release quando o arquivo vem em partes).
 
 ## Atualização após o bake
 
@@ -90,3 +90,8 @@ Entrada: <https://ham-cockpit.pages.dev/admin> com usuário e senha.
 
 PayPal (Orders v2) e PicPay: configure as credenciais na aba **Provedores** do admin
 (cifradas no D1). Sem credenciais, o checkout usa o provedor simulado se `ENABLE_MOCK_PROVIDER=1`.
+
+**PIX (manual):** habilitado por padrão (`providers.id = pix`). O comprador vê o valor em reais e as
+instruções (chave telefone, favorecido, envio do comprovante por WhatsApp). A licença só é emitida quando
+um admin confirma o recebimento em **Pagamentos → Confirmar Pix recebido** (após conferir o comprovante).
+Aplique a migration `0006_pix_provider.sql` no D1 remoto após o deploy.

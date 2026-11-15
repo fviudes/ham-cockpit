@@ -1,6 +1,6 @@
 import type { Ctx } from "../env";
 
-export type ProviderId = "paypal" | "picpay" | "mercadopago" | "mock";
+export type ProviderId = "paypal" | "picpay" | "mercadopago" | "mock" | "pix";
 export type ProviderMode = "sandbox" | "live";
 export type Currency = "USD" | "BRL";
 

@@ -5,6 +5,7 @@ import { createDefinitive, currentLicense, upsertDevice, type LicenseRow } from 
 import { createQuote, previewPrice, getPrice } from "./pricing";
 import { getProvider, loadProviderCfg, missingFields } from "./providers";
 import type { Currency, NormalizedStatus, PaymentRow, ProviderCfg } from "./providers/types";
+import { buildPixCheckoutInfo } from "../../shared/pix-checkout";
 import { HttpError, errorJson, json, newId } from "./util";
 
 const FINAL = new Set(["refunded", "chargeback"]);
@@ -138,7 +139,14 @@ export async function checkoutStart(
       .bind(pid, result.providerRef, ctx.now(), result.expiresAt ?? null)
       .run();
     await licenseEvent(ctx, "checkout_started", `device-buyer`, quote.serial, null, { pid, provider: prov.id, currency, amount });
-    return json({ paymentId: pid, redirectUrl: result.redirectUrl ?? null, qr: result.qr ?? null, currency, amountCents: amount });
+    const serialDisp = await serialDisplay(quote.serial);
+    const callsign =
+      (await ctx.env.DB.prepare("SELECT callsign FROM devices WHERE serial = ?1").bind(quote.serial).first<{ callsign: string | null }>())?.callsign ?? null;
+    const pix =
+      prov.id === "pix" && currency === "BRL"
+        ? buildPixCheckoutInfo({ amountCents: amount, serialDisplay: serialDisp, callsign: callsign?.trim() || null })
+        : undefined;
+    return json({ paymentId: pid, redirectUrl: result.redirectUrl ?? null, qr: result.qr ?? null, currency, amountCents: amount, provider: prov.id, pix });
   } catch (e) {
     await ctx.env.DB.prepare("UPDATE payments SET status = 'failed', note = ?2, updated_at = ?3 WHERE id = ?1").bind(pid, "create_failed", ctx.now()).run();
     await ctx.env.DB.prepare("UPDATE price_quotes SET used_payment_id = NULL WHERE id = ?1 AND used_payment_id = ?2").bind(quote.id, pid).run();
@@ -269,12 +277,21 @@ export async function checkoutStatus(ctx: Ctx, url: URL): Promise<Response> {
     const lic = await ctx.env.DB.prepare("SELECT id, token, status FROM licenses WHERE payment_id = ?1").bind(pid).first<{ id: string; token: string; status: string }>();
     if (lic && lic.status === "active") license = { token: lic.token, lid: lic.id };
   }
+  const serialDisp = await serialDisplay(cur.serial);
+  const callsign =
+    (await ctx.env.DB.prepare("SELECT callsign FROM devices WHERE serial = ?1").bind(cur.serial).first<{ callsign: string | null }>())?.callsign ?? null;
+  const pix =
+    cur.provider === "pix" && cur.currency === "BRL" && cur.status !== "paid"
+      ? buildPixCheckoutInfo({ amountCents: cur.amount_cents, serialDisplay: serialDisp, callsign: callsign?.trim() || null })
+      : undefined;
   return json({
     status: cur.status,
+    provider: cur.provider,
     currency: cur.currency,
     amountCents: cur.amount_cents,
-    serialDisplay: await serialDisplay(cur.serial),
+    serialDisplay: serialDisp,
     license,
+    pix,
   });
 }
 

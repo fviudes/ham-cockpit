@@ -63,6 +63,22 @@ export const BUY = {
 export const BUY_RET = {
   kicker: { pt: "PAGAMENTO", en: "PAYMENT" } satisfies Pair,
   waiting: { pt: "Aguardando confirmação do pagamento…", en: "Waiting for payment confirmation…" } satisfies Pair,
+  pixWaiting: {
+    pt: "Após o Pix, envie o comprovante. A licença será liberada quando o pagamento for conferido.",
+    en: "After paying via Pix, send the receipt. Your license is issued once payment is verified.",
+  } satisfies Pair,
+  pixTitle: { pt: "Pague com PIX", en: "Pay with Pix" } satisfies Pair,
+  pixAmount: { pt: "Valor a pagar", en: "Amount to pay" } satisfies Pair,
+  pixKeyLabel: { pt: "Chave Pix (telefone)", en: "Pix key (phone)" } satisfies Pair,
+  pixPayee: { pt: "Favorecido", en: "Payee" } satisfies Pair,
+  pixSerial: { pt: "Serial do aparelho", en: "Device serial" } satisfies Pair,
+  pixCallsign: { pt: "Indicativo no aparelho (se já informado)", en: "Callsign on device (if set)" } satisfies Pair,
+  pixSteps: {
+    pt: "1. Faça o Pix pelo valor em reais indicado acima.\n2. Envie o comprovante para o mesmo telefone (WhatsApp) junto com o indicativo usado no registro do serial no Raspberry Pi.",
+    en: "1. Send a Pix for the BRL amount shown above.\n2. Send the receipt to the same phone (WhatsApp) together with the callsign used when registering the serial on the Raspberry Pi.",
+  } satisfies Pair,
+  copyKey: { pt: "Copiar chave", en: "Copy key" } satisfies Pair,
+  copyAmount: { pt: "Copiar valor", en: "Copy amount" } satisfies Pair,
   paid: { pt: "Pagamento confirmado", en: "Payment confirmed" } satisfies Pair,
   failed: { pt: "Pagamento não concluído", en: "Payment not completed" } satisfies Pair,
   backConsole: {
@@ -131,6 +147,11 @@ export const ADM = {
   stSuperseded: { pt: "Substituída", en: "Superseded" } satisfies Pair,
   actions: { pt: "Ações", en: "Actions" } satisfies Pair,
   confirmDelete: { pt: "Excluir este usuário?", en: "Delete this user?" } satisfies Pair,
+  confirmPix: { pt: "Confirmar Pix recebido", en: "Confirm Pix received" } satisfies Pair,
+  pixProviderHint: {
+    pt: "Pagamento manual: o comprador vê as instruções no portal. Confirme na aba Pagamentos após conferir o comprovante.",
+    en: "Manual payment: the buyer sees instructions on the portal. Confirm under Payments after checking the receipt.",
+  } satisfies Pair,
   notConfigured: {
     pt: "Admin ainda não configurado neste ambiente (nenhum usuário no banco).",
     en: "Admin is not configured in this environment (no users in the database).",

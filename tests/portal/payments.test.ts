@@ -46,7 +46,7 @@ describe("checkout com provedor simulado", () => {
     expect(cfg.body.serial.display).toMatch(/^1000-0000-A1B2-C3D4-[0-9A-F]{2}$/);
     expect(cfg.body.noRefund).toBe(true);
     expect(cfg.body.priceConfigured).toBe(true);
-    expect(cfg.body.providers.map((x: { id: string }) => x.id)).toEqual(["mock"]);
+    expect(cfg.body.providers.map((x: { id: string }) => x.id)).toEqual(["pix", "mock"]);
     expect((await p.json("GET", "/api/checkout/config?serial=zzz")).body.serial.valid).toBe(false);
   });
 
@@ -270,7 +270,7 @@ describe("PayPal (Orders v2 + webhook) contra um PayPal simulado", () => {
     // checkout público também não vaza
     const cfg = await p.json("GET", `/api/checkout/config?serial=${SERIAL}`);
     expect(JSON.stringify(cfg.body)).not.toContain("PP-SECRET");
-    expect(cfg.body.providers.map((x: { id: string }) => x.id)).toEqual(["paypal", "mock"]);
+    expect(cfg.body.providers.map((x: { id: string }) => x.id)).toEqual(["pix", "paypal", "mock"]);
 
     // apagar um segredo desliga o provedor (não deixa checkout pela metade)
     await p.admin(s, "PUT", "/api/admin/providers/paypal/secrets", { mode: "sandbox", clear: ["webhook_id"], values: {} });
@@ -611,5 +611,38 @@ describe("câmbio: fontes, fallback, cache e divergência", () => {
     expect(again.body.price.usdCents).toBe(3150);
     expect(again.body.price.fxSpreadBps).toBe(350);
     void T0;
+  });
+});
+
+describe("checkout PIX manual", () => {
+  it("instruções na página de status e confirmação no admin emite a licença", async () => {
+    const p = await makePortal({ ENABLE_MOCK_PROVIDER: "0" });
+    p.fetchHandlers.push(fxHandler({ ptax: 5.4321 }));
+    const s = await p.login();
+    await p.setPrice(s, "29.00");
+    await p.db.prepare("INSERT INTO devices (serial, first_seen_at, last_seen_at, callsign) VALUES (?1, ?2, ?2, 'PR2PT')").bind(SERIAL, T0).run();
+    const st = await startCheckout(p, "pix", {}, SERIAL, { country: "BR" });
+    expect(st.status).toBe(200);
+    expect(st.body.redirectUrl).toBeFalsy();
+    expect(st.body.pix).toMatchObject({
+      amountCents: 16300,
+      currency: "BRL",
+      phoneDisplay: "11-98972-8000",
+      payeeName: expect.stringContaining("PR2PT"),
+      callsign: "PR2PT",
+    });
+    const pid = st.body.paymentId as string;
+    const pending = await p.json("GET", `/api/checkout/status?pid=${pid}`);
+    expect(pending.body.provider).toBe("pix");
+    expect(pending.body.pix?.amountCents).toBe(16300);
+    expect(pending.body.status).toBe("pending");
+
+    const conf = await p.admin(s, "POST", `/api/admin/payments/${pid}/confirm-pix`);
+    expect(conf.status).toBe(200);
+    expect(conf.body.status).toBe("paid");
+    const done = await p.json("GET", `/api/checkout/status?pid=${pid}`);
+    expect(done.body.status).toBe("paid");
+    expect(done.body.license?.token).toMatch(/^HCL1\./);
+    expect(await licCount(p)).toBe(1);
   });
 });

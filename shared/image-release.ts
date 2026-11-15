@@ -43,6 +43,8 @@ export type ImageInfo = {
   sizeBytes: number | null;
   /** Quando o .img.xz único passa de 2 GiB, a Release publica .part00+.part01. */
   parts?: ImagePart[] | null;
+  /** URL direta do `.img.xz` (quando couber num único arquivo no GitHub). */
+  downloadUrl?: string | null;
   /** Base em desenvolvimento (VERSION do repositório) quando já passou da última imagem. */
   nextVersion: string | null;
   /** De onde veio a informação. */
@@ -99,14 +101,16 @@ export function pickLatestImage(
     (parts?.[0]?.name ? parts[0].name.replace(/\.part\d+$/i, "") : null);
   const sizeBytes =
     asset?.size ?? (parts ? parts.reduce((acc, p) => acc + (p.size || 0), 0) : null);
+  const releaseUrl = best.html_url || `${IMAGE_RELEASES_PAGE}/tag/v${version}`;
   return {
     version,
     tag: best.tag_name.startsWith("v") ? best.tag_name : `v${best.tag_name}`,
-    releaseUrl: best.html_url || `${IMAGE_RELEASES_PAGE}/tag/v${version}`,
+    releaseUrl,
     publishedAt: best.published_at ?? null,
     fileName: logicalName,
     sizeBytes,
     parts,
+    downloadUrl: asset?.browser_download_url ?? null,
     nextVersion: next && compareVersion(next, version) > 0 ? next : null,
     source: opts.source ?? "github",
     generatedAt: new Date().toISOString(),
@@ -124,6 +128,7 @@ export function fallbackImage(versionFile: string): ImageInfo | null {
     publishedAt: null,
     fileName: `ham-cockpit-${version}-raspi.img.xz`,
     sizeBytes: null,
+    downloadUrl: null,
     nextVersion: null,
     source: "fallback",
     generatedAt: new Date().toISOString(),

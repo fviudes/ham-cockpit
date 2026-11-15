@@ -254,6 +254,7 @@ async function providerPut(ctx: Ctx, request: Request, id: string, adminId: stri
   const cm = b.currencyMode ?? row.currency_mode;
   if (!["USD", "BRL", "AUTO"].includes(cm)) throw new HttpError(400, "invalid_currency_mode");
   if (id === "picpay" && cm === "USD") throw new HttpError(400, "invalid_currency_mode", "PicPay só cobra em reais.");
+  if (id === "pix" && cm !== "BRL") throw new HttpError(400, "invalid_currency_mode", "PIX só cobra em reais.");
   let config: Record<string, unknown> = {};
   try {
     config = JSON.parse(row.config_json || "{}");
@@ -641,15 +642,15 @@ export async function adminRoute(ctx: Ctx, request: Request, path: string): Prom
     await need();
     return providersList(ctx);
   }
-  if ((m = path.match(/^\/providers\/(paypal|picpay)$/)) && method === "PUT") {
+  if ((m = path.match(/^\/providers\/(paypal|picpay|pix)$/)) && method === "PUT") {
     const a = await need("owner");
     return providerPut(ctx, request, m[1], a.id);
   }
-  if ((m = path.match(/^\/providers\/(paypal|picpay)\/secrets$/)) && method === "PUT") {
+  if ((m = path.match(/^\/providers\/(paypal|picpay|pix)\/secrets$/)) && method === "PUT") {
     const a = await need("owner");
     return providerSecretsPut(ctx, request, m[1], a.id);
   }
-  if ((m = path.match(/^\/providers\/(paypal|picpay)\/test$/)) && method === "POST") {
+  if ((m = path.match(/^\/providers\/(paypal|picpay|pix)\/test$/)) && method === "POST") {
     const a = await need("owner");
     return providerTest(ctx, m[1], a.id);
   }
@@ -672,6 +673,19 @@ export async function adminRoute(ctx: Ctx, request: Request, path: string): Prom
     }
     const r = await settlePayment(ctx, m[1]);
     await audit(ctx, a.id, "payment_reconcile", r.id, { status: p.status }, { status: r.status });
+    return json({ ok: true, status: r.status });
+  }
+  if ((m = path.match(/^\/payments\/(pay_[0-9a-z]{16})\/confirm-pix$/)) && method === "POST") {
+    const a = await need("admin");
+    const p = await loadPayment(ctx, m[1]);
+    if (!p) throw new HttpError(404, "payment_not_found");
+    if (p.provider !== "pix") throw new HttpError(409, "not_pix", "Este pagamento não é PIX.");
+    if (p.status === "paid") return json({ ok: true, status: "paid" });
+    await ctx.env.DB.prepare("UPDATE payments SET note = 'pix:approved', updated_at = ?2 WHERE id = ?1 AND status IN ('created','pending','approved')")
+      .bind(m[1], ctx.now())
+      .run();
+    const r = await settlePayment(ctx, m[1]);
+    await audit(ctx, a.id, "pix_confirmed", r.id, { status: p.status }, { status: r.status });
     return json({ ok: true, status: r.status });
   }
   if (path === "/audit" && method === "GET") {

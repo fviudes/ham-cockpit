@@ -4,9 +4,10 @@ import { decryptSecret, encryptSecret } from "../secrets";
 import { mock, mockEnabled } from "./mock";
 import { paypal } from "./paypal";
 import { picpay } from "./picpay";
+import { pix } from "./pix";
 import type { PaymentProvider, ProviderCfg, ProviderId, ProviderMode, ProviderRow } from "./types";
 
-const REGISTRY: Record<string, PaymentProvider> = { paypal, picpay, mock };
+const REGISTRY: Record<string, PaymentProvider> = { paypal, picpay, pix, mock };
 
 export function getProvider(ctx: Ctx, id: string): PaymentProvider | null {
   if (id === "mock" && !mockEnabled(ctx)) return null;

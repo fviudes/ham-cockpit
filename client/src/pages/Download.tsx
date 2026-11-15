@@ -23,13 +23,17 @@ const COPY = {
   size: { pt: "Tamanho", en: "Size" } satisfies Pair,
   date: { pt: "Publicada em", en: "Published on" } satisfies Pair,
   button: { pt: "Baixar a imagem", en: "Download the image" } satisfies Pair,
-  soon: { pt: "Em desenvolvimento", en: "Under development" } satisfies Pair,
-  soonNote: {
-    pt: "O download da imagem ainda não está liberado. Esta página já mostra a versão mais recente e se atualiza sozinha quando uma nova imagem é compilada.",
-    en: "The image download is not available yet. This page already shows the latest version and updates by itself whenever a new image is built.",
+  partsNote: {
+    pt: "Esta versão está em mais de um arquivo (.part00, .part01…). Baixe todas as partes na página do release.",
+    en: "This version is split across multiple files (.part00, .part01…). Download every part from the release page.",
   } satisfies Pair,
+  releaseOpen: { pt: "Abrir release no GitHub", en: "Open release on GitHub" } satisfies Pair,
   next: { pt: "Próxima imagem em desenvolvimento", en: "Next image in development" } satisfies Pair,
-  stepsTitle: { pt: "Depois que o download for liberado", en: "Once the download is available" } satisfies Pair,
+  stepsTitle: { pt: "Como gravar e usar", en: "How to flash and run" } satisfies Pair,
+  noFile: {
+    pt: "O arquivo ainda não apareceu no release. Confira o link do GitHub em alguns minutos.",
+    en: "The file is not on the release yet. Check the GitHub link in a few minutes.",
+  } satisfies Pair,
   reqTitle: { pt: "O que você precisa", en: "What you need" } satisfies Pair,
   manual: { pt: "Ler o manual do operador", en: "Read the operator manual" } satisfies Pair,
   docs: { pt: "Ver a documentação", en: "See the documentation" } satisfies Pair,
@@ -76,6 +80,9 @@ export default function DownloadPage() {
       })
     : "";
   const next = info?.nextVersion && compareVersion(info.nextVersion, info.version) > 0 ? info.nextVersion : null;
+  const splitParts = Boolean(info?.parts && info.parts.length > 0);
+  const href = info?.downloadUrl || (splitParts ? info.releaseUrl : info?.releaseUrl) || null;
+  const canDownload = Boolean(href && (info?.downloadUrl || splitParts || info?.fileName));
 
   return (
     <div className="flex min-h-screen flex-col bg-[#0d1b2a]">
@@ -146,24 +153,35 @@ export default function DownloadPage() {
             ) : null}
 
             <div className="mt-6">
-              <button
-                type="button"
-                disabled
-                aria-disabled="true"
-                title={t(COPY.soon)}
-                data-testid="download-button"
-                className="inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-lg border border-[rgba(142,160,179,0.3)] bg-[#142233] px-7 py-3.5 font-bold text-[#6b7f93] sm:w-auto"
-              >
-                <DownloadIcon size={18} />
-                {t(COPY.button)}
-              </button>
-              <span
-                className="mt-3 inline-block rounded-full border border-[rgba(255,179,0,0.45)] bg-[rgba(255,179,0,0.1)] px-3 py-1 font-['IBM_Plex_Mono'] text-xs font-bold tracking-wide text-[#FFB300] sm:mt-0 sm:ml-3"
-                data-testid="download-soon"
-              >
-                {t(COPY.soon)}
-              </span>
-              <p className="mt-4 text-sm leading-relaxed text-[#8ea0b3]">{t(COPY.soonNote)}</p>
+              {canDownload ? (
+                <a
+                  href={href!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid="download-button"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#4fc3f7] px-7 py-3.5 font-bold text-[#0d1b2a] hover:bg-[#80d8ff] sm:w-auto"
+                >
+                  <DownloadIcon size={18} />
+                  {info?.downloadUrl ? t(COPY.button) : t(COPY.releaseOpen)}
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  aria-disabled="true"
+                  data-testid="download-button"
+                  className="inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-lg border border-[rgba(142,160,179,0.3)] bg-[#142233] px-7 py-3.5 font-bold text-[#6b7f93] sm:w-auto"
+                >
+                  <DownloadIcon size={18} />
+                  {t(COPY.button)}
+                </button>
+              )}
+              {splitParts ? (
+                <p className="mt-4 text-sm leading-relaxed text-[#ffd27a]">{t(COPY.partsNote)}</p>
+              ) : null}
+              {!canDownload && info ? (
+                <p className="mt-4 text-sm leading-relaxed text-[#8ea0b3]">{t(COPY.noFile)}</p>
+              ) : null}
             </div>
           </motion.section>
 
