@@ -441,6 +441,9 @@ apply_app() {
       cp -a "$src/hamlib-arm64.tgz" "$APP_HOME/hamlib-arm64.tgz"
     fi
   fi
+  if [[ -f "$src/hamlib-models.json" ]]; then
+    cp -a "$src/hamlib-models.json" "$APP_HOME/hamlib-models.json"
+  fi
   if [[ -d "$src/bin" ]]; then
     # Não sobrescreve o station-upd em execução: bash relê o arquivo e pode
     # executar fragmentos (ex. "opt/wavelog-gate") como comando.

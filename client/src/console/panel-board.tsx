@@ -1,4 +1,3 @@
-import { GripVertical, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import {
   LAYOUT_COLS,
@@ -11,6 +10,7 @@ import {
   type TileId,
 } from "./panel-layout";
 import { useConsole } from "./state";
+import { PanelChromeProvider } from "./widgets";
 
 export function FitTile({ children }: { children: ReactNode }) {
   const viewRef = useRef<HTMLDivElement>(null);
@@ -163,35 +163,22 @@ export function PanelBoard({
             height: t.h * LAYOUT_ROW + (t.h - 1) * LAYOUT_GAP,
           }}
         >
-          <div className="relative h-full overflow-hidden rounded-xl border border-[rgba(79,195,247,0.14)] bg-[#0b1520]">
-            <button
-              type="button"
-              className="absolute left-2 top-2 z-20 grid size-6 cursor-grab place-items-center rounded-md text-[#5d7184] hover:bg-[#4fc3f7]/10 hover:text-[#4fc3f7] active:cursor-grabbing"
-              aria-label={tx("layoutMove")}
-              onPointerDown={(e) => start(e, t.id, "move")}
+          <div className="relative h-full overflow-hidden rounded-sm border border-[rgba(79,195,247,0.28)] bg-[#0b1520]">
+            <PanelChromeProvider
+              value={{
+                onMove: (event) => start(event, t.id, "move"),
+                onRemove: onRemove ? () => onRemove(t.id) : undefined,
+                moveLabel: tx("layoutMove"),
+                removeLabel: tx("layoutRemove"),
+              }}
             >
-              <GripVertical size={14} />
-            </button>
-            {onRemove ? (
-              <button
-                type="button"
-                className="absolute right-2 top-2 z-20 grid size-6 place-items-center rounded-md text-[#5d7184] hover:bg-[#ef4444]/15 hover:text-[#f87171]"
-                aria-label={tx("layoutRemove")}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onRemove(t.id);
-                }}
-              >
-                <X size={14} />
-              </button>
-            ) : null}
-            <div className="h-full min-h-0 overflow-hidden p-5 px-9 pt-8">
-              <FitTile>{render(t.id)}</FitTile>
-            </div>
+              <div className="h-full min-h-0 overflow-hidden px-1 pb-0.5 pt-0.5 [&_h2]:!mb-1">
+                <FitTile>{render(t.id)}</FitTile>
+              </div>
+            </PanelChromeProvider>
             <button
               type="button"
-              className="absolute bottom-1 right-1 z-20 size-4 cursor-nwse-resize rounded-sm border-b-2 border-r-2 border-[#4fc3f7]/70"
+              className="absolute bottom-0.5 right-0.5 z-20 size-3 cursor-nwse-resize border-b border-r border-[#4fc3f7]/70"
               aria-label={tx("layoutResize")}
               onPointerDown={(e) => start(e, t.id, "resize")}
             />

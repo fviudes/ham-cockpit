@@ -6,7 +6,7 @@ export type PanelTile = { id: TileId; x: number; y: number; w: number; h: number
 
 export const LAYOUT_COLS = 12;
 export const LAYOUT_ROW = 36;
-export const LAYOUT_GAP = 12;
+export const LAYOUT_GAP = 4;
 export const LAYOUT_MIN_W = 3;
 export const LAYOUT_MIN_H = 5;
 

@@ -29,6 +29,7 @@ import {
   type RadioProto,
   type StationRadio,
 } from "./state";
+import { civScopeOn } from "@shared/icom-scope";
 import { ser2netDialHost } from "@shared/ser2net-bind";
 import {
   SER2NET_RADIO_ID,
@@ -1012,7 +1013,7 @@ export function Ic705Page() {
               </ConsoleSelect>
             </Field>
           ) : null}
-          {catUsb && radioProto === "civ" ? (
+          {catUsb && radioProto === "civ" && civScopeOn(equipmentId, "serial") ? (
             <label className="flex items-start gap-2 text-sm text-[#c5d4e0] md:col-span-2">
               <input
                 type="checkbox"

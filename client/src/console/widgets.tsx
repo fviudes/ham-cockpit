@@ -5,9 +5,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, ChevronDown, KeyRound, LogOut, User } from "lucide-react";
+import { AlertTriangle, ChevronDown, GripVertical, KeyRound, LogOut, User, X } from "lucide-react";
 import type { UpdateId } from "@shared/const";
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { APP_LOGO_LG } from "@shared/brand";
 import type { I18nKey, Lang } from "./i18n";
@@ -38,10 +38,56 @@ export function Panel({
   );
 }
 
+type PanelChrome = {
+  onMove: (event: PointerEvent<HTMLButtonElement>) => void;
+  onRemove?: () => void;
+  moveLabel: string;
+  removeLabel: string;
+};
+
+const PanelChromeContext = createContext<PanelChrome | null>(null);
+
+export function PanelChromeProvider({ value, children }: { value: PanelChrome; children: ReactNode }) {
+  return <PanelChromeContext.Provider value={value}>{children}</PanelChromeContext.Provider>;
+}
+
 export function PanelTitle({ children }: { children: ReactNode }) {
+  const chrome = useContext(PanelChromeContext);
+  if (!chrome) {
+    return (
+      <h2 className="mb-4 font-['Space_Grotesk'] text-sm font-semibold tracking-wide text-[#ffb300]">
+        {children}
+      </h2>
+    );
+  }
   return (
-    <h2 className="mb-4 font-['Space_Grotesk'] text-sm font-semibold tracking-wide text-[#ffb300]">
-      {children}
+    <h2 className="mb-4 flex items-center gap-1 font-['Space_Grotesk'] text-sm font-semibold tracking-wide text-[#ffb300]">
+      <button
+        type="button"
+        className="grid size-4 shrink-0 cursor-grab place-items-center text-[#5d7184] hover:text-[#4fc3f7] active:cursor-grabbing"
+        aria-label={chrome.moveLabel}
+        onPointerDown={(event) => {
+          event.stopPropagation();
+          chrome.onMove(event);
+        }}
+      >
+        <GripVertical size={12} />
+      </button>
+      <span className="min-w-0 flex-1">{children}</span>
+      {chrome.onRemove ? (
+        <button
+          type="button"
+          className="grid size-4 shrink-0 place-items-center text-[#5d7184] hover:text-[#f87171]"
+          aria-label={chrome.removeLabel}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            chrome.onRemove?.();
+          }}
+        >
+          <X size={12} />
+        </button>
+      ) : null}
     </h2>
   );
 }

@@ -86,15 +86,21 @@ export function PcAudioCard() {
     }
     setBusy(true);
     setHint("pcAudioWait");
-    const result = await player.start();
-    setBusy(false);
-    if (!result.ok) {
-      setOn(false);
+    try {
+      const result = await player.start();
+      if (!result.ok) {
+        setOn(false);
+        setHint(hintFor(result));
+        return;
+      }
+      setOn(true);
       setHint(hintFor(result));
-      return;
+    } catch {
+      setOn(false);
+      setHint("pcAudioNone");
+    } finally {
+      setBusy(false);
     }
-    setOn(true);
-    setHint(hintFor(result));
   }
 
   const fill = muted ? 0 : (volume / 9) * 100;

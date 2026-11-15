@@ -158,7 +158,7 @@ def resolve(radio):
             model = int(radio.get("hamlibModel") or 0)
         except Exception:
             model = 0
-        if model not in OFFICIAL:
+        if OFFICIAL and model not in OFFICIAL:
             model = 0
         default = BY_M.get(model, "")
     if model <= 0:
@@ -206,13 +206,20 @@ DIAL="$BIND"
 if [[ -z "$DIAL" || "$DIAL" == "0.0.0.0" || "$DIAL" == "localhost" ]]; then
   DIAL="127.0.0.1"
 fi
-ARGS=(-m "$MODEL" -r "${DIAL}:${TCP}" -t "$LISTEN")
+# 4012 é o tap em shared/icom-scope.ts. O espectro CI-V é desviado ali.
+# Sem o tap, o rigctld segue no ser2net e o waterfall da serial fica mudo.
+RIG_PORT="$TCP"
+if [[ "${SCOPE:-0}" == "1" ]]; then
+  if python3 -c 'import socket; s=socket.create_connection(("127.0.0.1",4012),0.4); s.close()' 2>/dev/null; then
+    RIG_PORT=4012
+    echo "rigctld-ic705: CI-V pelo tap 127.0.0.1:4012" >&2
+  else
+    echo "rigctld-ic705: tap do waterfall fechado — CI-V direto no ser2net" >&2
+  fi
+fi
+ARGS=(-m "$MODEL" -r "${DIAL}:${RIG_PORT}" -t "$LISTEN")
 if [[ -n "${CIV:-}" && "$CIV" != "-" ]]; then
   ARGS+=(-c "$CIV")
-fi
-# Espectro só quando o rádio pede. O multicast fica na máquina; o S-meter segue na porta 4532.
-if [[ "${SCOPE:-0}" == "1" ]]; then
-  ARGS+=(--multicast-addr=224.0.0.1 --multicast-port=4533 --set-conf=async=1)
 fi
 echo "rigctld-ic705: ${RIGCTLD} ${ARGS[*]}"
 exec "$RIGCTLD" "${ARGS[@]}"

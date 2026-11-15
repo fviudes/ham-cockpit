@@ -7,7 +7,7 @@ import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { createServer, type Server, type Socket } from "node:net";
 import { promisify } from "node:util";
 import { IcomControl, type IcomMode, type IcomModelId } from "icom-wlan-node";
-import { isScopeWaveform } from "../shared/icom-scope";
+import { isScopeWaveform, scopeSpanData } from "../shared/icom-scope";
 import { bcdMeterRaw, civRawToUiSMeter } from "../shared/smeter";
 import { publishScopeFrame } from "./icom-scope-hub";
 
@@ -567,10 +567,21 @@ export async function icomLanCmd(
         if (on) {
           rig.sendCiv(civPayload(0x27, 0x10, 0x01));
           rig.sendCiv(civPayload(0x27, 0x11, 0x01));
+          rig.sendCiv(civPayload(0x27, 0x14, 0x00, 0x00));
+          rig.sendCiv(civPayload(...scopeSpanData()));
         } else {
           rig.sendCiv(civPayload(0x27, 0x11, 0x00));
           rig.sendCiv(civPayload(0x27, 0x10, 0x00));
         }
+        return { ok: true };
+      }
+      case "scopeCenter": {
+        rig.sendCiv(civPayload(0x27, 0x14, 0x00, 0x00));
+        return { ok: true };
+      }
+      case "scopeSpan": {
+        rig.sendCiv(civPayload(0x27, 0x14, 0x00, 0x00));
+        rig.sendCiv(civPayload(...scopeSpanData()));
         return { ok: true };
       }
       case "civ": {

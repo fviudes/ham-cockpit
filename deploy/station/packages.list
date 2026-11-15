@@ -36,6 +36,9 @@ git
 usbutils
 jq
 bsdutils
+# PC Audio: arecord. O codec USB do rádio aceita S8 e S16_LE.
+# O bake não roda ota-hooks (HC_OTA_APPLY=1); sem este pacote a imagem nova nasce muda.
+alsa-utils
 
 # Relógio / série
 fake-hwclock

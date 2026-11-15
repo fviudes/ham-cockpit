@@ -1,53 +1,74 @@
 /**
  * Waterfall do rádio.
- * Rede: quadro CI-V 0x27 0x00, sem entrar no TCP do rigctld.
- * Serial: o Hamlib entrega o espectro em multicast depois de \set_func SPECTRUM.
- * O socket só liga a saída enquanto houver um card aberto.
+ * Rede e serial: quadro CI-V 0x27 0x00, sem entrar no TCP do rigctld.
+ * A serial desvia esse quadro no tap. O Bluetooth monta o mesmo quadro no navegador.
+ * O socket só liga a saída (27 10 / 27 11) enquanto houver um card aberto.
  */
-import dgram from "node:dgram";
 import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
-import { sweepFromHamlib } from "../shared/hamlib-spectrum";
-import { ScopeAssembler, scopePayload, type ScopeSweep } from "../shared/icom-scope";
+import { ScopeAssembler, civScopeOn, scopePayload, type ScopeSweep } from "../shared/icom-scope";
+import { onSerialScopeFrame, onSerialScopeRevive, serialScopeCenter, serialScopeOutput, serialScopeReady, serialScopeSpan } from "./civ-scope-tap";
 import { consoleSessionOk } from "./console-session";
-import { hubRigctl } from "./hamlib-hub";
 import { subscribeScopeFrame } from "./icom-scope-hub";
 import { icomLanCmd } from "./icom-lan";
 import { currentSerialHamlib } from "./radios";
 
-const HAMLIB_PORT = 4532;
-const SPECTRUM_PORT = 4533;
-const SPECTRUM_GROUP = "224.0.0.1";
-
 const attached = new WeakSet<Server>();
-const assembler = new ScopeAssembler();
+const lanAsm = new ScopeAssembler();
+const serialAsm = new ScopeAssembler();
 const lanClients = new Set<WebSocket>();
 const serialClients = new Set<WebSocket>();
 let scopeOn = false;
 let serialOn = false;
 let unlisten: (() => void) | null = null;
-let spectrumSock: dgram.Socket | null = null;
+let unlistenSerial: (() => void) | null = null;
+let serialAsmLogged = false;
+let centerAt = 0;
+
+function askScopeCenter(via: "serial" | "lan", span = false) {
+  const now = Date.now();
+  if (now - centerAt < 800) return;
+  centerAt = now;
+  if (via === "serial") {
+    if (span) serialScopeSpan();
+    else serialScopeCenter();
+    return;
+  }
+  void icomLanCmd(span ? "scopeSpan" : "scopeCenter");
+}
 
 function sendJson(ws: WebSocket, body: unknown) {
   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(body));
 }
 
+function readScopeAsk(data: unknown): "center" | "span" | null {
+  const text = typeof data === "string" ? data : Buffer.isBuffer(data) ? data.toString("utf8") : "";
+  if (!text) return null;
+  try {
+    const type = (JSON.parse(text) as { type?: string }).type;
+    if (type === "center" || type === "span") return type;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function broadcast(group: Set<WebSocket>, sweep: ScopeSweep) {
-  const body = JSON.stringify({
+  const body = {
     type: "sweep",
     startHz: sweep.startHz,
     endHz: sweep.endHz,
     mode: sweep.mode,
     bins: Array.from(sweep.bins),
-  });
+  };
   for (const ws of group) sendJson(ws, body);
 }
 
 async function setLanScope(on: boolean) {
   if (scopeOn === on) return { ok: true as const };
   scopeOn = on;
-  assembler.reset();
+  lanAsm.reset();
   const result = await icomLanCmd("scope", { on });
   if (!result.ok && on) scopeOn = false;
   return result;
@@ -59,65 +80,50 @@ function ensureLanListen() {
     if (lanClients.size === 0) return;
     const payload = scopePayload(frame);
     if (!payload) return;
-    const sweep = assembler.push(payload);
+    const sweep = lanAsm.push(payload);
     if (sweep) broadcast(lanClients, sweep);
   });
 }
 
-function stopSpectrum() {
-  const sock = spectrumSock;
-  spectrumSock = null;
-  serialOn = false;
-  if (!sock) return;
-  try {
-    sock.close();
-  } catch {
-    /* já fechado */
-  }
+function ensureSerialListen() {
+  if (unlistenSerial) return;
+  onSerialScopeRevive(() => {
+    serialAsm.reset();
+    serialAsmLogged = false;
+  });
+  unlistenSerial = onSerialScopeFrame((frame) => {
+    if (serialClients.size === 0) return;
+    const payload = scopePayload(frame);
+    if (!payload) return;
+    const sweep = serialAsm.push(payload);
+    if (sweep) {
+      if (!serialAsmLogged) {
+        serialAsmLogged = true;
+        console.log(`civ-scope: varredura ${sweep.bins.length} pontos, ${sweep.startHz}–${sweep.endHz} Hz`);
+      }
+      broadcast(serialClients, sweep);
+      return;
+    }
+    if (!serialAsmLogged && payload.length <= 24) {
+      console.log(`civ-scope: cabeçalho ${Buffer.from(payload).toString("hex")}`);
+    }
+  });
 }
 
-async function setSerialScope(on: boolean) {
+function setSerialScope(on: boolean) {
   const radio = currentSerialHamlib();
-  if (!radio?.scope) return { ok: false as const, error: "off" };
-  if (serialOn === on && (on ? spectrumSock : !spectrumSock)) return { ok: true as const };
-  const cmd = await hubRigctl(HAMLIB_PORT, `\\set_func SPECTRUM ${on ? 1 : 0}`, "127.0.0.1", 2500);
-  if (!cmd.ok) {
-    if (on) stopSpectrum();
-    return { ok: false as const, error: cmd.error || "hamlib" };
+  if (!radio?.scope || radio.link !== "usb" || radio.proto !== "civ" || !civScopeOn(radio.equipmentId, "serial")) {
+    return { ok: false as const, error: "off" };
   }
-  if (!on) {
-    stopSpectrum();
+  if (on && !serialScopeReady()) return { ok: false as const, error: "tap" };
+  ensureSerialListen();
+  if (serialOn === on) {
+    if (on) serialScopeOutput(true);
     return { ok: true as const };
   }
-  serialOn = true;
-  const opened = await new Promise<boolean>((resolve) => {
-    const sock = dgram.createSocket({ type: "udp4", reuseAddr: true });
-    spectrumSock = sock;
-    let settled = false;
-    const finish = (ok: boolean) => {
-      if (settled) return;
-      settled = true;
-      resolve(ok);
-    };
-    sock.on("message", (msg) => {
-      if (serialClients.size === 0) return;
-      const sweep = sweepFromHamlib(msg.toString("utf8"));
-      if (sweep) broadcast(serialClients, sweep);
-    });
-    sock.on("error", () => {
-      if (spectrumSock === sock) stopSpectrum();
-      finish(false);
-    });
-    sock.bind(SPECTRUM_PORT, () => {
-      try {
-        sock.addMembership(SPECTRUM_GROUP);
-      } catch {
-        /* sem grupo multicast neste host; o pacote local ainda pode chegar */
-      }
-      finish(true);
-    });
-  });
-  if (!opened) return { ok: false as const, error: "multicast" };
+  serialAsm.reset();
+  serialOn = on;
+  serialScopeOutput(on);
   return { ok: true as const };
 }
 
@@ -127,6 +133,10 @@ async function bind(ws: WebSocket, via: string) {
     const result = await setSerialScope(true);
     if (!result.ok) sendJson(ws, { type: "error", reason: result.error || "serial" });
     else sendJson(ws, { type: "ready", via: "serial" });
+    ws.on("message", (data) => {
+      const ask = readScopeAsk(data);
+      if (ask) askScopeCenter("serial", ask === "span");
+    });
     ws.on("close", () => {
       serialClients.delete(ws);
       if (serialClients.size === 0) void setSerialScope(false);
@@ -138,6 +148,10 @@ async function bind(ws: WebSocket, via: string) {
   const result = await setLanScope(true);
   if (!result.ok) sendJson(ws, { type: "error", reason: "lan" });
   else sendJson(ws, { type: "ready", via: "lan" });
+  ws.on("message", (data) => {
+    const ask = readScopeAsk(data);
+    if (ask) askScopeCenter("lan", ask === "span");
+  });
   ws.on("close", () => {
     lanClients.delete(ws);
     if (lanClients.size === 0) void setLanScope(false);

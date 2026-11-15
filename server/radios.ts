@@ -175,9 +175,19 @@ function serialHamlibSig(list: StationRadio[]): string {
   return `${row.hamlibModel}|${row.hamlibPassCiv ? 1 : 0}|${row.civAddr}|${row.scope ? 1 : 0}`;
 }
 
+let beforeHamlibRestart: (() => Promise<void>) | null = null;
+
+/** O tap do waterfall precisa estar escutando antes do rigctld discar a 4012. */
+export function setBeforeHamlibRestart(fn: () => Promise<void>) {
+  beforeHamlibRestart = fn;
+}
+
 function pokeSerialHamlib() {
   if (icomLanLive()) return;
-  void hamlibCtl("start");
+  void (async () => {
+    if (beforeHamlibRestart) await beforeHamlibRestart();
+    await hamlibCtl("start");
+  })();
 }
 
 function persistAndPoke(beforeSig: string) {

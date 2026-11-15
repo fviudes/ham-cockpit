@@ -522,6 +522,10 @@ ensure_hamlib_spe() {
   if [[ -f "$ROOT/hamlib-models.json" ]]; then
     install -m 0644 "$ROOT/hamlib-models.json" /opt/ham-cockpit/hamlib-models.json
   fi
+  if ! command -v arecord >/dev/null 2>&1; then
+    apt-get update -qq || true
+    apt-get install -y --no-install-recommends alsa-utils || echo "ota-hooks: AVISO — arecord ausente; PC Audio sem codec" >&2
+  fi
   systemctl daemon-reload 2>/dev/null || true
   # Hamlib do Ubuntu 4.5.5 abre UDP no Icom e o CI-V morre. O rigctld tem de
   # ser o 4.6.5 do prefixo, com LD_LIBRARY_PATH. SPE é RFC2217 na 4001 e o

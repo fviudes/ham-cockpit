@@ -1,0 +1,26 @@
+---
+description: Correção validada na estação entra no instalador e no OTA — não fica só no Pi.
+alwaysApply: true
+---
+
+# Correção no instalador
+
+Ajuste que fez a estação funcionar entra no fonte do instalador da imagem **e** no caminho de update. Vale para pacote, wrapper, hook de OTA, dependência (como `alsa-utils`), models do Hamlib e tap do waterfall.
+
+Não declarar pronto se o Pi foi alterado à mão e uma instalação nova ou um OTA ainda não reproduz isso.
+
+## O que fazer
+
+- Wrapper (`deploy/hamlib/rigctld-ic705`), `deploy/hamlib/models.json` e hooks vão em `install-station.sh`, no bake e no pacote que `pack-update.mjs` monta. `station-upd` copia o que o gancho instala (`ota-hooks.sh`, `hamlib-models.json`, binários).
+- Fonte TypeScript do console (tap CI-V, PC Audio) basta estar certo: o OTA gera `dist/index.js` e `dist/public` no `pnpm build`. Arquivo copiado por lista explícita tem de estar nessa lista.
+- Dependência de runtime (ex.: `alsa-utils` para o `arecord`) fica em `deploy/station/packages.list` e no gancho de OTA, para imagem nova e estação antiga.
+
+## O que não fazer
+
+- Deixar a correção só no disco do Pi.
+- Sobrescrever na atualização: `radios.json`, `services.json`, `config.json` da estação, `spe.json`, nem o flag `enabled` de `support-vpn.json`. Criar o arquivo só se ele ainda não existir.
+- Commitar `.tmp-*` nem senha.
+
+## Exemplo
+
+O codec USB do rádio só aceita `S8` e `S16_LE`. O `arecord` pede `S16_LE` em `server/radio-audio.ts`. O pacote `alsa-utils` entra em `packages.list` e em `ota-hooks.sh` se `arecord` não existir. Um `apt install` solto no Pi não conta.

@@ -67,15 +67,20 @@ export class PcAudioPlayer {
     return { ok: false, reason: "no-device" };
   }
 
-  /** Seletor de saída do navegador. Sem isso, usa a placa padrão. Nunca abre microfone. */
+  /**
+   * Seletor de saída do navegador. Sem isso, usa a placa padrão. Nunca abre microfone.
+   * No HTTP do console o seletor é recusado (NotAllowedError). Isso não cancela o áudio:
+   * o rádio toca na saída padrão. Só o usuário fechar o seletor (AbortError) cancela.
+   */
   private async chooseOutput(): Promise<string | null> {
     const devices = navigator.mediaDevices as OutputPicker | undefined;
-    if (devices && typeof devices.selectAudioOutput === "function") {
+    if (window.isSecureContext && devices && typeof devices.selectAudioOutput === "function") {
       try {
         const chosen = await devices.selectAudioOutput();
         return chosen.deviceId || "";
-      } catch {
-        return null;
+      } catch (err) {
+        const name = err instanceof DOMException ? err.name : "";
+        if (name === "AbortError") return null;
       }
     }
     try {

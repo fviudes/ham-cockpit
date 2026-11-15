@@ -5,7 +5,8 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { lextelConnect, lextelDisconnect, lextelKeepalive, lextelLearn, lextelOpenBluetooth, lextelSave, lextelScan, lextelStatus } from "./lextel";
 import { listSerialDevices } from "./list-serials";
-import { currentSerialHamlib, radiosConnect, radiosDisconnect, radiosMarkBle, radiosRemove, radiosResumeIcomLan, radiosSave, radiosSetPrimary, radiosStatus, radiosUpsert } from "./radios";
+import { prepareSerialScopeTap, syncSerialScopeTap } from "./civ-scope-tap";
+import { currentSerialHamlib, radiosConnect, radiosDisconnect, radiosMarkBle, radiosRemove, radiosResumeIcomLan, radiosSave, radiosSetPrimary, radiosStatus, radiosUpsert, setBeforeHamlibRestart } from "./radios";
 import { hamlibCtl, loadSer2net, probeHamlibNet, saveSer2net } from "./ser2net-store";
 import { attachRadioAudio } from "./radio-audio";
 import { attachScopeWs } from "./icom-scope-ws";
@@ -990,10 +991,14 @@ async function startServer() {
 
   const port = process.env.PORT || 3000;
 
+  setBeforeHamlibRestart(async () => {
+    await prepareSerialScopeTap();
+  });
   void radiosResumeIcomLan().catch(() => undefined);
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
+    void syncSerialScopeTap();
     void servicesApplyBoot();
   });
 }

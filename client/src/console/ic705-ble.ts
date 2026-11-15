@@ -1,4 +1,5 @@
 /** Icom IC-705 CI-V over BLE — GATT 14cf8001 / char 14cf8002, handshake 0x61–0x64. */
+import { scopeSpanData } from "@shared/icom-scope";
 import { civRawToUiSMeter } from "@shared/smeter";
 import { publishScopeChunk } from "./scope-bus";
 import { publishSmeter } from "./smeter-bus";
@@ -448,10 +449,27 @@ class Ic705BleLink {
     if (on) {
       await this.ask(0x27, 0x10, 0x01);
       await this.ask(0x27, 0x11, 0x01);
+      await this.ask(0x27, 0x14, 0x00, 0x00);
+      await this.ask(...scopeSpanData());
     } else {
       await this.ask(0x27, 0x11, 0x00);
       await this.ask(0x27, 0x10, 0x00);
     }
+    return true;
+  }
+
+  /** 27 14 0000: modo centro, o scope acompanha o VFO. Manual CI-V do IC-705. */
+  async centerScope() {
+    if (!this.connected || this.hsBusy) return false;
+    await this.ask(0x27, 0x14, 0x00, 0x00);
+    return true;
+  }
+
+  /** 27 14 e 27 15: modo centro no passo de ±250 kHz que cobre a vista. */
+  async widenScope() {
+    if (!this.connected || this.hsBusy) return false;
+    await this.ask(0x27, 0x14, 0x00, 0x00);
+    await this.ask(...scopeSpanData());
     return true;
   }
 
