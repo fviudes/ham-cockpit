@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   CAPTURE_RING_MAX,
   LextelDecoder,
@@ -40,5 +41,17 @@ describe("anel da captura do Lextel", () => {
     expect(nextReconnectDelay(RECONNECT_AFTER_DROP_MS, "drop")).toBe(RECONNECT_AFTER_DROP_MS);
     expect(nextReconnectDelay(600, "grow")).toBe(900);
     expect(nextReconnectDelay(RECONNECT_CAP_MS, "grow")).toBe(RECONNECT_CAP_MS);
+  });
+});
+
+describe("SPP MS-2000", () => {
+  it("marca rebind após open sem OPEN e o helper trata closed/config", () => {
+    const src = readFileSync(new URL("./lextel.ts", import.meta.url), "utf8");
+    const bt = readFileSync(new URL("../deploy/lextel/lextel-bt", import.meta.url), "utf8");
+    expect(src).toContain("noteSppOpenTimeout");
+    expect(src).toContain("sppOpenMisses >= 2");
+    expect(src).toContain("lextelAutoConnect()");
+    expect(bt).toContain('[[ "$st" == "closed" ]]');
+    expect(bt).toContain("bluetoothctl connect");
   });
 });

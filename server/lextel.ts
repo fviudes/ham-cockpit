@@ -124,6 +124,8 @@ let connectBusy = false;
 let pendingConnect: { addr?: string; pin?: string; name?: string; channel?: number } | null = null;
 /** O bind atual não corresponde a um open que tenha funcionado. */
 let rfcommStale = false;
+/** Opens do pump que estouraram o prazo sem dados — após 2, pedimos rebind. */
+let sppOpenMisses = 0;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let opened = false;
 let opening = false;
@@ -811,6 +813,16 @@ function clearReconnect() {
   }
 }
 
+function noteSppOpenTimeout() {
+  sppOpenMisses = Math.min(8, sppOpenMisses + 1);
+  // clean/config sem OPEN repetido: recria o bind em vez de girar em config.
+  rfcommStale = sppOpenMisses >= 2;
+}
+
+function clearSppOpenMisses() {
+  sppOpenMisses = 0;
+}
+
 function scheduleReconnect() {
   if (!wantOpen || reconnectTimer) return;
   const wait = reconnectDelay;
@@ -979,7 +991,7 @@ function attachFd(path: string) {
     // rebind aqui faz o helper soltar esse nó, o open devolve ENODEV e o
     // console entra em retry eterno. Só ENODEV marca o nó como ausente.
     // 8s: religar na hora, com o hci0 ainda no tx timeout, trava o mini-UART.
-    rfcommStale = false;
+    noteSppOpenTimeout();
     opening = false;
     phase = "connecting";
     reconnectDelay = nextReconnectDelay(reconnectDelay, "drop");
@@ -993,6 +1005,7 @@ function attachFd(path: string) {
     clearOpenTimer();
     phase = "streaming";
     reconnectDelay = 600;
+    clearSppOpenMisses();
     rfcommStale = false;
     error = "";
   });
@@ -1113,6 +1126,7 @@ function markPumpOpen() {
   clearOpenTimer();
   phase = "streaming";
   reconnectDelay = 600;
+  clearSppOpenMisses();
   rfcommStale = false;
   error = "";
 }
@@ -1141,7 +1155,7 @@ function attachPump(path: string) {
   openTimer = setTimeout(() => {
     if (opened || pumpChild !== child) return;
     error = `MS-2000 ${saved.addr || "salvo"} sem resposta no SPP. Nova tentativa, sem desligar o Bluetooth.`;
-    rfcommStale = false;
+    noteSppOpenTimeout();
     opening = false;
     phase = "connecting";
     reconnectDelay = nextReconnectDelay(reconnectDelay, "drop");
@@ -1488,8 +1502,15 @@ async function lextelConnectBody(body: { addr?: string; pin?: string; name?: str
 }
 
 export async function lextelKeepalive(): Promise<LextelSnapshot> {
-  if (reconnectTimer && reconnectDelay >= 15_000) return lextelStatus();
-  if (!connectBusy && !recoverBusy && !autoRunning && wantOpen && !linkAlive()) {
+  const stuckLong =
+    wantOpen &&
+    !linkAlive() &&
+    (sppOpenMisses >= 2 || (attachedAt > 0 && Date.now() - attachedAt > 25_000));
+  if (reconnectTimer && reconnectDelay >= 15_000 && !stuckLong) return lextelStatus();
+  if (!wantOpen && saved.autoConnect && phase !== "scanning" && phase !== "pairing") {
+    const { isServiceAutostart } = await import("./services");
+    if (isServiceAutostart("lextel")) void lextelAutoConnect();
+  } else if (!connectBusy && !recoverBusy && !autoRunning && wantOpen && !linkAlive()) {
     reconnectDelay = 400;
     clearReconnect();
     void recoverLink();

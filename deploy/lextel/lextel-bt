@@ -254,7 +254,13 @@ settle_bind() {
   # O ACL do release precisa cair antes do nó novo. Sem esta pausa o
   # open pagina o mesmo link estourado.
   sleep 0.4
-  rfcomm bind "$RFCOMM_N" "$mac" "$channel"
+  if ! rfcomm bind "$RFCOMM_N" "$mac" "$channel" 2>/dev/null; then
+    bluetoothctl disconnect "$mac" >/dev/null 2>&1 || true
+    sleep 0.5
+    rfcomm release "$RFCOMM_N" 2>/dev/null || true
+    sleep 0.4
+    rfcomm bind "$RFCOMM_N" "$mac" "$channel"
+  fi
   for i in $(seq 1 20); do
     [[ -c "$RFCOMM_DEV" ]] && break
     sleep 0.1
@@ -297,8 +303,30 @@ bind_saved() {
     echo "OK $RFCOMM_DEV $mac $channel $st"
     return 0
   fi
+  # closed após try-restart: não é clean — recria o bind sem esperar rebind
+  # do Node, senão o pump abre um DLC já encerrado e fica em timeout.
+  if same_binding "$line" && [[ "$st" == "closed" ]] && ! pump_running && ! rfcomm_held; then
+    ensure_adapter
+    bluetoothctl trust "$mac" >/dev/null 2>&1 || true
+    settle_bind
+    line="$(rfcomm_line)"
+    st="$(rfcomm_state "$line")"
+    case "$st" in
+      connected|clean|config|connecting)
+        echo "OK $RFCOMM_DEV $mac $channel $st"
+        ;;
+      *)
+        echo "ERR $RFCOMM_DEV continua ${st} apos o bind" >&2
+        exit 1
+        ;;
+    esac
+    return 0
+  fi
   if same_binding "$line" && [[ "$st" == "config" ]]; then
-    if [[ "$force" != "rebind" ]] || rfcomm_held; then
+    if [[ "$force" == "rebind" ]] && ! rfcomm_held; then
+      :
+    else
+      timeout 8 bluetoothctl connect "$mac" >/dev/null 2>&1 || true
       fix_perms
       echo "OK $RFCOMM_DEV $mac $channel config"
       return 0

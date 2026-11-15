@@ -1,8 +1,8 @@
 {
-  "version": "0.1.11.01",
+  "version": "0.1.12.01",
   "channel": "main",
-  "file": "ham-cockpit-0.1.11.01.tgz",
-  "sha256": "bf80f530d4ee0de1788787723f7569d2ab0605843157b870f334f840a00ce429",
-  "bytes": 5122294,
-  "notes": "Ham Cockpit v0.1.11.01 — Imagem base 0.1.11. FT8: cascata sem barra de rolagem; removidos hint da escuta e linha «Período decodificado». Inclui ajustes de TX digital e layout compacto das versões 0.1.10.x."
+  "file": "ham-cockpit-0.1.12.01.tgz",
+  "sha256": "87f1861e93e005deab843d63c2ed1072d783715442378a1a1d51234188e96845",
+  "bytes": 5122548,
+  "notes": "Ham Cockpit v0.1.12.01 — Imagem base 0.1.12. Lextel MS-2000: religa o SPP após RFCOMM config/closed e rebind após open sem dados. Inclui cascata FT8 sem rolagem (0.1.11)."
 }
