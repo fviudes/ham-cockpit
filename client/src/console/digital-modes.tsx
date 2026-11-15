@@ -3,7 +3,6 @@ import {
   compactStepMs,
   compactStripes,
   stickToBottom,
-  stickToNewest,
   stripeFromJson,
   trimStripes,
   viewNorm,
@@ -101,7 +100,6 @@ export function DigitalPage() {
   const [logWarn, setLogWarn] = useState(false);
   const [level, setLevel] = useState(0);
   const [dbfs, setDbfs] = useState(-120);
-  const [decodeInfo, setDecodeInfo] = useState<{ ran: boolean; count: number } | null>(null);
   const specRef = useRef<Float32Array | null>(null);
   const ready = useRef(false);
   const seeded = useRef(false);
@@ -160,7 +158,6 @@ export function DigitalPage() {
     if (on) setRxError("");
     const phase: ListenPhase = snap.phase === "on" || snap.phase === "busy" || snap.phase === "none" || snap.phase === "auth" ? snap.phase : "off";
     setRxPhase(phase);
-    if (snap.decode !== undefined) setDecodeInfo(snap.decode ?? null);
     if (Array.isArray(snap.rows)) dispatch({ type: "syncRows", rows: snap.rows });
     if (!rxPending.current && on && (snap.mode === "FT8" || snap.mode === "FT4") && snap.mode !== stateRef.current.mode) {
       dispatch({ type: "mode", mode: snap.mode });
@@ -407,8 +404,6 @@ export function DigitalPage() {
     void postRx({ op: "enable", mode: state.mode, hz: picked.hz, band: picked.band, dialId: picked.id });
   };
   const listenWord = rxPhase === "on" ? t("listenOn") : rxPhase === "busy" ? t("listenBusy") : rxPhase === "auth" ? t("listenAuth") : rxPhase === "none" ? t("listenNone") : t("listenOff");
-  const decodeWord = decodeInfo == null ? t("decodeWait") : decodeInfo.ran ? (decodeInfo.count ? `${t("decodeRan")} · ${decodeInfo.count}` : t("decodeEmpty")) : t("decodeNoModem");
-
   return (
     <div>
       <PageHead
@@ -518,7 +513,6 @@ export function DigitalPage() {
           emptyLabel={rxOn && stripes.length === 0 ? t("waterfallWait") : t("waterfallEmpty")}
           onPick={(hzPick) => dispatch({ type: "graph", hz: hzPick, moveTx: !state.holdTx })}
         />
-        <p className="mt-1 text-[10px] text-[#8ea0b3]">{decodeWord}</p>
       </Panel>
 
       <div className="mb-1.5 grid gap-1.5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
@@ -1330,9 +1324,6 @@ function Waterfall({
   const canvas = useRef<HTMLCanvasElement>(null);
   const scaleRef = useRef<HTMLCanvasElement>(null);
   const paintRef = useRef<() => void>(() => undefined);
-  const stick = useRef(true);
-  const prevLen = useRef(0);
-  const prevRev = useRef(revision);
   const rows = useMemo(() => compactStripes(stripes), [stripes]);
   const cycles = rows.reduce((n, row) => n + row.cuts.length, 0);
   const stepMs = useMemo(() => compactStepMs(stripes), [stripes]);
@@ -1353,20 +1344,18 @@ function Waterfall({
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = "#03080d";
       ctx.fillRect(0, 0, w, h);
-      const scroll = view.scrollTop;
       const n = rows.length;
-      const first = Math.max(0, Math.floor(scroll / WF_ROW_PX) - 1);
-      const last = Math.min(n, Math.ceil((scroll + h) / WF_ROW_PX) + 1);
+      const maxRows = Math.min(n, Math.max(1, Math.ceil(h / WF_ROW_PX)));
       if (n) {
         const img = ctx.createImageData(w, h);
         const data = img.data;
         const viewArgs = { startHz: start, endHz: end, gain, zero, flatten, spec };
         const lines: number[] = [];
-        for (let i = first; i < last; i++) {
+        for (let i = 0; i < maxRows; i++) {
           const stripe = rows[n - 1 - i];
           if (!stripe) continue;
           const norm = viewNorm(stripe.cols, viewArgs, w);
-          const yTop = i * WF_ROW_PX - scroll;
+          const yTop = i * WF_ROW_PX;
           const y0 = Math.max(0, Math.floor(yTop));
           const y1 = Math.min(h, Math.ceil(yTop + WF_ROW_PX));
           for (let py = y0; py < y1; py++) {
@@ -1432,24 +1421,11 @@ function Waterfall({
       }
     };
     paintRef.current = paint;
-    if (box) {
-      if (revision !== prevRev.current) {
-        prevRev.current = revision;
-        prevLen.current = rows.length;
-        stick.current = true;
-        box.scrollTop = 0;
-      } else {
-        const added = rows.length - prevLen.current;
-        prevLen.current = rows.length;
-        if (added > 0 && !stick.current) box.scrollTop += added * WF_ROW_PX;
-        if (stick.current) box.scrollTop = 0;
-      }
-    }
     paint();
     const obs = new ResizeObserver(() => paintRef.current());
     if (box) obs.observe(box);
     return () => obs.disconnect();
-  }, [rows, revision, start, end, gain, zero, flatten, spec, palette, rx, tx, emptyLabel]);
+  }, [rows, start, end, gain, zero, flatten, spec, palette, rx, tx, emptyLabel]);
 
   return (
     <div>
@@ -1460,23 +1436,17 @@ function Waterfall({
         data-cycles={cycles}
         data-compact={WF_COMPACT}
         data-step-ms={stepMs ?? ""}
-        className="h-64 overflow-y-auto rounded-md border border-[rgba(79,195,247,0.14)] bg-[#03080d]"
-        onScroll={(e) => {
-          stick.current = stickToNewest(e.currentTarget.scrollTop);
-          paintRef.current();
-        }}
+        className="h-64 overflow-hidden rounded-md border border-[rgba(79,195,247,0.14)] bg-[#03080d]"
       >
-        <div style={{ height: Math.max(256, rows.length * WF_ROW_PX) }}>
-          <canvas
-            ref={canvas}
-            className="sticky top-0 block h-64 w-full"
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const hz = start + ((e.clientX - rect.left) / Math.max(1, rect.width)) * Math.max(1, end - start);
-              onPick(hz);
-            }}
-          />
-        </div>
+        <canvas
+          ref={canvas}
+          className="block h-64 w-full"
+          onClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const hz = start + ((e.clientX - rect.left) / Math.max(1, rect.width)) * Math.max(1, end - start);
+            onPick(hz);
+          }}
+        />
       </div>
       <canvas ref={scaleRef} className="mt-1 h-[18px] w-full" />
     </div>

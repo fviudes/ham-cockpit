@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.10.10** (`version.json`).
+Versão atual neste canal: **0.1.11.01** (`version.json`).
 
 ## Versionamento
 
@@ -20,12 +20,12 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.10.10",
+  "version": "0.1.11.01",
   "channel": "main",
-  "file": "ham-cockpit-0.1.10.10.tgz",
-  "sha256": "316b66338958726c559b8f949459071dc0c95dfc4cc1ecfbf9981acae7517b88",
-  "bytes": 5122537,
-  "notes": "Ham Cockpit v0.1.10.10 — TX: PTT antes do aplay, modo PKTUSB no rádio e nível no codec USB. Tela digital: layout compacto (2:3 atividade/Rx, 5:8 Tx/controles), textos de ajuda removidos."
+  "file": "ham-cockpit-0.1.11.01.tgz",
+  "sha256": "bf80f530d4ee0de1788787723f7569d2ab0605843157b870f334f840a00ce429",
+  "bytes": 5122294,
+  "notes": "Ham Cockpit v0.1.11.01 — Imagem base 0.1.11. FT8: cascata sem barra de rolagem; removidos hint da escuta e linha «Período decodificado»."
 }
 ```
 

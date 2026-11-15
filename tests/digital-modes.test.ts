@@ -454,6 +454,9 @@ describe("modos digitais", () => {
     expect(src).not.toContain('PanelTitle>{t("waterfall")');
     expect(src).toContain("lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]");
     expect(src).toContain("xl:grid-cols-[minmax(0,5fr)_minmax(0,8fr)]");
+    expect(src).not.toContain("decodeRan");
+    expect(src).not.toContain("decodeWord");
+    expect(src).toContain("h-64 overflow-hidden rounded-md");
   });
 
   it("o TX congela a mensagem do clique e o PTT passa na frente da fila do Hamlib", () => {
