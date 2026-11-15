@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import net from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadSer2net } from "./ser2net-store";
+import { loadSer2net, ser2netDialHost } from "./ser2net-store";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OPT_DIR = "/opt/ham-cockpit/lp100a";
@@ -91,7 +91,7 @@ async function resolveEndpoint(): Promise<{ host: string; port: number } | null>
   const cfg = await loadSer2net();
   const svc = cfg.services.find((x) => x.device === "lp100a");
   if (!svc) return null;
-  return { host: cfg.bind || "127.0.0.1", port: svc.tcpPort };
+  return { host: ser2netDialHost(cfg.bind), port: svc.tcpPort };
 }
 
 function asMeter(n: number): Lp100aMeter {

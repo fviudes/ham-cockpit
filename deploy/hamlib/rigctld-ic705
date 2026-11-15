@@ -118,7 +118,7 @@ do
   fi
 done
 if [[ -f "$RADIOS_JSON" ]]; then
-  read -r MODEL CIV < <(python3 - "$RADIOS_JSON" "$MODELS_JSON" <<'PY'
+  read -r MODEL CIV SCOPE < <(python3 - "$RADIOS_JSON" "$MODELS_JSON" <<'PY'
 import json, sys
 
 # deploy/hamlib/models.json — -m e CI-V do Hamlib 4.6.5. Sem chute de token.
@@ -174,7 +174,7 @@ def resolve(radio):
 try:
     raw = json.load(open(sys.argv[1], encoding="utf-8"))
 except Exception:
-    print(0, "-")
+    print(0, "-", 0)
     raise SystemExit(0)
 radios = [r for r in (raw.get("radios") or []) if isinstance(r, dict)]
 picked = None
@@ -188,10 +188,10 @@ if picked is None:
             picked = radio
             break
 if picked is None:
-    print(0, "-")
+    print(0, "-", 0)
 else:
     model, civ = resolve(picked)
-    print(model, civ or "-")
+    print(model, civ or "-", 1 if picked.get("scope") else 0)
 PY
 ) || true
 fi
@@ -202,9 +202,17 @@ if [[ -z "${MODEL:-}" || "$MODEL" == "0" ]]; then
   exit 0
 fi
 
-ARGS=(-m "$MODEL" -r "${BIND}:${TCP}" -t "$LISTEN")
+DIAL="$BIND"
+if [[ -z "$DIAL" || "$DIAL" == "0.0.0.0" || "$DIAL" == "localhost" ]]; then
+  DIAL="127.0.0.1"
+fi
+ARGS=(-m "$MODEL" -r "${DIAL}:${TCP}" -t "$LISTEN")
 if [[ -n "${CIV:-}" && "$CIV" != "-" ]]; then
   ARGS+=(-c "$CIV")
+fi
+# Espectro só quando o rádio pede. O multicast fica na máquina; o S-meter segue na porta 4532.
+if [[ "${SCOPE:-0}" == "1" ]]; then
+  ARGS+=(--multicast-addr=224.0.0.1 --multicast-port=4533 --set-conf=async=1)
 fi
 echo "rigctld-ic705: ${RIGCTLD} ${ARGS[*]}"
 exec "$RIGCTLD" "${ARGS[@]}"

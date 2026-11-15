@@ -28,7 +28,7 @@ export function WizardPage() {
   const usedPorts = useMemo(() => new Set(n.services.map((x) => x.tcpPort)), [n.services]);
   const takenDevices = useMemo(() => new Set(n.services.map((x) => x.device).filter(Boolean)), [n.services]);
   const available = SER2NET_ACC_IDS.filter((id) => !takenDevices.has(id));
-  const bind = n.bind || "127.0.0.1";
+  const bind = n.bind || "0.0.0.0";
   const freePort = nextTcpPort(n.services);
 
   useEffect(() => {

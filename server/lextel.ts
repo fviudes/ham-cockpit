@@ -1,6 +1,5 @@
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import {
-  appendFileSync,
   close,
   closeSync,
   constants as fsConstants,
@@ -14,7 +13,6 @@ import {
   readSync,
   renameSync,
   statSync,
-  truncateSync,
   unlinkSync,
   writeFileSync,
   type ReadStream,
@@ -22,7 +20,19 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { inspectCapture, LextelDecoder, type LextelInspect, type LextelLayout, type LextelReading } from "./lextel-parse";
+import {
+  CAPTURE_RESET_MS,
+  CAPTURE_RING_MAX,
+  CAPTURE_STALL_MS,
+  captureStreamStalled,
+  nextReconnectDelay,
+  inspectCapture,
+  LextelDecoder,
+  pushCaptureRing,
+  type LextelInspect,
+  type LextelLayout,
+  type LextelReading,
+} from "./lextel-parse";
 
 const execFileAsync = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -100,8 +110,12 @@ let updatedAt = 0;
 let inspect: LextelInspect = inspectCapture(Buffer.alloc(0));
 let captureWatch: ReturnType<typeof setInterval> | null = null;
 let captureOff = 0;
-/** Tamanho já gravado. Relê o arquivo a cada pacote enche o disco e o SPP para perto dos 256 KiB. */
+/** Tamanho já gravado. O arquivo não cresce com a sessão: o anel é trocado por inteiro. */
 let captureLen = -1;
+/** Últimos pacotes. Zera no prazo para o SPP não parar num arquivo grande. */
+let captureRing = Buffer.alloc(0);
+let captureResetAt = 0;
+let lastStallReopen = 0;
 let wantOpen = false;
 let autoRunning = false;
 let recoverBusy = false;
@@ -120,7 +134,6 @@ let sppPortsCache: { com: string; incoming: boolean; mac: string }[] = [];
 let sppLockCom = "";
 let attachedAt = 0;
 let lastRemapAt = 0;
-const CAPTURE_MAX = 256 * 1024;
 
 function dataDir(): string {
   if (existsSync(OPT_DIR)) return OPT_DIR;
@@ -472,16 +485,21 @@ function readCaptureSlice(path: string, from: number, len: number): Buffer | nul
   }
 }
 
-function appendCapture(buf: Buffer) {
-  const cap = ensureCaptureReady();
-  if (captureLen < 0) captureLen = captureSize(cap);
-  if (captureLen + buf.length > CAPTURE_MAX) {
-    truncateSync(cap, 0);
-    captureLen = 0;
-    captureOff = 0;
-  }
-  appendFileSync(cap, buf);
-  captureLen += buf.length;
+/**
+ * Guarda só o fim do fluxo e, no prazo, esvazia o anel e a janela do decoder.
+ * Não grava o disco a cada pacote: isso atrasava o mini-UART e o HCI perdia o quadro.
+ * A última leitura (PEP, ROE, tensão) fica no `reading`.
+ */
+function rollCapture(buf: Buffer) {
+  captureRing = pushCaptureRing(captureRing, buf);
+  const now = Date.now();
+  if (!captureResetAt) captureResetAt = now;
+  if (now - captureResetAt < CAPTURE_RESET_MS) return;
+  captureRing = Buffer.alloc(0);
+  captureResetAt = now;
+  decoder.trimWindow();
+  captureLen = 0;
+  captureOff = 0;
 }
 
 function startCaptureWatch() {
@@ -509,6 +527,7 @@ function startCaptureWatch() {
       let from = captureOff;
       if (size < from) from = 0;
       if (size <= from) return;
+      if (size - from > CAPTURE_RING_MAX) from = Math.max(0, size - 4096);
       const take = Math.min(size - from, 64 * 1024);
       const chunk = readCaptureSlice(p, from, take);
       if (!chunk?.length) return;
@@ -693,10 +712,15 @@ function ingest(buf: Buffer, alreadyOnDisk = false) {
   const got = decoder.push(buf);
   if (!alreadyOnDisk) {
     try {
-      appendCapture(buf);
+      rollCapture(buf);
     } catch {
       /* o dump é histórico; não pode segurar o SPP */
     }
+  } else if (!captureResetAt) {
+    captureResetAt = Date.now();
+  } else if (Date.now() - captureResetAt >= CAPTURE_RESET_MS) {
+    captureResetAt = Date.now();
+    decoder.trimWindow();
   }
   if (got) {
     reading = got;
@@ -789,11 +813,12 @@ function clearReconnect() {
 
 function scheduleReconnect() {
   if (!wantOpen || reconnectTimer) return;
+  const wait = reconnectDelay;
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     void recoverLink();
-  }, reconnectDelay);
-  reconnectDelay = Math.min(10_000, Math.round(reconnectDelay * 1.5));
+  }, wait);
+  reconnectDelay = nextReconnectDelay(wait, "grow");
 }
 
 async function remapIfWrongCom() {
@@ -864,6 +889,31 @@ function killLeftoverWinSpp(_com?: string) {
   if (pid) killPidTree(pid);
 }
 
+function reopenStalledPump() {
+  const now = Date.now();
+  if (now - lastStallReopen < CAPTURE_STALL_MS * 2) return;
+  if (!wantOpen || recoverBusy || connectBusy || opening) return;
+  lastStallReopen = now;
+  captureRing = Buffer.alloc(0);
+  captureResetAt = now;
+  decoder.trimWindow();
+  captureLen = 0;
+  captureOff = 0;
+  try {
+    writeFileSync(ensureCaptureReady(), Buffer.alloc(0));
+  } catch {
+    /* o arquivo é só histórico */
+  }
+  closeStream();
+  wantOpen = true;
+  phase = "connecting";
+  opening = true;
+  opened = false;
+  pathOpen = RFCOMM;
+  attachedAt = now;
+  attachPump(RFCOMM);
+}
+
 function clearOpenTimer() {
   if (openTimer) {
     clearTimeout(openTimer);
@@ -932,7 +982,7 @@ function attachFd(path: string) {
     rfcommStale = false;
     opening = false;
     phase = "connecting";
-    reconnectDelay = 8_000;
+    reconnectDelay = nextReconnectDelay(reconnectDelay, "drop");
     closeStream();
     scheduleReconnect();
   }, 12_000);
@@ -1094,7 +1144,7 @@ function attachPump(path: string) {
     rfcommStale = false;
     opening = false;
     phase = "connecting";
-    reconnectDelay = 8_000;
+    reconnectDelay = nextReconnectDelay(reconnectDelay, "drop");
     closeStream();
     scheduleReconnect();
   }, 12_000);
@@ -1145,6 +1195,7 @@ function attachPump(path: string) {
 }
 
 function attach(path: string) {
+  if (!wantOpen) return;
   const openPath = normalizeSerialPath(path) || path;
   if (samePort(pathOpen, openPath) && linkAlive()) {
     phase = "streaming";
@@ -1156,6 +1207,8 @@ function attach(path: string) {
     writeFileSync(ensureCaptureReady(), Buffer.alloc(0));
     captureLen = 0;
     captureOff = 0;
+    captureRing = Buffer.alloc(0);
+    captureResetAt = 0;
   } catch {
     /* */
   }
@@ -1420,7 +1473,9 @@ async function lextelConnectBody(body: { addr?: string; pin?: string; name?: str
     // stale faria o próximo bind pedir rebind e soltar o nó.
     // Nó que ficou closed: esperar. Religar em cima do tx timeout trava o hci0.
     rfcommStale = !helperBusy(msg) && !noController(msg) && /ENODEV|nao apareceu|não apareceu/i.test(msg);
-    if (/continua closed|nao saiu|não saiu/i.test(msg)) reconnectDelay = 15_000;
+    if (/continua closed|nao saiu|não saiu|tx timeout/i.test(msg)) {
+      reconnectDelay = nextReconnectDelay(reconnectDelay, "drop");
+    }
     closeStream();
     if (wantOpen) {
       phase = "connecting";
@@ -1433,6 +1488,7 @@ async function lextelConnectBody(body: { addr?: string; pin?: string; name?: str
 }
 
 export async function lextelKeepalive(): Promise<LextelSnapshot> {
+  if (reconnectTimer && reconnectDelay >= 15_000) return lextelStatus();
   if (!connectBusy && !recoverBusy && !autoRunning && wantOpen && !linkAlive()) {
     reconnectDelay = 400;
     clearReconnect();
@@ -1494,6 +1550,13 @@ const recoverWatch = setInterval(() => {
   if (phase === "scanning" || phase === "pairing") return;
   if (opening && attachedAt && Date.now() - attachedAt < 12_000) return;
   if (linkAlive()) {
+    if (
+      process.platform === "linux" &&
+      captureStreamStalled(Date.now(), updatedAt, attachedAt, CAPTURE_STALL_MS)
+    ) {
+      reopenStalledPump();
+      return;
+    }
     if (process.platform === "win32" && bytes === 0 && attachedAt && Date.now() - attachedAt > 5000) {
       void remapIfWrongCom();
     }

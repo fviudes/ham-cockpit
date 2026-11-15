@@ -5,6 +5,7 @@ import { resolvePrimaryRoute, sendPrimaryCmd } from "@/console/radio-cmd";
 import { ConsoleProvider, useConsole } from "@/console/state";
 import { SVC_LABEL, serviceLive } from "@/console/services-ui";
 import { HeaderSMeter } from "@/console/header-smeter";
+import { PcAudioCard } from "@/console/pc-audio-card";
 import { LangToggle, UpdatesMenu, UserMenu } from "@/console/widgets";
 import { RadioPage } from "@/console/radio";
 import { ManualPage } from "@/console/manual";
@@ -163,7 +164,23 @@ function LcdLamp({ label, tone }: { label: ReactNode; tone: "amber" | "rx" | "tx
   );
 }
 
-/** Serviços em duas linhas; à direita, idioma/usuário em cima e avisos embaixo, cortados por um fio vertical. */
+function HeaderChipView({ chip }: { chip: HeaderChip }) {
+  const cls = `${HEADER_CHIP} ${chip.className}`;
+  if (chip.onClick) {
+    return (
+      <button type="button" title={chip.label} disabled={chip.disabled} onClick={chip.onClick} className={cls}>
+        {chip.label}
+      </button>
+    );
+  }
+  return (
+    <span title={chip.label} className={cls}>
+      {chip.label}
+    </span>
+  );
+}
+
+/** Três linhas, de cima para baixo. A quarta peça só entra na linha de cima da coluna à direita. */
 function HeaderServiceRows({
   chips,
   identity,
@@ -173,42 +190,16 @@ function HeaderServiceRows({
   identity?: ReactNode;
   notices?: ReactNode;
 }) {
-  const mid = Math.ceil(chips.length / 2);
-  const rows = [chips.slice(0, mid), chips.slice(mid)];
   return (
-    <div className="@container col-start-2 row-span-2 grid h-full min-w-0 grid-cols-[minmax(0,1fr)_auto] grid-rows-2 gap-x-2 gap-y-1 overflow-hidden">
-      {rows.map((row, index) => (
-        <div
-          key={index}
-          className={`col-start-1 flex min-h-0 min-w-0 items-center gap-1 overflow-hidden ${index === 0 ? "row-start-1" : "row-start-2"}`}
-        >
-          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
-            {row.map((chip) => {
-              const cls = `${HEADER_CHIP} ${chip.className}`;
-              if (chip.onClick) {
-                return (
-                  <button
-                    key={chip.key}
-                    type="button"
-                    title={chip.label}
-                    disabled={chip.disabled}
-                    onClick={chip.onClick}
-                    className={cls}
-                  >
-                    {chip.label}
-                  </button>
-                );
-              }
-              return (
-                <span key={chip.key} title={chip.label} className={cls}>
-                  {chip.label}
-                </span>
-              );
-            })}
-          </div>
+    <div className="@container col-start-3 row-span-2 grid h-full min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-2 overflow-hidden">
+      <div className="col-start-1 min-h-0 min-w-0 overflow-hidden rounded-md border border-[rgba(79,195,247,0.28)] bg-[#0b1520] px-1.5">
+        <div className="grid h-full grid-flow-col grid-rows-3 items-center justify-start gap-x-1">
+          {chips.map((chip) => (
+            <HeaderChipView key={chip.key} chip={chip} />
+          ))}
         </div>
-      ))}
-      <div className="col-start-2 row-span-2 row-start-1 flex min-h-0 items-stretch gap-2">
+      </div>
+      <div className="col-start-2 flex h-full min-h-0 items-stretch gap-2">
         <div aria-hidden="true" className="w-px shrink-0 self-stretch bg-[rgba(79,195,247,0.4)]" />
         <div className="grid shrink-0 grid-rows-2 items-center justify-items-end gap-1 pr-1">
           <div className="flex items-center justify-end gap-2">{identity}</div>
@@ -576,7 +567,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
               {open ? <X size={18} /> : <Menu size={18} />}
             </button>
           ) : null}
-          <div className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] grid-rows-[2.85rem_2.85rem] gap-x-2 gap-y-1">
+          <div className="grid min-w-0 flex-1 grid-cols-[auto_auto_minmax(0,1fr)] grid-rows-[2.85rem_2.85rem] gap-x-2 gap-y-1">
             <div className="lcd-bezel row-span-2 flex h-full min-h-0 items-stretch gap-1.5 overflow-hidden py-0.5 pr-2.5 pl-0.5">
             <HeaderSMeter live={liveSignal} />
             <div
@@ -603,6 +594,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
               </div>
             </div>
             </div>
+            <PcAudioCard />
             <HeaderServiceRows
               chips={headerChips}
               identity={

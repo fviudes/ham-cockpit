@@ -18,6 +18,7 @@ import {
 import { formatWatts, useConsole, type Station } from "./state";
 import { NextionViz } from "./nextion-panel";
 import { Drop, VfoPanel } from "./vfo-panel";
+import { WaterfallViz } from "./waterfall-panel";
 import { Chip, GhostBtn, Lcd, Led, PageHead, PanelTitle, PrimaryBtn } from "./widgets";
 
 const TILE_LABEL: Record<TileId, I18nKey> = {
@@ -30,6 +31,7 @@ const TILE_LABEL: Record<TileId, I18nKey> = {
   lextel: "lextel",
   ldg: "ldg",
   lp100a: "lp100a",
+  waterfall: "panelWaterfall",
 };
 
 export function RadioPage() {
@@ -192,6 +194,7 @@ export function RadioPage() {
         render={(id) => {
           if (id === "vfo") return <VfoPanel />;
           if (id === "nextion") return <NextionViz />;
+          if (id === "waterfall") return <WaterfallViz />;
           return accessories.find((a) => a.id === id)?.node ?? null;
         }}
       />

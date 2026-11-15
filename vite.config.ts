@@ -11,6 +11,8 @@ import { radiosConnect, radiosDisconnect, radiosMarkBle, radiosRemove, radiosSav
 import { icomLanCmd, icomLanStatus } from "./server/icom-lan";
 import { hubRigctl } from "./server/hamlib-hub";
 import { loadSer2net, saveSer2net } from "./server/ser2net-store";
+import { attachRadioAudio } from "./server/radio-audio";
+import { attachScopeWs } from "./server/icom-scope-ws";
 import { attachTerminal } from "./server/term";
 import { createUser, deleteUser, listUsers, sshStatus } from "./server/users";
 import { consoleSessionCookie, consoleSessionOk, consoleSessionToken } from "./server/console-session";
@@ -348,7 +350,11 @@ function vitePluginTerm(): Plugin {
     name: "term-ws",
     configureServer(server: ViteDevServer) {
       const bind = () => {
-        if (server.httpServer) attachTerminal(server.httpServer);
+        if (server.httpServer) {
+          attachTerminal(server.httpServer);
+          attachRadioAudio(server.httpServer);
+          attachScopeWs(server.httpServer);
+        }
       };
       bind();
       server.httpServer?.on("listening", bind);

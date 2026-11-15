@@ -143,6 +143,8 @@ export type StationRadio = {
   netPassword?: string;
   /** Senha gravada no Pi (valor nunca volta na API). */
   hasNetPassword?: boolean;
+  /** CI-V da serial pode entregar o waterfall. O Hamlib reinicia ao gravar. */
+  scope?: boolean;
 };
 
 /**
@@ -691,7 +693,7 @@ function initial(): Station {
       folder: "/opt/ser2net",
       running: false,
       hamlibRunning: false,
-      bind: "127.0.0.1",
+      bind: "0.0.0.0",
       services: [],
       serials: [],
     },

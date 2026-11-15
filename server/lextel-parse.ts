@@ -32,6 +32,38 @@ export type LextelLayout = {
 };
 
 const MAX_BUF = 2048;
+/** Histórico em memória. Acima disso o trecho antigo sai, sem encostar no disco a cada pacote. */
+export const CAPTURE_RING_MAX = 32 * 1024;
+/** De quanto em quanto o anel e a janela do decoder são esvaziados. A última leitura fica. */
+export const CAPTURE_RESET_MS = 15_000;
+/** Silêncio com o SPP ainda “conectado”: o HCI já perdeu o quadro e o read não volta. */
+export const CAPTURE_STALL_MS = 8_000;
+/** Teto da espera entre tentativas. O crescimento para aqui. */
+export const RECONNECT_CAP_MS = 90_000;
+/**
+ * Depois que o open não atende, ou o nó ficou closed, a próxima tentativa
+ * espera isso. Religar em cima do tx timeout do mini-UART trava o hci0.
+ */
+export const RECONNECT_AFTER_DROP_MS = 60_000;
+
+export function nextReconnectDelay(current: number, reason: "grow" | "drop"): number {
+  if (reason === "drop") return Math.max(current, RECONNECT_AFTER_DROP_MS);
+  const base = Math.max(current, 600);
+  return Math.min(RECONNECT_CAP_MS, Math.round(base * 1.5));
+}
+
+export function captureStreamStalled(now: number, updatedAt: number, attachedAt: number, stallMs = CAPTURE_STALL_MS): boolean {
+  if (!updatedAt || !attachedAt) return false;
+  if (now - attachedAt < stallMs) return false;
+  return now - updatedAt >= stallMs;
+}
+
+export function pushCaptureRing(ring: Buffer, chunk: Buffer, max = CAPTURE_RING_MAX): Buffer {
+  if (!chunk.length) return ring;
+  const next = Buffer.concat([ring, chunk]);
+  if (next.length <= max) return next;
+  return Buffer.from(next.subarray(next.length - max));
+}
 
 function round(n: number, d: number) {
   const p = 10 ** d;
@@ -402,6 +434,14 @@ export class LextelDecoder {
     this.layout = saved ?? null;
     this.lastHex = "";
     this.bytes = 0;
+  }
+
+  /** Esvazia a janela de montagem. O mapa já aprendido permanece, para a tela não zerar. */
+  trimWindow() {
+    this.buf = Buffer.alloc(0);
+    this.ascii = "";
+    this.letters = {};
+    this.lastHex = "";
   }
 
   push(chunk: Buffer): LextelReading | null {

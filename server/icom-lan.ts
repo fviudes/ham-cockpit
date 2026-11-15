@@ -7,7 +7,9 @@ import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { createServer, type Server, type Socket } from "node:net";
 import { promisify } from "node:util";
 import { IcomControl, type IcomMode, type IcomModelId } from "icom-wlan-node";
+import { isScopeWaveform } from "../shared/icom-scope";
 import { bcdMeterRaw, civRawToUiSMeter } from "../shared/smeter";
+import { publishScopeFrame } from "./icom-scope-hub";
 
 const execFileAsync = promisify(execFile);
 
@@ -159,6 +161,10 @@ function feedTcp(frame: Buffer) {
 
 function attachCivListeners(control: IcomControl) {
   control.events.on("civFrame", (frame: Buffer) => {
+    if (isScopeWaveform(frame)) {
+      publishScopeFrame(frame);
+      return;
+    }
     feedTcp(Buffer.from(frame));
   });
   control.events.on("connectionLost", () => {
@@ -555,6 +561,17 @@ export async function icomLanCmd(
         const tick = Number(body.tick ?? 0) || 0;
         const reply = await pollLanTelemetry(tick);
         return { ok: true, reply };
+      }
+      case "scope": {
+        const on = Boolean(body.on);
+        if (on) {
+          rig.sendCiv(civPayload(0x27, 0x10, 0x01));
+          rig.sendCiv(civPayload(0x27, 0x11, 0x01));
+        } else {
+          rig.sendCiv(civPayload(0x27, 0x11, 0x00));
+          rig.sendCiv(civPayload(0x27, 0x10, 0x00));
+        }
+        return { ok: true };
       }
       case "civ": {
         const hex = String(body.hex || "").replace(/\s+/g, "");

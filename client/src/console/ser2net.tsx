@@ -171,7 +171,7 @@ export function Ser2netPage() {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Tile label="ser2net" value={n.running ? tx("connected") : tx("disconnected")} on={n.running} />
         <Tile label={tx("registered")} value={String(n.services.length)} on={n.services.length > 0} />
-        <Tile label={tx("ser2netBind")} value={n.bind} on={n.bind === "127.0.0.1"} />
+        <Tile label={tx("ser2netBind")} value={n.bind} on={n.bind === "0.0.0.0"} />
         <Tile label={tx("scan")} value={String(serials.length)} on={serials.length > 0} />
       </div>
 
@@ -292,6 +292,7 @@ export function Ser2netPage() {
                     <td className="py-2 font-['IBM_Plex_Mono'] text-[11px]">{row.serial}</td>
                     <td className="py-2 font-['IBM_Plex_Mono']">
                       {n.bind}:{row.tcpPort}
+                      {row.device === "spe" ? ` · ${tx("s2nRfc2217")}` : ""}
                     </td>
                     <td className="py-2 font-['IBM_Plex_Mono']">{row.baud}</td>
                     <td className="py-2">

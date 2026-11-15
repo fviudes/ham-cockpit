@@ -7,6 +7,7 @@ import {
   type Ser2netAccId,
   type Ser2netDevice,
 } from "@shared/const";
+import { ser2netDialHost } from "@shared/ser2net-bind";
 import type { Ser2netSvc } from "./state";
 
 export {
@@ -35,7 +36,7 @@ export function s2nDeviceLabelKey(device: Ser2netDevice): "s2nForNone" | "s2nFor
 
 export function s2nAside(bind: string, services: { device?: string; tcpPort: number }[], acc: Ser2netAccId): string {
   const row = services.find((x) => x.device === acc);
-  return row ? `${bind}:${row.tcpPort}` : "";
+  return row ? `${ser2netDialHost(bind)}:${row.tcpPort}` : "";
 }
 
 export function nextTcpPort(services: { tcpPort: number }[], from = 4001): number {

@@ -1,5 +1,6 @@
 /** Icom IC-705 CI-V over BLE — GATT 14cf8001 / char 14cf8002, handshake 0x61–0x64. */
 import { civRawToUiSMeter } from "@shared/smeter";
+import { publishScopeChunk } from "./scope-bus";
 import { publishSmeter } from "./smeter-bus";
 
 export const IC705_SVC = "14cf8001-1ec2-d408-1b04-2eb270f14203";
@@ -441,6 +442,19 @@ class Ic705BleLink {
     return true;
   }
 
+  /** Liga a tela e a saída do scope neste enlace BLE. Não mexe no CI-V do rigctld. */
+  async setScope(on: boolean) {
+    if (!this.connected || this.hsBusy) return false;
+    if (on) {
+      await this.ask(0x27, 0x10, 0x01);
+      await this.ask(0x27, 0x11, 0x01);
+    } else {
+      await this.ask(0x27, 0x11, 0x00);
+      await this.ask(0x27, 0x10, 0x00);
+    }
+    return true;
+  }
+
   /** 07 00 = VFO A, 07 01 = VFO B (IC-705 CI-V). */
   async selectVfo(which: "A" | "B") {
     await this.ask(0x07, which === "B" ? 0x01 : 0x00);
@@ -766,7 +780,7 @@ class Ic705BleLink {
         }
       }
       if (end < 0) {
-        if (this.rx.length > 256) this.rx = this.rx.subarray(-64);
+        if (this.rx.length > 800) this.rx = this.rx.subarray(-64);
         return;
       }
       const frame = this.rx.subarray(0, end + 1);
@@ -824,6 +838,9 @@ class Ic705BleLink {
         this.lastPtt = data[0] === 0x01;
         patch.ptt = this.lastPtt;
       }
+    } else if (cmd === 0x27 && data.length >= 4 && data[0] === 0x00) {
+      publishScopeChunk(data);
+      return;
     } else if (cmd === 0x15 && data.length >= 3 && data[0] === 0x02) {
       patch.smeter = sFromLevel(bcd2(data[1]!, data[2]!));
       publishSmeter(patch.smeter);

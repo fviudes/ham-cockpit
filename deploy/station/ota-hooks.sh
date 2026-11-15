@@ -746,6 +746,35 @@ EOF
 }
 allow_support_vpn_input || echo "ota-hooks: AVISO — entrada do tunel VPN nao aplicada" >&2
 
+# Portas TCP do ser2net para a rede privada. Não dá ufw enable/disable e não abre a WAN.
+allow_ser2net_ports() {
+  local ctl=/opt/ham-cockpit/bin/ser2net-ctl
+  [[ -x "$ctl" ]] || return 1
+  cat >/etc/systemd/system/ham-cockpit-ser2net-ports.service <<'EOF'
+[Unit]
+Description=Ham Cockpit portas ser2net na rede local
+After=network-online.target ufw.service ser2net.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Abre as portas do services.json para redes privadas. Não dá ufw enable/disable e não abre a WAN.
+ExecStart=/opt/ham-cockpit/bin/ser2net-ctl open-ports
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload 2>/dev/null || true
+  if ! systemctl enable ham-cockpit-ser2net-ports.service 2>/dev/null; then
+    mkdir -p /etc/systemd/system/multi-user.target.wants
+    ln -sfn /etc/systemd/system/ham-cockpit-ser2net-ports.service /etc/systemd/system/multi-user.target.wants/ham-cockpit-ser2net-ports.service
+  fi
+  "$ctl" open-ports
+  return 0
+}
+allow_ser2net_ports || echo "ota-hooks: AVISO — portas ser2net no firewall nao aplicadas" >&2
+
 # .env do Wavelog costuma nascer root:root 600 (Docker/install antigo).
 # Sem isso o backup do console falha com EACCES ao copiar /opt/wavelog/.env.
 if [[ -x "$ROOT/bin/station-backup" ]]; then
@@ -813,9 +842,9 @@ fi
 ser2net_yaml_keeps_contract() {
   local y=/opt/ser2net/ser2net.yaml
   [[ -f "$y" ]] || return 1
-  grep -q 'telnet(rfc2217),tcp,127.0.0.1,4001' "$y" || return 1
-  grep -q 'accepter: tcp,127.0.0.1,4002' "$y" || return 1
-  grep -q 'telnet(rfc2217),tcp,127.0.0.1,4002' "$y" && return 1
+  grep -Eq 'telnet\(rfc2217\),tcp,[^,]+,4001' "$y" || return 1
+  grep -Eq 'accepter: tcp,[^,]+,4002' "$y" || return 1
+  grep -Eq 'telnet\(rfc2217\),tcp,[^,]+,4002' "$y" && return 1
   return 0
 }
 if ser2net_yaml_keeps_contract; then

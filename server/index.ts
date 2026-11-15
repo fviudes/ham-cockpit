@@ -7,6 +7,8 @@ import { lextelConnect, lextelDisconnect, lextelKeepalive, lextelLearn, lextelOp
 import { listSerialDevices } from "./list-serials";
 import { currentSerialHamlib, radiosConnect, radiosDisconnect, radiosMarkBle, radiosRemove, radiosResumeIcomLan, radiosSave, radiosSetPrimary, radiosStatus, radiosUpsert } from "./radios";
 import { hamlibCtl, loadSer2net, probeHamlibNet, saveSer2net } from "./ser2net-store";
+import { attachRadioAudio } from "./radio-audio";
+import { attachScopeWs } from "./icom-scope-ws";
 import { attachTerminal } from "./term";
 import { createUser, deleteUser, listUsers, sshStatus } from "./users";
 import {
@@ -75,6 +77,8 @@ async function startServer() {
   const server = createServer(app);
   app.use(express.json({ limit: "32kb" }));
   attachTerminal(server);
+  attachRadioAudio(server);
+  attachScopeWs(server);
   registerLicenseRoutes(app);
 
   // Serve static files from dist/public in production

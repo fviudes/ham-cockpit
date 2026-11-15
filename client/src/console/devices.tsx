@@ -29,6 +29,7 @@ import {
   type RadioProto,
   type StationRadio,
 } from "./state";
+import { ser2netDialHost } from "@shared/ser2net-bind";
 import {
   SER2NET_RADIO_ID,
   asSer2netDevice,
@@ -179,6 +180,7 @@ export function Ic705Page() {
   const [port, setPort] = useState("");
   const [baud, setBaud] = useState(115200);
   const [civAddr, setCivAddr] = useState("0xA4");
+  const [scope, setScope] = useState(false);
   const [host, setHost] = useState("");
   const [netProfile, setNetProfile] = useState("");
   const [netUser, setNetUser] = useState("");
@@ -212,7 +214,7 @@ export function Ic705Page() {
   const needNetAuth = useNet && activeNet?.auth === "network-user";
   const radioSvcs = useMemo(() => radioSer2netSvcs(s.ser2net.services), [s.ser2net.services]);
   const s2nRow = useMemo(() => radioSvcs.find((x) => x.id === device), [radioSvcs, device]);
-  const s2nEndpoint = s2nRow ? `${s.ser2net.bind}:${s2nRow.tcpPort}` : "";
+  const s2nEndpoint = s2nRow ? `${ser2netDialHost(s.ser2net.bind)}:${s2nRow.tcpPort}` : "";
   const picks = catUsb || useNet ? [] : [...webBle, ...s.radios.bluetooth];
   const primary = s.radios.items.find((r) => r.primary);
   const live = (primary?.connected ? primary : undefined) || s.radios.items.find((r) => r.connected) || primary;
@@ -307,7 +309,7 @@ export function Ic705Page() {
 
   useEffect(() => {
     if (!catUsb || !s2nRow) return;
-    setPort(`${s.ser2net.bind}:${s2nRow.tcpPort}`);
+    setPort(`${ser2netDialHost(s.ser2net.bind)}:${s2nRow.tcpPort}`);
     setBaud(s2nRow.baud);
   }, [catUsb, s.ser2net.bind, s2nRow]);
 
@@ -338,6 +340,7 @@ export function Ic705Page() {
     setPort(row.port);
     setBaud(row.baud);
     setCivAddr(row.civAddr);
+    setScope(Boolean(row.scope));
     setHost(row.host || (row.link === "network" ? row.device : ""));
     setNetProfile(row.netProfile || "");
     setNetUser((row.netUser || "").toUpperCase());
@@ -358,6 +361,7 @@ export function Ic705Page() {
     setHost("");
     setNetUser("");
     setNetPassword("");
+    setScope(false);
     setBaud(eq?.defaultBaud || defaultBaud(maker, link));
     if (link === "network") applyNetProfile(defaultNetworkProfile(maker), setPort, setNetProfile);
     else setNetProfile("");
@@ -391,7 +395,7 @@ export function Ic705Page() {
       };
     }
     if (catUsb && s2nRow) {
-      const endpoint = `${s.ser2net.bind}:${s2nRow.tcpPort}`;
+      const endpoint = `${ser2netDialHost(s.ser2net.bind)}:${s2nRow.tcpPort}`;
       return {
         id: editingId || undefined,
         maker,
@@ -403,6 +407,7 @@ export function Ic705Page() {
         port: endpoint,
         baud: s2nRow.baud,
         civAddr,
+        scope: radioProto === "civ" && scope,
         name: radioName,
       };
     }
@@ -921,7 +926,7 @@ export function Ic705Page() {
                   setDevice(id);
                   const row = radioSvcs.find((x) => x.id === id);
                   if (row) {
-                    setPort(`${s.ser2net.bind}:${row.tcpPort}`);
+                    setPort(`${ser2netDialHost(s.ser2net.bind)}:${row.tcpPort}`);
                     setBaud(row.baud);
                   } else {
                     setPort("");
@@ -931,7 +936,7 @@ export function Ic705Page() {
                 <option value="">{tx("s2nPick")}</option>
                 {radioSvcs.map((row) => (
                   <option key={row.id} value={row.id}>
-                    {row.name} · {s.ser2net.bind}:{row.tcpPort} · {row.serial} · {row.baud}
+                    {row.name} · {ser2netDialHost(s.ser2net.bind)}:{row.tcpPort} · {row.serial} · {row.baud}
                   </option>
                 ))}
               </ConsoleSelect>
@@ -1006,6 +1011,20 @@ export function Ic705Page() {
                 ))}
               </ConsoleSelect>
             </Field>
+          ) : null}
+          {catUsb && radioProto === "civ" ? (
+            <label className="flex items-start gap-2 text-sm text-[#c5d4e0] md:col-span-2">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={scope}
+                onChange={(e) => setScope(e.target.checked)}
+              />
+              <span>
+                <span className="font-semibold text-white">{tx("radioScope")}</span>
+                <span className="mt-1 block text-xs leading-relaxed text-[#8ea0b3]">{tx("radioScopeHelp")}</span>
+              </span>
+            </label>
           ) : null}
         </div>
         {selectedEq ? (

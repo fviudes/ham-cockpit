@@ -53,8 +53,47 @@ case "${1:-}" in
   is-hamlib)
     /usr/bin/systemctl is-active rigctld@ic705.service 2>/dev/null || echo inactive
     ;;
+  # Portas TCP do services.json para a rede privada. Não mexe no ser2net,
+  # no rigctld, no ufw enable/disable nem na WAN.
+  open-ports)
+    json=/opt/ser2net/services.json
+    [[ -f "$json" ]] || exit 0
+    ports=$(python3 - "$json" <<'PY'
+import json, sys
+try:
+    raw = json.load(open(sys.argv[1], encoding="utf-8"))
+except Exception:
+    raise SystemExit(0)
+seen = set()
+for row in raw.get("services") or []:
+    try:
+        port = int(row.get("tcpPort"))
+    except (TypeError, ValueError):
+        continue
+    if 1024 <= port <= 65535 and port not in seen:
+        seen.add(port)
+        print(port)
+PY
+)
+    nets=(192.168.0.0/16 10.0.0.0/8 172.16.0.0/12)
+    while IFS= read -r port; do
+      [[ "$port" =~ ^[0-9]+$ ]] || continue
+      for net in "${nets[@]}"; do
+        if command -v iptables >/dev/null 2>&1; then
+          iptables -C INPUT -p tcp -s "$net" --dport "$port" -m comment --comment "ham-cockpit ser2net $port" -j ACCEPT 2>/dev/null \
+            || iptables -I INPUT 1 -p tcp -s "$net" --dport "$port" -m comment --comment "ham-cockpit ser2net $port" -j ACCEPT \
+            || true
+        fi
+        if command -v ufw >/dev/null 2>&1 && [[ -f /etc/ufw/user.rules ]]; then
+          if ! grep -Eq -- "-s ${net} .*--dport ${port}( |$)|--dport ${port} .*-s ${net}( |$)" /etc/ufw/user.rules 2>/dev/null; then
+            ufw allow from "$net" to any port "$port" proto tcp >/dev/null 2>&1 || true
+          fi
+        fi
+      done
+    done <<< "$ports"
+    ;;
   *)
-    echo "uso: ser2net-ctl start|stop|restart|reload-or-restart|is-active|quiet-amp|sync-spe|sync-hamlib|start-hamlib|stop-hamlib|is-hamlib" >&2
+    echo "uso: ser2net-ctl start|stop|restart|reload-or-restart|is-active|quiet-amp|sync-spe|sync-hamlib|start-hamlib|stop-hamlib|is-hamlib|open-ports" >&2
     exit 2
     ;;
 esac

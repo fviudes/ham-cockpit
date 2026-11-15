@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.10.04** (`version.json`).
+Versão atual neste canal: **0.1.10.05** (`version.json`).
 
 ## Versionamento
 
@@ -20,12 +20,12 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.10.04",
+  "version": "0.1.10.05",
   "channel": "main",
-  "file": "ham-cockpit-0.1.10.04.tgz",
-  "sha256": "5e3906d9ccf2ae148e82e608196318727c39bddb2f9e519c9b9d99860309f5b9",
-  "bytes": 5060602,
-  "notes": "Ham Cockpit v0.1.10.04 — frequencímetro e frequência no mesmo LCD âmbar, com VFO, modo e RX/TX em caixas; o S-meter desenha a 60 quadros com a mesma suavidade.\n\nA OTA não sobrescreve rádios, INI, services.json, Lextel, SPE nem a escolha da VPN."
+  "file": "ham-cockpit-0.1.10.05.tgz",
+  "sha256": "161a68142d22cddbb0905f816d6b9aaa72d403eaa77ae2529a81eb1cb718dff8",
+  "bytes": 5071560,
+  "notes": "Ham Cockpit v0.1.10.05 — waterfall no painel (Bluetooth, rede e CI-V da serial), áudio do rádio na saída de som do PC, e as portas do ser2net liberadas no firewall da rede local.\n\nA OTA não sobrescreve rádios, INI, services.json, Lextel, SPE nem a escolha da VPN."
 }
 ```
 

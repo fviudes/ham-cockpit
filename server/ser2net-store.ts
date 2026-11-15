@@ -6,6 +6,9 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { randomBytes } from "node:crypto";
 import { asSer2netDevice, type Ser2netDevice } from "../shared/const";
+import { SER2NET_LISTEN, ser2netDialHost } from "../shared/ser2net-bind";
+
+export { SER2NET_LISTEN, ser2netDialHost };
 
 const execFileAsync = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -206,6 +209,15 @@ export async function probeHamlibNet(port = HAMLIB_NET_PORT, host = "127.0.0.1",
   });
 }
 
+async function openListenPorts(): Promise<void> {
+  if (process.platform !== "linux" || !existsSync(HELPER)) return;
+  try {
+    await execFileAsync("sudo", ["-n", HELPER, "open-ports"], { timeout: 15_000, windowsHide: true });
+  } catch {
+    /* o firewall é opcional; a escuta do ser2net já foi gravada */
+  }
+}
+
 async function reloadDaemon(): Promise<boolean> {
   if (process.platform !== "linux") return false;
   try {
@@ -245,7 +257,7 @@ export async function hamlibCtl(action: "start" | "stop"): Promise<boolean> {
 
 export async function loadSer2net(): Promise<Ser2netConfig> {
   const { folder, jsonPath, yamlPath } = paths();
-  let bind = "127.0.0.1";
+  let bind = SER2NET_LISTEN;
   let services: Ser2netSvc[] = [];
   const json = existsSync(jsonPath) ? readJson(jsonPath) : null;
   if (json) {
@@ -310,6 +322,7 @@ export async function saveSer2net(input: {
   writeAtomic(jsonPath, `${payload}\n`);
   writeAtomic(yamlPath, renderYaml(bind, services));
   await reloadDaemon();
+  await openListenPorts();
   const [running, hamlibRunning] = await Promise.all([daemonActive(), probeHamlibNet()]);
   return {
     ok: true,

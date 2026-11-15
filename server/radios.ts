@@ -21,7 +21,7 @@ import {
   resolveIcomLanModel,
 } from "./icom-lan";
 import { listSerialDevices } from "./list-serials";
-import { hamlibCtl, loadSer2net, saveSer2net } from "./ser2net-store";
+import { hamlibCtl, loadSer2net, saveSer2net, ser2netDialHost } from "./ser2net-store";
 
 const execFileAsync = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -66,6 +66,8 @@ export type StationRadio = {
   netPassword?: string;
   /** Senha gravada (não ecoa o valor). */
   hasNetPassword?: boolean;
+  /** CI-V da serial entrega o waterfall. Mudar isto reinicia o rigctld. */
+  scope?: boolean;
 };
 
 export type RadioPick = {
@@ -170,7 +172,7 @@ export function serialHamlibRadio(list: StationRadio[]): StationRadio | undefine
 function serialHamlibSig(list: StationRadio[]): string {
   const row = serialHamlibRadio(list);
   if (!row) return "";
-  return `${row.hamlibModel}|${row.hamlibPassCiv ? 1 : 0}|${row.civAddr}`;
+  return `${row.hamlibModel}|${row.hamlibPassCiv ? 1 : 0}|${row.civAddr}|${row.scope ? 1 : 0}`;
 }
 
 function pokeSerialHamlib() {
@@ -287,6 +289,10 @@ function sanitize(raw: Partial<StationRadio>, fallback?: StationRadio): StationR
   const serialHamlib = Boolean(eq && eq.hamlibBackend === "ser2net" && eq.hamlibModel);
   const hamlibModel = serialHamlib ? eq!.hamlibModel! : undefined;
   const civOverride = eq && serialHamlib ? rigctldCivOverride(eq, civAddr, proto) : null;
+  const scope =
+    link === "usb" &&
+    proto === "civ" &&
+    (raw.scope === undefined ? Boolean(fallback?.scope) : Boolean(raw.scope));
   return {
     id: String(raw.id ?? fallback?.id ?? newId()),
     name,
@@ -307,6 +313,7 @@ function sanitize(raw: Partial<StationRadio>, fallback?: StationRadio): StationR
     ...(modelName ? { model: modelName } : {}),
     ...(hamlibModel ? { hamlibModel } : {}),
     ...(civOverride ? { hamlibPassCiv: true } : {}),
+    ...(scope ? { scope: true } : {}),
     ...(link === "network"
       ? {
           host,
@@ -626,6 +633,7 @@ export async function radiosConnect(raw: Partial<StationRadio>): Promise<RadiosS
     const cfg = await loadSer2net();
     const svc =
       cfg.services.find((x) => x.id === next.device) ||
+      cfg.services.find((x) => `${ser2netDialHost(cfg.bind)}:${x.tcpPort}` === next.port) ||
       cfg.services.find((x) => `${cfg.bind}:${x.tcpPort}` === next.port) ||
       cfg.services.find((x) => x.device === SER2NET_RADIO_ID);
     const taken = Boolean(svc?.device && svc.device !== SER2NET_RADIO_ID);
@@ -635,7 +643,7 @@ export async function radiosConnect(raw: Partial<StationRadio>): Promise<RadiosS
     } else {
       next.device = svc.id;
       next.deviceName = svc.name || next.deviceName;
-      next.port = `${cfg.bind}:${svc.tcpPort}`;
+      next.port = `${ser2netDialHost(cfg.bind)}:${svc.tcpPort}`;
       next.baud = svc.baud;
       next.connected = true;
       radios = radios.map((r) => (r.id === next.id ? r : { ...r, connected: r.link === "usb" ? false : r.connected }));

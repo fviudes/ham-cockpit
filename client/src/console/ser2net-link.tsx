@@ -1,5 +1,6 @@
 import { useLocation } from "wouter";
 import { toast } from "sonner";
+import { ser2netDialHost } from "@shared/ser2net-bind";
 import { assignedSvc, assignDevice, persistSer2net, s2nDeviceLabelKey, type Ser2netAccId } from "./ser2net-api";
 import { useConsole } from "./state";
 import { ConsoleInput, ConsoleSelect, Field, GhostBtn, Panel, PanelTitle } from "./widgets";
@@ -9,7 +10,7 @@ export function Ser2netLink({ acc }: { acc: Ser2netAccId }) {
   const [, navigate] = useLocation();
   const n = s.ser2net;
   const selected = assignedSvc(n.services, acc);
-  const endpoint = selected ? `${n.bind}:${selected.tcpPort}` : "—";
+  const endpoint = selected ? `${ser2netDialHost(n.bind)}:${selected.tcpPort}` : "—";
 
   const pick = async (id: string) => {
     try {
@@ -43,7 +44,7 @@ export function Ser2netLink({ acc }: { acc: Ser2netAccId }) {
             <option value="">{tx("s2nPick")}</option>
             {n.services.map((row) => (
               <option key={row.id} value={row.id}>
-                {row.name} · {n.bind}:{row.tcpPort} · {row.baud}
+                {row.name} · {ser2netDialHost(n.bind)}:{row.tcpPort} · {row.baud}
                 {row.device && row.device !== acc ? ` · ${tx(s2nDeviceLabelKey(row.device))}` : ""}
               </option>
             ))}

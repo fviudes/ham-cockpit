@@ -1,6 +1,6 @@
 import { DEFAULT_USER } from "./i18n";
 
-export const TILE_IDS = ["vfo", "nextion", "spe", "palstar", "hamplus", "acom", "lextel", "ldg", "lp100a"] as const;
+export const TILE_IDS = ["vfo", "nextion", "spe", "palstar", "hamplus", "acom", "lextel", "ldg", "lp100a", "waterfall"] as const;
 export type TileId = (typeof TILE_IDS)[number];
 export type PanelTile = { id: TileId; x: number; y: number; w: number; h: number };
 
@@ -20,6 +20,7 @@ export const DEFAULT_TILES: Record<TileId, PanelTile> = {
   acom: { id: "acom", x: 0, y: 31, w: 6, h: 9 },
   ldg: { id: "ldg", x: 6, y: 31, w: 6, h: 10 },
   lp100a: { id: "lp100a", x: 0, y: 41, w: 6, h: 10 },
+  waterfall: { id: "waterfall", x: 0, y: 51, w: 12, h: 10 },
 };
 
 const AUTH_USER_KEY = "hamcockpit.user";
@@ -36,8 +37,10 @@ function asId(v: string): TileId | null {
   return (TILE_IDS as readonly string[]).includes(v) ? (v as TileId) : null;
 }
 
+const DEFAULT_TILE_IDS = TILE_IDS.filter((id) => id !== "waterfall");
+
 export function defaultTiles(): PanelTile[] {
-  return TILE_IDS.map((id) => ({ ...DEFAULT_TILES[id] }));
+  return DEFAULT_TILE_IDS.map((id) => ({ ...DEFAULT_TILES[id] }));
 }
 
 function overlaps(a: PanelTile, b: PanelTile) {
