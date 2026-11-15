@@ -9,6 +9,9 @@ import { prepareSerialScopeTap, syncSerialScopeTap } from "./civ-scope-tap";
 import { currentSerialHamlib, radiosConnect, radiosDisconnect, radiosMarkBle, radiosRemove, radiosResumeIcomLan, radiosSave, radiosSetPrimary, radiosStatus, radiosUpsert, setBeforeHamlibRestart } from "./radios";
 import { hamlibCtl, loadSer2net, probeHamlibNet, saveSer2net } from "./ser2net-store";
 import { attachRadioAudio } from "./radio-audio";
+import { decodeSlot } from "./digital-decode";
+import { digitalRxCommand, digitalRxSnapshot } from "./digital-rx";
+import { haltDigitalTx, scheduleDigitalTx, txSnapshot } from "./digital-tx";
 import { attachScopeWs } from "./icom-scope-ws";
 import { attachTerminal } from "./term";
 import { createUser, deleteUser, listUsers, sshStatus } from "./users";
@@ -445,6 +448,92 @@ async function startServer() {
     }
   });
   // Só STRENGTH, na mesma fila do rigctld. Sempre 200: ocupado/timeout não é queda do console.
+  app.post(
+    "/api/digital/decode",
+    express.raw({ type: "application/octet-stream", limit: "1mb" }),
+    async (req, res) => {
+      if (!consoleSessionOk(req.headers.cookie)) {
+        res.status(401).json({ ok: false, ran: false, lines: [] });
+        return;
+      }
+      const mode = req.query.mode === "FT4" ? "FT4" : req.query.mode === "FT8" ? "FT8" : "";
+      const pcm = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);
+      const expect = mode === "FT4" ? 90_000 * 2 : mode === "FT8" ? 180_000 * 2 : 0;
+      if (!mode || pcm.length !== expect) {
+        res.status(400).json({ ok: false, ran: false, lines: [] });
+        return;
+      }
+      try {
+        const out = await decodeSlot(mode, pcm);
+        res.json({ ok: true, ran: out.ran, lines: out.lines });
+      } catch (err) {
+        res.status(200).json({ ok: true, ran: false, lines: [], error: String(err) });
+      }
+    },
+  );
+  app.get("/api/digital/rx", (req, res) => {
+    if (!consoleSessionOk(req.headers.cookie)) {
+      res.status(401).json({ ok: false, enabled: false, rows: [] });
+      return;
+    }
+    res.json(digitalRxSnapshot());
+  });
+  app.post("/api/digital/rx", async (req, res) => {
+    if (!consoleSessionOk(req.headers.cookie)) {
+      res.status(401).json({ ok: false, enabled: false, rows: [] });
+      return;
+    }
+    const out = await digitalRxCommand({
+      op: String(req.body?.op ?? ""),
+      mode: String(req.body?.mode ?? ""),
+      hz: Number(req.body?.hz),
+      band: String(req.body?.band ?? ""),
+      dialId: String(req.body?.dialId ?? ""),
+    });
+    res.status(out.ok ? 200 : 409).json(out);
+  });
+  app.get("/api/digital/clock", (req, res) => {
+    if (!consoleSessionOk(req.headers.cookie)) {
+      res.status(401).json({ ok: false });
+      return;
+    }
+    res.json({ ok: true, now: Date.now() });
+  });
+  app.post("/api/digital/tx", async (req, res) => {
+    if (!consoleSessionOk(req.headers.cookie)) {
+      res.status(401).json({ ok: false, error: "auth" });
+      return;
+    }
+    const mode = req.body?.mode === "FT4" ? "FT4" : req.body?.mode === "FT8" ? "FT8" : "";
+    if (!mode) {
+      res.status(400).json({ ok: false, error: "modo" });
+      return;
+    }
+    const out = await scheduleDigitalTx({
+      mode,
+      message: String(req.body?.message ?? ""),
+      audioHz: Number(req.body?.audioHz),
+      even: Boolean(req.body?.even),
+      port: Number(req.body?.port ?? 4532),
+      level: Number(req.body?.level ?? 0.5),
+    });
+    res.status(out.ok ? 200 : 409).json(out);
+  });
+  app.get("/api/digital/tx", (req, res) => {
+    if (!consoleSessionOk(req.headers.cookie)) {
+      res.status(401).json({ ok: false, phase: "idle" });
+      return;
+    }
+    res.json({ ok: true, ...txSnapshot() });
+  });
+  app.post("/api/digital/halt", async (req, res) => {
+    if (!consoleSessionOk(req.headers.cookie)) {
+      res.status(401).json({ ok: false });
+      return;
+    }
+    await haltDigitalTx();
+    res.json({ ok: true, ...txSnapshot() });
+  });
   app.post("/api/hamlib/smeter", async (req, res) => {
     try {
       const port = Number(req.body?.port ?? 4532);

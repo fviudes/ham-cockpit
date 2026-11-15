@@ -11,7 +11,7 @@ Type=simple
 User=hamcockpit
 Group=hamcockpit
 # Acesso ao docker.sock para status/backup do Wavelog (grupo docker em /etc/group).
-SupplementaryGroups=docker
+SupplementaryGroups=docker audio
 # /run/ham-cockpit (tmpfs) para veredito license.json — dono = User do serviço.
 RuntimeDirectory=ham-cockpit
 RuntimeDirectoryMode=0755

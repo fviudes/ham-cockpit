@@ -1,8 +1,8 @@
 {
-  "version": "0.1.10.06",
+  "version": "0.1.10.07",
   "channel": "main",
-  "file": "ham-cockpit-0.1.10.06.tgz",
-  "sha256": "1eee7f44b58643e32c073e613e4aedfd40d2a647c9d36caebf8480a6db7914e5",
-  "bytes": 5077309,
-  "notes": "Ham Cockpit v0.1.10.06 — o waterfall mostra ±150 kHz em volta do VFO, o clique sintoniza o kHz inteiro e o espectro religa quando o rádio volta a falar.\n\nA OTA não sobrescreve rádios, INI, services.json, Lextel, SPE nem a escolha da VPN."
+  "file": "ham-cockpit-0.1.10.07.tgz",
+  "sha256": "7f801c9cf71bfecbf556bf8abf4bb1b33ebe8a4aaed68d008807d001ae729e5a",
+  "bytes": 5116067,
+  "notes": "Ham Cockpit v0.1.10.07 — Habilitar FT8 guarda a frequência e o modo, põe o IC-705 em DATA (PKTUSB), sintoniza o dial e decodifica. A escuta continua em outro menu. Desabilitar devolve os dois e para a captura. A cascata fica acima das listas e o TX manda o tom inteiro depois de 0,5 s de silêncio.\n\nA OTA não sobrescreve rádios, INI, services.json, Lextel, SPE nem a escolha da VPN."
 }

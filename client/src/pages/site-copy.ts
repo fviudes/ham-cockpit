@@ -421,6 +421,7 @@ export const DOCS_TOC: { id: string; label: Pair }[] = [
   { id: "wlg", label: { pt: "WaveLogGate", en: "WaveLogGate" } },
   { id: "contest", label: { pt: "Contest", en: "Contest" } },
   { id: "mmdvm", label: { pt: "MMDVM / WPSD", en: "MMDVM / WPSD" } },
+  { id: "digitais", label: { pt: "Modos Digitais", en: "Digital Modes" } },
   { id: "rede", label: { pt: "Rede e Wi‑Fi", en: "Network and Wi‑Fi" } },
   { id: "portas", label: { pt: "Mapa de portas", en: "Port map" } },
   { id: "cabos", label: { pt: "Cabos e níveis elétricos", en: "Cables and levels" } },

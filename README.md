@@ -93,10 +93,10 @@ Ordem sugerida na primeira vez (menu à esquerda do console):
 
 1. **Config Device Wizard** — serial → IP:porta ser2net, escolhe o dispositivo, liga o autostart.
 2. **Rádio** — Icom Bluetooth CI-V (`0xA4`) ou Cat-USB via uma conexão ser2net já criada. Só Bluetooth é direto; USB/CAT é sempre IP. Marque **Principal** no rádio que o Painel deve operar.
-3. **ser2net** — uma serial, um dono. Acessórios (SPE, Hamplus, Palstar, LDG, ACOM) usam TCP `127.0.0.1:400x`.
+3. **ser2net** — uma serial, um dono. Acessórios (SPE, Hamplus, Palstar, LDG, ACOM) usam TCP na porta 400x: na estação, `127.0.0.1`; na rede, o IP do Pi.
 4. **WiFi** — nome na rede (`ham-cockpit.local`), cabo ou Wi‑Fi da casa, DHCP ou IP fixo, Access Point para o campo.
 5. **Wavelog** — chave API e Station ID no Gate (`/opt/wavelog-gate/wavelog-gate.env`). WSJT-X / JTDX: UDP secundário na porta 2333; Hamlib em `127.0.0.1:4532`.
-6. **Painel** — **+ dispositivo** inclui cards; **X** remove. **Salvar o layout** grava para o usuário logado.
+6. **Painel** — **+ dispositivo** inclui cards; o Waterfall não vem no layout padrão. A alça à esquerda do nome arrasta; o **X** remove. **Salvar o layout** grava para o usuário logado.
 7. **Admin → Serviços** — o que sobe no boot.
 8. **Admin → Backup** — arquivo em `/backup` (configs, WaveLogGate, Wavelog). Restore pede checkbox de confirmação.
 
@@ -117,10 +117,11 @@ USB e Bluetooth não precisam de conversor. RS232 de PC (±12 V) precisa de MAX3
 
 ## Operação
 
-- **Painel** — VFO A/B, PTT, modo, bandas, cards dos acessórios ligados. Maximizar é da página, não do card.
+- **Painel** — VFO A/B, PTT, modo, bandas, cards dos acessórios ligados e o card Waterfall (espectro, barra de frequências e cachoeira, ±150 kHz). Maximizar é da página, não do card.
+- **PC Audio** — botão no topo. Toca neste computador o codec USB do rádio ligado no Pi. Bluetooth e a rede do rádio não levam esse som.
 - **Wavelog** — logbook em :8086. Pacote UDP no Gate vira contato.
 - **Logs / Terminal** — diário filtrável e shell root no Pi.
-- **Admin → Atualização** — card **Ham Cockpit** compara a versão instalada com [`update/version.json`](update/version.json) na branch `main`. Os outros cards são Ubuntu, ser2net, Hamlib, Wavelog e WaveLogGate.
+- **Admin → Atualização** — card **Ham Cockpit** compara a versão instalada com [`update/version.json`](update/version.json) na branch `main`. A imagem do cartão permanece na base 0.1.10; o console publicado nesse canal está na 0.1.10.07 e não exige regravar o cartão. Os outros cards são Ubuntu, ser2net, Hamlib, Wavelog e WaveLogGate.
 - **Admin → Backup** — restore devolve a estação à data/hora do arquivo; o que veio depois se perde.
 
 Idioma PT/EN no canto do console. O **Manual** completo (com diagramas) está em Sistema → Manual. Catálogo de rádios (Icom, Kenwood, Yaesu, Flex, Ten-Tec, Xiegu, Hermes Lite 2, Anan — protocolos, portas, Hamlib): documentação do site em `/docs#equipamentos` e Manual → **Rádios suportados**; resumo em [`docs/equipamentos.md`](docs/equipamentos.md).
@@ -152,4 +153,4 @@ Guia: [`docs/versionamento.md`](docs/versionamento.md).
 
 ---
 
-Ham Cockpit v0.1.06 · Raspberry Pi 3 / 4 / 5 · Ubuntu Server 24.04 LTS
+Ham Cockpit imagem 0.1.10 · console 0.1.10.07 · Raspberry Pi 3 / 4 / 5 · Ubuntu Server 24.04 LTS

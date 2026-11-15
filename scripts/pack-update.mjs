@@ -49,6 +49,8 @@ const BIN_FROM_STATION = [
   "vfo-display-idle",
   "ldg-serial",
   "hc-tune.sh",
+  "build-ft8-decode.sh",
+  "ftx-encode.c",
   "ham-cockpit-watch.sh",
 ];
 

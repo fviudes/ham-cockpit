@@ -7,7 +7,7 @@ const dict = {
   pt: {
     brand: "Ham Cockpit",
     tagline: "Gateway da estação",
-    version: "v0.1.10.06",
+    version: "v0.1.10.07",
     vfoHdmiExit: "Tecle CTRL+X para sair para o console",
     loginTitle: "Acessar o console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -36,6 +36,7 @@ const dict = {
     ports: "CAT / Portas",
     wavelog: "Wavelog",
     mmdvm: "MMDVM",
+    digital: "Modos Digitais",
     ser2net: "ser2net",
     logs: "Logs",
     admin: "Admin",
@@ -668,6 +669,7 @@ const dict = {
       "Dispara o update oficial Docker: docker compose pull + up. As migrações do Wavelog rodam sozinhas na nova imagem. Faça backup antes em Sistema.",
     wlDbPassMissing: "Senha não encontrada no .env",
     mmdvmTitle: "Hotspot e repetidora MMDVM",
+    digitalTitle: "FT8 e FT4",
     mmdvmHelp:
       "Pilha WPSD / Pi-Star no console Ham Cockpit: MMDVM Host no UART do modem (HAT 3,3 V ou USB ZUMspot) e DMR Gateway em 127.0.0.1:62031. Não é o dashboard PHP — o layout, as cores e as fontes são os do portal. O modem não entra no ser2net: o Host é o dono exclusivo da TTY.",
     mmdvmHost: "MMDVM Host",
@@ -938,7 +940,7 @@ const dict = {
   en: {
     brand: "Ham Cockpit",
     tagline: "Station gateway",
-    version: "v0.1.10.06",
+    version: "v0.1.10.07",
     vfoHdmiExit: "Press CTRL+X to return to the console",
     loginTitle: "Sign in to the console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -967,6 +969,7 @@ const dict = {
     ports: "CAT / Ports",
     wavelog: "Wavelog",
     mmdvm: "MMDVM",
+    digital: "Digital Modes",
     ser2net: "ser2net",
     logs: "Logs",
     admin: "Admin",
@@ -1599,6 +1602,7 @@ const dict = {
       "Runs the official Docker update: docker compose pull + up. Wavelog migrations run inside the new image. Back up first under System.",
     wlDbPassMissing: "Password not found in .env",
     mmdvmTitle: "MMDVM hotspot and repeater",
+    digitalTitle: "FT8 and FT4",
     mmdvmHelp:
       "WPSD / Pi-Star stack inside the Ham Cockpit console: MMDVM Host on the modem UART (3.3 V HAT or USB ZUMspot) and DMR Gateway on 127.0.0.1:62031. This is not the PHP dashboard — layout, colors, and fonts are the portal's. The modem is not a ser2net row: Host exclusively owns that TTY.",
     mmdvmHost: "MMDVM Host",

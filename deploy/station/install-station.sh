@@ -40,7 +40,7 @@ add_station_user() {
     echo "$user:$pass" | chpasswd
   fi
   local g
-  for g in sudo docker dialout plugdev bluetooth video input tty render; do
+  for g in sudo docker dialout plugdev bluetooth video input tty render audio; do
     getent group "$g" >/dev/null 2>&1 && usermod -aG "$g" "$user" || true
   done
 }
@@ -51,6 +51,13 @@ install -d -o hamcockpit -g hamcockpit /opt/ham-cockpit /opt/ham-cockpit/bin /op
 install -m 0755 "$HERE/ham-cockpit-ap.sh" /opt/ham-cockpit/bin/ham-cockpit-ap.sh
 install -m 0755 "$HERE/first-boot.sh" /opt/ham-cockpit/bin/first-boot.sh
 # Idempotente: skip se src e dst forem o mesmo arquivo (inode).
+if [[ -f "$HERE/ftx-encode.c" ]]; then
+  install -m 0644 "$HERE/ftx-encode.c" /opt/ham-cockpit/bin/ftx-encode.c
+fi
+if [[ -f "$HERE/build-ft8-decode.sh" ]]; then
+  install -m 0755 "$HERE/build-ft8-decode.sh" /opt/ham-cockpit/bin/build-ft8-decode.sh
+  bash /opt/ham-cockpit/bin/build-ft8-decode.sh || echo "install: AVISO — modem FT8/FT4 não compilou"
+fi
 if [[ -f "$HERE/hc-tune.sh" ]]; then
   if [[ -e /opt/ham-cockpit/bin/hc-tune.sh && "$HERE/hc-tune.sh" -ef /opt/ham-cockpit/bin/hc-tune.sh ]]; then
     chmod 0755 /opt/ham-cockpit/bin/hc-tune.sh

@@ -522,6 +522,24 @@ ensure_hamlib_spe() {
   if [[ -f "$ROOT/hamlib-models.json" ]]; then
     install -m 0644 "$ROOT/hamlib-models.json" /opt/ham-cockpit/hamlib-models.json
   fi
+  ensure_ft8_decode() {
+    if [[ -f "$ROOT/bin/ftx-encode.c" ]]; then
+      install -m 0644 "$ROOT/bin/ftx-encode.c" /opt/ham-cockpit/bin/ftx-encode.c
+    fi
+    if [[ -f "$ROOT/bin/build-ft8-decode.sh" ]]; then
+      install -m 0755 "$ROOT/bin/build-ft8-decode.sh" /opt/ham-cockpit/bin/build-ft8-decode.sh
+    fi
+    if [[ -x /opt/ham-cockpit/bin/decode_ft8 && -x /opt/ham-cockpit/bin/ftx-encode ]]; then
+      return 0
+    fi
+    local script="/opt/ham-cockpit/bin/build-ft8-decode.sh"
+    if [[ ! -f "$script" ]]; then
+      echo "ota-hooks: AVISO — sem build-ft8-decode.sh; modem FT8/FT4 fica de fora" >&2
+      return 0
+    fi
+    bash "$script" || echo "ota-hooks: AVISO — modem FT8/FT4 não compilou" >&2
+  }
+  ensure_ft8_decode || true
   if ! command -v arecord >/dev/null 2>&1; then
     apt-get update -qq || true
     apt-get install -y --no-install-recommends alsa-utils || echo "ota-hooks: AVISO — arecord ausente; PC Audio sem codec" >&2
@@ -863,6 +881,7 @@ fi
 getent group docker >/dev/null 2>&1 || groupadd --system docker 2>/dev/null || true
 if getent passwd hamcockpit >/dev/null 2>&1; then
   getent group docker >/dev/null 2>&1 && usermod -aG docker hamcockpit 2>/dev/null || true
+  getent group audio >/dev/null 2>&1 && usermod -aG audio hamcockpit 2>/dev/null || true
 fi
 if command -v docker >/dev/null 2>&1 || [[ -x /usr/bin/docker ]]; then
   systemctl unmask docker.service docker.socket 2>/dev/null || true

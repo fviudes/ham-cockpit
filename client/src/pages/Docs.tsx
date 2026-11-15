@@ -298,6 +298,18 @@ export default function Docs() {
                   })}
                 </li>
               </ol>
+              <p>
+                {t({
+                  pt: "O card Waterfall não vem no layout padrão: entra pelo + na página Painel. O espectro fica em cima, a barra de frequências no meio e a cachoeira embaixo. A escala de tempo fica à direita, fora do gráfico, na mesma cor âmbar da barra, com a coluna preenchida. A linha da frequência permanece no centro; ao girar o VFO o gráfico se desloca. A janela visível tem 300 kHz (150 kHz de cada lado). O IC-705 não tem passo de 300 kHz: no Hamlib 4.6.5 os passos são 5, 10, 20, 50, 100, 200, 500 e 1000 kHz, a estação pede 500 kHz e o card mostra só ±150 kHz. Um clique no gráfico sintoniza o VFO em uso no kHz inteiro mais próximo (decimais .00), com piso de 100 kHz. A escala de tempo não sintoniza. A cachoeira desce de forma contínua, cerca de 30 quadros por segundo. A alça à esquerda do nome arrasta o card, e as bordas ficam rente ao conteúdo.",
+                  en: "The Waterfall card is not in the default layout: add it with + on the Panel page. Spectrum on top, frequency bar in the middle, waterfall below. The time scale sits on the right, outside the graph, in the same amber as the bar, with the column filled. The frequency line stays centered; turning the VFO shifts the graph. The visible window is 300 kHz (150 kHz each side). The IC-705 has no 300 kHz step: Hamlib 4.6.5 steps are 5, 10, 20, 50, 100, 200, 500 and 1000 kHz, the station asks for 500 kHz and the card shows only ±150 kHz. A click on the graph tunes the VFO in use to the nearest whole kHz (decimals .00), with a 100 kHz floor. The time scale does not tune. The waterfall scrolls continuously, about 30 frames per second. The handle to the left of the name drags the card, and the borders sit tight against the content.",
+                })}
+              </p>
+              <p>
+                {t({
+                  pt: "O espectro CI-V vale para o IC-705, o IC-7300, o IC-7300MK2, o IC-7610, o IC-9700, o IC-905 e o IC-7760. No cabo, marque Waterfall na aba Rádio e salve. O IC-7300MK2 está na lista, mas o Hamlib 4.6.5 não tem modelo para ele: no cabo a varredura não chega, use a rede. Na rede, a lista é a mesma menos o IC-7300. No Bluetooth, só o IC-705. No cabo, com o card aberto, o espectro liga de novo sozinho quando o rádio volta a responder depois de um silêncio. No Bluetooth, o card pede o espectro outra vez quando a conexão volta. No cabo e na rede, se a página ficou aberta num reinício do serviço, abra o card de novo uma vez.",
+                  en: "CI-V spectrum covers the IC-705, IC-7300, IC-7300MK2, IC-7610, IC-9700, IC-905 and IC-7760. On the cable, tick Waterfall on the Radio tab and save. The IC-7300MK2 is on the list, but Hamlib 4.6.5 has no model for it: on the cable the sweep does not arrive, use the network. On the network, the list is the same except the IC-7300. On Bluetooth, only the IC-705. On the cable, with the card open, the spectrum turns itself back on when the radio answers again after a silence. On Bluetooth, the card asks for the spectrum again when the link returns. On the cable and on the network, if the page stayed open through a service restart, open the card once more.",
+                })}
+              </p>
             </Sec>
 
             <Sec id="console" title={t({ pt: "Console, tela e contas", en: "Console, screen, and accounts" })}>
@@ -328,6 +340,10 @@ export default function Docs() {
                 <Li
                   pt="VFO por HDMI: tela cheia no monitor ligado ao Pi (CTRL+X volta ao console)."
                   en="HDMI VFO: kiosk on the Pi monitor (CTRL+X returns to the console)."
+                />
+                <Li
+                  pt="PC Audio, ao lado da frequência, toca neste computador o áudio do codec USB do rádio ligado no Pi. O clique escolhe a saída quando o navegador permite; no http da estação o som sai na saída padrão. A roda do mouse ajusta o volume de 0 a 9 e o ícone corta o som. Só um console ouve de cada vez, e é preciso ter entrado no console. Sem o cabo USB de áudio no Pi, o botão avisa que não há áudio USB. Bluetooth e a rede do rádio não levam esse som."
+                  en="PC Audio, beside the frequency, plays on this computer the audio from the radio USB codec plugged into the Pi. The click picks an output when the browser allows it; on the station http address the sound uses the default output. The mouse wheel sets the volume from 0 to 9 and the icon mutes. Only one console hears at a time, and you need to be signed in. Without the radio USB audio cable on the Pi, the button says there is no USB audio. Bluetooth and the radio network do not carry that sound."
                 />
                 <Li
                   pt="O Firefox não tem Web Bluetooth: use Chrome ou Edge. O endereço precisa ser seguro: HTTPS ou o IP do Pi na rede local."
@@ -374,8 +390,8 @@ export default function Docs() {
               </ul>
               <p>
                 {t({
-                  pt: "Depois da primeira autorização neste navegador, o rádio Principal reconecta no login sem pedir para escolher o dispositivo. Nas vezes seguintes, deixe o Pairing Reception fechado e o Bluetooth ligado no 705. O áudio de recepção não passa pelo Bluetooth LE: para levar o áudio ao PC, use o áudio USB do Icom.",
-                  en: "After a grant in this browser, the Primary radio reconnects at login without “choose another device”. Leave Pairing Reception closed later; Bluetooth ON on the 705. RX audio is not on GATT — USB audio is the Icom path to the PC.",
+                  pt: "Depois da primeira autorização neste navegador, o rádio Principal reconecta no login sem pedir para escolher o dispositivo. Nas vezes seguintes, deixe o Pairing Reception fechado e o Bluetooth ligado no 705. O áudio de recepção não passa pelo Bluetooth LE: o botão PC Audio toca o codec USB do rádio, com o cabo no Pi.",
+                  en: "After a grant in this browser, the Primary radio reconnects at login without “choose another device”. Leave Pairing Reception closed later; Bluetooth ON on the 705. RX audio is not on Bluetooth LE: the PC Audio button plays the radio USB codec, with the cable on the Pi.",
                 })}
               </p>
             </Sec>
@@ -806,6 +822,15 @@ export default function Docs() {
               <Screen name="console-mmdvm-ouvidos" className="my-4" />
             </Sec>
 
+            <Sec id="digitais" title={t({ pt: "Modos Digitais", en: "Digital Modes" })}>
+              <p>
+                {t({
+                  pt: "Operação → Modos Digitais é a tela de FT8 e FT4 no console, no mesmo visual do Ham Cockpit. A atividade da banda, a frequência de Rx, a cascata de áudio e os textos Tx1–Tx6 ficam na mesma página. A transmissão no ar ainda não sai enquanto não houver áudio de TX no codec.",
+                  en: "Operate → Digital Modes is the FT8 and FT4 screen, in the Ham Cockpit look. Band activity, Rx frequency, the audio waterfall and the Tx1–Tx6 texts share one page. Nothing goes on the air until the codec has TX audio.",
+                })}
+              </p>
+            </Sec>
+
             <Sec id="rede" title={t({ pt: "Wi‑Fi da casa e Wi‑Fi do Pi no campo", en: "Home Wi‑Fi and the field AP" })}>
               <ul>
                 <Li
@@ -867,8 +892,8 @@ export default function Docs() {
             <Sec id="admin" title={t({ pt: "Serviços, atualizações, backup", en: "Services, updates, backup" })}>
               <p>
                 {t({
-                  pt: "Aba Serviços: cada chave liga ou desliga o início automático no próximo boot (rádio, bluetooth, lextel, ser2net, wavelog, mmdvm, web…). Atenção: se você desligar o Webserver, o console não abre mais depois de reiniciar. Aba Atualização: app (GitHub fviudes/ham-cockpit), sistema, ser2net, Hamlib (libhamlib-utils), Wavelog e Gate. Aba Backup: salva ser2net, rádios, layouts, LDG, LP-100A, rede, serviços, Lextel e MMDVM.",
-                  en: "Services tab: each switch is start-on-boot (radio, bluetooth, lextel, ser2net, wavelog, mmdvm, web…). Turning off Webserver blocks the console after reboot. Updates: app (GitHub fviudes/ham-cockpit), OS, ser2net, hamlib (libhamlib-utils), Wavelog, Gate. Backup saves ser2net, radios, layouts, LDG, LP-100A, net, services, Lextel, MMDVM.",
+                  pt: "Aba Serviços: cada chave liga ou desliga o início automático no próximo boot (rádio, bluetooth, lextel, ser2net, wavelog, mmdvm, web…). Atenção: se você desligar o Webserver, o console não abre mais depois de reiniciar. Aba Atualização: app (GitHub fviudes/ham-cockpit, pasta update, na main), sistema, ser2net, Hamlib (libhamlib-utils), Wavelog e Gate. A imagem gravada no cartão permanece na base 0.1.10. O console publicado nesse canal está na 0.1.10.06: quem já tem essa imagem atualiza por essa aba, sem regravar o cartão. Aba Backup: salva ser2net, rádios, layouts, LDG, LP-100A, rede, serviços, Lextel e MMDVM.",
+                  en: "Services tab: each switch is start-on-boot (radio, bluetooth, lextel, ser2net, wavelog, mmdvm, web…). Turning off Webserver blocks the console after reboot. Updates: app (GitHub fviudes/ham-cockpit, update folder, on main), OS, ser2net, hamlib (libhamlib-utils), Wavelog, Gate. The image written to the card stays on base 0.1.10. The console published on that channel is 0.1.10.06: a station that already has this image updates from that tab, without rewriting the card. Backup saves ser2net, radios, layouts, LDG, LP-100A, net, services, Lextel, MMDVM.",
                 })}
               </p>
               <Screen name="console-status" className="my-4" />
@@ -948,6 +973,14 @@ export default function Docs() {
                   pt="MMDVM Host ausente: coloque os binários do WPSD em /usr/local/bin. Modem mudo: tire essa serial do ser2net; o HAT usa ttyAMA0 a 115200."
                   en="MMDVM Host missing: put WPSD binaries in /usr/local/bin. Silent modem: take that TTY off ser2net; the HAT uses ttyAMA0 at 115200."
                 />
+                <Li
+                  pt="Waterfall vazio no cabo: marque Waterfall na aba Rádio e salve. Vale para 705, 7300, 7610, 9700, 905 e 7760 no Hamlib. O IC-7300MK2 no cabo não entrega a varredura: use a rede. O IC-7300 não entra na rede. No Bluetooth, só o IC-705. Se o serviço reiniciou com a página aberta, abra o card de novo."
+                  en="Empty Waterfall on the cable: tick Waterfall on the Radio tab and save. That covers 705, 7300, 7610, 9700, 905 and 7760 in Hamlib. The IC-7300MK2 on the cable does not deliver the sweep: use the network. The IC-7300 is not on the network list. On Bluetooth, only the IC-705. If the service restarted with the page open, open the card again."
+                />
+                <Li
+                  pt="PC Audio mudo: o cabo USB de áudio do rádio precisa estar no Pi, e só um console ouve de cada vez. Bluetooth e a rede do rádio não levam esse som."
+                  en="Silent PC Audio: the radio USB audio cable has to be on the Pi, and only one console hears at a time. Bluetooth and the radio network do not carry that sound."
+                />
               </ul>
               <button
                 type="button"
@@ -1020,7 +1053,7 @@ const PORT_ROWS = [
   { what: "Console", where: "/opt/ham-cockpit", port: "TCP 80" },
   { what: "Wavelog", where: "/opt/wavelog", port: "TCP 8086" },
   { what: "WaveLogGate", where: "/opt/wavelog-gate", port: "UDP 2333 · TCP 54321/54322" },
-  { what: "ser2net", where: "/opt/ser2net", port: "127.0.0.1:4001–4006" },
+  { what: "ser2net", where: "/opt/ser2net", port: "TCP 4001–4006 · 127.0.0.1 local · LAN: Pi IP" },
   { what: "rigctld 705", where: "libhamlib-utils", port: "TCP 4532 (-m 3085)" },
   { what: "ampctld SPE", where: "libhamlib-utils", port: "TCP 4531" },
   { what: "SSH", where: "sshd", port: "TCP 22" },

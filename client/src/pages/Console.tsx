@@ -14,6 +14,7 @@ import { Ser2netPage } from "@/console/ser2net";
 import { WizardPage } from "@/console/wizard";
 import { WavelogPage } from "@/console/wavelog";
 import { MmdvmPage } from "@/console/mmdvm";
+import { DigitalPage } from "@/console/digital-modes";
 import { useIsMobile } from "@/hooks/useMobile";
 import {
   Activity,
@@ -33,6 +34,7 @@ import {
   Shield,
   TowerControl,
   WandSparkles,
+  AudioLines,
   Waves,
   Wifi,
   X,
@@ -62,6 +64,7 @@ type PageId =
   | "bluetooth"
   | "wavelog"
   | "mmdvm"
+  | "digital"
   | "ser2net"
   | "logs"
   | "admin"
@@ -83,6 +86,7 @@ const NAV: { group: "navSetup" | "navOp" | "navDev" | "navNet" | "navSys"; items
     group: "navOp",
     items: [
       { id: "radio", icon: Radio },
+      { id: "digital", icon: AudioLines },
       { id: "wavelog", icon: BookMarked },
       { id: "mmdvm", icon: TowerControl },
       { id: "ser2net", icon: Cable },
@@ -225,6 +229,7 @@ const PAGES: Record<PageId, ComponentType> = {
   bluetooth: BluetoothPage,
   wavelog: WavelogPage,
   mmdvm: MmdvmPage,
+  digital: DigitalPage,
   ser2net: Ser2netPage,
   logs: AdminPage,
   admin: AdminPage,
