@@ -75,7 +75,7 @@ const INK: Record<Ink, string> = {
 };
 
 /** Cards mais agrupados na página digital (borda e padding reduzidos). */
-const DIG_PANEL = "mb-2 rounded-lg border border-[rgba(79,195,247,0.08)] bg-[#0b1520] p-2";
+const DIG_PANEL = "mb-1.5 rounded-md border border-[rgba(79,195,247,0.06)] bg-[#0b1520] p-1.5";
 
 type Tab = "tx" | "filter" | "prefix" | "states" | "ignore" | "alerts" | "others";
 const SET_TABS = ["general", "radio", "audio", "macros", "reporting", "frequencies", "colors", "advanced", "z"] as const;
@@ -200,7 +200,7 @@ export function DigitalPage() {
     }
   };
 
-  const txLevel = state.txPower > 0 ? Math.min(0.8, Math.max(0.15, state.txPower / 100)) : 0.5;
+  const txLevel = state.txPower > 0 ? Math.min(0.95, Math.max(0.25, state.txPower / 100)) : 0.65;
 
   useEffect(() => {
     rememberContact(state);
@@ -518,11 +518,10 @@ export function DigitalPage() {
           emptyLabel={rxOn && stripes.length === 0 ? t("waterfallWait") : t("waterfallEmpty")}
           onPick={(hzPick) => dispatch({ type: "graph", hz: hzPick, moveTx: !state.holdTx })}
         />
-        <p className="mt-2 text-[11px] text-[#8ea0b3]">{t("waterfallHint")}</p>
-        <p className="mt-1 text-[11px] text-[#8ea0b3]">{decodeWord}</p>
+        <p className="mt-1 text-[10px] text-[#8ea0b3]">{decodeWord}</p>
       </Panel>
 
-      <div className="mb-2 grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="mb-1.5 grid gap-1.5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <Panel className={DIG_PANEL}>
           <PanelTitle>{t("bandActivity")}</PanelTitle>
           <DecodeTable
@@ -561,7 +560,7 @@ export function DigitalPage() {
         </Panel>
       </div>
 
-      <div className="mb-2 grid gap-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="mb-1.5 grid gap-1.5 xl:grid-cols-[minmax(0,5fr)_minmax(0,8fr)]">
         <Panel className={DIG_PANEL}>
           <div className="mb-3 flex gap-1 overflow-x-auto">
             <Chip active={tab === "tx"} onClick={() => setTab("tx")}>
@@ -588,7 +587,7 @@ export function DigitalPage() {
           </div>
           {tab === "tx" ? (
             <div>
-              <div className="mb-1 grid grid-cols-[44px_36px_minmax(0,1fr)] gap-1 text-[10px] tracking-wide text-[#5d7184] uppercase">
+              <div className="mb-1 grid grid-cols-[32px_28px_minmax(0,1fr)] gap-1 text-[10px] tracking-wide text-[#5d7184] uppercase">
                 <span>{t("next")}</span>
                 <span>{t("now")}</span>
                 <span>Tx</span>
@@ -596,7 +595,7 @@ export function DigitalPage() {
               {([1, 2, 3, 4, 5, 6] as TxId[]).map((n) => (
                 <div
                   key={n}
-                  className="mb-0.5 grid grid-cols-[44px_36px_minmax(0,1fr)] items-center gap-1"
+                  className="mb-0.5 grid grid-cols-[32px_28px_minmax(0,1fr)] items-center gap-1"
                   onDoubleClick={() => n === 5 && dispatch({ type: "rr73" })}
                 >
                   <label className="flex items-center gap-1 text-[11px] text-[#8ea0b3]">
@@ -809,7 +808,6 @@ export function DigitalPage() {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 font-['IBM_Plex_Mono'] text-[11px]">
           <span className={phase === "rx" ? "text-[#4fc3f7]" : "text-[#ffb300]"}>{statusWord}</span>
           <span className="text-[#8ea0b3]">{state.mode}</span>
-          <span className="text-[#ffb300]">{t("airShort")}</span>
           {(phase === "tx" || phase === "finish" || phase === "tune") && planned ? <span className="text-[#e8eef4]">{t("localSeq")}: {planned}</span> : null}
           <span className="text-[#8ea0b3]">
             {t("last")}: {state.lastText || "—"}
@@ -841,7 +839,6 @@ export function DigitalPage() {
               aria-label={t("txPower")}
               onChange={(e) => patch(dispatch, { txPower: Number(e.target.value) })}
             />
-            <span className="text-[10px]">{t("txPowerHint")}</span>
           </label>
         </div>
         {note ? <p className="mt-2 text-xs text-[#ffb300]">{note}</p> : null}

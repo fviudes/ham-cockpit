@@ -1,8 +1,8 @@
 {
-  "version": "0.1.10.09",
+  "version": "0.1.10.10",
   "channel": "main",
-  "file": "ham-cockpit-0.1.10.09.tgz",
-  "sha256": "d32eeaef2b5771c137ccf7083e259df4d5097c81c75448334eb01cb092e3b3c8",
-  "bytes": 5122340,
-  "notes": "Ham Cockpit v0.1.10.09 — TX: o PTT passa na frente da fila do Hamlib e espera o CI-V; Enable TX e duplo clique trocam a mensagem que ainda não saiu e seguem até o 73. Digital: textos removidos, cards mais compactos, Atividade da banda e Tx1–Tx6 estreitos.\n\nA OTA não sobrescreve rádios, INI, services.json, Lextel, SPE nem a escolha da VPN."
+  "file": "ham-cockpit-0.1.10.10.tgz",
+  "sha256": "316b66338958726c559b8f949459071dc0c95dfc4cc1ecfbf9981acae7517b88",
+  "bytes": 5122537,
+  "notes": "Ham Cockpit v0.1.10.10 — TX: PTT antes do aplay, modo PKTUSB no rádio e nível no codec USB. Tela digital: layout compacto (2:3 atividade/Rx, 5:8 Tx/controles), textos de ajuda removidos."
 }

@@ -7,8 +7,9 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { pickAlsaCapture } from "../shared/pc-audio";
+import { pickAlsaCapture, pickAlsaPlayback } from "../shared/pc-audio";
 import { nextTxSlot, playbackBytes, playbackPlan, type SlotMode } from "../shared/digital-slot";
+import { DIGITAL_DATA_MODE, parseRigMode } from "./digital-rx-plan";
 import { hubRigctl } from "./hamlib-hub";
 import { holdRadioCapture } from "./radio-audio";
 
@@ -93,6 +94,12 @@ async function waitCaptureClear(limitMs: number) {
 function listCards(): Promise<string> {
   return new Promise((resolve) => {
     execFile("arecord", ["-l"], (err, stdout) => resolve(err ? "" : String(stdout || "")));
+  });
+}
+
+function listPlayback(): Promise<string> {
+  return new Promise((resolve) => {
+    execFile("aplay", ["-l"], (err, stdout) => resolve(err ? "" : String(stdout || "")));
   });
 }
 
@@ -197,9 +204,19 @@ function playRaw(device: string, pcm: Buffer, timeoutMs: number, gen: number): P
 }
 
 async function playbackDevice(): Promise<string> {
-  const hit = pickAlsaCapture(await listCards());
+  const capList = await listCards();
+  const cap = pickAlsaCapture(capList);
+  const hit = pickAlsaPlayback(await listPlayback(), cap) ?? cap;
   if (!hit) throw new Error("no-device");
   return `plughw:${hit.card},${hit.device}`;
+}
+
+async function ensurePktUsb(port: number): Promise<void> {
+  const m = await hubRigctl(port, "m", "127.0.0.1", PTT_TIMEOUT_MS, true);
+  const parsed = parseRigMode(m.reply || "");
+  if (parsed?.mode === DIGITAL_DATA_MODE) return;
+  const set = await hubRigctl(port, `M ${DIGITAL_DATA_MODE} 0`, "127.0.0.1", PTT_TIMEOUT_MS, true);
+  if (!set.ok) throw new Error(set.error || "data-mode");
 }
 
 async function playOnCodec(device: string, pcm: Buffer, timeoutMs: number, gen: number) {
@@ -331,16 +348,15 @@ async function run(current: Job) {
     const slot = await codecReady(current.startAt, current.mode, current.even, gen);
     current.startAt = slot;
     if (cancelled(gen)) throw new Error("halt");
-    current.phase = "audio";
-    const playTask = playOnCodec(device, play, Math.ceil(plan.txEnd * 1000) + 4000, gen);
-    // O erro do aplay chega no await abaixo; aqui só evita rejeição solta durante o PTT.
-    playTask.catch(() => undefined);
+    await ensurePktUsb(current.port);
     if (cancelled(gen)) throw new Error("halt");
+    current.phase = "ptt";
     await raisePtt(current.port);
     keyed = true;
     current.ptt = true;
     if (cancelled(gen)) throw new Error("halt");
-    await playTask;
+    current.phase = "audio";
+    await playOnCodec(device, play, Math.ceil(plan.txEnd * 1000) + 4000, gen);
     if (cancelled(gen)) throw new Error("halt");
     await sleepUntil(slot + plan.pttDrop * 1000, gen);
     if (cancelled(gen)) throw new Error("halt");

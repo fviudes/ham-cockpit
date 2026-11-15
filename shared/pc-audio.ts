@@ -64,3 +64,8 @@ export function pickAlsaCapture(listing: string): AlsaCapture | null {
   const hit = usb ?? (usable.length === 1 ? usable[0] : null);
   return hit ? { card: hit.card, device: hit.device } : null;
 }
+
+/** Playback no codec USB do rádio — mesmo card/dispositivo da captura (duplex). */
+export function pickAlsaPlayback(listing: string, capture: AlsaCapture | null = pickAlsaCapture(listing)): AlsaCapture | null {
+  return capture;
+}

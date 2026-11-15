@@ -452,8 +452,8 @@ describe("modos digitais", () => {
     expect(copy).not.toContain("Cascata de áudio");
     expect(copy).not.toContain("Audio waterfall");
     expect(src).not.toContain('PanelTitle>{t("waterfall")');
-    expect(src).toContain("lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]");
-    expect(src).toContain("xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]");
+    expect(src).toContain("lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]");
+    expect(src).toContain("xl:grid-cols-[minmax(0,5fr)_minmax(0,8fr)]");
   });
 
   it("o TX congela a mensagem do clique e o PTT passa na frente da fila do Hamlib", () => {
@@ -466,7 +466,8 @@ describe("modos digitais", () => {
     expect(server).toContain("hubRigctl(port, command, \"127.0.0.1\", PTT_TIMEOUT_MS, true)");
     expect(server).not.toMatch(/hubRigctl\(port, "t"\)/);
     expect(server).not.toContain('hubRigctl(port, "T 0")');
-    expect(server).toContain("playTask.catch(() => undefined)");
+    expect(server).toContain("ensurePktUsb");
+    expect(server).toContain("await raisePtt(current.port)");
     expect(hub).toContain("preempt && isPttCommand(cmd)");
     expect(shouldHaltTx("cleanup", "audio")).toBe(false);
     expect(shouldHaltTx("user", "audio")).toBe(true);
