@@ -276,26 +276,14 @@ export function PanelWaterfallCollector({
   via: string;
 }) {
   useEffect(() => {
-    const opts = {
+    syncPanelWaterfallFeed({
       feed,
       rfScope,
       via,
       getTuneHz,
       getSpanHz: () => panelWaterfallGetSpan(),
-    };
-    const sync = () => {
-      if (document.visibilityState === "hidden") {
-        stopPanelWaterfallFeed();
-        return;
-      }
-      syncPanelWaterfallFeed(opts);
-    };
-    sync();
-    document.addEventListener("visibilitychange", sync);
-    return () => {
-      document.removeEventListener("visibilitychange", sync);
-      stopPanelWaterfallFeed();
-    };
+    });
+    return () => stopPanelWaterfallFeed();
   }, [feed, rfScope, via, getTuneHz]);
 
   return null;
