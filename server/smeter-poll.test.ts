@@ -47,8 +47,8 @@ afterEach(() => {
 describe("S-meter rápido", () => {
   it("a leitura seguinte espera a anterior e ocupado não vira rajada", () => {
     expect(nextSmeterWaitMs(true)).toBe(0);
-    expect(nextSmeterWaitMs(false)).toBeGreaterThanOrEqual(100);
-    expect(nextSmeterWaitMs(false)).toBeLessThanOrEqual(250);
+    expect(nextSmeterWaitMs(false)).toBeGreaterThanOrEqual(80);
+    expect(nextSmeterWaitMs(false)).toBeLessThanOrEqual(200);
   });
 
   it("desenha na casa de 30 quadros por segundo", () => {
@@ -62,7 +62,7 @@ describe("S-meter rápido", () => {
     const up = stepSmeter(0, 9, SMETER_FRAME_MS);
     const down = stepSmeter(9, 0, SMETER_FRAME_MS);
     expect(up).toBeGreaterThan(0);
-    expect(up).toBeLessThan(2.5);
+    expect(up).toBeLessThan(3.5);
     expect(9 - down).toBeCloseTo(up, 5);
     let risen = 0;
     for (let i = 0; i < 8; i++) risen = stepSmeter(risen, 9, SMETER_FRAME_MS);

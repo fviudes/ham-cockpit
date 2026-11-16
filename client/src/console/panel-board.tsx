@@ -5,10 +5,9 @@ import {
   LAYOUT_MIN_H,
   LAYOUT_MIN_W,
   LAYOUT_ROW,
-  patchTile,
-  type PanelTile,
-  type TileId,
-} from "./panel-layout";
+  patchGridTile,
+  type GridTile,
+} from "./layout-grid";
 import { useConsole } from "./state";
 import { PanelChromeProvider } from "./widgets";
 
@@ -81,18 +80,18 @@ export function PanelBoard({
   onRemove,
   render,
 }: {
-  tiles: PanelTile[];
-  shown: TileId[];
-  onChange: (next: PanelTile[]) => void;
-  onRemove?: (id: TileId) => void;
-  render: (id: TileId) => ReactNode;
+  tiles: GridTile[];
+  shown: string[];
+  onChange: (next: GridTile[]) => void;
+  onRemove?: (id: string) => void;
+  render: (id: string) => ReactNode;
 }) {
   const { tx } = useConsole();
   const ref = useRef<HTMLDivElement>(null);
   const tilesRef = useRef(tiles);
   tilesRef.current = tiles;
   const [width, setWidth] = useState(960);
-  const [active, setActive] = useState<TileId | null>(null);
+  const [active, setActive] = useState<string | null>(null);
 
   useEffect(() => {
     const el = ref.current;
@@ -112,7 +111,7 @@ export function PanelBoard({
   const visible = tiles.filter((t) => shown.includes(t.id));
   const bottom = visible.reduce((m, t) => Math.max(m, t.y + t.h), 8);
 
-  const start = (e: PointerEvent<HTMLButtonElement>, id: TileId, kind: "move" | "resize") => {
+  const start = (e: PointerEvent<HTMLButtonElement>, id: string, kind: "move" | "resize") => {
     if (e.button !== 0) return;
     const tile = tilesRef.current.find((t) => t.id === id);
     if (!tile) return;
@@ -132,12 +131,12 @@ export function PanelBoard({
       if (kind === "move") {
         const x = Math.max(0, Math.min(LAYOUT_COLS - ow, ox + Math.round(dx / stepX())));
         const y = Math.max(0, oy + Math.round(dy / stepY));
-        onChange(patchTile(tilesRef.current, id, { x, y }));
+        onChange(patchGridTile(tilesRef.current, id, { x, y }));
         return;
       }
       const w = Math.max(LAYOUT_MIN_W, Math.min(LAYOUT_COLS - ox, ow + Math.round(dx / stepX())));
       const h = Math.max(LAYOUT_MIN_H, oh + Math.round(dy / stepY));
-      onChange(patchTile(tilesRef.current, id, { w, h }));
+      onChange(patchGridTile(tilesRef.current, id, { w, h }));
     };
 
     const up = () => {

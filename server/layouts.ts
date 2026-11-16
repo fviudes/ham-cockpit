@@ -17,8 +17,15 @@ function dataDir(): string {
   return local;
 }
 
-function jsonPath() {
-  return join(dataDir(), "panel.json");
+export type LayoutScope = "panel" | "digital";
+
+function jsonPath(scope: LayoutScope) {
+  const file = scope === "digital" ? "digital.json" : "panel.json";
+  return join(dataDir(), file);
+}
+
+function parseScope(raw: unknown): LayoutScope {
+  return raw === "digital" ? "digital" : "panel";
 }
 
 function writeAtomic(file: string, body: string) {
@@ -35,9 +42,9 @@ export function sanitizeUser(name: unknown) {
   return n || "admin";
 }
 
-function loadStore(): Record<string, PanelTile[]> {
+function loadStore(scope: LayoutScope): Record<string, PanelTile[]> {
   try {
-    const raw = readFileSync(jsonPath(), "utf8");
+    const raw = readFileSync(jsonPath(scope), "utf8");
     const j = JSON.parse(raw) as unknown;
     if (!j || typeof j !== "object" || Array.isArray(j)) return {};
     return j as Record<string, PanelTile[]>;
@@ -58,9 +65,10 @@ function asTile(v: unknown): PanelTile | null {
   return { id, x, y, w: Math.min(w, 12 - x), h };
 }
 
-export function layoutGet(user: string) {
+export function layoutGet(user: string, scopeRaw?: unknown) {
+  const scope = parseScope(scopeRaw);
   const name = sanitizeUser(user);
-  const store = loadStore();
+  const store = loadStore(scope);
   if (!Object.prototype.hasOwnProperty.call(store, name)) {
     return { ok: true, user: name, tiles: null };
   }
@@ -68,11 +76,12 @@ export function layoutGet(user: string) {
   return { ok: true, user: name, tiles: tiles as PanelTile[] };
 }
 
-export function layoutSave(user: string, tiles: unknown) {
+export function layoutSave(user: string, tiles: unknown, scopeRaw?: unknown) {
+  const scope = parseScope(scopeRaw);
   const name = sanitizeUser(user);
   const list = Array.isArray(tiles) ? tiles.map(asTile).filter(Boolean) : [];
-  const store = loadStore();
+  const store = loadStore(scope);
   store[name] = list as PanelTile[];
-  writeAtomic(jsonPath(), `${JSON.stringify(store, null, 2)}\n`);
-  return { ok: true, user: name, tiles: store[name] };
+  writeAtomic(jsonPath(scope), `${JSON.stringify(store, null, 2)}\n`);
+  return { ok: true, user: name, scope, tiles: store[name] };
 }

@@ -160,18 +160,18 @@ function useLiveSmeter(live: boolean): number | null {
     let stopped = false;
     const run = async () => {
       while (!stopped) {
-        let value: number | null = null;
+        let result: Awaited<ReturnType<typeof pollPrimarySmeter>> = null;
         try {
-          value = await pollPrimarySmeter(radiosRef.current, {
+          result = await pollPrimarySmeter(radiosRef.current, {
             bleReady: ic705Ble.connected,
             hamlibPort: 4532,
           });
         } catch {
-          value = null;
+          result = null;
         }
         if (stopped) return;
-        if (value != null) publishSmeter(value);
-        const wait = nextSmeterWaitMs(value != null);
+        if (typeof result === "number") publishSmeter(result);
+        const wait = nextSmeterWaitMs(result !== null);
         if (wait > 0) await new Promise((resolve) => window.setTimeout(resolve, wait));
       }
     };

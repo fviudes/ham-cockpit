@@ -1,4 +1,6 @@
+import { Save } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 import {
   compactStepMs,
   compactStripes,
@@ -13,7 +15,17 @@ import {
 } from "@shared/digital-waterfall";
 import { expireConsoleSession } from "./console-auth";
 import { useConsole } from "./state";
-import { Chip, ConsoleInput, ConsoleSelect, Field, GhostBtn, PageHead, Panel, PanelTitle } from "./widgets";
+import {
+  currentLayoutUser,
+  defaultDigitalTiles,
+  loadDigitalLayout,
+  saveDigitalLayout,
+  tilesEqual as digitalTilesEqual,
+  type DigitalTile,
+  type DigitalTileId,
+} from "./digital-layout";
+import { PanelBoard } from "./panel-board";
+import { Chip, ConsoleInput, ConsoleSelect, Field, GhostBtn, PageHead, Panel, PanelTitle, PrimaryBtn } from "./widgets";
 import { digTx, type DigKey } from "./digital-modes-copy";
 import { graphView, useDigitalListen, type ListenPhase } from "./digital-listen";
 import { onDigitalTx, publishDigitalTx, releaseDigitalTx, setDigitalTxPage } from "./digital-tx";
@@ -88,6 +100,293 @@ function loadState(): DigState {
   }
 }
 
+function DigTabsPanel({
+  tab,
+  setTab,
+  t,
+  state,
+  dispatch,
+  nowTx,
+  alerts,
+  hop,
+}: {
+  tab: Tab;
+  setTab: (t: Tab) => void;
+  t: (k: DigKey) => string;
+  state: DigState;
+  dispatch: (a: DigAction) => void;
+  nowTx: TxId | null;
+  alerts: DecodeRow[];
+  hop: string[] | null;
+}) {
+  return (
+    <>
+<div className="mb-3 flex gap-1 overflow-x-auto">
+            <Chip active={tab === "tx"} onClick={() => setTab("tx")}>
+              Tx1–Tx6
+            </Chip>
+            <Chip active={tab === "filter"} onClick={() => setTab("filter")}>
+              {t("tabFilter")}
+            </Chip>
+            <Chip active={tab === "prefix"} onClick={() => setTab("prefix")}>
+              {t("tabPrefix")}
+            </Chip>
+            <Chip active={tab === "states"} onClick={() => setTab("states")}>
+              {t("tabStates")}
+            </Chip>
+            <Chip active={tab === "ignore"} onClick={() => setTab("ignore")}>
+              {t("tabIgnore")}
+            </Chip>
+            <Chip active={tab === "alerts"} onClick={() => setTab("alerts")}>
+              {t("tabAlerts")}
+            </Chip>
+            <Chip active={tab === "others"} onClick={() => setTab("others")}>
+              {t("tabOthers")}
+            </Chip>
+          </div>
+          {tab === "tx" ? (
+            <div>
+              <div className="mb-1 grid grid-cols-[32px_28px_minmax(0,1fr)] gap-1 text-[10px] tracking-wide text-[#5d7184] uppercase">
+                <span>{t("next")}</span>
+                <span>{t("now")}</span>
+                <span>Tx</span>
+              </div>
+              {([1, 2, 3, 4, 5, 6] as TxId[]).map((n) => (
+                <div
+                  key={n}
+                  className="mb-0.5 grid grid-cols-[32px_28px_minmax(0,1fr)] items-center gap-1"
+                  onDoubleClick={() => n === 5 && dispatch({ type: "rr73" })}
+                >
+                  <label className="flex items-center gap-1 text-[11px] text-[#8ea0b3]">
+                    <input type="radio" name="dig-next" checked={state.next === n} onChange={() => dispatch({ type: "next", tx: n })} />
+                    {n}
+                  </label>
+                  <span className={`text-[11px] ${nowTx === n ? "text-[#ffb300]" : "text-[#5d7184]"}`}>{nowTx === n ? "●" : "○"}</span>
+                  <ConsoleInput
+                    className="h-8 font-['IBM_Plex_Mono'] text-xs"
+                    aria-label={`Tx${n}`}
+                    value={state.tx[n]}
+                    onChange={(e) => dispatch({ type: "txText", tx: n, text: e.target.value })}
+                  />
+                </div>
+              ))}
+              <p className="mt-2 text-[11px] text-[#5d7184]">{t("rrHint")}</p>
+            </div>
+          ) : null}
+          {tab === "filter" ? (
+            <div className="grid gap-2">
+              <p className="text-[11px] text-[#8ea0b3]">{t("filterNote")}</p>
+              <p className="text-[11px] text-[#8ea0b3]">{t("dxccNote")}</p>
+              <Toggle on={state.filterOn} label={t("filterOn")} onClick={() => patch(dispatch, { filterOn: !state.filterOn })} />
+              <Toggle on={state.newCall} label={t("newCall")} onClick={() => patch(dispatch, { newCall: !state.newCall })} />
+              <Toggle on={state.newDxcc} label={t("newDxcc")} onClick={() => patch(dispatch, { newDxcc: !state.newDxcc })} />
+              <Toggle on={state.newBand} label={t("newBand")} onClick={() => patch(dispatch, { newBand: !state.newBand })} />
+              <Toggle on={state.workedBand} label={t("workedBand")} onClick={() => patch(dispatch, { workedBand: !state.workedBand })} />
+              <Toggle on={state.lotwOnly} label={t("lotw")} onClick={() => patch(dispatch, { lotwOnly: !state.lotwOnly })} />
+              <Field label={t("continents")}>
+                <ConsoleInput value={state.continents} onChange={(e) => patch(dispatch, { continents: e.target.value })} />
+              </Field>
+            </div>
+          ) : null}
+          {tab === "prefix" ? (
+            <div className="grid gap-2">
+              <ModeSelect label={t("prefixes")} value={state.prefixMode} t={t} onChange={(prefixMode) => patch(dispatch, { prefixMode })} />
+              <ConsoleInput value={state.prefixes} onChange={(e) => patch(dispatch, { prefixes: e.target.value })} placeholder="20m:SP,SQ" />
+              <p className="text-[11px] text-[#5d7184]">{t("prefixHint")}</p>
+              <Field label={t("cqTargets")}>
+                <ConsoleInput value={state.cqTargets} onChange={(e) => patch(dispatch, { cqTargets: e.target.value })} />
+              </Field>
+            </div>
+          ) : null}
+          {tab === "states" ? (
+            <div className="grid gap-2">
+              <ModeSelect label={t("states")} value={state.stateMode} t={t} onChange={(stateMode) => patch(dispatch, { stateMode })} />
+              <ConsoleInput value={state.states} onChange={(e) => patch(dispatch, { states: e.target.value })} />
+            </div>
+          ) : null}
+          {tab === "ignore" ? (
+            <div className="grid gap-2">
+              <Field label={t("ignoreTemp")}>
+                <textarea
+                  className="min-h-28 w-full rounded-md border border-[rgba(79,195,247,0.22)] bg-[#101c28] px-3 py-2 font-['IBM_Plex_Mono'] text-sm text-[#e8eef4] outline-none focus:border-[#4fc3f7]"
+                  value={state.ignore}
+                  onChange={(e) => patch(dispatch, { ignore: e.target.value })}
+                />
+              </Field>
+              <p className="text-[11px] text-[#5d7184]">{t("ignoreHint")}</p>
+              <GhostBtn onClick={() => dispatch({ type: "clearIgnore" })}>{t("ignoreClear")}</GhostBtn>
+            </div>
+          ) : null}
+          {tab === "alerts" ? (
+            <div className="grid gap-2">
+              <Toggle on={state.alertNewCall} label={t("newCall")} onClick={() => patch(dispatch, { alertNewCall: !state.alertNewCall })} />
+              <Toggle on={state.alertNewDxcc} label={t("newDxcc")} onClick={() => patch(dispatch, { alertNewDxcc: !state.alertNewDxcc })} />
+              <Field label={t("alertList")}>
+                <ConsoleInput value={state.alertList} onChange={(e) => patch(dispatch, { alertList: e.target.value })} />
+              </Field>
+              <p className="text-[11px] text-[#8ea0b3]">
+                {t("alertLog")}: {alerts.length ? alerts.map((a) => a.message).join(" · ") : t("alertEmpty")}
+              </p>
+            </div>
+          ) : null}
+          {tab === "others" ? (
+            <div className="grid gap-2">
+              <Field label={t("bandHop")}>
+                <textarea
+                  className="min-h-20 w-full rounded-md border border-[rgba(79,195,247,0.22)] bg-[#101c28] px-3 py-2 font-['IBM_Plex_Mono'] text-sm text-[#e8eef4] outline-none focus:border-[#4fc3f7]"
+                  value={state.bandHop}
+                  placeholder="12:20m,40m"
+                  onChange={(e) => patch(dispatch, { bandHop: e.target.value })}
+                />
+              </Field>
+              <p className="text-[11px] text-[#5d7184]">{t("bandHopHint")}</p>
+              {hop ? (
+                <p className="text-sm text-[#ffb300]">
+                  {t("hopNow")}: {hop.join(", ")}. {t("hopStay")}
+                </p>
+              ) : null}
+              <Toggle on={state.modeSwitch} label={t("modeSwitch")} onClick={() => patch(dispatch, { modeSwitch: !state.modeSwitch })} />
+              <div className="flex flex-wrap gap-3">
+                <Mini label={t("autoCqN")}>
+                  <Num value={state.autoCqN} onChange={(n) => patch(dispatch, { autoCqN: n })} />
+                </Mini>
+                <Mini label={t("autoCallN")}>
+                  <Num value={state.autoCallN} onChange={(n) => patch(dispatch, { autoCallN: n })} />
+                </Mini>
+                <Readout k="#" v={String(state.switchLeft)} />
+              </div>
+              <Toggle on={state.treat73} label={t("treat73")} onClick={() => patch(dispatch, { treat73: !state.treat73 })} />
+              <Mini label={t("minSignal")}>
+                <Num value={state.minSignal} onChange={(n) => patch(dispatch, { minSignal: n })} />
+              </Mini>
+              <Field label={t("priority")}>
+                <ConsoleSelect value={state.priority} onChange={(e) => patch(dispatch, { priority: e.target.value as DigState["priority"] })}>
+                  <option value="last">{t("priLast")}</option>
+                  <option value="signal">{t("priSignal")}</option>
+                  <option value="distance">{t("priDistance")}</option>
+                </ConsoleSelect>
+              </Field>
+              <Toggle on={state.callFirst} label={t("callFirst")} onClick={() => patch(dispatch, { callFirst: !state.callFirst })} />
+            </div>
+          ) : null}
+    </>
+  );
+}
+
+function DigControlsPanel({
+  state,
+  dispatch,
+  t,
+  period,
+  band,
+  fhLabel,
+  setLogWarn,
+  setLogOpen,
+}: {
+  state: DigState;
+  dispatch: (a: DigAction) => void;
+  t: (k: DigKey) => string;
+  period: ReturnType<typeof periodAt>;
+  band: string;
+  fhLabel: string;
+  setLogWarn: (v: boolean) => void;
+  setLogOpen: (v: boolean) => void;
+}) {
+  return (
+    <>
+<div className="flex flex-wrap gap-1.5">
+            <Toggle on={state.autoCq} label={t("autoCq")} title={t("airShort")} tone="amber" onClick={() => dispatch({ type: "autoCq" })} />
+            <Toggle on={state.autoCall} label={t("autoCall")} title={t("airShort")} tone="amber" onClick={() => dispatch({ type: "autoCall" })} />
+            <Toggle on={state.holdTx} label={t("hold")} title={t("holdHint")} onClick={() => dispatch({ type: "hold" })} />
+            <Toggle
+              on={state.txEven}
+              locked={state.txEvenLocked}
+              lockedWord={t("locked")}
+              label={t("even")}
+              title={t("evenHint")}
+              onClick={() => dispatch({ type: "even" })}
+              onDoubleClick={() => dispatch({ type: "evenLock" })}
+            />
+            <Field label={t("call")}>
+              <ConsoleInput className="h-8 font-['IBM_Plex_Mono']" value={state.dxCall} onChange={(e) => dispatch({ type: "dx", call: e.target.value })} />
+            </Field>
+            <Field label={t("grid")}>
+              <ConsoleInput className="h-8 font-['IBM_Plex_Mono']" value={state.dxGrid} onChange={(e) => dispatch({ type: "dx", grid: e.target.value })} />
+            </Field>
+            <Toggle on={state.fh !== "off"} label={`${t("fh")} ${fhLabel}`} onClick={() => dispatch({ type: "fh" })} />
+            <Toggle on={state.cqOnly} label={t("cqOnly")} onClick={() => dispatch({ type: "cqOnly" })} />
+            {state.mode === "FT4" ? <Toggle on={state.bestSp} label={t("best")} onClick={() => patch(dispatch, { bestSp: !state.bestSp })} /> : null}
+            <GhostBtn
+              onClick={() => {
+                if (!state.dxCall.trim()) {
+                  setLogWarn(true);
+                  setLogOpen(true);
+                  return;
+                }
+                setLogWarn(false);
+                dispatch({ type: "log", at: new Date().toISOString(), band });
+                setLogOpen(true);
+              }}
+            >
+              {t("logQso")}
+            </GhostBtn>
+            <GhostBtn onClick={() => dispatch({ type: "stop", periodIndex: period.index })}>{t("stop")}</GhostBtn>
+            <Toggle on={state.monitor} label={t("monitor")} onClick={() => dispatch({ type: "monitor" })} />
+            <GhostBtn
+              onClick={() => {
+                dispatch({ type: "erase" });
+                void fetch("/api/digital/rx", {
+                  method: "POST",
+                  credentials: "same-origin",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ op: "clear" }),
+                });
+              }}
+            >
+              {t("erase")}
+            </GhostBtn>
+            <div className="flex flex-wrap gap-1">
+              <span className="self-center text-[10px] tracking-wide text-[#5d7184] uppercase">{t("decode")}</span>
+              <Chip active={state.decode === "fast"} onClick={() => dispatch({ type: "decode", depth: "fast" })}>
+                {t("fast")}
+              </Chip>
+              <Chip active={state.decode === "normal"} onClick={() => dispatch({ type: "decode", depth: "normal" })}>
+                {t("normal")}
+              </Chip>
+              <Chip active={state.decode === "deep"} onClick={() => dispatch({ type: "decode", depth: "deep" })}>
+                {t("deep")}
+              </Chip>
+            </div>
+            <Toggle
+              on={state.enable}
+              label={t("enable")}
+              title={t("airShort")}
+              tone="amber"
+              onClick={() => {
+                if (state.enable) releaseDigitalTx();
+                dispatch({ type: "toggleEnable", periodIndex: period.index });
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                releaseDigitalTx();
+                dispatch({ type: "halt" });
+              }}
+              className="h-8 rounded-md border border-[#ef4444]/50 px-2.5 text-[11px] font-semibold text-[#f87171] hover:bg-[#ef4444]/10"
+            >
+              {t("halt")}
+            </button>
+            <Toggle on={state.tune} label={t("tune")} title={t("tuneHint")} tone="amber" onClick={() => dispatch({ type: "tune" })} />
+            <Toggle on={state.pounce} label={t("pounce")} title={t("airShort")} tone="amber" onClick={() => dispatch({ type: "pounce" })} />
+            <GhostBtn onClick={() => dispatch({ type: "generate" })}>{t("gen")}</GhostBtn>
+          </div>
+          <p className="mt-3 text-[11px] leading-relaxed text-[#5d7184]">{t("genHint")}</p>
+
+    </>
+  );
+}
+
 export function DigitalPage() {
   const { s, tx, lang, license, setFreq, setS } = useConsole();
   const t = (key: DigKey) => digTx(lang, key);
@@ -114,6 +413,10 @@ export function DigitalPage() {
   const [stripes, setStripes] = useState<FallStripe[]>([]);
   const [fallGen, setFallGen] = useState(0);
   const rxPending = useRef(false);
+  const layoutUser = currentLayoutUser();
+  const [layoutTiles, setLayoutTiles] = useState<DigitalTile[]>(defaultDigitalTiles);
+  const [layoutSaved, setLayoutSaved] = useState<DigitalTile[]>(defaultDigitalTiles);
+  const [layoutBusy, setLayoutBusy] = useState(false);
 
   const vfo = s.vfo === "B" ? "B" : "A";
   const hz = vfo === "B" ? s.freqB : s.freq;
@@ -198,6 +501,18 @@ export function DigitalPage() {
   };
 
   const txLevel = state.txPower > 0 ? Math.min(0.95, Math.max(0.25, state.txPower / 100)) : 0.65;
+
+  useEffect(() => {
+    let live = true;
+    void loadDigitalLayout(layoutUser).then((next) => {
+      if (!live) return;
+      setLayoutTiles(next);
+      setLayoutSaved(next);
+    });
+    return () => {
+      live = false;
+    };
+  }, [layoutUser]);
 
   useEffect(() => {
     rememberContact(state);
@@ -404,119 +719,104 @@ export function DigitalPage() {
     void postRx({ op: "enable", mode: state.mode, hz: picked.hz, band: picked.band, dialId: picked.id });
   };
   const listenWord = rxPhase === "on" ? t("listenOn") : rxPhase === "busy" ? t("listenBusy") : rxPhase === "auth" ? t("listenAuth") : rxPhase === "none" ? t("listenNone") : t("listenOff");
-  return (
-    <div>
-      <PageHead
-        kicker={tx("digital")}
-        title={tx("digitalTitle")}
-        aside={
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              aria-pressed={rxOn}
-              disabled={rxBusy}
-              onClick={toggleRx}
-              className={`inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm font-semibold transition-colors disabled:opacity-40 ${
-                rxOn
-                  ? "border-[#ffb300] text-[#ffb300] hover:bg-[#ffb300]/10"
-                  : "border-[rgba(79,195,247,0.28)] text-[#4fc3f7] hover:bg-[#4fc3f7]/10"
-              }`}
-            >
-              {rxOn ? t("ft8Off") : t("ft8On")}
-            </button>
-            <GhostBtn onClick={() => setSettings(true)}>{t("settings")}</GhostBtn>
-          </div>
-        }
-      />
+  const layoutDirty = !digitalTilesEqual(layoutTiles, layoutSaved);
+  const persistLayout = async () => {
+    setLayoutBusy(true);
+    try {
+      const next = await saveDigitalLayout(layoutUser, layoutTiles);
+      setLayoutTiles(next);
+      setLayoutSaved(next);
+      toast.success(tx("layoutSaved"));
+    } catch {
+      toast.error(tx("layoutSaveFail"));
+    } finally {
+      setLayoutBusy(false);
+    }
+  };
 
-      <Panel className={DIG_PANEL}>
-        <div className="flex flex-wrap items-center gap-3 font-['IBM_Plex_Mono'] text-xs">
-          <Readout k={t("vfoHint")} v={`${band} · ${formatVfoMhz(hz)} MHz · ${radioMode} · VFO ${vfo}`} />
-          {s.split ? <Readout k={t("splitOn")} v={formatVfoMhz(otherHz)} tone="green" /> : <Readout k={t("splitOff")} v="—" />}
-          <Readout k="UTC" v={utcClock(now)} tone="amber" />
-          <div className="flex items-center gap-1">
-            <ConsoleSelect aria-label={t("band")} className="h-8 w-44" value={selectValue} onChange={(e) => selectDial(e.target.value)}>
-              {dials.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {bandChipLabel(d, dials)}
-                </option>
-              ))}
-            </ConsoleSelect>
-            <Chip active={state.mode === "FT8"} onClick={() => selectMode("FT8")}>
-              {t("modeFt8")}
-            </Chip>
-            <Chip active={state.mode === "FT4"} onClick={() => selectMode("FT4")}>
-              {t("modeFt4")}
-            </Chip>
+  const renderLayoutTile = (id: string): ReactNode => {
+    const key = id as DigitalTileId;
+    if (key === "status") {
+      return (
+        <Panel className={`${DIG_PANEL} mb-0 h-full overflow-auto`}>
+          <div className="flex flex-wrap items-center gap-3 font-['IBM_Plex_Mono'] text-xs">
+            <Readout k={t("vfoHint")} v={`${band} · ${formatVfoMhz(hz)} MHz · ${radioMode} · VFO ${vfo}`} />
+            {s.split ? <Readout k={t("splitOn")} v={formatVfoMhz(otherHz)} tone="green" /> : <Readout k={t("splitOff")} v="—" />}
+            <Readout k="UTC" v={utcClock(now)} tone="amber" />
+            <div className="flex items-center gap-1">
+              <ConsoleSelect aria-label={t("band")} className="h-8 w-44" value={selectValue} onChange={(e) => selectDial(e.target.value)}>
+                {dials.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {bandChipLabel(d, dials)}
+                  </option>
+                ))}
+              </ConsoleSelect>
+              <Chip active={state.mode === "FT8"} onClick={() => selectMode("FT8")}>
+                {t("modeFt8")}
+              </Chip>
+              <Chip active={state.mode === "FT4"} onClick={() => selectMode("FT4")}>
+                {t("modeFt4")}
+              </Chip>
+            </div>
+            <div className="min-w-[160px]">
+              <p className="text-[10px] tracking-wide text-[#5d7184] uppercase">{t("rxAudio")}</p>
+              <Meter level={level} />
+              <p className="mt-1 text-[10px] text-[#8ea0b3]">{Number.isFinite(dbfs) ? `${dbfs.toFixed(0)} dBFS` : "—"}</p>
+            </div>
+            <Readout k={t("rxAudio")} v={listenWord} tone={rxPhase === "on" ? "green" : undefined} />
           </div>
-          <div className="min-w-[160px]">
-            <p className="text-[10px] tracking-wide text-[#5d7184] uppercase">{t("rxAudio")}</p>
-            <Meter level={level} />
-            <p className="mt-1 text-[10px] text-[#8ea0b3]">{Number.isFinite(dbfs) ? `${dbfs.toFixed(0)} dBFS` : "—"}</p>
+          {rxError ? <p className="mt-1 text-[11px] text-[#f87171]">{rxError}</p> : null}
+        </Panel>
+      );
+    }
+    if (key === "waterfall") {
+      return (
+        <Panel className={`${DIG_PANEL} mb-0 flex h-full min-h-0 flex-col overflow-hidden`}>
+          <div className="mb-3 flex shrink-0 flex-wrap items-end gap-3">
+            <Mini label={t("start")}>
+              <Num value={state.graphStart} onChange={(n) => dispatch({ type: "patch", patch: { graphStart: n } })} />
+            </Mini>
+            <Mini label={t("bins")}>
+              <Num value={state.graphBins} onChange={(n) => dispatch({ type: "patch", patch: { graphBins: n } })} />
+            </Mini>
+            <Mini label={t("navg")}>
+              <Num value={state.graphAvg} onChange={(n) => dispatch({ type: "patch", patch: { graphAvg: n } })} />
+            </Mini>
+            <Mini label={t("palette")}>
+              <ConsoleSelect
+                className="h-8"
+                value={state.graphPalette}
+                onChange={(e) => dispatch({ type: "patch", patch: { graphPalette: e.target.value as DigState["graphPalette"] } })}
+              >
+                <option value="cyan">{t("palCyan")}</option>
+                <option value="amber">{t("palAmber")}</option>
+                <option value="mix">{t("palMix")}</option>
+              </ConsoleSelect>
+            </Mini>
+            <Toggle on={state.graphFlatten} label={t("flatten")} onClick={() => dispatch({ type: "patch", patch: { graphFlatten: !state.graphFlatten } })} />
+            <Mini label={t("gain")}>
+              <Num value={state.graphGain} onChange={(n) => dispatch({ type: "patch", patch: { graphGain: n } })} />
+            </Mini>
+            <Mini label={t("zero")}>
+              <Num value={state.graphZero} onChange={(n) => dispatch({ type: "patch", patch: { graphZero: n } })} />
+            </Mini>
+            <Mini label={t("spec")}>
+              <Num value={state.graphSpec} onChange={(n) => dispatch({ type: "patch", patch: { graphSpec: n } })} />
+            </Mini>
+            <Mini label="Rx">
+              <Num value={state.rxHz} onChange={(n) => dispatch({ type: "graph", hz: n, moveTx: false })} />
+            </Mini>
+            <Mini label="Tx">
+              <Num value={state.txHz} onChange={(n) => dispatch({ type: "patch", patch: { txHz: n } })} />
+            </Mini>
           </div>
-          <Readout k={t("rxAudio")} v={listenWord} tone={rxPhase === "on" ? "green" : undefined} />
-        </div>
-        {rxError ? <p className="mt-1 text-[11px] text-[#f87171]">{rxError}</p> : null}
-      </Panel>
-
-      <Panel className={DIG_PANEL}>
-        <div className="mb-3 flex flex-wrap items-end gap-3">
-          <Mini label={t("start")}>
-            <Num value={state.graphStart} onChange={(n) => dispatch({ type: "patch", patch: { graphStart: n } })} />
-          </Mini>
-          <Mini label={t("bins")}>
-            <Num value={state.graphBins} onChange={(n) => dispatch({ type: "patch", patch: { graphBins: n } })} />
-          </Mini>
-          <Mini label={t("navg")}>
-            <Num value={state.graphAvg} onChange={(n) => dispatch({ type: "patch", patch: { graphAvg: n } })} />
-          </Mini>
-          <Mini label={t("palette")}>
-            <ConsoleSelect
-              className="h-8"
-              value={state.graphPalette}
-              onChange={(e) => dispatch({ type: "patch", patch: { graphPalette: e.target.value as DigState["graphPalette"] } })}
-            >
-              <option value="cyan">{t("palCyan")}</option>
-              <option value="amber">{t("palAmber")}</option>
-              <option value="mix">{t("palMix")}</option>
-            </ConsoleSelect>
-          </Mini>
-          <Toggle on={state.graphFlatten} label={t("flatten")} onClick={() => dispatch({ type: "patch", patch: { graphFlatten: !state.graphFlatten } })} />
-          <Mini label={t("gain")}>
-            <Num value={state.graphGain} onChange={(n) => dispatch({ type: "patch", patch: { graphGain: n } })} />
-          </Mini>
-          <Mini label={t("zero")}>
-            <Num value={state.graphZero} onChange={(n) => dispatch({ type: "patch", patch: { graphZero: n } })} />
-          </Mini>
-          <Mini label={t("spec")}>
-            <Num value={state.graphSpec} onChange={(n) => dispatch({ type: "patch", patch: { graphSpec: n } })} />
-          </Mini>
-          <Mini label="Rx">
-            <Num value={state.rxHz} onChange={(n) => dispatch({ type: "graph", hz: n, moveTx: false })} />
-          </Mini>
-          <Mini label="Tx">
-            <Num value={state.txHz} onChange={(n) => dispatch({ type: "patch", patch: { txHz: n } })} />
-          </Mini>
-        </div>
-        <Waterfall
-          stripes={stripes}
-          revision={fallGen}
-          start={span.start}
-          end={span.end}
-          gain={state.graphGain}
-          zero={state.graphZero}
-          flatten={state.graphFlatten}
-          spec={state.graphSpec}
-          palette={state.graphPalette}
-          rx={state.rxHz}
-          tx={state.txHz}
-          emptyLabel={rxOn && stripes.length === 0 ? t("waterfallWait") : t("waterfallEmpty")}
-          onPick={(hzPick) => dispatch({ type: "graph", hz: hzPick, moveTx: !state.holdTx })}
-        />
-      </Panel>
-
-      <div className="mb-1.5 grid gap-1.5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <Panel className={DIG_PANEL}>
+          <div className="min-h-0 flex-1"><Waterfall stripes={stripes} revision={fallGen} start={span.start} end={span.end} gain={state.graphGain} zero={state.graphZero} flatten={state.graphFlatten} spec={state.graphSpec} palette={state.graphPalette} rx={state.rxHz} tx={state.txHz} emptyLabel={rxOn && stripes.length === 0 ? t("waterfallWait") : t("waterfallEmpty")} onPick={(hzPick) => dispatch({ type: "graph", hz: hzPick, moveTx: !state.holdTx })} /></div>
+        </Panel>
+      );
+    }
+    if (key === "bandActivity") {
+      return (
+        <Panel className={`${DIG_PANEL} mb-0 flex h-full min-h-0 flex-col overflow-hidden`}>
           <PanelTitle>{t("bandActivity")}</PanelTitle>
           <DecodeTable
             rows={left}
@@ -527,13 +827,17 @@ export function DigitalPage() {
             onRow={(row) => dispatch({ type: "double", row })}
             follow
           />
-          <p className="mt-2 text-[11px] text-[#8ea0b3]">
+          <p className="mt-2 shrink-0 text-[11px] text-[#8ea0b3]">
             {t("candidates")}: {pick ? pick.message : t("none")} · {picks.length}
           </p>
         </Panel>
-        <Panel className={DIG_PANEL}>
+      );
+    }
+    if (key === "rxFreq") {
+      return (
+        <Panel className={`${DIG_PANEL} mb-0 flex h-full min-h-0 flex-col overflow-hidden`}>
           <PanelTitle>{t("rxFreq")}</PanelTitle>
-          <label className="mb-2 flex items-center gap-2 text-[11px] text-[#8ea0b3]">
+          <label className="mb-2 flex shrink-0 items-center gap-2 text-[11px] text-[#8ea0b3]">
             {t("rxWidth")}
             <ConsoleInput
               className="h-8 w-16 font-['IBM_Plex_Mono']"
@@ -552,291 +856,113 @@ export function DigitalPage() {
             compact
           />
         </Panel>
-      </div>
-
-      <div className="mb-1.5 grid gap-1.5 xl:grid-cols-[minmax(0,5fr)_minmax(0,8fr)]">
-        <Panel className={DIG_PANEL}>
-          <div className="mb-3 flex gap-1 overflow-x-auto">
-            <Chip active={tab === "tx"} onClick={() => setTab("tx")}>
-              Tx1–Tx6
-            </Chip>
-            <Chip active={tab === "filter"} onClick={() => setTab("filter")}>
-              {t("tabFilter")}
-            </Chip>
-            <Chip active={tab === "prefix"} onClick={() => setTab("prefix")}>
-              {t("tabPrefix")}
-            </Chip>
-            <Chip active={tab === "states"} onClick={() => setTab("states")}>
-              {t("tabStates")}
-            </Chip>
-            <Chip active={tab === "ignore"} onClick={() => setTab("ignore")}>
-              {t("tabIgnore")}
-            </Chip>
-            <Chip active={tab === "alerts"} onClick={() => setTab("alerts")}>
-              {t("tabAlerts")}
-            </Chip>
-            <Chip active={tab === "others"} onClick={() => setTab("others")}>
-              {t("tabOthers")}
-            </Chip>
-          </div>
-          {tab === "tx" ? (
-            <div>
-              <div className="mb-1 grid grid-cols-[32px_28px_minmax(0,1fr)] gap-1 text-[10px] tracking-wide text-[#5d7184] uppercase">
-                <span>{t("next")}</span>
-                <span>{t("now")}</span>
-                <span>Tx</span>
-              </div>
-              {([1, 2, 3, 4, 5, 6] as TxId[]).map((n) => (
-                <div
-                  key={n}
-                  className="mb-0.5 grid grid-cols-[32px_28px_minmax(0,1fr)] items-center gap-1"
-                  onDoubleClick={() => n === 5 && dispatch({ type: "rr73" })}
-                >
-                  <label className="flex items-center gap-1 text-[11px] text-[#8ea0b3]">
-                    <input type="radio" name="dig-next" checked={state.next === n} onChange={() => dispatch({ type: "next", tx: n })} />
-                    {n}
-                  </label>
-                  <span className={`text-[11px] ${nowTx === n ? "text-[#ffb300]" : "text-[#5d7184]"}`}>{nowTx === n ? "●" : "○"}</span>
-                  <ConsoleInput
-                    className="h-8 font-['IBM_Plex_Mono'] text-xs"
-                    aria-label={`Tx${n}`}
-                    value={state.tx[n]}
-                    onChange={(e) => dispatch({ type: "txText", tx: n, text: e.target.value })}
-                  />
-                </div>
-              ))}
-              <p className="mt-2 text-[11px] text-[#5d7184]">{t("rrHint")}</p>
-            </div>
-          ) : null}
-          {tab === "filter" ? (
-            <div className="grid gap-2">
-              <p className="text-[11px] text-[#8ea0b3]">{t("filterNote")}</p>
-              <p className="text-[11px] text-[#8ea0b3]">{t("dxccNote")}</p>
-              <Toggle on={state.filterOn} label={t("filterOn")} onClick={() => patch(dispatch, { filterOn: !state.filterOn })} />
-              <Toggle on={state.newCall} label={t("newCall")} onClick={() => patch(dispatch, { newCall: !state.newCall })} />
-              <Toggle on={state.newDxcc} label={t("newDxcc")} onClick={() => patch(dispatch, { newDxcc: !state.newDxcc })} />
-              <Toggle on={state.newBand} label={t("newBand")} onClick={() => patch(dispatch, { newBand: !state.newBand })} />
-              <Toggle on={state.workedBand} label={t("workedBand")} onClick={() => patch(dispatch, { workedBand: !state.workedBand })} />
-              <Toggle on={state.lotwOnly} label={t("lotw")} onClick={() => patch(dispatch, { lotwOnly: !state.lotwOnly })} />
-              <Field label={t("continents")}>
-                <ConsoleInput value={state.continents} onChange={(e) => patch(dispatch, { continents: e.target.value })} />
-              </Field>
-            </div>
-          ) : null}
-          {tab === "prefix" ? (
-            <div className="grid gap-2">
-              <ModeSelect label={t("prefixes")} value={state.prefixMode} t={t} onChange={(prefixMode) => patch(dispatch, { prefixMode })} />
-              <ConsoleInput value={state.prefixes} onChange={(e) => patch(dispatch, { prefixes: e.target.value })} placeholder="20m:SP,SQ" />
-              <p className="text-[11px] text-[#5d7184]">{t("prefixHint")}</p>
-              <Field label={t("cqTargets")}>
-                <ConsoleInput value={state.cqTargets} onChange={(e) => patch(dispatch, { cqTargets: e.target.value })} />
-              </Field>
-            </div>
-          ) : null}
-          {tab === "states" ? (
-            <div className="grid gap-2">
-              <ModeSelect label={t("states")} value={state.stateMode} t={t} onChange={(stateMode) => patch(dispatch, { stateMode })} />
-              <ConsoleInput value={state.states} onChange={(e) => patch(dispatch, { states: e.target.value })} />
-            </div>
-          ) : null}
-          {tab === "ignore" ? (
-            <div className="grid gap-2">
-              <Field label={t("ignoreTemp")}>
-                <textarea
-                  className="min-h-28 w-full rounded-md border border-[rgba(79,195,247,0.22)] bg-[#101c28] px-3 py-2 font-['IBM_Plex_Mono'] text-sm text-[#e8eef4] outline-none focus:border-[#4fc3f7]"
-                  value={state.ignore}
-                  onChange={(e) => patch(dispatch, { ignore: e.target.value })}
-                />
-              </Field>
-              <p className="text-[11px] text-[#5d7184]">{t("ignoreHint")}</p>
-              <GhostBtn onClick={() => dispatch({ type: "clearIgnore" })}>{t("ignoreClear")}</GhostBtn>
-            </div>
-          ) : null}
-          {tab === "alerts" ? (
-            <div className="grid gap-2">
-              <Toggle on={state.alertNewCall} label={t("newCall")} onClick={() => patch(dispatch, { alertNewCall: !state.alertNewCall })} />
-              <Toggle on={state.alertNewDxcc} label={t("newDxcc")} onClick={() => patch(dispatch, { alertNewDxcc: !state.alertNewDxcc })} />
-              <Field label={t("alertList")}>
-                <ConsoleInput value={state.alertList} onChange={(e) => patch(dispatch, { alertList: e.target.value })} />
-              </Field>
-              <p className="text-[11px] text-[#8ea0b3]">
-                {t("alertLog")}: {alerts.length ? alerts.map((a) => a.message).join(" · ") : t("alertEmpty")}
-              </p>
-            </div>
-          ) : null}
-          {tab === "others" ? (
-            <div className="grid gap-2">
-              <Field label={t("bandHop")}>
-                <textarea
-                  className="min-h-20 w-full rounded-md border border-[rgba(79,195,247,0.22)] bg-[#101c28] px-3 py-2 font-['IBM_Plex_Mono'] text-sm text-[#e8eef4] outline-none focus:border-[#4fc3f7]"
-                  value={state.bandHop}
-                  placeholder="12:20m,40m"
-                  onChange={(e) => patch(dispatch, { bandHop: e.target.value })}
-                />
-              </Field>
-              <p className="text-[11px] text-[#5d7184]">{t("bandHopHint")}</p>
-              {hop ? (
-                <p className="text-sm text-[#ffb300]">
-                  {t("hopNow")}: {hop.join(", ")}. {t("hopStay")}
-                </p>
-              ) : null}
-              <Toggle on={state.modeSwitch} label={t("modeSwitch")} onClick={() => patch(dispatch, { modeSwitch: !state.modeSwitch })} />
-              <div className="flex flex-wrap gap-3">
-                <Mini label={t("autoCqN")}>
-                  <Num value={state.autoCqN} onChange={(n) => patch(dispatch, { autoCqN: n })} />
-                </Mini>
-                <Mini label={t("autoCallN")}>
-                  <Num value={state.autoCallN} onChange={(n) => patch(dispatch, { autoCallN: n })} />
-                </Mini>
-                <Readout k="#" v={String(state.switchLeft)} />
-              </div>
-              <Toggle on={state.treat73} label={t("treat73")} onClick={() => patch(dispatch, { treat73: !state.treat73 })} />
-              <Mini label={t("minSignal")}>
-                <Num value={state.minSignal} onChange={(n) => patch(dispatch, { minSignal: n })} />
-              </Mini>
-              <Field label={t("priority")}>
-                <ConsoleSelect value={state.priority} onChange={(e) => patch(dispatch, { priority: e.target.value as DigState["priority"] })}>
-                  <option value="last">{t("priLast")}</option>
-                  <option value="signal">{t("priSignal")}</option>
-                  <option value="distance">{t("priDistance")}</option>
-                </ConsoleSelect>
-              </Field>
-              <Toggle on={state.callFirst} label={t("callFirst")} onClick={() => patch(dispatch, { callFirst: !state.callFirst })} />
-            </div>
-          ) : null}
+      );
+    }
+    if (key === "tabs") {
+      return (
+        <Panel className={`${DIG_PANEL} mb-0 h-full overflow-auto`}>
+          <DigTabsPanel tab={tab} setTab={setTab} t={t} state={state} dispatch={dispatch} nowTx={nowTx} alerts={alerts} hop={hop} />
         </Panel>
+      );
+    }
+    if (key === "controls") {
+      return (
+        <Panel className={`${DIG_PANEL} mb-0 h-full overflow-auto`}>
+          <DigControlsPanel state={state} dispatch={dispatch} t={t} period={period} band={band} fhLabel={fhLabel} setLogWarn={setLogWarn} setLogOpen={setLogOpen} />
+        </Panel>
+      );
+    }
+    if (key === "footer") {
+      return (
+        <Panel className={`${DIG_PANEL} mb-0 h-full overflow-auto`}>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 font-['IBM_Plex_Mono'] text-[11px]">
+            <span className={phase === "rx" ? "text-[#4fc3f7]" : "text-[#ffb300]"}>{statusWord}</span>
+            <span className="text-[#8ea0b3]">{state.mode}</span>
+            {(phase === "tx" || phase === "finish" || phase === "tune") && planned ? (
+              <span className="text-[#e8eef4]">
+                {t("localSeq")}: {planned}
+              </span>
+            ) : null}
+            <span className="text-[#8ea0b3]">
+              {t("last")}: {state.lastText || "—"}
+            </span>
+            <span className="text-[#8ea0b3]">
+              {t("decodes")}: {state.rows.length}
+            </span>
+            {txSent || txPhase ? (
+              <span className="text-[#ffb300]">
+                {t("txDone")}: {txSent || "—"} {txPhase ? `· ${txPhase}` : ""}
+              </span>
+            ) : null}
+            <span className="flex min-w-[120px] items-center gap-2 text-[#c5d4e0]">
+              {period.label}
+              <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#101c28]">
+                <span className="block h-full bg-[#4fc3f7]" style={{ width: `${Math.min(100, (period.elapsed / period.period) * 100)}%` }} />
+              </span>
+            </span>
+            <span className="text-[#8ea0b3]">
+              {t("wd")} {wdText}
+            </span>
+            <label className="flex items-center gap-2 text-[#8ea0b3]">
+              {t("txAudio")} {state.txPower}%
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={state.txPower}
+                aria-label={t("txPower")}
+                onChange={(e) => patch(dispatch, { txPower: Number(e.target.value) })}
+              />
+            </label>
+          </div>
+          {note ? <p className="mt-2 text-xs text-[#ffb300]">{note}</p> : null}
+        </Panel>
+      );
+    }
+    return null;
+  };
 
-        <Panel className={DIG_PANEL}>
-          <div className="flex flex-wrap gap-1.5">
-            <Toggle on={state.autoCq} label={t("autoCq")} title={t("airShort")} tone="amber" onClick={() => dispatch({ type: "autoCq" })} />
-            <Toggle on={state.autoCall} label={t("autoCall")} title={t("airShort")} tone="amber" onClick={() => dispatch({ type: "autoCall" })} />
-            <Toggle on={state.holdTx} label={t("hold")} title={t("holdHint")} onClick={() => dispatch({ type: "hold" })} />
-            <Toggle
-              on={state.txEven}
-              locked={state.txEvenLocked}
-              lockedWord={t("locked")}
-              label={t("even")}
-              title={t("evenHint")}
-              onClick={() => dispatch({ type: "even" })}
-              onDoubleClick={() => dispatch({ type: "evenLock" })}
-            />
-            <Field label={t("call")}>
-              <ConsoleInput className="h-8 font-['IBM_Plex_Mono']" value={state.dxCall} onChange={(e) => dispatch({ type: "dx", call: e.target.value })} />
-            </Field>
-            <Field label={t("grid")}>
-              <ConsoleInput className="h-8 font-['IBM_Plex_Mono']" value={state.dxGrid} onChange={(e) => dispatch({ type: "dx", grid: e.target.value })} />
-            </Field>
-            <Toggle on={state.fh !== "off"} label={`${t("fh")} ${fhLabel}`} onClick={() => dispatch({ type: "fh" })} />
-            <Toggle on={state.cqOnly} label={t("cqOnly")} onClick={() => dispatch({ type: "cqOnly" })} />
-            {state.mode === "FT4" ? <Toggle on={state.bestSp} label={t("best")} onClick={() => patch(dispatch, { bestSp: !state.bestSp })} /> : null}
-            <GhostBtn
-              onClick={() => {
-                if (!state.dxCall.trim()) {
-                  setLogWarn(true);
-                  setLogOpen(true);
-                  return;
-                }
-                setLogWarn(false);
-                dispatch({ type: "log", at: new Date().toISOString(), band });
-                setLogOpen(true);
-              }}
-            >
-              {t("logQso")}
-            </GhostBtn>
-            <GhostBtn onClick={() => dispatch({ type: "stop", periodIndex: period.index })}>{t("stop")}</GhostBtn>
-            <Toggle on={state.monitor} label={t("monitor")} onClick={() => dispatch({ type: "monitor" })} />
-            <GhostBtn
-              onClick={() => {
-                dispatch({ type: "erase" });
-                void fetch("/api/digital/rx", {
-                  method: "POST",
-                  credentials: "same-origin",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ op: "clear" }),
-                });
-              }}
-            >
-              {t("erase")}
-            </GhostBtn>
-            <div className="flex flex-wrap gap-1">
-              <span className="self-center text-[10px] tracking-wide text-[#5d7184] uppercase">{t("decode")}</span>
-              <Chip active={state.decode === "fast"} onClick={() => dispatch({ type: "decode", depth: "fast" })}>
-                {t("fast")}
-              </Chip>
-              <Chip active={state.decode === "normal"} onClick={() => dispatch({ type: "decode", depth: "normal" })}>
-                {t("normal")}
-              </Chip>
-              <Chip active={state.decode === "deep"} onClick={() => dispatch({ type: "decode", depth: "deep" })}>
-                {t("deep")}
-              </Chip>
-            </div>
-            <Toggle
-              on={state.enable}
-              label={t("enable")}
-              title={t("airShort")}
-              tone="amber"
-              onClick={() => {
-                if (state.enable) releaseDigitalTx();
-                dispatch({ type: "toggleEnable", periodIndex: period.index });
-              }}
-            />
+  return (
+    <div>
+      <PageHead
+        kicker={tx("digital")}
+        title={tx("digitalTitle")}
+        aside={
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
-              onClick={() => {
-                releaseDigitalTx();
-                dispatch({ type: "halt" });
-              }}
-              className="h-8 rounded-md border border-[#ef4444]/50 px-2.5 text-[11px] font-semibold text-[#f87171] hover:bg-[#ef4444]/10"
+              aria-pressed={rxOn}
+              disabled={rxBusy}
+              onClick={toggleRx}
+              className={`inline-flex h-10 items-center justify-center rounded-md border px-4 text-sm font-semibold transition-colors disabled:opacity-40 ${
+                rxOn
+                  ? "border-[#ffb300] text-[#ffb300] hover:bg-[#ffb300]/10"
+                  : "border-[rgba(79,195,247,0.28)] text-[#4fc3f7] hover:bg-[#4fc3f7]/10"
+              }`}
             >
-              {t("halt")}
+              {rxOn ? t("ft8Off") : t("ft8On")}
             </button>
-            <Toggle on={state.tune} label={t("tune")} title={t("tuneHint")} tone="amber" onClick={() => dispatch({ type: "tune" })} />
-            <Toggle on={state.pounce} label={t("pounce")} title={t("airShort")} tone="amber" onClick={() => dispatch({ type: "pounce" })} />
-            <GhostBtn onClick={() => dispatch({ type: "generate" })}>{t("gen")}</GhostBtn>
+            <GhostBtn onClick={() => setSettings(true)}>{t("settings")}</GhostBtn>
+            <PrimaryBtn disabled={layoutBusy || !layoutDirty} onClick={() => void persistLayout()}>
+              <span className="inline-flex items-center gap-2">
+                <Save size={16} />
+                {tx("saveLayout")}
+              </span>
+            </PrimaryBtn>
           </div>
-          <p className="mt-3 text-[11px] leading-relaxed text-[#5d7184]">{t("genHint")}</p>
-        </Panel>
-      </div>
+          <p className="max-w-xs text-right text-[11px] leading-snug text-[#5d7184]">{tx("layoutHint")}</p>
+          </div>
+        }
+      />
 
-      <Panel className={DIG_PANEL}>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 font-['IBM_Plex_Mono'] text-[11px]">
-          <span className={phase === "rx" ? "text-[#4fc3f7]" : "text-[#ffb300]"}>{statusWord}</span>
-          <span className="text-[#8ea0b3]">{state.mode}</span>
-          {(phase === "tx" || phase === "finish" || phase === "tune") && planned ? <span className="text-[#e8eef4]">{t("localSeq")}: {planned}</span> : null}
-          <span className="text-[#8ea0b3]">
-            {t("last")}: {state.lastText || "—"}
-          </span>
-          <span className="text-[#8ea0b3]">
-            {t("decodes")}: {state.rows.length}
-          </span>
-          {txSent || txPhase ? (
-            <span className="text-[#ffb300]">
-              {t("txDone")}: {txSent || "—"} {txPhase ? `· ${txPhase}` : ""}
-            </span>
-          ) : null}
-          <span className="flex min-w-[120px] items-center gap-2 text-[#c5d4e0]">
-            {period.label}
-            <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#101c28]">
-              <span className="block h-full bg-[#4fc3f7]" style={{ width: `${Math.min(100, (period.elapsed / period.period) * 100)}%` }} />
-            </span>
-          </span>
-          <span className="text-[#8ea0b3]">
-            {t("wd")} {wdText}
-          </span>
-          <label className="flex items-center gap-2 text-[#8ea0b3]">
-            {t("txAudio")} {state.txPower}%
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={state.txPower}
-              aria-label={t("txPower")}
-              onChange={(e) => patch(dispatch, { txPower: Number(e.target.value) })}
-            />
-          </label>
-        </div>
-        {note ? <p className="mt-2 text-xs text-[#ffb300]">{note}</p> : null}
-      </Panel>
+      <PanelBoard
+        tiles={layoutTiles}
+        shown={layoutTiles.map((tile) => tile.id)}
+        onChange={setLayoutTiles}
+        render={renderLayoutTile}
+      />
+
 
       {settings ? (
         <Dialog title={t("settingsTitle")} onClose={() => setSettings(false)} closeLabel={t("close")}>

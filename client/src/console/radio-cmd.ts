@@ -142,16 +142,18 @@ export async function pollPrimaryTelemetry(
  * Sem transporte ao vivo devolve null — o ponteiro fica em S0, sem dBm inventado.
  * Hamlib ocupado/timeout e CI-V em curso também devolvem null (o tick é pulado).
  */
+/** `false` = pedido CI-V enviado (BLE); leitura chega pelo notify. */
+export type SmeterPollResult = number | null | false;
+
 export async function pollPrimarySmeter(
   items: StationRadio[],
   opts?: { bleReady?: boolean; hamlibPort?: number },
-): Promise<number | null> {
+): Promise<SmeterPollResult> {
   const route = resolvePrimaryRoute(items, opts);
   if (!route.live || route.transport === "none") return null;
 
   if (route.transport === "ble") {
-    ic705Ble.requestSmeter();
-    return null;
+    return ic705Ble.requestSmeter() ? false : null;
   }
 
   if (route.transport === "lan") {

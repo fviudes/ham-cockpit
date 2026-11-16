@@ -54,15 +54,15 @@ export const SMETER_FRAME_MS = Math.round(1000 / 30);
  * Ocupado espera, senão o tick vira rajada que só recebe ocupado.
  */
 export function nextSmeterWaitMs(gotLevel: boolean): number {
-  return gotLevel ? 0 : 150;
+  return gotLevel ? 0 : 120;
 }
 /**
  * Constante de tempo da curva, igual na subida e na descida.
- * ~63% do caminho em 160 ms; um salto de várias unidades S atravessa vários quadros.
+ * ~63% do caminho em 80 ms — resposta mais rápida sem sacudir a agulha.
  */
-export const SMETER_TAU_MS = 160;
+export const SMETER_TAU_MS = 80;
 /** Quadro atrasado não percorre a curva inteira. */
-export const SMETER_DT_CAP_MS = 50;
+export const SMETER_DT_CAP_MS = 40;
 
 /** Um passo da curva. Mesma fração para subir e para descer. */
 export function stepSmeter(shown: number, target: number, dtMs: number): number {

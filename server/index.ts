@@ -871,14 +871,14 @@ async function startServer() {
 
   app.get("/api/layout", (req, res) => {
     try {
-      res.json(layoutGet(String(req.query.user || "admin")));
+      res.json(layoutGet(String(req.query.user || "admin"), req.query.scope));
     } catch (err) {
       res.status(500).json({ ok: false, tiles: [], error: String(err) });
     }
   });
   app.put("/api/layout", (req, res) => {
     try {
-      res.json(layoutSave(req.body?.user, req.body?.tiles));
+      res.json(layoutSave(req.body?.user, req.body?.tiles, req.body?.scope));
     } catch (err) {
       res.status(500).json({ ok: false, tiles: [], error: String(err) });
     }

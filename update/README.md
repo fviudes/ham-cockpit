@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.12.04** (`version.json`).
+Versão atual neste canal: **0.1.12.05** (`version.json`).
 
 ## Versionamento
 
@@ -20,12 +20,12 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.12.04",
+  "version": "0.1.12.05",
   "channel": "main",
-  "file": "ham-cockpit-0.1.12.04.tgz",
-  "sha256": "e57284f8337d323bcfb73264569e8a05a10b6e6e75333ac4b2ae182eb3700641",
-  "bytes": 5123404,
-  "notes": "Menu mostra versão instalada; waterfall usa só CI-V com escala Icom 0-160."
+  "file": "ham-cockpit-0.1.12.05.tgz",
+  "sha256": "ba9780e31b3c15143edee9adc1209be7fd43244c7ed2b4c3745f34c9d2aa68d2",
+  "bytes": 5124654,
+  "notes": "Layout salvo em modos digitais; S-meter mais rápido (BLE e suavização)."
 }
 ```
 

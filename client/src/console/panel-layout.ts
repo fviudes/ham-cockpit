@@ -1,14 +1,26 @@
 import { DEFAULT_USER } from "./i18n";
+import {
+  LAYOUT_COLS,
+  LAYOUT_GAP,
+  LAYOUT_MIN_H,
+  LAYOUT_MIN_W,
+  LAYOUT_ROW,
+  patchGridTile,
+  tilesEqual as gridTilesEqual,
+  type GridTile,
+} from "./layout-grid";
+
+export {
+  LAYOUT_COLS,
+  LAYOUT_GAP,
+  LAYOUT_MIN_H,
+  LAYOUT_MIN_W,
+  LAYOUT_ROW,
+} from "./layout-grid";
 
 export const TILE_IDS = ["vfo", "nextion", "spe", "palstar", "hamplus", "acom", "lextel", "ldg", "lp100a", "waterfall"] as const;
 export type TileId = (typeof TILE_IDS)[number];
-export type PanelTile = { id: TileId; x: number; y: number; w: number; h: number };
-
-export const LAYOUT_COLS = 12;
-export const LAYOUT_ROW = 36;
-export const LAYOUT_GAP = 4;
-export const LAYOUT_MIN_W = 3;
-export const LAYOUT_MIN_H = 5;
+export type PanelTile = GridTile<TileId>;
 
 export const DEFAULT_TILES: Record<TileId, PanelTile> = {
   vfo: { id: "vfo", x: 0, y: 0, w: 7, h: 12 },
@@ -83,11 +95,11 @@ export function removeTile(list: PanelTile[], id: TileId): PanelTile[] {
 }
 
 export function tilesEqual(a: PanelTile[], b: PanelTile[]) {
-  return JSON.stringify(a) === JSON.stringify(b);
+  return gridTilesEqual(a, b);
 }
 
 export function patchTile(list: PanelTile[], id: TileId, patch: Partial<PanelTile>): PanelTile[] {
-  return list.map((t) => (t.id === id ? { ...t, ...patch, id } : t));
+  return patchGridTile(list, id, patch);
 }
 
 export async function loadLayout(user: string): Promise<PanelTile[]> {
