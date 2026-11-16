@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.12.02** (`version.json`).
+Versão atual neste canal: **0.1.12.03** (`version.json`).
 
 ## Versionamento
 
@@ -20,12 +20,12 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.12.02",
+  "version": "0.1.12.03",
   "channel": "main",
-  "file": "ham-cockpit-0.1.12.02.tgz",
-  "sha256": "dfe3cf87535fb4dc73d6aa6c506ae62fa65dadc4331c10904289c09b4c5a2a72",
-  "bytes": 5122965,
-  "notes": "Waterfall: largura 200 kHz alinhada ao scope, sem pico falso no centro (scope CI-V separado do PCM)."
+  "file": "ham-cockpit-0.1.12.03.tgz",
+  "sha256": "a64a291102f3c7505711fea85a267e18bff0c0feaf46981fe77d380ba2ec5947",
+  "bytes": 5123167,
+  "notes": "Waterfall: volta a mostrar após 2,5 s sem CI-V (PCM) e reenvio do span na serial."
 }
 ```
 

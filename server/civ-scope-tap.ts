@@ -155,7 +155,7 @@ export function serialScopeCenter(): void {}
 /** Repete 27 15 com a largura pedida no painel (sem novo 27 14). */
 export function serialScopeSpan(spanHz?: number): void {
   if (spanHz != null) scopeSpanHz = normalizeScopeSpan(spanHz);
-  if (!tap?.output || rigQuiet) return;
+  if (!tap || rigQuiet || !outputWanted) return;
   sendFrames(tap, [scopeSpanFrame(tap.civ, scopeSpanHz)]);
 }
 

@@ -8,7 +8,16 @@ import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
 import { ScopeAssembler, civScopeOn, scopePayload, type ScopeSweep } from "../shared/icom-scope";
-import { onSerialScopeFrame, onSerialScopeRevive, serialScopeCenter, serialScopeReady, serialScopeSpan } from "./civ-scope-tap";
+import {
+  onSerialScopeFrame,
+  onSerialScopeRevive,
+  prepareSerialScopeTap,
+  serialScopeCenter,
+  serialScopeOutput,
+  serialScopeReady,
+  serialScopeSpan,
+} from "./civ-scope-tap";
+import { SCOPE_SPAN_HZ } from "../shared/icom-scope";
 import { consoleSessionOk } from "./console-session";
 import { subscribeScopeFrame } from "./icom-scope-hub";
 import { icomLanCmd } from "./icom-lan";
@@ -155,7 +164,14 @@ async function bind(ws: WebSocket, via: string) {
           if (serialClients.has(ws)) void setSerialScope(true);
         }, 1500);
       }
-    } else sendJson(ws, { type: "ready", via: "serial" });
+    } else {
+      sendJson(ws, { type: "ready", via: "serial" });
+      void prepareSerialScopeTap().then((ok) => {
+        if (!ok) return;
+        serialScopeOutput(true);
+        serialScopeSpan(SCOPE_SPAN_HZ);
+      });
+    }
     ws.on("message", (data) => {
       const ask = readScopeAsk(data);
       if (ask) askScopeCenter("serial", ask.kind === "span", ask.kind === "span" ? ask.spanHz : undefined);

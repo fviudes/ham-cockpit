@@ -25,6 +25,8 @@ import {
 import { PanelTitle } from "./widgets";
 
 const HISTORY = 96;
+/** Sem quadro CI-V neste intervalo, usa PCM (fallback estreito ±24 kHz). */
+const SCOPE_RF_STALE_MS = 2_500;
 
 function ampColor(level: number, full: number): [number, number, number] {
   const t = Math.max(0, Math.min(1, level / full));
@@ -230,6 +232,7 @@ export function WaterfallViz() {
   spanRef.current = spanHz;
   const [live, setLive] = useState(false);
   const [serialFail, setSerialFail] = useState(false);
+  const scopeWsRef = useRef<WebSocket | null>(null);
   const route = resolvePrimaryRoute(s.radios.items, {
     bleReady: s.ic705.phase === "ready" && s.ic705.ble,
   });
@@ -261,6 +264,7 @@ export function WaterfallViz() {
     let last = 0;
     let running = true;
     let socket: WebSocket | null = null;
+    let lastRfAt = 0;
     const draw = () => {
       if (!canvas) return;
       paint(canvas, rowsRef.current, tuneRef.current, spanRef.current, atlasRef, sweepMsRef, genRef.current, Date.now());
@@ -273,7 +277,8 @@ export function WaterfallViz() {
       draw();
     };
     raf = requestAnimationFrame(loop);
-    const onSweep = (sweep: ScopeSweep) => {
+    const onSweep = (sweep: ScopeSweep, rf = false) => {
+      if (rf) lastRfAt = Date.now();
       const next = rowsRef.current;
       next.unshift({
         bins: sweep.bins,
@@ -288,34 +293,37 @@ export function WaterfallViz() {
 
     let stop = () => {};
     let audio: WebSocket | null = null;
-    let scopeSocket: WebSocket | null = null;
     let lastAudio = 0;
-    /** Com scope CI-V ativo, o PCM não entra na fila — evita pico falso no centro. */
-    if (!rfScope) {
-      try {
-        const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-        audio = new WebSocket(`${proto}//${window.location.host}/ws/radio-audio`);
-        audio.binaryType = "arraybuffer";
-        audio.addEventListener("message", (event) => {
-          if (!(event.data instanceof ArrayBuffer) || event.data.byteLength < 2) return;
-          const now = Date.now();
-          if (now - lastAudio < 80) return;
-          lastAudio = now;
-          const bytes = event.data.byteLength - (event.data.byteLength % 2);
-          const pcm = new Int16Array(event.data.slice(0, bytes));
-          const tune = tuneRef.current > 0 ? tuneRef.current : 14_074_000;
-          onSweep(audioSweep(pcm, tune, spanRef.current));
-        });
-      } catch {
-        audio = null;
-      }
+    try {
+      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+      audio = new WebSocket(`${proto}//${window.location.host}/ws/radio-audio`);
+      audio.binaryType = "arraybuffer";
+      audio.addEventListener("message", (event) => {
+        if (!(event.data instanceof ArrayBuffer) || event.data.byteLength < 2) return;
+        const now = Date.now();
+        if (now - lastAudio < 80) return;
+        if (rfScope && now - lastRfAt < SCOPE_RF_STALE_MS) return;
+        lastAudio = now;
+        const bytes = event.data.byteLength - (event.data.byteLength % 2);
+        const pcm = new Int16Array(event.data.slice(0, bytes));
+        const tune = tuneRef.current > 0 ? tuneRef.current : 14_074_000;
+        onSweep(audioSweep(pcm, tune, spanRef.current), false);
+      });
+    } catch {
+      audio = null;
     }
     if (via === "ble") {
-      const unsub = subscribeScope(onSweep);
+      const unsub = subscribeScope((sweep) => onSweep(sweep, true));
       let alive = true;
-      void ic705Ble.setScope(true).then((ok) => {
-        if (!alive && ok) void ic705Ble.setScope(false).catch(() => undefined);
-      }).catch(() => undefined);
+      const armBleScope = (attempt = 0) => {
+        void ic705Ble.setScope(true).then((ok) => {
+          if (!alive && ok) void ic705Ble.setScope(false).catch(() => undefined);
+          if (alive && !ok && attempt < 8) window.setTimeout(() => armBleScope(attempt + 1), 400);
+        }).catch(() => {
+          if (alive && attempt < 8) window.setTimeout(() => armBleScope(attempt + 1), 400);
+        });
+      };
+      armBleScope();
       stop = () => {
         alive = false;
         unsub();
@@ -324,13 +332,16 @@ export function WaterfallViz() {
     } else if (feed === "lan" || feed === "serial") {
       const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
       try {
-        scopeSocket = new WebSocket(`${proto}//${window.location.host}/ws/scope?via=${feed}`);
-        socket = scopeSocket;
+        socket = new WebSocket(`${proto}//${window.location.host}/ws/scope?via=${feed}`);
+        scopeWsRef.current = socket;
       } catch {
-        scopeSocket = null;
         socket = null;
+        scopeWsRef.current = null;
       }
       if (socket) {
+        socket.addEventListener("close", () => {
+          if (scopeWsRef.current === socket) scopeWsRef.current = null;
+        });
         socket.addEventListener("message", (event) => {
           if (typeof event.data !== "string") return;
           try {
@@ -346,13 +357,16 @@ export function WaterfallViz() {
               return;
             }
             if (body.type !== "sweep" || !Array.isArray(body.bins)) return;
-            onSweep({
-              startHz: Number(body.startHz) || 0,
-              endHz: Number(body.endHz) || 0,
-              mode: Number(body.mode) || 0,
-              bins: Uint8Array.from(body.bins),
-              oor: false,
-            });
+            onSweep(
+              {
+                startHz: Number(body.startHz) || 0,
+                endHz: Number(body.endHz) || 0,
+                mode: Number(body.mode) || 0,
+                bins: Uint8Array.from(body.bins),
+                oor: false,
+              },
+              true,
+            );
           } catch {
             /* quadro incompleto */
           }
@@ -365,6 +379,7 @@ export function WaterfallViz() {
       running = false;
       cancelAnimationFrame(raf);
       stop();
+      scopeWsRef.current = null;
       audio?.close();
     };
   }, [feed, rfScope]);
@@ -375,16 +390,9 @@ export function WaterfallViz() {
       void ic705Ble.setScopeSpan(span).catch(() => undefined);
       return;
     }
-    if (feed !== "lan" && feed !== "serial") return;
-    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-    try {
-      const ws = new WebSocket(`${proto}//${window.location.host}/ws/scope?via=${feed}`);
-      ws.addEventListener("open", () => {
-        ws.send(JSON.stringify({ type: "span", spanHz: span }));
-        ws.close();
-      });
-    } catch {
-      /* estação aplica span no próximo scope ON */
+    const ws = scopeWsRef.current;
+    if ((feed === "lan" || feed === "serial") && ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "span", spanHz: span }));
     }
   }, [spanHz, feed, via]);
 
