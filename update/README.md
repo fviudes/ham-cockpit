@@ -25,8 +25,8 @@ Cada pacote OTA é **cumulativo**: substitui o console inteiro. Basta aplicar a 
   "version": "0.1.14",
   "channel": "main",
   "file": "ham-cockpit-0.1.14.tgz",
-  "sha256": "1dfad659e4fed0211b0b953e2f522a672121ff7dcf70cc8f8d94c840352494fd",
-  "bytes": 5137180,
+  "sha256": "e81344b7dddcdd306c4a2cad399466abaf05f93355ff2b166e15ba123e65c5e6",
+  "bytes": 5137164,
   "notes": "Ham Cockpit v0.1.14 — Processos/Contêineres: CPU+mem 2,5s; Wavelog: RAM/CPU no compose (x2) e tela Contêineres."
 }
 ```
