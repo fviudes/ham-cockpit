@@ -19,13 +19,19 @@ services:
     volumes:
       - wavelog-dbdata:/var/lib/mysql
     # Pi com 1 GB: MariaDB padrão chega a ~115 MB RSS com performance_schema.
+    # Limites Docker (abaixo) são teto — o OTA/hc-tune não troca senha nem volume.
     command:
-      - --innodb-buffer-pool-size=64M
+      - --innodb-buffer-pool-size=128M
       - --performance-schema=OFF
       - --max-connections=40
-      - --key-buffer-size=8M
-      - --tmp-table-size=16M
-      - --max-heap-table-size=16M
+      - --key-buffer-size=16M
+      - --tmp-table-size=32M
+      - --max-heap-table-size=32M
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+          cpus: "1.0"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
@@ -55,6 +61,11 @@ services:
       - wavelog-userdata:/var/www/html/userdata
     ports:
       - "8086:80"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.5"
     restart: unless-stopped
     logging:
       driver: json-file

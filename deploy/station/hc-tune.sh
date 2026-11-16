@@ -4,6 +4,8 @@
 # Causas de travamento achadas no lab (12/Nov/2026, Pi 3 B, 899 MB, sem swap):
 #   - RAM esgotada (MMDVM + Nextion + MariaDB + Docker + console + kiosk) sem swap →
 #     "systemd-journald: Under memory pressure" e o Pi para de responder;
+#   - Wavelog/MariaDB: cotas no compose (ver docs/docker-limites.md) — OTA recria os
+#     contêineres quando o docker-compose.yml muda; este script não rotaciona senha.
 #   - serviços em laço de restart (ser2net, rigctld, ham-cockpit-ap, vfo, dmrgateway);
 #   - scripts com CRLF (ham-cockpit-ap.sh) falhando e reiniciando sem parar;
 #   - processos de manutenção do Ubuntu (apt-check, snapd, packagekit, unattended-upgrades).

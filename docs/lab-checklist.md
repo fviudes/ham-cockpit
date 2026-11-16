@@ -9,6 +9,7 @@ Leitura SSH (`admin`, sudo para o `.env`). Dual/Host **não** foram reiniciados.
 | Campo | Valor no Pi | Fonte |
 | --- | --- | --- |
 | Implantação | Docker Compose (`wavelog.service` → `wavelog-ctl.sh start`) | `/opt/wavelog/docker-compose.yml` |
+| Cotas Docker | `wavelog-db` 384 MiB / 1 CPU · `wavelog-main` 512 MiB / 1,5 CPU (tetos) | [docker-limites.md](docker-limites.md) |
 | Host (instalador web) | `wavelog-db` | compose, rede Docker `wavelog` |
 | Porta | 3306 **não publicada** no host (`3306/tcp` só no container) | compose; `docker ps` |
 | Nome do banco | `wavelog` | `MARIADB_DATABASE` |
