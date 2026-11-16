@@ -163,6 +163,61 @@ export async function currentLicense(ctx: Ctx, serial: string): Promise<LicenseR
   return row;
 }
 
+/** Dados do aparelho/licença no instante em que o pagamento é registrado (checkout). */
+export async function paymentRegistrationSnapshot(
+  ctx: Ctx,
+  serial: string,
+  checkoutEmail?: string | null,
+): Promise<{
+  registered_at: number;
+  license_id: string | null;
+  license_token: string | null;
+  device_callsign: string | null;
+  device_email: string | null;
+}> {
+  const dev = await ctx.env.DB.prepare("SELECT callsign, email FROM devices WHERE serial = ?1")
+    .bind(serial)
+    .first<{ callsign: string | null; email: string | null }>();
+  const lic = await currentLicense(ctx, serial);
+  const fromCheckout = checkoutEmail?.trim() || null;
+  const devNorm = dev?.email ? normalizeEmail(dev.email) : "";
+  const deviceEmail = (devNorm && isValidEmail(devNorm) ? devNorm : null) || fromCheckout;
+  const csRaw = dev?.callsign ? normalizeCallsign(dev.callsign) : "";
+  const deviceCallsign = csRaw && isValidCallsign(csRaw) ? csRaw : null;
+  return {
+    registered_at: ctx.now(),
+    license_id: lic?.id ?? null,
+    license_token: lic?.token ?? null,
+    device_callsign: deviceCallsign,
+    device_email: deviceEmail,
+  };
+}
+
+/** Atualiza o registro do pagamento com a licença definitiva emitida. */
+export async function linkPaymentToLicense(
+  ctx: Ctx,
+  paymentId: string,
+  license: Pick<LicenseRow, "id" | "token" | "serial">,
+): Promise<void> {
+  const dev = await ctx.env.DB.prepare("SELECT callsign, email FROM devices WHERE serial = ?1")
+    .bind(license.serial)
+    .first<{ callsign: string | null; email: string | null }>();
+  const csRaw = dev?.callsign ? normalizeCallsign(dev.callsign) : "";
+  const deviceCallsign = csRaw && isValidCallsign(csRaw) ? csRaw : null;
+  const devNorm = dev?.email ? normalizeEmail(dev.email) : "";
+  const deviceEmail = devNorm && isValidEmail(devNorm) ? devNorm : null;
+  await ctx.env.DB.prepare(
+    `UPDATE payments SET
+      license_id = ?2,
+      license_token = ?3,
+      device_callsign = COALESCE(?4, device_callsign),
+      device_email = COALESCE(?5, device_email, payer_email)
+     WHERE id = ?1`,
+  )
+    .bind(paymentId, license.id, license.token, deviceCallsign, deviceEmail)
+    .run();
+}
+
 /** Concede o trial de forma atômica: o índice único por serial resolve a corrida entre aparelhos. */
 export async function grantTrial(ctx: Ctx, serial: string): Promise<LicenseRow> {
   const settings = await getSettings(ctx);
@@ -192,7 +247,10 @@ export async function createDefinitive(
   const now = ctx.now();
   if (paymentId) {
     const existing = await ctx.env.DB.prepare("SELECT * FROM licenses WHERE payment_id = ?1").bind(paymentId).first<LicenseRow>();
-    if (existing) return { license: existing, created: false };
+    if (existing) {
+      await linkPaymentToLicense(ctx, paymentId, existing);
+      return { license: existing, created: false };
+    }
   }
   const active = await ctx.env.DB.prepare("SELECT * FROM licenses WHERE serial = ?1 AND type = 'definitive' AND status = 'active'")
     .bind(serial)
@@ -228,9 +286,13 @@ export async function createDefinitive(
       .run();
   }
   const row = await ctx.env.DB.prepare("SELECT * FROM licenses WHERE id = ?1").bind(lid).first<LicenseRow>();
-  if (row) return { license: row, created };
+  if (row) {
+    if (paymentId) await linkPaymentToLicense(ctx, paymentId, row);
+    return { license: row, created };
+  }
   const again = await ctx.env.DB.prepare("SELECT * FROM licenses WHERE serial = ?1 AND type = 'definitive' AND status = 'active'").bind(serial).first<LicenseRow>();
   if (!again) throw new HttpError(500, "grant_failed");
+  if (paymentId) await linkPaymentToLicense(ctx, paymentId, again);
   return { license: again, created: false };
 }
 

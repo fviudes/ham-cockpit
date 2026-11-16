@@ -1,7 +1,7 @@
 import { parseSerialInput, serialDisplay } from "../../shared/license";
 import { audit, bumpCrl, enforceRate, ipKey, licenseEvent, rateLimit } from "./db";
 import type { Ctx } from "./env";
-import { createDefinitive, currentLicense, upsertDevice, type LicenseRow } from "./licenses";
+import { createDefinitive, currentLicense, paymentRegistrationSnapshot, upsertDevice, type LicenseRow } from "./licenses";
 import { createQuote, previewPrice, getPrice } from "./pricing";
 import { getProvider, loadProviderCfg, missingFields } from "./providers";
 import type { Currency, NormalizedStatus, PaymentRow, ProviderCfg } from "./providers/types";
@@ -119,12 +119,38 @@ export async function checkoutStart(
   const email = typeof body.email === "string" && /^[^\s@]{1,64}@[^\s@]{1,200}$/.test(body.email.trim()) ? body.email.trim().slice(0, 120) : null;
   const now = ctx.now();
   const pid = newId("pay");
+  const reg = await paymentRegistrationSnapshot(ctx, quote.serial, email);
   const claim = await ctx.env.DB.prepare("UPDATE price_quotes SET used_payment_id = ?2 WHERE id = ?1 AND used_payment_id IS NULL").bind(quote.id, pid).run();
   if ((claim.meta.changes ?? 0) === 0) throw new HttpError(409, "quote_used", "Esta cotação já foi usada. Recarregue a página.");
   await ctx.env.DB.prepare(
-    "INSERT INTO payments (id, serial, provider, mode, status, quote_id, currency, amount_cents, usd_cents, fx_rate_micro, payer_email, payer_country, lang, created_at, updated_at, expires_at) VALUES (?1, ?2, ?3, ?4, 'created', ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?13, ?14)",
+    `INSERT INTO payments (
+      id, serial, provider, mode, status, quote_id, currency, amount_cents, usd_cents, fx_rate_micro,
+      payer_email, payer_country, lang,
+      registered_at, license_id, license_token, device_callsign, device_email,
+      created_at, updated_at, expires_at
+    ) VALUES (?1, ?2, ?3, ?4, 'created', ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?18, ?19)`,
   )
-    .bind(pid, quote.serial, prov.id, cfg.row.mode, quote.id, currency, amount, quote.usd_cents, currency === "BRL" ? quote.fx_rate_micro : null, email, ctx.country || null, lang, now, now + PAYMENT_TTL)
+    .bind(
+      pid,
+      quote.serial,
+      prov.id,
+      cfg.row.mode,
+      quote.id,
+      currency,
+      amount,
+      quote.usd_cents,
+      currency === "BRL" ? quote.fx_rate_micro : null,
+      email,
+      ctx.country || null,
+      lang,
+      reg.registered_at,
+      reg.license_id,
+      reg.license_token,
+      reg.device_callsign,
+      reg.device_email,
+      now,
+      now + PAYMENT_TTL,
+    )
     .run();
   const payment = (await loadPayment(ctx, pid))!;
   try {

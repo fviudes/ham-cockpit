@@ -66,7 +66,24 @@ const CALLSIGN_EMPTY: Record<CallsignTone, string> = {
   trial: "lic-callsign lic-callsign--trial text-xs text-[#ffb300]/50",
   invalid: "lic-callsign lic-callsign--invalid text-xs text-red-400/70",
 };
-type PayRow = { id: string; provider: string; status: string; currency: string; amount_cents: number; created_at: number };
+type PayRow = {
+  id: string;
+  provider: string;
+  status: string;
+  currency: string;
+  amount_cents: number;
+  created_at: number;
+  registered_at?: number | null;
+  paid_at?: number | null;
+  serial?: string;
+  serialDisplay?: string;
+  device_callsign?: string | null;
+  device_email?: string | null;
+  payer_email?: string | null;
+  license_id?: string | null;
+  license_token?: string | null;
+  note?: string | null;
+};
 type UserRow = {
   id: string;
   username: string | null;
@@ -155,6 +172,15 @@ export default function AdminPortalPage() {
   const [licType, setLicType] = useState<"trial" | "definitive">("trial");
   const [licEmail, setLicEmail] = useState("");
   const [licCallsign, setLicCallsign] = useState("");
+  const [viewingPay, setViewingPay] = useState<PayRow | null>(null);
+  const [editingPay, setEditingPay] = useState<PayRow | null>(null);
+  const [payStatus, setPayStatus] = useState("pending");
+  const [payNote, setPayNote] = useState("");
+  const [payPayerEmail, setPayPayerEmail] = useState("");
+  const [payDeviceEmail, setPayDeviceEmail] = useState("");
+  const [payCallsign, setPayCallsign] = useState("");
+  const [payLicId, setPayLicId] = useState("");
+  const [payLicToken, setPayLicToken] = useState("");
 
   const authed = !!csrf;
   const canManageUsers = meRole === "owner";
@@ -433,6 +459,79 @@ export default function AdminPortalPage() {
     setUserForm(null);
     setEditingUser(null);
     await refresh();
+  };
+
+  const openViewPayment = async (p: PayRow) => {
+    setErr("");
+    const r = await api<PayRow & { serialDisplay?: string; note?: string | null }>(`/api/admin/payments/${p.id}`);
+    if (!r.ok) {
+      setErr(r.body.message || "Não foi possível carregar o pagamento.");
+      return;
+    }
+    setViewingPay({ ...p, ...r.body });
+  };
+
+  const openEditPayment = async (p: PayRow) => {
+    setErr("");
+    const r = await api<PayRow & { note?: string | null; payer_email?: string | null }>(`/api/admin/payments/${p.id}`);
+    if (!r.ok) {
+      setErr(r.body.message || "Não foi possível carregar o pagamento.");
+      return;
+    }
+    const row = { ...p, ...r.body };
+    setEditingPay(row);
+    setPayStatus(row.status);
+    setPayNote(row.note || "");
+    setPayPayerEmail(row.payer_email || "");
+    setPayDeviceEmail(row.device_email || "");
+    setPayCallsign(row.device_callsign || "");
+    setPayLicId(row.license_id || "");
+    setPayLicToken(row.license_token || "");
+  };
+
+  const submitPaymentEdit = async () => {
+    if (!editingPay) return;
+    setErr("");
+    const r = await api<{ message?: string }>(`/api/admin/payments/${editingPay.id}`, {
+      method: "PATCH",
+      csrf,
+      body: JSON.stringify({
+        status: payStatus,
+        note: payNote.trim() || null,
+        payer_email: payPayerEmail.trim() || null,
+        device_email: payDeviceEmail.trim() || null,
+        device_callsign: payCallsign.trim() || null,
+        license_id: payLicId.trim() || null,
+        license_token: payLicToken.trim() || null,
+      }),
+    });
+    if (!r.ok) {
+      setErr(r.body.message || "Não foi possível salvar o pagamento.");
+      return;
+    }
+    setEditingPay(null);
+    await refresh();
+  };
+
+  const deletePayment = async (p: PayRow) => {
+    if (!window.confirm(t(ADM.confirmDeletePayment))) return;
+    setErr("");
+    const r = await api<{ message?: string }>(`/api/admin/payments/${p.id}`, { method: "DELETE", csrf });
+    if (!r.ok) {
+      setErr(r.body.message || "Não foi possível excluir o pagamento.");
+      return;
+    }
+    if (viewingPay?.id === p.id) setViewingPay(null);
+    if (editingPay?.id === p.id) setEditingPay(null);
+    await refresh();
+  };
+
+  const reconcilePayment = async (p: PayRow) => {
+    setErr("");
+    const r = await api<{ message?: string }>(`/api/admin/payments/${p.id}/reconcile`, { method: "POST", csrf, body: "{}" });
+    if (!r.ok) setErr(r.body.message || "Conciliação falhou.");
+    else await refresh();
+    if (viewingPay?.id === p.id) void openViewPayment(p);
   };
 
   const deleteUser = async (u: UserRow) => {
@@ -874,20 +973,109 @@ export default function AdminPortalPage() {
             ) : null}
 
             {tab === "pay" ? (
+              <div className="space-y-4">
+                {viewingPay ? (
+                  <div className="max-w-2xl space-y-2 rounded-md border border-[rgba(79,195,247,0.2)] bg-[#132033] p-4 text-sm text-[#e2e8f0]">
+                    <h2 className="font-semibold text-white">{t(ADM.payDetail)} · <span className="font-mono text-xs">{viewingPay.id}</span></h2>
+                    <dl className="grid gap-1 sm:grid-cols-2">
+                      <div><dt className="text-[#94a3b8]">{t(ADM.payColWhen)}</dt><dd>{formatLicensedAt(viewingPay.registered_at ?? viewingPay.created_at)}</dd></div>
+                      <div><dt className="text-[#94a3b8]">{t(ADM.status)}</dt><dd>{viewingPay.status}</dd></div>
+                      <div><dt className="text-[#94a3b8]">{t(ADM.payColSerial)}</dt><dd className="font-mono text-xs">{viewingPay.serialDisplay || viewingPay.serial}</dd></div>
+                      <div><dt className="text-[#94a3b8]">Provedor</dt><dd>{viewingPay.provider} · {viewingPay.currency} {(viewingPay.amount_cents / 100).toFixed(2)}</dd></div>
+                      <div><dt className="text-[#94a3b8]">{t(ADM.payColCallsign)}</dt><dd className="font-mono">{viewingPay.device_callsign || "—"}</dd></div>
+                      <div><dt className="text-[#94a3b8]">{t(ADM.payColEmail)}</dt><dd className="break-all">{viewingPay.device_email || "—"}</dd></div>
+                      <div><dt className="text-[#94a3b8]">{t(ADM.payPayerEmail)}</dt><dd className="break-all">{viewingPay.payer_email || "—"}</dd></div>
+                      <div><dt className="text-[#94a3b8]">{t(ADM.payColLic)}</dt><dd className="font-mono text-xs">{viewingPay.license_id || "—"}</dd></div>
+                    </dl>
+                    {viewingPay.license_token ? (
+                      <div>
+                        <p className="text-[#94a3b8]">{t(ADM.payColKey)}</p>
+                        <p className="mt-1 break-all font-mono text-xs text-[#cbd5e1]">{viewingPay.license_token}</p>
+                        <button type="button" className={`${btnGhost} mt-2`} onClick={() => void copyToken(viewingPay.license_token!)}>
+                          {t(ADM.copy)}
+                        </button>
+                      </div>
+                    ) : null}
+                    {viewingPay.note ? <p className="text-xs text-[#94a3b8]">{t(ADM.payNote)}: {viewingPay.note}</p> : null}
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      <button type="button" className={btnGhost} onClick={() => void openEditPayment(viewingPay)}>
+                        {t(ADM.editPayment)}
+                      </button>
+                      <button type="button" className={btnGhost} onClick={() => void reconcilePayment(viewingPay)}>
+                        {t(ADM.payReconcile)}
+                      </button>
+                      <button type="button" className={btnGhost} onClick={() => setViewingPay(null)}>
+                        {t(ADM.cancel)}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {editingPay ? (
+                  <div className="max-w-lg space-y-3 rounded-md border border-[rgba(79,195,247,0.2)] bg-[#132033] p-4">
+                    <h2 className="font-semibold text-white">
+                      {t(ADM.editPayment)} · <span className="font-mono text-sm text-[#94a3b8]">{editingPay.id}</span>
+                    </h2>
+                    <label className="block text-sm text-[#94a3b8]">{t(ADM.status)}</label>
+                    <select className={inputCls} value={payStatus} onChange={(e) => setPayStatus(e.target.value)}>
+                      {["created", "pending", "approved", "failed", "cancelled", "expired"].map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                    <label className="block text-sm text-[#94a3b8]">{t(ADM.payNote)}</label>
+                    <input className={inputCls} value={payNote} onChange={(e) => setPayNote(e.target.value)} />
+                    <label className="block text-sm text-[#94a3b8]">{t(ADM.payPayerEmail)}</label>
+                    <input className={inputCls} type="email" value={payPayerEmail} onChange={(e) => setPayPayerEmail(e.target.value)} />
+                    <label className="block text-sm text-[#94a3b8]">{t(ADM.payColEmail)}</label>
+                    <input className={inputCls} type="email" value={payDeviceEmail} onChange={(e) => setPayDeviceEmail(e.target.value)} />
+                    <label className="block text-sm text-[#94a3b8]">{t(ADM.payColCallsign)}</label>
+                    <input className={inputCls} value={payCallsign} onChange={(e) => setPayCallsign(e.target.value)} />
+                    <label className="block text-sm text-[#94a3b8]">{t(ADM.payColLic)}</label>
+                    <input className={inputCls} value={payLicId} onChange={(e) => setPayLicId(e.target.value)} />
+                    <label className="block text-sm text-[#94a3b8]">{t(ADM.payColKey)}</label>
+                    <textarea className={`${inputCls} min-h-20 font-mono text-xs`} value={payLicToken} onChange={(e) => setPayLicToken(e.target.value)} />
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" className={btnPrimary} onClick={() => void submitPaymentEdit()}>
+                        {t(ADM.save)}
+                      </button>
+                      <button type="button" className={btnGhost} onClick={() => setEditingPay(null)}>
+                        {t(ADM.cancel)}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
               <div className="overflow-x-auto rounded-md border border-[rgba(79,195,247,0.15)]">
                 <table className="min-w-full text-left text-sm text-[#e2e8f0]">
                   <thead className="bg-[#132033] text-[#94a3b8]">
                     <tr>
                       <th className="px-3 py-2">ID</th>
+                      <th className="px-3 py-2">{t(ADM.payColWhen)}</th>
+                      <th className="px-3 py-2">{t(ADM.payColSerial)}</th>
+                      <th className="px-3 py-2">{t(ADM.payColCallsign)}</th>
+                      <th className="px-3 py-2">{t(ADM.payColEmail)}</th>
+                      <th className="px-3 py-2">{t(ADM.payColLic)}</th>
+                      <th className="px-3 py-2">{t(ADM.payColKey)}</th>
                       <th className="px-3 py-2">Provedor</th>
                       <th className="px-3 py-2">Estado</th>
                       <th className="px-3 py-2">Valor</th>
+                      <th className="px-3 py-2">{t(ADM.actions)}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {payments.map((p) => (
                       <tr key={p.id} className="border-t border-[rgba(79,195,247,0.08)]">
                         <td className="px-3 py-2 font-mono text-xs">{p.id}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-xs">{formatLicensedAt(p.registered_at ?? p.created_at)}</td>
+                        <td className="px-3 py-2 font-mono text-xs">{p.serial ?? "—"}</td>
+                        <td className="px-3 py-2 font-mono text-xs">{p.device_callsign || "—"}</td>
+                        <td className="px-3 py-2 text-xs">{p.device_email || "—"}</td>
+                        <td className="px-3 py-2 font-mono text-[10px]">{p.license_id ?? "—"}</td>
+                        <td className="max-w-[8rem] truncate px-3 py-2 font-mono text-[10px]" title={p.license_token ?? ""}>
+                          {p.license_token ? `${p.license_token.slice(0, 24)}…` : "—"}
+                        </td>
                         <td className="px-3 py-2">{p.provider}</td>
                         <td className="px-3 py-2">{p.status}</td>
                         <td className="px-3 py-2">
@@ -904,10 +1092,24 @@ export default function AdminPortalPage() {
                             </button>
                           ) : null}
                         </td>
+                        <td className="px-3 py-2">
+                          <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap">
+                            <button type="button" className={btnGhost} onClick={() => void openViewPayment(p)}>
+                              {t(ADM.viewPayment)}
+                            </button>
+                            <button type="button" className={btnGhost} onClick={() => void openEditPayment(p)}>
+                              {t(ADM.editPayment)}
+                            </button>
+                            <button type="button" className={btnGhost} onClick={() => void deletePayment(p)}>
+                              {t(ADM.deletePayment)}
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
               </div>
             ) : null}
 

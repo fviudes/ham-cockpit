@@ -1,4 +1,12 @@
-import { normalizeSerial, serialDisplay, type LicenseType } from "../../shared/license";
+import {
+  isValidCallsign,
+  isValidEmail,
+  normalizeCallsign,
+  normalizeEmail,
+  normalizeSerial,
+  serialDisplay,
+  type LicenseType,
+} from "../../shared/license";
 import { createAdminUser, hashPassword, normalizeUsername, requireAdmin } from "./admin-auth";
 import { settlePayment, loadPayment } from "./checkout";
 import { audit, getSettings, setSetting } from "./db";
@@ -308,6 +316,106 @@ async function providerTest(ctx: Ctx, id: string, adminId: string): Promise<Resp
   return json(r);
 }
 
+const PAYMENT_EDIT_STATUS = new Set(["created", "pending", "approved", "failed", "cancelled", "expired"]);
+
+function paymentToAdminJson(p: PaymentRow, opts: { maskEmail: boolean; maskSerial: boolean }) {
+  const serial = opts.maskSerial ? maskSerial(p.serial) : p.serial;
+  const maskE = (e: string | null) => (e && opts.maskEmail ? e.replace(/^(.).*(@.*)$/, "$1•••$2") : e);
+  return {
+    ...p,
+    serial,
+    payer_email: maskE(p.payer_email),
+    device_email: maskE(p.device_email),
+  };
+}
+
+async function paymentGet(ctx: Ctx, pid: string): Promise<Response> {
+  const p = await loadPayment(ctx, pid);
+  if (!p) throw new HttpError(404, "payment_not_found");
+  return json({
+    ...(await paymentToAdminJson(p, { maskEmail: false, maskSerial: false })),
+    serialDisplay: await serialDisplay(p.serial),
+  });
+}
+
+async function paymentPatch(ctx: Ctx, pid: string, body: Record<string, unknown>, adminId: string): Promise<Response> {
+  const p = await loadPayment(ctx, pid);
+  if (!p) throw new HttpError(404, "payment_not_found");
+  const before = { ...p };
+  const sets: string[] = ["updated_at = ?2"];
+  const binds: unknown[] = [pid, ctx.now()];
+  let i = 3;
+
+  if (body.status !== undefined) {
+    const st = String(body.status);
+    if (!PAYMENT_EDIT_STATUS.has(st)) throw new HttpError(400, "status_invalid", "Use conciliar ou confirmar Pix para marcar como pago.");
+    if (p.status === "paid" || p.status === "refunded" || p.status === "chargeback") {
+      throw new HttpError(409, "status_locked", "Pagamento finalizado não pode mudar de estado por aqui.");
+    }
+    sets.push(`status = ?${i++}`);
+    binds.push(st);
+  }
+  if (body.note !== undefined) {
+    sets.push(`note = ?${i++}`);
+    binds.push(body.note === null || body.note === "" ? null : clip(String(body.note), 200));
+  }
+  if (body.payer_email !== undefined) {
+    const raw = body.payer_email === null || body.payer_email === "" ? "" : normalizeEmail(String(body.payer_email));
+    if (raw && !isValidEmail(raw)) throw new HttpError(400, "email_invalid", "E-mail do pagador inválido.");
+    sets.push(`payer_email = ?${i++}`);
+    binds.push(raw || null);
+  }
+  if (body.device_email !== undefined) {
+    const raw = body.device_email === null || body.device_email === "" ? "" : normalizeEmail(String(body.device_email));
+    if (raw && !isValidEmail(raw)) throw new HttpError(400, "email_invalid", "E-mail do aparelho inválido.");
+    sets.push(`device_email = ?${i++}`);
+    binds.push(raw || null);
+  }
+  if (body.device_callsign !== undefined) {
+    const raw = body.device_callsign === null || body.device_callsign === "" ? "" : normalizeCallsign(String(body.device_callsign));
+    if (raw && !isValidCallsign(raw)) throw new HttpError(400, "callsign_invalid", "Prefixo inválido.");
+    sets.push(`device_callsign = ?${i++}`);
+    binds.push(raw || null);
+  }
+  if (body.license_id !== undefined) {
+    sets.push(`license_id = ?${i++}`);
+    binds.push(body.license_id === null || body.license_id === "" ? null : clip(String(body.license_id), 64));
+  }
+  if (body.license_token !== undefined) {
+    const tok = body.license_token === null || body.license_token === "" ? null : String(body.license_token).trim();
+    if (tok && !tok.startsWith("HCL1.")) throw new HttpError(400, "token_invalid", "Chave deve começar com HCL1.");
+    sets.push(`license_token = ?${i++}`);
+    binds.push(tok ? clip(tok, 4096) : null);
+  }
+
+  if (sets.length === 1) throw new HttpError(400, "no_changes", "Nada para alterar.");
+  await ctx.env.DB.prepare(`UPDATE payments SET ${sets.join(", ")} WHERE id = ?1`).bind(...binds).run();
+  const after = (await loadPayment(ctx, pid))!;
+  await audit(ctx, adminId, "payment_patch", pid, before, after);
+  return json({ ok: true, payment: await paymentToAdminJson(after, { maskEmail: false, maskSerial: false }) });
+}
+
+async function paymentDelete(ctx: Ctx, pid: string, adminId: string): Promise<Response> {
+  const p = await loadPayment(ctx, pid);
+  if (!p) throw new HttpError(404, "payment_not_found");
+  if (p.status === "paid" || p.status === "refunded" || p.status === "partially_refunded" || p.status === "chargeback") {
+    const lic = await ctx.env.DB.prepare(
+      "SELECT id, type, status FROM licenses WHERE payment_id = ?1 AND type = 'definitive' AND status = 'active' LIMIT 1",
+    )
+      .bind(pid)
+      .first<{ id: string; type: string; status: string }>();
+    if (lic) throw new HttpError(409, "has_active_license", "Há licença definitiva ativa ligada a este pagamento. Revogue-a antes de excluir.");
+  }
+  await ctx.env.DB.batch([
+    ctx.env.DB.prepare("DELETE FROM webhook_events WHERE payment_id = ?1").bind(pid),
+    ctx.env.DB.prepare("UPDATE licenses SET payment_id = NULL WHERE payment_id = ?1").bind(pid),
+    ctx.env.DB.prepare("UPDATE price_quotes SET used_payment_id = NULL WHERE used_payment_id = ?1").bind(pid),
+    ctx.env.DB.prepare("DELETE FROM payments WHERE id = ?1").bind(pid),
+  ]);
+  await audit(ctx, adminId, "payment_delete", pid, p, undefined);
+  return json({ ok: true });
+}
+
 async function paymentsList(ctx: Ctx, url: URL): Promise<Response> {
   const lim = pageSize(url);
   const args: unknown[] = [];
@@ -319,12 +427,15 @@ async function paymentsList(ctx: Ctx, url: URL): Promise<Response> {
   }
   args.push(lim);
   const rows = await ctx.env.DB.prepare(
-    `SELECT id, serial, provider, mode, status, currency, amount_cents, usd_cents, fx_rate_micro, provider_ref, provider_fee_cents, payer_email, payer_country, note, created_at, paid_at FROM payments ${where} ORDER BY created_at DESC LIMIT ?${args.length}`,
+    `SELECT id, serial, provider, mode, status, currency, amount_cents, usd_cents, fx_rate_micro, provider_ref, provider_fee_cents,
+            payer_email, payer_country, note,
+            registered_at, license_id, license_token, device_callsign, device_email,
+            created_at, paid_at FROM payments ${where} ORDER BY created_at DESC LIMIT ?${args.length}`,
   )
     .bind(...args)
     .all<PaymentRow>();
   return json({
-    items: rows.results.map(p => ({ ...p, serial: maskSerial(p.serial), payer_email: p.payer_email ? p.payer_email.replace(/^(.).*(@.*)$/, "$1•••$2") : null })),
+    items: rows.results.map(p => paymentToAdminJson(p, { maskEmail: true, maskSerial: true })),
   });
 }
 
@@ -657,6 +768,18 @@ export async function adminRoute(ctx: Ctx, request: Request, path: string): Prom
   if (path === "/payments" && method === "GET") {
     await need();
     return paymentsList(ctx, url);
+  }
+  if ((m = path.match(/^\/payments\/(pay_[0-9a-z]{16})$/)) && method === "GET") {
+    await need();
+    return paymentGet(ctx, m[1]);
+  }
+  if ((m = path.match(/^\/payments\/(pay_[0-9a-z]{16})$/)) && method === "PATCH") {
+    const a = await need("admin");
+    return paymentPatch(ctx, m[1], await readJson(request), a.id);
+  }
+  if ((m = path.match(/^\/payments\/(pay_[0-9a-z]{16})$/)) && method === "DELETE") {
+    const a = await need("admin");
+    return paymentDelete(ctx, m[1], a.id);
   }
   if ((m = path.match(/^\/payments\/(pay_[0-9a-z]{16})\/reconcile$/)) && method === "POST") {
     const a = await need("admin");

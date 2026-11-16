@@ -23,6 +23,11 @@ export interface PaymentRow {
   payer_country: string | null;
   lang: "pt" | "en";
   note: string | null;
+  registered_at: number | null;
+  license_id: string | null;
+  license_token: string | null;
+  device_callsign: string | null;
+  device_email: string | null;
   created_at: number;
   updated_at: number;
   paid_at: number | null;

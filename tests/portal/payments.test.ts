@@ -38,6 +38,61 @@ async function mockWebhook(p: Portal, body: object, sign = true) {
 }
 
 describe("checkout com provedor simulado", () => {
+  it("admin visualiza, edita e exclui pagamento pendente", async () => {
+    const p = await makePortal();
+    const s = await ready(p);
+    await p.json("POST", "/api/lic/activate", {
+      json: { serial: SERIAL, email: "a@test.com", callsign: "PY2ADM", appVersion: "0.1.12.01" },
+    });
+    const st = await startCheckout(p, "mock", { email: "a@test.com" });
+    const pid = st.body.paymentId as string;
+    const get = await p.admin(s, "GET", `/api/admin/payments/${pid}`);
+    expect(get.status).toBe(200);
+    expect(get.body.license_token).toMatch(/^HCL1\./);
+
+    const patch = await p.admin(s, "PATCH", `/api/admin/payments/${pid}`, { note: "teste manual", device_callsign: "PY2ZZZ" });
+    expect(patch.status).toBe(200);
+    expect(
+      (
+        await p.db.prepare("SELECT note, device_callsign FROM payments WHERE id = ?1").bind(pid).first<{ note: string; device_callsign: string }>()
+      )?.device_callsign,
+    ).toBe("PY2ZZZ");
+
+    const del = await p.admin(s, "DELETE", `/api/admin/payments/${pid}`);
+    expect(del.status).toBe(200);
+    expect(await p.db.prepare("SELECT id FROM payments WHERE id = ?1").bind(pid).first()).toBeNull();
+  });
+
+  it("ao registrar o pagamento grava data, serial, licença, prefixo e e-mail", async () => {
+    const p = await makePortal();
+    await ready(p);
+    await p.json("POST", "/api/lic/activate", {
+      json: { serial: SERIAL, email: "comprador@teste.com", callsign: "PY2TST", appVersion: "0.1.12.01" },
+    });
+    const st = await startCheckout(p, "mock", { email: "comprador@teste.com" });
+    expect(st.status).toBe(200);
+    const pid = st.body.paymentId as string;
+    const row = await p.db
+      .prepare(
+        "SELECT registered_at, serial, license_id, license_token, device_callsign, device_email FROM payments WHERE id = ?1",
+      )
+      .bind(pid)
+      .first<{
+        registered_at: number;
+        serial: string;
+        license_id: string;
+        license_token: string;
+        device_callsign: string;
+        device_email: string;
+      }>();
+    expect(row?.serial).toBe(SERIAL);
+    expect(row?.registered_at).toBe(T0);
+    expect(row?.device_callsign).toBe("PY2TST");
+    expect(row?.device_email).toBe("comprador@teste.com");
+    expect(row?.license_id).toMatch(/^lic_/);
+    expect(row?.license_token).toMatch(/^HCL1\./);
+  });
+
   it("página de config: ausência de reembolso, serial e provedores", async () => {
     const p = await makePortal();
     await ready(p);
