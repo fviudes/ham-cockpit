@@ -4,5 +4,5 @@
   "file": "ham-cockpit-0.1.12.11.tgz",
   "sha256": "13fcb1776768ade87c0c6f52e0d1998781eeedbad1101c625a31188fad9547a1",
   "bytes": 5125310,
-  "notes": "Ham Cockpit v0.1.12.11 — layout digital compacto (minH 3); painel RF com escala clássica; S-meter mais rápido."
+  "notes": "Ham Cockpit v0.1.12.11 — OTA cumulativo: waterfall CI-V no painel RF; S-meter mais rápido; modos digitais com grid compacto; painel RF com escala clássica do FitTile."
 }

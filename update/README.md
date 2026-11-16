@@ -18,6 +18,8 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 2. Compara com `/opt/ham-cockpit/VERSION` (ou o `VERSION` da árvore instalada).
 3. Se o número daqui for maior, o botão Atualizar aplica o pacote.
 
+Cada pacote OTA é **cumulativo**: substitui o console inteiro. Basta aplicar a **versão mais recente** — não é necessário instalar releases intermediárias em sequência.
+
 ```json
 {
   "version": "0.1.12.11",
@@ -25,7 +27,7 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
   "file": "ham-cockpit-0.1.12.11.tgz",
   "sha256": "13fcb1776768ade87c0c6f52e0d1998781eeedbad1101c625a31188fad9547a1",
   "bytes": 5125310,
-  "notes": "Ham Cockpit v0.1.12.11 — layout digital compacto (minH 3); painel RF com escala clássica; S-meter mais rápido."
+  "notes": "Ham Cockpit v0.1.12.11 — OTA cumulativo: waterfall CI-V no painel RF; S-meter mais rápido; modos digitais com grid compacto; painel RF com escala clássica do FitTile."
 }
 ```
 
