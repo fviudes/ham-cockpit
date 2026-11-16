@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.12.11** (`version.json`).
+Versão atual neste canal: **0.1.13** (`version.json`).
 
 ## Versionamento
 
@@ -22,12 +22,12 @@ Cada pacote OTA é **cumulativo**: substitui o console inteiro. Basta aplicar a 
 
 ```json
 {
-  "version": "0.1.12.11",
+  "version": "0.1.13",
   "channel": "main",
-  "file": "ham-cockpit-0.1.12.11.tgz",
-  "sha256": "13fcb1776768ade87c0c6f52e0d1998781eeedbad1101c625a31188fad9547a1",
-  "bytes": 5125310,
-  "notes": "Ham Cockpit v0.1.12.11 — OTA cumulativo: waterfall CI-V no painel RF; S-meter mais rápido; modos digitais com grid compacto; painel RF com escala clássica do FitTile."
+  "file": "ham-cockpit-0.1.13.tgz",
+  "sha256": "611b5be5dba73aff57374799a4e79eea7042592d33e1c9d3ae60946369a8e998",
+  "bytes": 5125229,
+  "notes": "Ham Cockpit v0.1.13 — imagem de instalação + OTA cumulativo: waterfall CI-V no painel RF; S-meter mais rápido; modos digitais com grid compacto e chrome reduzido; painel RF com escala clássica do FitTile."
 }
 ```
 
