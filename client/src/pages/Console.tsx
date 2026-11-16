@@ -651,7 +651,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
         </header>
         <main
           className={
-            page === "radio"
+            page === "radio" || page === "digital"
               ? "min-w-0 w-full flex-1 px-2 py-4 md:px-3"
               : "mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:px-8"
           }

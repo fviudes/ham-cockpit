@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.12.10** (`version.json`).
+Versão atual neste canal: **0.1.12.11** (`version.json`).
 
 ## Versionamento
 
@@ -20,12 +20,12 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.12.10",
+  "version": "0.1.12.11",
   "channel": "main",
-  "file": "ham-cockpit-0.1.12.10.tgz",
-  "sha256": "d7222a083b1c48aeff25d15a3efd0df6db073f5e0f446ef59862cce77da69595",
-  "bytes": 5125216,
-  "notes": "Painel RF: FitTile e waterfall como antes; Modos Digitais mantém preenchimento no grid."
+  "file": "ham-cockpit-0.1.12.11.tgz",
+  "sha256": "13fcb1776768ade87c0c6f52e0d1998781eeedbad1101c625a31188fad9547a1",
+  "bytes": 5125310,
+  "notes": "Ham Cockpit v0.1.12.11 — layout digital compacto (minH 3); painel RF com escala clássica; S-meter mais rápido."
 }
 ```
 

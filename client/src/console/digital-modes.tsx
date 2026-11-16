@@ -17,6 +17,7 @@ import { expireConsoleSession } from "./console-auth";
 import { useConsole } from "./state";
 import {
   currentLayoutUser,
+  DIGITAL_LAYOUT_MIN_H,
   defaultDigitalTiles,
   loadDigitalLayout,
   saveDigitalLayout,
@@ -1000,6 +1001,8 @@ export function DigitalPage() {
         onChange={setLayoutTiles}
         render={renderLayoutTile}
         fillFitTile
+        minH={DIGITAL_LAYOUT_MIN_H}
+        compactTile
       />
 
 

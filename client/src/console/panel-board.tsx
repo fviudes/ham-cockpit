@@ -83,6 +83,9 @@ export function PanelBoard({
   onRemove,
   render,
   fillFitTile,
+  minW = LAYOUT_MIN_W,
+  minH = LAYOUT_MIN_H,
+  compactTile,
 }: {
   tiles: GridTile[];
   shown: string[];
@@ -91,6 +94,10 @@ export function PanelBoard({
   render: (id: string) => ReactNode;
   /** Cascata digital: filhos em coluna flexível; painel RF usa escala clássica do FitTile. */
   fillFitTile?: boolean;
+  minW?: number;
+  minH?: number;
+  /** Menos recuo interno do chrome do tile (modos digitais). */
+  compactTile?: boolean;
 }) {
   const { tx } = useConsole();
   const ref = useRef<HTMLDivElement>(null);
@@ -140,8 +147,8 @@ export function PanelBoard({
         onChange(patchGridTile(tilesRef.current, id, { x, y }));
         return;
       }
-      const w = Math.max(LAYOUT_MIN_W, Math.min(LAYOUT_COLS - ox, ow + Math.round(dx / stepX())));
-      const h = Math.max(LAYOUT_MIN_H, oh + Math.round(dy / stepY));
+      const w = Math.max(minW, Math.min(LAYOUT_COLS - ox, ow + Math.round(dx / stepX())));
+      const h = Math.max(minH, oh + Math.round(dy / stepY));
       onChange(patchGridTile(tilesRef.current, id, { w, h }));
     };
 
@@ -177,7 +184,13 @@ export function PanelBoard({
                 removeLabel: tx("layoutRemove"),
               }}
             >
-              <div className="h-full min-h-0 overflow-hidden px-1 pb-0.5 pt-0.5 [&_h2]:!mb-1">
+              <div
+                className={
+                  compactTile
+                    ? "h-full min-h-0 overflow-hidden px-0 pb-0 pt-0 [&_h2]:!mb-1"
+                    : "h-full min-h-0 overflow-hidden px-1 pb-0.5 pt-0.5 [&_h2]:!mb-1"
+                }
+              >
                 <FitTile fill={fillFitTile}>{render(t.id)}</FitTile>
               </div>
             </PanelChromeProvider>

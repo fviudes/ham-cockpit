@@ -14,14 +14,17 @@ export type DigitalTile = GridTile<DigitalTileId>;
 
 const AUTH_USER_KEY = "hamcockpit.user";
 
+/** Altura mínima ao redimensionar no grid digital (painel RF continua em LAYOUT_MIN_H). */
+export const DIGITAL_LAYOUT_MIN_H = 3;
+
 export const DEFAULT_DIGITAL_TILES: Record<DigitalTileId, DigitalTile> = {
-  status: { id: "status", x: 0, y: 0, w: 12, h: 5 },
-  waterfall: { id: "waterfall", x: 0, y: 5, w: 12, h: 10 },
-  bandActivity: { id: "bandActivity", x: 0, y: 15, w: 5, h: 12 },
-  rxFreq: { id: "rxFreq", x: 5, y: 15, w: 7, h: 12 },
-  tabs: { id: "tabs", x: 0, y: 27, w: 5, h: 14 },
-  controls: { id: "controls", x: 5, y: 27, w: 7, h: 14 },
-  footer: { id: "footer", x: 0, y: 41, w: 12, h: 5 },
+  status: { id: "status", x: 0, y: 0, w: 12, h: 3 },
+  waterfall: { id: "waterfall", x: 0, y: 3, w: 12, h: 10 },
+  bandActivity: { id: "bandActivity", x: 0, y: 13, w: 5, h: 12 },
+  rxFreq: { id: "rxFreq", x: 5, y: 13, w: 7, h: 12 },
+  tabs: { id: "tabs", x: 0, y: 25, w: 5, h: 10 },
+  controls: { id: "controls", x: 5, y: 25, w: 7, h: 10 },
+  footer: { id: "footer", x: 0, y: 35, w: 12, h: 3 },
 };
 
 export function currentLayoutUser() {
@@ -51,7 +54,7 @@ export function normalizeDigitalTiles(raw: unknown): DigitalTile[] {
       const x = Math.max(0, Math.min(LAYOUT_COLS - LAYOUT_MIN_W, Math.round(Number(o.x) || 0)));
       const y = Math.max(0, Math.min(80, Math.round(Number(o.y) || 0)));
       const w = Math.max(LAYOUT_MIN_W, Math.min(LAYOUT_COLS - x, Math.round(Number(o.w) || DEFAULT_DIGITAL_TILES[id].w)));
-      const h = Math.max(LAYOUT_MIN_H, Math.min(40, Math.round(Number(o.h) || DEFAULT_DIGITAL_TILES[id].h)));
+      const h = Math.max(DIGITAL_LAYOUT_MIN_H, Math.min(40, Math.round(Number(o.h) || DEFAULT_DIGITAL_TILES[id].h)));
       byId.set(id, { id, x, y, w, h });
     }
   }
