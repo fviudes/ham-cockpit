@@ -88,52 +88,120 @@ valid_service_unit() {
 
 if [[ "$cmd" == "list-running" ]]; then
   python3 - <<'PY'
-import json, subprocess, sys
+import json, os, subprocess, sys
+from pathlib import Path
+
+_PS_ENV = {**os.environ, "LC_ALL": "C", "LANG": "C"}
+
 
 def num(s):
-    s = (s or "").strip()
+    s = (s or "").strip().replace(",", ".")
+    if not s or s in ("-", "[not set]", "infinity", "[unlimited]"):
+        return None
     try:
-        return float(s) if s and s not in ("-", "[not set]") else None
+        return float(s)
     except ValueError:
         return None
 
-def main_pid(unit: str) -> int:
-    raw = subprocess.check_output(
-        ["systemctl", "show", unit, "-p", "MainPID", "--value"], text=True, stderr=subprocess.DEVNULL
-    ).strip()
-    try:
-        return int(raw or "0")
-    except ValueError:
-        return 0
 
-def cgroup_mem(unit: str) -> int | None:
-    raw = subprocess.check_output(
-        ["systemctl", "show", unit, "-p", "MemoryCurrent", "--value"],
-        text=True,
-        stderr=subprocess.DEVNULL,
-    ).strip()
-    n = num(raw)
-    return int(n) if n is not None and n >= 0 else None
-
-def ps_stats(pid: int) -> tuple[float | None, float | None, int | None]:
-    if pid <= 0:
-        return None, None, None
+def show_prop(unit: str, prop: str) -> str:
     try:
-        out = subprocess.check_output(
-            ["ps", "-p", str(pid), "-o", "%cpu=", "%mem=", "rss="],
+        return subprocess.check_output(
+            ["systemctl", "show", unit, "-p", prop, "--value"],
             text=True,
             stderr=subprocess.DEVNULL,
         ).strip()
+    except subprocess.CalledProcessError:
+        return ""
+
+
+def main_pid(unit: str) -> int:
+    for prop in ("MainPID", "ExecMainPID"):
+        raw = show_prop(unit, prop)
+        try:
+            n = int(raw or "0")
+        except ValueError:
+            n = 0
+        if n > 0:
+            return n
+    return 0
+
+
+def cgroup_mem(unit: str) -> int | None:
+    n = num(show_prop(unit, "MemoryCurrent"))
+    return int(n) if n is not None and n >= 0 else None
+
+
+def cgroup_pids(unit: str) -> list[int]:
+    cg = show_prop(unit, "ControlGroup")
+    if not cg or cg == "/":
+        return []
+    base = Path("/sys/fs/cgroup") / cg.lstrip("/")
+    procs = base / "cgroup.procs"
+    if not procs.is_file():
+        return []
+    out: list[int] = []
+    for line in procs.read_text().splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            out.append(int(line))
+        except ValueError:
+            continue
+    return out
+
+
+def unit_pids(unit: str) -> list[int]:
+    seen: set[int] = set()
+    ordered: list[int] = []
+    for pid in (main_pid(unit), *cgroup_pids(unit)):
+        if pid > 0 and pid not in seen:
+            seen.add(pid)
+            ordered.append(pid)
+    return ordered
+
+
+def ps_stats(pids: list[int]) -> tuple[float | None, float | None, int | None]:
+    if not pids:
+        return None, None, None
+    try:
+        out = subprocess.check_output(
+            ["ps", "-p", ",".join(str(p) for p in pids), "-o", "%cpu=", "%mem=", "rss=", "--no-headers"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+            env=_PS_ENV,
+        )
     except (subprocess.CalledProcessError, FileNotFoundError):
         return None, None, None
-    parts = out.split()
-    if len(parts) < 3:
+    cpu_sum = 0.0
+    mem_sum = 0.0
+    rss_sum = 0
+    got_cpu = False
+    got_mem = False
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+        cpu = num(parts[0])
+        mem_pct = num(parts[1])
+        rss = num(parts[2])
+        if cpu is not None:
+            cpu_sum += cpu
+            got_cpu = True
+        if mem_pct is not None:
+            mem_sum += mem_pct
+            got_mem = True
+        if rss is not None:
+            rss_sum += int(rss)
+    if not got_cpu and not got_mem and rss_sum <= 0:
         return None, None, None
-    cpu = num(parts[0])
-    mem_pct = num(parts[1])
-    rss = num(parts[2])
-    rss_kb = int(rss) if rss is not None else None
-    return cpu, mem_pct, rss_kb
+    return (
+        round(cpu_sum, 1) if got_cpu else None,
+        round(mem_sum, 1) if got_mem else None,
+        rss_sum if rss_sum > 0 else None,
+    )
+
 
 raw = subprocess.check_output(
     ["systemctl", "list-units", "--type=service", "--state=running", "--no-pager", "--output=json"],
@@ -147,16 +215,15 @@ for row in units:
     unit = str(row.get("unit") or "")
     if not unit:
         continue
-    pid = main_pid(unit)
-    cpu, mem_pct, rss_kb = ps_stats(pid)
+    cpu, mem_pct, rss_kb = ps_stats(unit_pids(unit))
     mem_bytes = cgroup_mem(unit)
     if mem_bytes is None and rss_kb is not None:
         mem_bytes = rss_kb * 1024
     item = dict(row)
     if cpu is not None:
-        item["cpuPct"] = round(cpu, 1)
+        item["cpuPct"] = cpu
     if mem_pct is not None:
-        item["memPct"] = round(mem_pct, 1)
+        item["memPct"] = mem_pct
     if mem_bytes is not None:
         item["memBytes"] = int(mem_bytes)
     out.append(item)

@@ -23,4 +23,22 @@ describe("processes", () => {
       memBytes: 134217728,
     });
   });
+
+  it("aceita CPU zero e números em string (locale ps)", () => {
+    const raw = JSON.stringify([
+      {
+        unit: "ser2net.service",
+        active: "active",
+        sub: "running",
+        description: "Serial",
+        cpuPct: 0,
+        memPct: "0,4",
+        memBytes: "4096",
+      },
+    ]);
+    const items = parseProcessUnitsJson(raw);
+    expect(items[0]?.cpuPct).toBe(0);
+    expect(items[0]?.memPct).toBe(0.4);
+    expect(items[0]?.memBytes).toBe(4096);
+  });
 });

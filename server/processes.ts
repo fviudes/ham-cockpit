@@ -68,8 +68,14 @@ async function listRunningRaw(): Promise<string> {
 }
 
 function finiteNum(v: unknown): number | null {
-  if (typeof v !== "number" || !Number.isFinite(v)) return null;
-  return v;
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const s = v.trim().replace(",", ".");
+    if (!s || s === "-" || s === "[not set]") return null;
+    const n = Number(s);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
 }
 
 function parseUnits(raw: string): ProcessUnit[] {

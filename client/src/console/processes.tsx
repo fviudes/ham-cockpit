@@ -16,6 +16,7 @@ type ProcRow = {
 
 function fmtCpu(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "—";
+  if (v === 0) return "0%";
   return `${v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
 }
 
@@ -68,8 +69,9 @@ export function ProcessesPage({ embedded = false }: { embedded?: boolean }) {
     setError(typeof j.error === "string" ? j.error : "");
   };
 
-  const refresh = async () => {
-    setLoading(true);
+  const refresh = async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
+    if (!silent) setLoading(true);
     try {
       const r = await fetch("/api/processes", { cache: "no-store" });
       const j = (await r.json()) as ProcList;
@@ -78,15 +80,26 @@ export function ProcessesPage({ embedded = false }: { embedded?: boolean }) {
     } catch {
       if (alive.current) setError(tx("procFail"));
     } finally {
-      if (alive.current) setLoading(false);
+      if (alive.current && !silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     alive.current = true;
     void refresh();
+    const tick = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      void refresh({ silent: true });
+    };
+    const t = window.setInterval(tick, 2500);
+    const onVis = () => {
+      if (document.visibilityState === "visible") void refresh({ silent: true });
+    };
+    document.addEventListener("visibilitychange", onVis);
     return () => {
       alive.current = false;
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", onVis);
     };
   }, []);
 

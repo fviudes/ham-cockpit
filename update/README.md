@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.13.13** (`version.json`).
+Versão atual neste canal: **0.1.14** (`version.json`).
 
 ## Versionamento
 
@@ -22,12 +22,12 @@ Cada pacote OTA é **cumulativo**: substitui o console inteiro. Basta aplicar a 
 
 ```json
 {
-  "version": "0.1.13.13",
+  "version": "0.1.14",
   "channel": "main",
-  "file": "ham-cockpit-0.1.13.13.tgz",
-  "sha256": "1b6f6cef7cd7db978210736b59b7262af3eb7f0755c71ebe293afa924b3438be",
-  "bytes": 5132032,
-  "notes": "Ham Cockpit v0.1.13.13 — OTA: progresso conclui em 100%; Admin Processos: CPU e memória por serviço."
+  "file": "ham-cockpit-0.1.14.tgz",
+  "sha256": "3ea22d8c5bf88f1b97c8d2aa80cae2853ddb07afc586cd56a585f847ddf20d11",
+  "bytes": 5132598,
+  "notes": "Ham Cockpit v0.1.14 — Processos: CPU via cgroup/ps (locale C), refresh 2,5s; imagem 0.1.14."
 }
 ```
 
