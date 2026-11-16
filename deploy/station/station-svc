@@ -2,6 +2,8 @@
 # Liga/desliga unidades no boot e start/stop sob demanda. Chamado via sudo -n.
 #   station-svc is-active-all            → "id=estado" (um spawn só; usado no polling do console)
 #   station-svc list-running             → JSON (systemctl list-units --type=service --state=running)
+#   station-svc list-containers          → JSON (docker allowlist)
+#   station-svc container-stop|restart|set-limits NAME [MEM_MIB CPUS]
 #   station-svc stop-unit|restart-unit UNIT  → systemctl stop|restart, nome validado (sem path)
 #   station-svc enable|disable|start|stop|is-enabled|is-active ID
 # IDs com unit própria: ser2net wavelog wlg mmdvm hamlib spe wifi bluetooth web docker
@@ -84,6 +86,13 @@ valid_service_unit() {
       ;;
   esac
   return 0
+}
+
+valid_container() {
+  case "${1:-}" in
+    wavelog-db|wavelog-main) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 if [[ "$cmd" == "list-running" ]]; then
@@ -232,6 +241,160 @@ PY
   exit 0
 fi
 
+if [[ "$cmd" == "list-containers" ]]; then
+  python3 - <<'PY'
+import json, subprocess, sys
+
+ALLOW = ("wavelog-db", "wavelog-main")
+
+
+def num(s):
+    s = (s or "").strip().replace(",", ".")
+    if not s or s in ("-", "—"):
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def parse_bytes(s):
+    s = (s or "").strip().upper()
+    if not s or s == "0B":
+        return None
+    mult = 1
+    for suf, m in (("GIB", 1024 ** 3), ("GB", 1000 ** 3), ("MIB", 1024 ** 2), ("MB", 1000 ** 2), ("KIB", 1024), ("KB", 1000)):
+        if s.endswith(suf):
+            s = s[: -len(suf)].strip()
+            mult = m
+            break
+    if s.endswith("B"):
+        s = s[:-1].strip()
+    try:
+        return int(float(s.replace(",", ".")) * mult)
+    except ValueError:
+        return None
+
+
+def inspect_one(name):
+    try:
+        raw = subprocess.check_output(
+            ["docker", "inspect", name],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if not data or not isinstance(data, list):
+        return None
+    row = data[0]
+    state = ((row.get("State") or {}).get("Status")) or ""
+    image = (row.get("Config") or {}).get("Image") or (row.get("Image") or "")
+    host = row.get("HostConfig") or {}
+    mem_lim = host.get("Memory") or 0
+    nano = host.get("NanoCpus") or 0
+    cpus = float(nano) / 1e9 if nano and nano > 0 else None
+    return {
+        "name": name,
+        "image": image,
+        "state": state,
+        "memLimitBytes": int(mem_lim) if mem_lim and mem_lim > 0 else None,
+        "cpusLimit": round(cpus, 2) if cpus is not None else None,
+        "memUsageBytes": None,
+        "cpuPct": None,
+    }
+
+
+def stats_map():
+    try:
+        out = subprocess.check_output(
+            ["docker", "stats", "--no-stream", "--format", "{{json .}}", *ALLOW],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return {}
+    m = {}
+    for line in out.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        cname = (row.get("Name") or "").lstrip("/")
+        if not cname:
+            continue
+        cpu_raw = (row.get("CPUPerc") or "").replace("%", "").strip()
+        mem_raw = (row.get("MemUsage") or "").split("/")[0].strip()
+        m[cname] = {
+            "cpuPct": num(cpu_raw),
+            "memUsageBytes": parse_bytes(mem_raw),
+        }
+    return m
+
+
+out = []
+sm = stats_map()
+for name in ALLOW:
+    item = inspect_one(name)
+    if item is None:
+        item = {
+            "name": name,
+            "image": "",
+            "state": "not-found",
+            "memLimitBytes": None,
+            "cpusLimit": None,
+            "memUsageBytes": None,
+            "cpuPct": None,
+        }
+    st = sm.get(name)
+    if st:
+        if st.get("cpuPct") is not None:
+            item["cpuPct"] = round(st["cpuPct"], 1)
+        if st.get("memUsageBytes") is not None:
+            item["memUsageBytes"] = st["memUsageBytes"]
+    out.append(item)
+json.dump(out, sys.stdout)
+PY
+  exit 0
+fi
+
+if [[ "$cmd" == "container-stop" || "$cmd" == "container-restart" || "$cmd" == "container-set-limits" ]]; then
+  cname="${2:-}"
+  valid_container "$cname" || { echo "contêiner fora da allowlist" >&2; exit 2; }
+  if [[ "$cmd" == "container-stop" ]]; then
+    docker stop --time=30 "$cname"
+    echo stopped
+    exit 0
+  fi
+  if [[ "$cmd" == "container-restart" ]]; then
+    docker restart --time=30 "$cname"
+    echo restarted
+    exit 0
+  fi
+  mem_mib="${3:-}"
+  cpus="${4:-}"
+  [[ "$mem_mib" =~ ^[0-9]+$ ]] || { echo "memória inválida" >&2; exit 2; }
+  [[ "$mem_mib" -ge 64 && "$mem_mib" -le 4096 ]] || { echo "memória fora da faixa" >&2; exit 2; }
+  [[ "$cpus" =~ ^[0-9]+([.][0-9]+)?$ ]] || { echo "cpus inválidas" >&2; exit 2; }
+  python3 - "$cpus" <<'PY'
+import sys
+cpus = float(sys.argv[1])
+if cpus < 0.1 or cpus > 4:
+    sys.exit(2)
+PY
+  mem_bytes=$(( mem_mib * 1024 * 1024 ))
+  docker update --memory="$mem_bytes" --cpus="$cpus" "$cname"
+  echo updated
+  exit 0
+fi
+
 if [[ "$cmd" == "stop-unit" || "$cmd" == "restart-unit" ]]; then
   unit="${2:-}"
   valid_service_unit "$unit" || { echo "unit inválida" >&2; exit 2; }
@@ -330,7 +493,7 @@ case "$cmd" in
     systemctl is-active "$unit" 2>/dev/null || echo inactive
     ;;
   *)
-    echo "uso: station-svc is-active-all | list-running | stop-unit|restart-unit UNIT | enable|disable|start|stop|is-enabled|is-active ID" >&2
+    echo "uso: station-svc is-active-all | list-running | list-containers | container-stop|restart|set-limits NAME … | stop-unit|restart-unit UNIT | enable|disable|start|stop|is-enabled|is-active ID" >&2
     exit 1
     ;;
 esac

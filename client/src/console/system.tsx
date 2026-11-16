@@ -13,6 +13,7 @@ import { TermPage } from "./term";
 import { BackupPage } from "./backup";
 import { LicensePage } from "./license";
 import { ProcessesPage } from "./processes";
+import { ContainersPage } from "./containers";
 import { SupportVpnPage } from "./support-vpn";
 import { ActionProgress, Chip, ConsoleInput, Field, GhostBtn, PageHead, Panel, PanelTitle, PrimaryBtn, progressHint, stageLabel } from "./widgets";
 
@@ -111,6 +112,7 @@ export function AdminPage() {
     path === "term" ||
     path === "services" ||
     path === "processes" ||
+    path === "containers" ||
     path === "updates" ||
     path === "backup" ||
     path === "license" ||
@@ -199,7 +201,9 @@ export function AdminPage() {
                 ? tx("services")
                 : tab === "processes"
                   ? tx("processes")
-                  : tab === "updates"
+                  : tab === "containers"
+                    ? tx("containers")
+                    : tab === "updates"
                     ? tx("update")
                     : tab === "backup"
                     ? tx("backupTitle")
@@ -219,6 +223,9 @@ export function AdminPage() {
         </Chip>
         <Chip active={tab === "processes"} disabled={!menusOpen} onClick={() => navigate("/console/processes")}>
           {tx("processes")}
+        </Chip>
+        <Chip active={tab === "containers"} disabled={!menusOpen} onClick={() => navigate("/console/containers")}>
+          {tx("containers")}
         </Chip>
         <Chip active={tab === "updates"} disabled={!menusOpen} onClick={() => navigate("/console/updates")}>
           {tx("update")}
@@ -241,6 +248,7 @@ export function AdminPage() {
       </div>
       {tab === "services" ? <ServicesPage embedded /> : null}
       {tab === "processes" ? <ProcessesPage embedded /> : null}
+      {tab === "containers" ? <ContainersPage embedded /> : null}
       {tab === "updates" ? <UpdatesPage embedded /> : null}
       {tab === "backup" ? <BackupPage embedded /> : null}
       {tab === "license" ? <LicensePage embedded /> : null}

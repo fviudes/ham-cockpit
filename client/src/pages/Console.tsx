@@ -68,6 +68,7 @@ type PageId =
   | "admin"
   | "services"
   | "processes"
+  | "containers"
   | "updates"
   | "backup"
   | "license"
@@ -176,6 +177,7 @@ const PAGES: Record<PageId, ComponentType> = {
   admin: AdminPage,
   services: AdminPage,
   processes: AdminPage,
+  containers: AdminPage,
   updates: AdminPage,
   backup: AdminPage,
   license: AdminPage,
@@ -451,6 +453,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
                     page === "term" ||
                     page === "services" ||
                     page === "processes" ||
+                    page === "containers" ||
                     page === "updates" ||
                     page === "backup" ||
                     page === "license"

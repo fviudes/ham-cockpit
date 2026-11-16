@@ -21,6 +21,7 @@ import { wavelogDatabase, wavelogDbUpdate, wavelogDown, wavelogStatus, wavelogUp
 import { wlgDown, wlgStatus, wlgUp } from "./server/wlg-status";
 import { netConnect, netForget, netSave, netScan, netSetAp, netSetHostname, netSetIp, netSetLink, netStatus } from "./server/net";
 import { processesAction, processesList } from "./server/processes";
+import { containersAction, containersList } from "./server/containers";
 import { servicesApplyBoot, servicesSetAutostart, servicesStatus } from "./server/services";
 import { updatesApply, updatesRefresh, updatesStatus } from "./server/updates";
 import { layoutGet, layoutSave } from "./server/layouts";
@@ -756,6 +757,43 @@ function vitePluginProcesses(): Plugin {
   };
 }
 
+function vitePluginContainers(): Plugin {
+  return {
+    name: "containers-api",
+    configureServer(server: ViteDevServer) {
+      server.middlewares.use(async (req, res, next) => {
+        const url = req.url?.split("?")[0] ?? "";
+        if (url !== "/api/containers") return next();
+        try {
+          if (req.method === "GET") {
+            const body = await containersList();
+            return sendJson(res, body.ok ? 200 : 500, body);
+          }
+          if (req.method === "POST") {
+            const raw = await readBody(req);
+            let body: { name?: string; action?: string; memoryMiB?: unknown; cpus?: unknown } = {};
+            try {
+              body = raw
+                ? (JSON.parse(raw) as { name?: string; action?: string; memoryMiB?: unknown; cpus?: unknown })
+                : {};
+            } catch {
+              return sendJson(res, 400, { ok: false, name: "", action: "", error: "JSON inválido" });
+            }
+            const result = await containersAction(String(body.name ?? ""), String(body.action ?? ""), {
+              memoryMiB: body.memoryMiB,
+              cpus: body.cpus,
+            });
+            return sendJson(res, result.ok ? 200 : 400, result);
+          }
+        } catch (err) {
+          return sendJson(res, 500, { ok: false, available: false, items: [], error: String(err) });
+        }
+        next();
+      });
+    },
+  };
+}
+
 function vitePluginHost(): Plugin {
   return {
     name: "host-api",
@@ -1036,6 +1074,7 @@ export default defineConfig(({ command }) => ({
           vitePluginNet(),
           vitePluginServices(),
           vitePluginProcesses(),
+          vitePluginContainers(),
           vitePluginLayout(),
           vitePluginUpdates(),
           vitePluginWavelog(),

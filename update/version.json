@@ -2,7 +2,7 @@
   "version": "0.1.14",
   "channel": "main",
   "file": "ham-cockpit-0.1.14.tgz",
-  "sha256": "c8a4a4db5c4b4cc8b968a609a40690160171968c70aa1822268945b3e7ae441d",
-  "bytes": 5132766,
-  "notes": "Ham Cockpit v0.1.14 — Processos: CPU (cgroup+ps, locale C), refresh 2,5s; Wavelog: RAM/CPU no compose (x2)."
+  "sha256": "b1185558d477f236c9cb954800a333faef727339564f9d0e843dbf5ae919ad07",
+  "bytes": 5137162,
+  "notes": "Ham Cockpit v0.1.14 — Processos/Contêineres: CPU+mem 2,5s; Wavelog: RAM/CPU no compose (x2) e tela Contêineres."
 }

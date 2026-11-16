@@ -29,6 +29,7 @@ import {
 import { wlgDown, wlgStatus, wlgUp } from "./wlg-status";
 import { netConnect, netForget, netSave, netScan, netSetAp, netSetHostname, netSetIp, netSetLink, netStatus } from "./net";
 import { processesAction, processesList } from "./processes";
+import { containersAction, containersList } from "./containers";
 import { servicesApplyBoot, servicesPower, servicesSetAutostart, servicesStatus } from "./services";
 import { updatesApply, updatesRefresh, updatesStatus } from "./updates";
 import { layoutGet, layoutSave } from "./layouts";
@@ -677,6 +678,29 @@ async function startServer() {
       res.status(body.ok ? 200 : 400).json(body);
     } catch (err) {
       res.status(500).json({ ok: false, unit: "", action: "", error: String(err) });
+    }
+  });
+
+  app.get("/api/containers", async (_req, res) => {
+    try {
+      const body = await containersList();
+      res.status(body.ok ? 200 : 500).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, available: false, items: [], error: String(err) });
+    }
+  });
+  app.post("/api/containers", async (req, res) => {
+    try {
+      res.setTimeout(90_000);
+      const action = String(req.body?.action ?? "");
+      const name = String(req.body?.name ?? "");
+      const body = await containersAction(name, action, {
+        memoryMiB: req.body?.memoryMiB,
+        cpus: req.body?.cpus,
+      });
+      res.status(body.ok ? 200 : 400).json(body);
+    } catch (err) {
+      res.status(500).json({ ok: false, name: "", action: "", error: String(err) });
     }
   });
 
