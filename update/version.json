@@ -1,8 +1,8 @@
 {
-  "version": "0.1.13.02",
+  "version": "0.1.13.03",
   "channel": "main",
-  "file": "ham-cockpit-0.1.13.02.tgz",
-  "sha256": "67aee0116d89fe27fe04a30bd6e7a03aeb6346fba05c27809c8417d9f4091091",
-  "bytes": 5126437,
-  "notes": "Ham Cockpit v0.1.13.02 — OTA cumulativo: waterfall — dropdown Tempo (5–60 s), barra verde/LIVE, espectro com fill verde→amarelo→vermelho, feed persiste ao sair do painel; MS-2000 SPP — reconnect BlueZ + ACL antes do rfcomm bind."
+  "file": "ham-cockpit-0.1.13.03.tgz",
+  "sha256": "c7e63b67777f8f293c27dba62cbca93036b85a1edbb1f07bf33b7b9a6eb37d4f",
+  "bytes": 5126373,
+  "notes": "Ham Cockpit v0.1.13.03 — OTA cumulativo: S-meter ~30 Hz (poll/render 33 ms), EMA assimétrica (attack 18 ms / decay 95 ms), menos ocupado no Hamlib e BLE; inclui 0.1.13.02 (waterfall Tempo/verde, MS-2000 reconnect)."
 }

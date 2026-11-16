@@ -437,8 +437,8 @@ class Ic705BleLink {
     if (!this.connected || this.hsBusy || this.attaching) return false;
     const now = Date.now();
     if (now < this.laneUntil) return false;
-    if (this.pollTimer && this.nextPollAt - now < 40 && this.nextPollAt >= now - 10) return false;
-    this.laneUntil = now + 45;
+    if (this.pollTimer && this.nextPollAt - now < 28 && this.nextPollAt >= now - 8) return false;
+    this.laneUntil = now + 33;
     void this.ask(0x15, 0x02);
     return true;
   }
@@ -749,7 +749,7 @@ class Ic705BleLink {
     const wait = this.laneUntil - Date.now();
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
     if (!this.gatt?.connected || this.hsBusy || this.attaching) return;
-    this.laneUntil = Date.now() + 45;
+    this.laneUntil = Date.now() + 33;
     const n = this.pollN++;
     if (this.lastPtt) {
       const seq = n % 4;

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   SMETER_DT_CAP_MS,
   SMETER_FRAME_MS,
+  SMETER_POLL_MS,
   hamlibStrengthToUiSMeter,
   nextSmeterWaitMs,
   parseHamlibStrength,
@@ -46,11 +47,11 @@ afterEach(() => {
 
 describe("S-meter rápido", () => {
   it("a leitura seguinte espera a anterior e ocupado não vira rajada", () => {
-    expect(nextSmeterWaitMs(5.2)).toBe(0);
+    expect(nextSmeterWaitMs(5.2)).toBe(SMETER_POLL_MS);
     expect(nextSmeterWaitMs(false)).toBeGreaterThanOrEqual(30);
-    expect(nextSmeterWaitMs(false)).toBeLessThanOrEqual(60);
-    expect(nextSmeterWaitMs(null)).toBeGreaterThanOrEqual(60);
-    expect(nextSmeterWaitMs(null)).toBeLessThanOrEqual(120);
+    expect(nextSmeterWaitMs(false)).toBeLessThanOrEqual(40);
+    expect(nextSmeterWaitMs(null)).toBeGreaterThanOrEqual(45);
+    expect(nextSmeterWaitMs(null)).toBeLessThanOrEqual(60);
   });
 
   it("desenha na casa de 30 quadros por segundo", () => {
@@ -63,16 +64,16 @@ describe("S-meter rápido", () => {
   it("um quadro não fecha o salto e a subida é mais rápida que a descida", () => {
     const up = stepSmeter(0, 9, SMETER_FRAME_MS);
     const down = stepSmeter(9, 0, SMETER_FRAME_MS);
-    expect(up).toBeGreaterThan(0);
-    expect(up).toBeLessThan(6);
+    expect(up).toBeGreaterThan(5);
+    expect(up).toBeLessThan(9);
     expect(up).toBeGreaterThan(9 - down);
     let risen = 0;
-    for (let i = 0; i < 6; i++) risen = stepSmeter(risen, 9, SMETER_FRAME_MS);
-    expect(risen).toBeGreaterThan(5);
+    for (let i = 0; i < 4; i++) risen = stepSmeter(risen, 9, SMETER_FRAME_MS);
+    expect(risen).toBeGreaterThan(8.5);
     expect(risen).toBeLessThanOrEqual(9);
     const late = stepSmeter(0, 9, 500);
     expect(late).toBeCloseTo(stepSmeter(0, 9, SMETER_DT_CAP_MS), 5);
-    expect(late).toBeLessThan(7);
+    expect(late).toBeGreaterThan(7);
   });
 
   it("lê zero como S9 e ignora a linha RPRT", () => {

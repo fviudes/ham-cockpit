@@ -3,7 +3,7 @@
  * dB; uma amostra nova só troca o alvo, sem reiniciar a curva.
  */
 import { useEffect, useRef, useState } from "react";
-import { stepSmeter } from "@shared/smeter";
+import { SMETER_FRAME_MS, stepSmeter } from "@shared/smeter";
 import { subscribeSmeter } from "./smeter-bus";
 
 export function useEasedNumber(target: number): number {
@@ -15,21 +15,15 @@ export function useEasedNumber(target: number): number {
   useEffect(() => {
     const reduce =
       typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    let last = performance.now();
-    let frame = 0;
-    const paint = (now: number) => {
-      const dt = now - last;
-      last = now;
+    const id = window.setInterval(() => {
       const dest = targetRef.current;
-      const next = reduce ? dest : stepSmeter(shown.current, dest, dt);
+      const next = reduce ? dest : stepSmeter(shown.current, dest, SMETER_FRAME_MS);
       if (Math.abs(next - shown.current) >= 1e-4) {
         shown.current = next;
         setValue(next);
       }
-      frame = window.requestAnimationFrame(paint);
-    };
-    frame = window.requestAnimationFrame(paint);
-    return () => window.cancelAnimationFrame(frame);
+    }, SMETER_FRAME_MS);
+    return () => window.clearInterval(id);
   }, []);
 
   return value;
