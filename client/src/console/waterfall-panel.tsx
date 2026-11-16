@@ -28,6 +28,7 @@ import {
   panelWaterfallSendSpan,
   panelWaterfallSetHistorySec,
   panelWaterfallSetSpan,
+  panelWaterfallKickIfStale,
   panelWaterfallSubscribe,
   panelWaterfallSnapshot,
   stopPanelWaterfallFeed,
@@ -61,7 +62,6 @@ const GUTTER = 36;
 const BAR_H = 16;
 /** Mesmos tons dos chips de serviço no cabeçalho (bg #10b981/15 · texto #34d399). */
 const FREQ_BAR = "#10b981";
-const BAR_FILL = "rgba(16, 185, 129, 0.18)";
 const BAR_INK = "#34d399";
 
 function signalRgb(t: number): [number, number, number] {
@@ -170,8 +170,10 @@ function paint(
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = "#05080c";
   ctx.fillRect(0, 0, bw, bh);
-  ctx.fillStyle = BAR_FILL;
-  ctx.fillRect(Math.floor(plotW * dpr), 0, Math.max(0, bw - Math.floor(plotW * dpr)), bh);
+  const gutterPx = Math.max(0, bw - Math.floor(plotW * dpr));
+  const plotXPx = Math.floor(plotW * dpr);
+  ctx.fillStyle = FREQ_BAR;
+  ctx.fillRect(plotXPx, 0, gutterPx, bh);
 
   const historyCap = panelHistoryCap(historySec, intervalMs);
   const visibleRows = rows.filter((row) => now - row.at <= historySec * 1000);
@@ -392,6 +394,15 @@ export function WaterfallViz() {
   useEffect(() => {
     panelWaterfallSendSpan(spanHz, feed, via);
   }, [spanHz, feed, via]);
+
+  useEffect(() => {
+    if (feed === "off") return;
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+      panelWaterfallKickIfStale();
+    }, 2000);
+    return () => window.clearInterval(id);
+  }, [feed]);
 
   const tuneClicked = (event: MouseEvent<HTMLDivElement>) => {
     const canvas = canvasRef.current;

@@ -32,6 +32,9 @@ describe("tap CI-V do painel", () => {
     expect(src).toContain("if (outputWanted) applyScopeOutput(true, true)");
     expect(src).toContain("connectUp(state)");
     expect(src).toContain("ensureRigctldOnTap");
+    expect(src).toContain("rearmScope");
+    expect(src).toContain("scopeOutputStale");
+    expect(src).toContain("startScopeWatch");
   });
 });
 
@@ -42,6 +45,8 @@ describe("shell do waterfall no painel", () => {
     expect(src).toContain("panel-waterfall-feed");
     expect(src).toContain('aria-label="Tempo"');
     expect(src).toContain("#10b981");
+    expect(src).toContain("FREQ_BAR");
+    expect(src).not.toContain("BAR_FILL");
     const board = readFileSync(resolve("client/src/console/panel-board.tsx"), "utf8");
     expect(board).toContain('className={fill ? "flex h-full min-h-0 w-full flex-col" : "w-full"}');
     expect(board).toContain("fillFitTile");

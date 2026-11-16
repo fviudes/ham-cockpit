@@ -33,6 +33,7 @@ let stopFeed: (() => void) | null = null;
 let scopeWs: WebSocket | null = null;
 let scopeReconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let lastSweepAt = 0;
+let feedStartedAt = 0;
 let historySec = PANEL_HISTORY_SEC_DEFAULT;
 let spanHz = PANEL_SPAN_HZ;
 
@@ -137,6 +138,8 @@ export function syncPanelWaterfallFeed(opts: FeedOpts) {
   activeKey = key;
   activeOpts = opts;
   serialFail = false;
+  feedStartedAt = Date.now();
+  lastSweepAt = 0;
 
   if (opts.feed === "off") {
     live = rows.length > 0;
@@ -271,7 +274,7 @@ export function panelWaterfallKickIfStale(maxMs = 4500) {
   if (opts.feed !== "lan" && opts.feed !== "serial") return;
   const now = Date.now();
   if (lastSweepAt > 0 && now - lastSweepAt < maxMs) return;
-  if (lastSweepAt === 0 && now - (scopeWs ? 0 : maxMs) < maxMs && live) return;
+  if (lastSweepAt === 0 && now - feedStartedAt < maxMs) return;
   clearScopeReconnect();
   stopFeed();
   stopFeed = null;

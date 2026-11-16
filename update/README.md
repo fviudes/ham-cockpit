@@ -25,9 +25,9 @@ Cada pacote OTA é **cumulativo**: substitui o console inteiro. Basta aplicar a 
   "version": "0.1.13.07",
   "channel": "main",
   "file": "ham-cockpit-0.1.13.07.tgz",
-  "sha256": "2304830b1bfd8cac97394574dd1852629a28566dfcf55e0183b98404e0ef7a40",
-  "bytes": 5128221,
-  "notes": "Ham Cockpit v0.1.13.06 — corrige waterfall do painel RF: cliente decodifica binsB64 do scope WebSocket; feed não derruba ao trocar de aba (backpressure 12 Hz mantido)."
+  "sha256": "9321e6debd3bf64e5f1be9953fe4c613ef174b52bf5077cb5870f2dc9c6e9b8e",
+  "bytes": 5128972,
+  "notes": "Ham Cockpit v0.1.13.07 — waterfall: reidratação do scope/tap após reconexão do rádio, eixo tempo/live alinhado ao verde #10b981; S-meter com subida suave (τ 72/95 ms) e prioridade CI-V na fila Hamlib e no poll BLE."
 }
 ```
 
