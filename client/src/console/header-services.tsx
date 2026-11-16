@@ -12,7 +12,7 @@ export type HeaderChip = {
 };
 
 const CHIP_BASE =
-  "min-w-[4.9rem] max-w-[5.6rem] truncate rounded border px-1 py-0.5 text-center font-['IBM_Plex_Mono'] text-[9px] font-semibold leading-tight @[28rem]:min-w-[5.2rem] @[28rem]:text-[10px]";
+  "min-w-0 w-full truncate rounded border px-0.5 py-0.5 text-center font-['IBM_Plex_Mono'] text-[8px] font-semibold leading-tight @[22rem]:px-1 @[22rem]:text-[9px] @[28rem]:text-[10px]";
 
 function lampCls(on: boolean) {
   return on
@@ -45,19 +45,19 @@ export function HeaderServiceRows({
   notices?: ReactNode;
 }) {
   return (
-    <div className="@container col-start-3 row-span-2 grid h-full min-w-0 max-w-[11.5rem] grid-cols-[minmax(0,1fr)_auto] gap-x-2 overflow-hidden">
-      <div className="col-start-1 min-h-0 min-w-0 overflow-hidden rounded-md border border-[rgba(79,195,247,0.28)] bg-[#0b1520] px-1 py-0.5">
-        <div className="grid h-full grid-flow-col grid-rows-3 items-center justify-start gap-x-1 gap-y-0.5">
+    <div className="@container col-start-3 row-span-2 flex h-full w-full min-w-0 items-stretch justify-end gap-2 overflow-hidden">
+      <div className="min-h-0 min-w-0 max-w-[15.5rem] flex-1 overflow-hidden rounded-md border border-[rgba(79,195,247,0.28)] bg-[#0b1520] px-1 py-0.5 @[26rem]:max-w-[16.5rem]">
+        <div className="grid h-full grid-flow-col grid-rows-3 auto-cols-fr items-center justify-items-stretch gap-x-1 gap-y-0.5">
           {chips.map((chip) => (
             <HeaderChipView key={chip.key} chip={chip} />
           ))}
         </div>
       </div>
-      <div className="col-start-2 flex h-full min-h-0 items-stretch gap-2">
+      <div className="flex h-full min-h-0 shrink-0 items-stretch gap-2">
         <div aria-hidden="true" className="w-px shrink-0 self-stretch bg-[rgba(79,195,247,0.4)]" />
-        <div className="grid shrink-0 grid-rows-2 items-center justify-items-end gap-1 pr-1">
-          <div className="flex items-center justify-end gap-2">{identity}</div>
-          <div className="flex min-h-0 items-center justify-end gap-1.5">{notices}</div>
+        <div className="grid shrink-0 grid-rows-2 items-center justify-items-end gap-1 pr-0.5">
+          <div className="flex flex-nowrap items-center justify-end gap-2">{identity}</div>
+          <div className="flex min-h-0 flex-nowrap items-center justify-end gap-1.5">{notices}</div>
         </div>
       </div>
     </div>

@@ -514,7 +514,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
               {open ? <X size={18} /> : <Menu size={18} />}
             </button>
           ) : null}
-          <div className="grid min-w-0 flex-1 grid-cols-[auto_auto_minmax(0,1fr)] grid-rows-[2.85rem_2.85rem] gap-x-2 gap-y-1">
+          <div className="grid min-w-0 flex-1 grid-cols-[auto_auto_minmax(13.5rem,1fr)] grid-rows-[2.85rem_2.85rem] gap-x-2 gap-y-1">
             <div className="lcd-bezel row-span-2 flex h-full min-h-0 items-stretch gap-1.5 overflow-hidden py-0.5 pr-2.5 pl-0.5">
             <HeaderSMeter live={liveSignal} />
             <div
