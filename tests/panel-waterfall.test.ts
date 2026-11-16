@@ -34,11 +34,12 @@ describe("tap CI-V do painel", () => {
 });
 
 describe("shell do waterfall no painel", () => {
-  it("preenche a célula do FitTile em vez de h-64 fixo", () => {
+  it("mantém altura fixa no card RF (escala no FitTile)", () => {
     const src = readFileSync(resolve("client/src/console/waterfall-panel.tsx"), "utf8");
-    expect(src).toContain('data-waterfall="1"');
-    expect(src).toContain("min-h-0 flex-1");
-    expect(src).not.toMatch(/relative h-64 overflow-hidden/);
+    expect(src).toMatch(/relative h-64 overflow-hidden/);
+    const board = readFileSync(resolve("client/src/console/panel-board.tsx"), "utf8");
+    expect(board).toContain('className={fill ? "flex h-full min-h-0 w-full flex-col" : "w-full"}');
+    expect(board).toContain("fillFitTile");
   });
 });
 

@@ -1,8 +1,8 @@
 {
-  "version": "0.1.12.09",
+  "version": "0.1.12.10",
   "channel": "main",
-  "file": "ham-cockpit-0.1.12.09.tgz",
-  "sha256": "bba5a91fd73e798a4f39d6cacf382c87cc0432c4c33e454f3c50afaf3c53d003",
-  "bytes": 5125154,
-  "notes": "S-meter mais rapido (BLE in-flight 40 ms, ocupado 80 ms). Modos digitais: tiles como no painel RF (fillFitTile)."
+  "file": "ham-cockpit-0.1.12.10.tgz",
+  "sha256": "d7222a083b1c48aeff25d15a3efd0df6db073f5e0f446ef59862cce77da69595",
+  "bytes": 5125216,
+  "notes": "Painel RF: FitTile e waterfall como antes; Modos Digitais mantém preenchimento no grid."
 }

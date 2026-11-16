@@ -11,7 +11,7 @@ import {
 import { useConsole } from "./state";
 import { PanelChromeProvider } from "./widgets";
 
-export function FitTile({ children }: { children: ReactNode }) {
+export function FitTile({ children, fill }: { children: ReactNode; fill?: boolean }) {
   const viewRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const applyRef = useRef<() => void>(() => {});
@@ -66,7 +66,10 @@ export function FitTile({ children }: { children: ReactNode }) {
 
   return (
     <div ref={viewRef} className="h-full min-h-0 w-full overflow-hidden">
-      <div ref={innerRef} className="flex h-full min-h-0 w-full flex-col">
+      <div
+        ref={innerRef}
+        className={fill ? "flex h-full min-h-0 w-full flex-col" : "w-full"}
+      >
         {children}
       </div>
     </div>
@@ -79,12 +82,15 @@ export function PanelBoard({
   onChange,
   onRemove,
   render,
+  fillFitTile,
 }: {
   tiles: GridTile[];
   shown: string[];
   onChange: (next: GridTile[]) => void;
   onRemove?: (id: string) => void;
   render: (id: string) => ReactNode;
+  /** Cascata digital: filhos em coluna flexível; painel RF usa escala clássica do FitTile. */
+  fillFitTile?: boolean;
 }) {
   const { tx } = useConsole();
   const ref = useRef<HTMLDivElement>(null);
@@ -172,7 +178,7 @@ export function PanelBoard({
               }}
             >
               <div className="h-full min-h-0 overflow-hidden px-1 pb-0.5 pt-0.5 [&_h2]:!mb-1">
-                <FitTile>{render(t.id)}</FitTile>
+                <FitTile fill={fillFitTile}>{render(t.id)}</FitTile>
               </div>
             </PanelChromeProvider>
             <button
