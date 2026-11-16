@@ -379,6 +379,8 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 2. Compara com \`/opt/ham-cockpit/VERSION\` (ou o \`VERSION\` da árvore instalada).
 3. Se o número daqui for maior, o botão Atualizar aplica o pacote.
 
+Cada pacote OTA é **cumulativo**: substitui o console inteiro. Basta aplicar a **versão mais recente** — não é necessário instalar releases intermediárias em sequência.
+
 \`\`\`json
 ${JSON.stringify(meta, null, 2)}
 \`\`\`
