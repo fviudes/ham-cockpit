@@ -25,7 +25,7 @@ import {
   type DigitalTileId,
 } from "./digital-layout";
 import { PanelBoard } from "./panel-board";
-import { Chip, ConsoleInput, ConsoleSelect, Field, GhostBtn, PageHead, Panel, PanelTitle, PrimaryBtn } from "./widgets";
+import { Chip, ConsoleInput, ConsoleSelect, Field, GhostBtn, PageHead, PanelTitle, PrimaryBtn } from "./widgets";
 import { digTx, type DigKey } from "./digital-modes-copy";
 import { graphView, useDigitalListen, type ListenPhase } from "./digital-listen";
 import { onDigitalTx, publishDigitalTx, releaseDigitalTx, setDigitalTxPage } from "./digital-tx";
@@ -85,10 +85,7 @@ const INK: Record<Ink, string> = {
   red: "text-[#f87171]",
 };
 
-/** Shell do card no grid layout (igual ao painel: h-full + coluna flex). */
-const DIG_TILE =
-  "mb-0 flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-[rgba(79,195,247,0.06)] bg-[#0b1520] p-1.5";
-
+/** Shell do tile no grid — mesmo padrão do painel RF (só PanelTitle + corpo; chrome fica no PanelBoard). */
 function DigLayoutTile({
   title,
   children,
@@ -99,16 +96,18 @@ function DigLayoutTile({
   scroll?: boolean;
 }) {
   return (
-    <Panel className={DIG_TILE}>
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
       <PanelTitle>{title}</PanelTitle>
       <div
         className={
-          scroll ? "min-h-0 flex-1 overflow-auto" : "flex min-h-0 flex-1 flex-col overflow-hidden"
+          scroll
+            ? "min-h-0 flex-1 overflow-auto"
+            : "flex h-0 min-h-0 flex-1 flex-col overflow-hidden"
         }
       >
         {children}
       </div>
-    </Panel>
+    </div>
   );
 }
 
@@ -763,7 +762,7 @@ export function DigitalPage() {
     if (key === "status") {
       return (
         <DigLayoutTile title={t("tileStation")} scroll>
-          <div className="flex flex-wrap items-center gap-3 font-['IBM_Plex_Mono'] text-xs">
+          <div className="flex flex-wrap items-center gap-3 font-['IBM_Plex_Mono'] text-[11px]">
             <Readout k={t("vfoHint")} v={`${band} · ${formatVfoMhz(hz)} MHz · ${radioMode} · VFO ${vfo}`} />
             {s.split ? <Readout k={t("splitOn")} v={formatVfoMhz(otherHz)} tone="green" /> : <Readout k={t("splitOff")} v="—" />}
             <Readout k="UTC" v={utcClock(now)} tone="amber" />
@@ -954,7 +953,7 @@ export function DigitalPage() {
               />
             </label>
           </div>
-          {note ? <p className="mt-2 text-xs text-[#ffb300]">{note}</p> : null}
+          {note ? <p className="mt-2 text-[11px] text-[#ffb300]">{note}</p> : null}
         </DigLayoutTile>
       );
     }
@@ -1000,6 +999,7 @@ export function DigitalPage() {
         shown={layoutTiles.map((tile) => tile.id)}
         onChange={setLayoutTiles}
         render={renderLayoutTile}
+        fillFitTile
       />
 
 
@@ -1249,7 +1249,7 @@ function Readout({ k, v, tone }: { k: string; v: string; tone?: "amber" | "green
   return (
     <div>
       <p className="text-[10px] tracking-wide text-[#5d7184] uppercase">{k}</p>
-      <p className={`font-semibold ${color}`}>{v}</p>
+      <p className={`text-[11px] font-semibold ${color}`}>{v}</p>
     </div>
   );
 }
@@ -1408,7 +1408,7 @@ function DecodeTable({
         stick.current = stickToBottom(el.scrollTop, el.scrollHeight, el.clientHeight);
       }}
       className={`overflow-auto rounded-md border border-[rgba(79,195,247,0.12)] bg-[#071018] ${
-        fill ? "min-h-0 flex-1" : compact ? "max-h-52" : "max-h-64"
+        fill ? "h-0 min-h-0 flex-1" : compact ? "max-h-52" : "max-h-64"
       }`}
     >
       <table className="w-full border-collapse text-left font-['IBM_Plex_Mono'] text-[11px]">
@@ -1600,7 +1600,7 @@ function Waterfall({
   }, [rows, revision, start, end, gain, zero, flatten, spec, palette, rx, tx, emptyLabel, fill]);
 
   return (
-    <div className={fill ? "flex min-h-0 flex-1 flex-col" : undefined}>
+    <div className={fill ? "flex h-0 min-h-0 flex-1 flex-col" : undefined}>
       <div
         ref={scroller}
         data-waterfall="1"

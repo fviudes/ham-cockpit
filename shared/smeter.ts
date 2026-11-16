@@ -49,28 +49,39 @@ export const SMETER_POLL_MS = Math.round(1000 / 60);
 /** Desenho do ponteiro e da barra: na casa de 30 quadros por segundo. */
 export const SMETER_FRAME_MS = Math.round(1000 / 30);
 
+/** CI-V enviado (BLE): aguarda a resposta antes de outro pedido. */
+export const SMETER_INFLIGHT_MS = 40;
+/** Fila CI-V / Hamlib ocupada ou transporte indisponível. */
+export const SMETER_BUSY_MS = 80;
+
 /**
- * Espera até disparar a leitura seguinte. Nível novo segue na hora.
- * Ocupado espera, senão o tick vira rajada que só recebe ocupado.
+ * Espera até disparar a leitura seguinte.
+ * Nível de Hamlib/LAN dispara na hora; BLE no ar espera SMETER_INFLIGHT_MS.
  */
-export function nextSmeterWaitMs(gotLevel: boolean): number {
-  return gotLevel ? 0 : 120;
+export function nextSmeterWaitMs(result: number | null | false): number {
+  if (typeof result === "number") return 0;
+  if (result === false) return SMETER_INFLIGHT_MS;
+  return SMETER_BUSY_MS;
 }
-/**
- * Constante de tempo da curva, igual na subida e na descida.
- * ~63% do caminho em 80 ms — resposta mais rápida sem sacudir a agulha.
- */
-export const SMETER_TAU_MS = 80;
+
+/** Subida: ~63% do salto em 35 ms. */
+export const SMETER_TAU_ATTACK_MS = 35;
+/** Descida: mais lenta para não tremer em ruído de medição. */
+export const SMETER_TAU_DECAY_MS = 110;
+/** Legado nos testes que citam uma única τ. */
+export const SMETER_TAU_MS = SMETER_TAU_ATTACK_MS;
 /** Quadro atrasado não percorre a curva inteira. */
 export const SMETER_DT_CAP_MS = 40;
 
-/** Um passo da curva. Mesma fração para subir e para descer. */
+/** Um passo da curva EMA; subida mais rápida que a descida. */
 export function stepSmeter(shown: number, target: number, dtMs: number): number {
   if (!Number.isFinite(shown)) return Number.isFinite(target) ? target : 0;
   if (!Number.isFinite(target)) return shown;
   const dt = Math.min(SMETER_DT_CAP_MS, Math.max(0, dtMs));
   if (dt <= 0) return shown;
-  const k = 1 - Math.exp(-dt / SMETER_TAU_MS);
+  const rising = target > shown + 1e-6;
+  const tau = rising ? SMETER_TAU_ATTACK_MS : SMETER_TAU_DECAY_MS;
+  const k = 1 - Math.exp(-dt / tau);
   const next = shown + (target - shown) * k;
   return Math.abs(next - target) < 0.01 ? target : next;
 }

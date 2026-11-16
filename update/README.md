@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.12.08** (`version.json`).
+Versão atual neste canal: **0.1.12.09** (`version.json`).
 
 ## Versionamento
 
@@ -20,12 +20,12 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.12.08",
+  "version": "0.1.12.09",
   "channel": "main",
-  "file": "ham-cockpit-0.1.12.08.tgz",
-  "sha256": "91e650b7b47d81f77b631e748a13a5e249aeb928e2371710b8565b42622e79e6",
-  "bytes": 5125211,
-  "notes": "Waterfall do painel RF: religa 27 10/11 no tap CI-V ao abrir o card e preenche a célula no FitTile."
+  "file": "ham-cockpit-0.1.12.09.tgz",
+  "sha256": "bba5a91fd73e798a4f39d6cacf382c87cc0432c4c33e454f3c50afaf3c53d003",
+  "bytes": 5125154,
+  "notes": "S-meter mais rapido (BLE in-flight 40 ms, ocupado 80 ms). Modos digitais: tiles como no painel RF (fillFitTile)."
 }
 ```
 

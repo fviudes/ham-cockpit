@@ -452,8 +452,8 @@ describe("modos digitais", () => {
     expect(copy).not.toContain("Cascata de áudio");
     expect(copy).not.toContain("Audio waterfall");
     expect(src).not.toContain('PanelTitle>{t("waterfall")');
-    expect(src).toContain("lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]");
-    expect(src).toContain("xl:grid-cols-[minmax(0,5fr)_minmax(0,8fr)]");
+    expect(src).toContain("<PanelBoard");
+    expect(src).toContain("render={renderLayoutTile}");
     expect(src).not.toContain("decodeRan");
     expect(src).not.toContain("decodeWord");
     expect(src).toContain("h-64 overflow-hidden rounded-md");

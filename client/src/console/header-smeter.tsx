@@ -171,7 +171,7 @@ function useLiveSmeter(live: boolean): number | null {
         }
         if (stopped) return;
         if (typeof result === "number") publishSmeter(result);
-        const wait = nextSmeterWaitMs(result !== null);
+        const wait = nextSmeterWaitMs(result);
         if (wait > 0) await new Promise((resolve) => window.setTimeout(resolve, wait));
       }
     };
