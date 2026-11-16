@@ -1,8 +1,8 @@
 {
-  "version": "0.1.12.05",
+  "version": "0.1.12.06",
   "channel": "main",
-  "file": "ham-cockpit-0.1.12.05.tgz",
-  "sha256": "ba9780e31b3c15143edee9adc1209be7fd43244c7ed2b4c3745f34c9d2aa68d2",
-  "bytes": 5124654,
-  "notes": "Layout salvo em modos digitais; S-meter mais rápido (BLE e suavização)."
+  "file": "ham-cockpit-0.1.12.06.tgz",
+  "sha256": "d2e3086bd55d4937cfe347c272f2bf8b44cc3e1e95af34a6b34305c9bc472bcf",
+  "bytes": 5124998,
+  "notes": "Modos digitais: alça de arraste em todos os cards e conteúdo que acompanha o redimensionamento."
 }

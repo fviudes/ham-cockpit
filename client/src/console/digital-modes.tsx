@@ -85,8 +85,32 @@ const INK: Record<Ink, string> = {
   red: "text-[#f87171]",
 };
 
-/** Cards mais agrupados na página digital (borda e padding reduzidos). */
-const DIG_PANEL = "mb-1.5 rounded-md border border-[rgba(79,195,247,0.06)] bg-[#0b1520] p-1.5";
+/** Shell do card no grid layout (igual ao painel: h-full + coluna flex). */
+const DIG_TILE =
+  "mb-0 flex h-full min-h-0 flex-col overflow-hidden rounded-md border border-[rgba(79,195,247,0.06)] bg-[#0b1520] p-1.5";
+
+function DigLayoutTile({
+  title,
+  children,
+  scroll,
+}: {
+  title: string;
+  children: ReactNode;
+  scroll?: boolean;
+}) {
+  return (
+    <Panel className={DIG_TILE}>
+      <PanelTitle>{title}</PanelTitle>
+      <div
+        className={
+          scroll ? "min-h-0 flex-1 overflow-auto" : "flex min-h-0 flex-1 flex-col overflow-hidden"
+        }
+      >
+        {children}
+      </div>
+    </Panel>
+  );
+}
 
 type Tab = "tx" | "filter" | "prefix" | "states" | "ignore" | "alerts" | "others";
 const SET_TABS = ["general", "radio", "audio", "macros", "reporting", "frequencies", "colors", "advanced", "z"] as const;
@@ -738,7 +762,7 @@ export function DigitalPage() {
     const key = id as DigitalTileId;
     if (key === "status") {
       return (
-        <Panel className={`${DIG_PANEL} mb-0 h-full overflow-auto`}>
+        <DigLayoutTile title={t("tileStation")} scroll>
           <div className="flex flex-wrap items-center gap-3 font-['IBM_Plex_Mono'] text-xs">
             <Readout k={t("vfoHint")} v={`${band} · ${formatVfoMhz(hz)} MHz · ${radioMode} · VFO ${vfo}`} />
             {s.split ? <Readout k={t("splitOn")} v={formatVfoMhz(otherHz)} tone="green" /> : <Readout k={t("splitOff")} v="—" />}
@@ -766,13 +790,13 @@ export function DigitalPage() {
             <Readout k={t("rxAudio")} v={listenWord} tone={rxPhase === "on" ? "green" : undefined} />
           </div>
           {rxError ? <p className="mt-1 text-[11px] text-[#f87171]">{rxError}</p> : null}
-        </Panel>
+        </DigLayoutTile>
       );
     }
     if (key === "waterfall") {
       return (
-        <Panel className={`${DIG_PANEL} mb-0 flex h-full min-h-0 flex-col overflow-hidden`}>
-          <div className="mb-3 flex shrink-0 flex-wrap items-end gap-3">
+        <DigLayoutTile title={t("tileWaterfall")}>
+          <div className="mb-2 flex shrink-0 flex-wrap items-end gap-3">
             <Mini label={t("start")}>
               <Num value={state.graphStart} onChange={(n) => dispatch({ type: "patch", patch: { graphStart: n } })} />
             </Mini>
@@ -810,15 +834,30 @@ export function DigitalPage() {
               <Num value={state.txHz} onChange={(n) => dispatch({ type: "patch", patch: { txHz: n } })} />
             </Mini>
           </div>
-          <div className="min-h-0 flex-1"><Waterfall stripes={stripes} revision={fallGen} start={span.start} end={span.end} gain={state.graphGain} zero={state.graphZero} flatten={state.graphFlatten} spec={state.graphSpec} palette={state.graphPalette} rx={state.rxHz} tx={state.txHz} emptyLabel={rxOn && stripes.length === 0 ? t("waterfallWait") : t("waterfallEmpty")} onPick={(hzPick) => dispatch({ type: "graph", hz: hzPick, moveTx: !state.holdTx })} /></div>
-        </Panel>
+          <Waterfall
+            fill
+            stripes={stripes}
+            revision={fallGen}
+            start={span.start}
+            end={span.end}
+            gain={state.graphGain}
+            zero={state.graphZero}
+            flatten={state.graphFlatten}
+            spec={state.graphSpec}
+            palette={state.graphPalette}
+            rx={state.rxHz}
+            tx={state.txHz}
+            emptyLabel={rxOn && stripes.length === 0 ? t("waterfallWait") : t("waterfallEmpty")}
+            onPick={(hzPick) => dispatch({ type: "graph", hz: hzPick, moveTx: !state.holdTx })}
+          />
+        </DigLayoutTile>
       );
     }
     if (key === "bandActivity") {
       return (
-        <Panel className={`${DIG_PANEL} mb-0 flex h-full min-h-0 flex-col overflow-hidden`}>
-          <PanelTitle>{t("bandActivity")}</PanelTitle>
+        <DigLayoutTile title={t("bandActivity")}>
           <DecodeTable
+            fill
             rows={left}
             empty={t("emptyBand")}
             labels={{ utc: t("colUtc"), db: t("colDb"), dt: t("colDt"), hz: t("colHz"), msg: t("colMsg") }}
@@ -830,13 +869,12 @@ export function DigitalPage() {
           <p className="mt-2 shrink-0 text-[11px] text-[#8ea0b3]">
             {t("candidates")}: {pick ? pick.message : t("none")} · {picks.length}
           </p>
-        </Panel>
+        </DigLayoutTile>
       );
     }
     if (key === "rxFreq") {
       return (
-        <Panel className={`${DIG_PANEL} mb-0 flex h-full min-h-0 flex-col overflow-hidden`}>
-          <PanelTitle>{t("rxFreq")}</PanelTitle>
+        <DigLayoutTile title={t("rxFreq")}>
           <label className="mb-2 flex shrink-0 items-center gap-2 text-[11px] text-[#8ea0b3]">
             {t("rxWidth")}
             <ConsoleInput
@@ -847,6 +885,7 @@ export function DigitalPage() {
             />
           </label>
           <DecodeTable
+            fill
             rows={right}
             empty={t("emptyRx")}
             labels={{ utc: t("colUtc"), db: t("colDb"), dt: t("colDt"), hz: t("colHz"), msg: t("colMsg") }}
@@ -855,26 +894,26 @@ export function DigitalPage() {
             onRow={(row) => dispatch({ type: "double", row })}
             compact
           />
-        </Panel>
+        </DigLayoutTile>
       );
     }
     if (key === "tabs") {
       return (
-        <Panel className={`${DIG_PANEL} mb-0 h-full overflow-auto`}>
+        <DigLayoutTile title={t("tileTabs")} scroll>
           <DigTabsPanel tab={tab} setTab={setTab} t={t} state={state} dispatch={dispatch} nowTx={nowTx} alerts={alerts} hop={hop} />
-        </Panel>
+        </DigLayoutTile>
       );
     }
     if (key === "controls") {
       return (
-        <Panel className={`${DIG_PANEL} mb-0 h-full overflow-auto`}>
+        <DigLayoutTile title={t("tileControls")} scroll>
           <DigControlsPanel state={state} dispatch={dispatch} t={t} period={period} band={band} fhLabel={fhLabel} setLogWarn={setLogWarn} setLogOpen={setLogOpen} />
-        </Panel>
+        </DigLayoutTile>
       );
     }
     if (key === "footer") {
       return (
-        <Panel className={`${DIG_PANEL} mb-0 h-full overflow-auto`}>
+        <DigLayoutTile title={t("tileFooter")} scroll>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 font-['IBM_Plex_Mono'] text-[11px]">
             <span className={phase === "rx" ? "text-[#4fc3f7]" : "text-[#ffb300]"}>{statusWord}</span>
             <span className="text-[#8ea0b3]">{state.mode}</span>
@@ -916,7 +955,7 @@ export function DigitalPage() {
             </label>
           </div>
           {note ? <p className="mt-2 text-xs text-[#ffb300]">{note}</p> : null}
-        </Panel>
+        </DigLayoutTile>
       );
     }
     return null;
@@ -1339,6 +1378,7 @@ function DecodeTable({
   onRow,
   compact,
   follow,
+  fill,
 }: {
   rows: DecodeRow[];
   empty: string;
@@ -1348,6 +1388,7 @@ function DecodeTable({
   onRow: (row: DecodeRow) => void;
   compact?: boolean;
   follow?: boolean;
+  fill?: boolean;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -1366,7 +1407,9 @@ function DecodeTable({
         const el = e.currentTarget;
         stick.current = stickToBottom(el.scrollTop, el.scrollHeight, el.clientHeight);
       }}
-      className={`overflow-auto rounded-md border border-[rgba(79,195,247,0.12)] bg-[#071018] ${compact ? "max-h-52" : "max-h-64"}`}
+      className={`overflow-auto rounded-md border border-[rgba(79,195,247,0.12)] bg-[#071018] ${
+        fill ? "min-h-0 flex-1" : compact ? "max-h-52" : "max-h-64"
+      }`}
     >
       <table className="w-full border-collapse text-left font-['IBM_Plex_Mono'] text-[11px]">
         <thead className="sticky top-0 bg-[#0b1520] text-[10px] tracking-wide text-[#ffb300] uppercase">
@@ -1431,6 +1474,7 @@ function Waterfall({
   tx,
   emptyLabel,
   onPick,
+  fill,
 }: {
   stripes: FallStripe[];
   revision: number;
@@ -1445,6 +1489,7 @@ function Waterfall({
   tx: number;
   emptyLabel: string;
   onPick: (hz: number) => void;
+  fill?: boolean;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -1554,7 +1599,7 @@ function Waterfall({
   }, [rows, start, end, gain, zero, flatten, spec, palette, rx, tx, emptyLabel]);
 
   return (
-    <div>
+    <div className={fill ? "flex min-h-0 flex-1 flex-col" : undefined}>
       <div
         ref={scroller}
         data-waterfall="1"
@@ -1562,11 +1607,15 @@ function Waterfall({
         data-cycles={cycles}
         data-compact={WF_COMPACT}
         data-step-ms={stepMs ?? ""}
-        className="h-64 overflow-hidden rounded-md border border-[rgba(79,195,247,0.14)] bg-[#03080d]"
+        className={
+          fill
+            ? "min-h-[120px] flex-1 overflow-hidden rounded-md border border-[rgba(79,195,247,0.14)] bg-[#03080d]"
+            : "h-64 overflow-hidden rounded-md border border-[rgba(79,195,247,0.14)] bg-[#03080d]"
+        }
       >
         <canvas
           ref={canvas}
-          className="block h-64 w-full"
+          className={fill ? "block h-full w-full" : "block h-64 w-full"}
           onClick={(e) => {
             const rect = e.currentTarget.getBoundingClientRect();
             const hz = start + ((e.clientX - rect.left) / Math.max(1, rect.width)) * Math.max(1, end - start);
