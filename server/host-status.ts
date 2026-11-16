@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statfsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync, statfsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
@@ -400,48 +400,100 @@ function readNetTotals(): { rx: number; tx: number } {
 
 const DISK_SECTOR_BYTES = 512;
 
-function blockDeviceForPath(mountPath: string): string | null {
-  if (process.platform !== "linux" || !existsSync("/proc/mounts")) return null;
+function resolveMountBlockSource(src: string): string {
+  if (!src.startsWith("/dev/")) return src;
   try {
-    const want = mountPath.replace(/\/+$/, "") || "/";
-    const text = readFileSync("/proc/mounts", "utf8");
-  for (const line of text.split(/\r?\n/)) {
-      const cols = line.split(/\s+/);
-      if (cols.length < 2) continue;
-      const mnt = cols[1].replace(/\\040/g, " ");
-      if (mnt !== want) continue;
-      const src = cols[0];
-      const m = src.match(/\/dev\/(mmcblk\d+)(?:p\d+)?$/) || src.match(/\/dev\/(nvme\d+n\d+)(?:p\d+)?$/);
-      if (m) return m[1];
-      const base = src.replace(/^\/dev\//, "").replace(/p?\d+$/, "");
-      if (base) return base;
-    }
+    return realpathSync(src);
   } catch {
-    /* ignore */
+    return src;
+  }
+}
+
+/** Candidatos em /proc/diskstats: partição do mount primeiro, depois disco inteiro. */
+export function diskDeviceNamesForSource(src: string): string[] {
+  const resolved = resolveMountBlockSource(src);
+  const out: string[] = [];
+  const add = (d: string) => {
+    if (d && !out.includes(d)) out.push(d);
+  };
+  const devMatch = resolved.match(/^\/dev\/(.+)$/);
+  if (!devMatch) return out;
+  const name = devMatch[1];
+  add(name);
+  const mmcWhole = name.match(/^(mmcblk\d+)p\d+$/);
+  if (mmcWhole) add(mmcWhole[1]);
+  const nvmeWhole = name.match(/^(nvme\d+n\d+)p\d+$/);
+  if (nvmeWhole) add(nvmeWhole[1]);
+  const sdPart = name.match(/^((?:sd|vd|hd|xvd)[a-z])\d+$/);
+  if (sdPart) add(sdPart[1]);
+  return out;
+}
+
+/**
+ * Setores lidos/gravados em uma linha de /proc/diskstats.
+ * Disco (14+ campos): setores em 5 e 9. Partição legada (7 campos): em 4 e 6.
+ */
+export function diskSectorCountersFromCols(cols: string[]): { read: number; write: number } | null {
+  if (cols.length < 7) return null;
+  if (cols.length === 7) {
+    return { read: Number(cols[4]) || 0, write: Number(cols[6]) || 0 };
+  }
+  if (cols.length >= 11) {
+    return { read: Number(cols[5]) || 0, write: Number(cols[9]) || 0 };
   }
   return null;
 }
 
-function diskSectorTotals(dev: string): { read: number; write: number } {
-  if (!existsSync("/proc/diskstats")) return { read: 0, write: 0 };
-  try {
-    const text = readFileSync("/proc/diskstats", "utf8");
+export function diskSectorTotalsFromText(
+  text: string,
+  deviceNames: string[],
+): { read: number; write: number; dev: string } {
+  for (const dev of deviceNames) {
     for (const line of text.split(/\r?\n/)) {
       const cols = line.trim().split(/\s+/);
-      if (cols[2] !== dev) continue;
-      return { read: Number(cols[5]) || 0, write: Number(cols[9]) || 0 };
+      if (cols.length < 7 || cols[2] !== dev) continue;
+      const parsed = diskSectorCountersFromCols(cols);
+      if (parsed) return { ...parsed, dev };
+    }
+  }
+  return { read: 0, write: 0, dev: deviceNames[0] ?? "" };
+}
+
+function blockDevicesForPath(mountPath: string): string[] {
+  if (process.platform !== "linux" || !existsSync("/proc/mounts")) return [];
+  try {
+    const want = mountPath.replace(/\/+$/, "") || "/";
+    const text = readFileSync("/proc/mounts", "utf8");
+    for (const line of text.split(/\r?\n/)) {
+      const cols = line.split(/\s+/);
+      if (cols.length < 2) continue;
+      const mnt = cols[1].replace(/\\040/g, " ");
+      if (mnt !== want) continue;
+      return diskDeviceNamesForSource(cols[0]);
     }
   } catch {
     /* ignore */
   }
-  return { read: 0, write: 0 };
+  return [];
+}
+
+function diskSectorTotals(devices: string[]): { read: number; write: number; dev: string } {
+  if (!devices.length || !existsSync("/proc/diskstats")) return { read: 0, write: 0, dev: devices[0] ?? "" };
+  try {
+    const text = readFileSync("/proc/diskstats", "utf8");
+    return diskSectorTotalsFromText(text, devices);
+  } catch {
+    /* ignore */
+  }
+  return { read: 0, write: 0, dev: devices[0] ?? "" };
 }
 
 function diskBpsFromDelta(diskPath: string): { read: number | null; write: number | null } {
-  const dev = blockDeviceForPath(diskPath);
-  if (!dev) return { read: null, write: null };
+  const devices = blockDevicesForPath(diskPath);
+  if (!devices.length) return { read: null, write: null };
   const now = Date.now();
-  const cur = diskSectorTotals(dev);
+  const cur = diskSectorTotals(devices);
+  const dev = cur.dev;
   const prev = diskIoPrev;
   diskIoPrev = { t: now, readSectors: cur.read, writeSectors: cur.write, dev };
   if (!prev || prev.dev !== dev || now <= prev.t) return { read: null, write: null };
