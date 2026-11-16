@@ -1,8 +1,8 @@
 {
-  "version": "0.1.13.03",
+  "version": "0.1.13.04",
   "channel": "main",
-  "file": "ham-cockpit-0.1.13.03.tgz",
-  "sha256": "c7e63b67777f8f293c27dba62cbca93036b85a1edbb1f07bf33b7b9a6eb37d4f",
-  "bytes": 5126373,
-  "notes": "Ham Cockpit v0.1.13.03 — OTA cumulativo: S-meter ~30 Hz (poll/render 33 ms), EMA assimétrica (attack 18 ms / decay 95 ms), menos ocupado no Hamlib e BLE; inclui 0.1.13.02 (waterfall Tempo/verde, MS-2000 reconnect)."
+  "file": "ham-cockpit-0.1.13.04.tgz",
+  "sha256": "5fff0076f8201c230bd64d9a6659fdebab0a0cfea914c6251ff1ce794ed4b73b",
+  "bytes": 5126693,
+  "notes": "Ham Cockpit v0.1.13.04 — OTA cumulativo: pausa scope/waterfall/S-meter com aba oculta, menos re-render no waterfall; período FT8 em 00.0/15; inclui 0.1.13.03 (S-meter ~30 Hz, EMA)."
 }

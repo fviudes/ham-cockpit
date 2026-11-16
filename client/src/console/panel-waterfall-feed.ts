@@ -45,6 +45,7 @@ function pruneRows(now: number) {
 }
 
 function pushRow(sweep: ScopeSweep, rf: boolean, tuneHz: number, spanHz: number) {
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
   const tuned = rf ? panelizeRfSweep(sweep, tuneHz, spanHz) : sweep;
   rows.unshift({
     bins: tuned.bins,

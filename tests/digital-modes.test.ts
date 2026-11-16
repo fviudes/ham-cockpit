@@ -230,10 +230,10 @@ describe("modos digitais", () => {
     const ft4 = periodAt(t0, "FT4");
     expect(ft8.period).toBe(15);
     expect(ft8.even).toBe(true);
-    expect(ft8.label.endsWith("/15")).toBe(true);
+    expect(ft8.label).toBe("08.0/15");
     expect(ft4.period).toBe(7.5);
     expect(ft4.even).toBe(false);
-    expect(ft4.label.endsWith("/7.5")).toBe(true);
+    expect(ft4.label).toBe("00.5/7.5");
   });
 
   it("a lista de frequências marca provisório só onde a lista padrão marca", () => {

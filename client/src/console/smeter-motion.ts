@@ -16,6 +16,7 @@ export function useEasedNumber(target: number): number {
     const reduce =
       typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const id = window.setInterval(() => {
+      if (document.visibilityState === "hidden") return;
       const dest = targetRef.current;
       const next = reduce ? dest : stepSmeter(shown.current, dest, SMETER_FRAME_MS);
       if (Math.abs(next - shown.current) >= 1e-4) {

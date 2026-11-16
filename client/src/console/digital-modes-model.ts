@@ -363,17 +363,23 @@ export function utcClock(ms: number): string {
   return `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
 }
 
+/** Relógio FT8/FT4 em largura fixa (ex.: 08.0/15), sem “dançar” no layout. */
+export function formatPeriodLabel(elapsed: number, period: number): string {
+  const cap = Math.min(period, Math.max(0, elapsed));
+  const whole = Math.floor(cap);
+  const tenth = Math.min(9, Math.floor((cap - whole) * 10 + 1e-6));
+  const left = `${String(whole).padStart(2, "0")}.${tenth}`;
+  const right = Number.isInteger(period) ? String(period) : period.toFixed(1);
+  return `${left}/${right}`;
+}
+
 export function periodAt(ms: number, mode: DigMode): { period: number; index: number; elapsed: number; even: boolean; label: string } {
   const d = new Date(ms);
   const sec = d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds() + d.getUTCMilliseconds() / 1000;
   const period = mode === "FT8" ? 15 : 7.5;
   const index = Math.floor(sec / period);
   const elapsed = sec - index * period;
-  const trim = (n: number) => {
-    const s = n.toFixed(1);
-    return s.endsWith(".0") ? s.slice(0, -2) : s;
-  };
-  return { period, index, elapsed, even: index % 2 === 0, label: `${trim(elapsed)}/${trim(period)}` };
+  return { period, index, elapsed, even: index % 2 === 0, label: formatPeriodLabel(elapsed, period) };
 }
 
 export function graphEnd(start: number, bins: number): number {

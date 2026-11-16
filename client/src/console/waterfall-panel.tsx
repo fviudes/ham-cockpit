@@ -276,16 +276,27 @@ export function PanelWaterfallCollector({
   via: string;
 }) {
   useEffect(() => {
-    syncPanelWaterfallFeed({
+    const opts = {
       feed,
       rfScope,
       via,
       getTuneHz,
       getSpanHz: () => panelWaterfallGetSpan(),
-    });
+    };
+    const sync = () => {
+      if (document.visibilityState === "hidden") {
+        stopPanelWaterfallFeed();
+        return;
+      }
+      syncPanelWaterfallFeed(opts);
+    };
+    sync();
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      document.removeEventListener("visibilitychange", sync);
+      stopPanelWaterfallFeed();
+    };
   }, [feed, rfScope, via, getTuneHz]);
-
-  useEffect(() => () => stopPanelWaterfallFeed(), []);
 
   return null;
 }
@@ -307,7 +318,9 @@ export function WaterfallViz() {
   const historyRef = useRef(historySec);
   historyRef.current = historySec;
   const [live, setLive] = useState(false);
+  const liveUi = useRef(false);
   const [serialFail, setSerialFail] = useState(false);
+  const serialUi = useRef(false);
   const route = resolvePrimaryRoute(s.radios.items, {
     bleReady: s.ic705.phase === "ready" && s.ic705.ble,
   });
@@ -341,8 +354,14 @@ export function WaterfallViz() {
       rowsRef.current = shot.rows;
       genRef.current = shot.gen;
       sweepMsRef.current = shot.sweepMs;
-      setLive(shot.live);
-      setSerialFail(shot.serialFail);
+      if (shot.live !== liveUi.current) {
+        liveUi.current = shot.live;
+        setLive(shot.live);
+      }
+      if (shot.serialFail !== serialUi.current) {
+        serialUi.current = shot.serialFail;
+        setSerialFail(shot.serialFail);
+      }
     };
     pull();
     return panelWaterfallSubscribe(pull);
@@ -370,6 +389,7 @@ export function WaterfallViz() {
     const loop = (ts: number) => {
       if (!running) return;
       raf = requestAnimationFrame(loop);
+      if (document.visibilityState === "hidden") return;
       if (last !== 0 && ts - last < FRAME_MS) return;
       last = ts;
       draw();

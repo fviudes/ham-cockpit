@@ -668,8 +668,16 @@ export function DigitalPage() {
   }, []);
 
   useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 200);
-    return () => window.clearInterval(id);
+    const tick = () => {
+      if (document.visibilityState === "visible") setNow(Date.now());
+    };
+    tick();
+    const id = window.setInterval(tick, 100);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", tick);
+    };
   }, []);
 
   useEffect(() => {
@@ -933,8 +941,10 @@ export function DigitalPage() {
                 {t("txDone")}: {txSent || "—"} {txPhase ? `· ${txPhase}` : ""}
               </span>
             ) : null}
-            <span className="flex min-w-[120px] items-center gap-2 text-[#c5d4e0]">
-              {period.label}
+            <span className="flex min-w-[132px] items-center gap-2 text-[#c5d4e0]">
+              <span className="inline-block w-[4.25rem] shrink-0 text-right font-['IBM_Plex_Mono'] text-[11px] tabular-nums tracking-tight">
+                {period.label}
+              </span>
               <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#101c28]">
                 <span className="block h-full bg-[#4fc3f7]" style={{ width: `${Math.min(100, (period.elapsed / period.period) * 100)}%` }} />
               </span>
