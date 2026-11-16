@@ -51,7 +51,10 @@ describe("SPP MS-2000", () => {
     expect(src).toContain("noteSppOpenTimeout");
     expect(src).toContain("sppOpenMisses >= 2");
     expect(src).toContain("lextelAutoConnect()");
+    expect(src).toContain("sppEstablishing");
+    expect(src).toContain("Pump ou stream no meio do open()");
     expect(bt).toContain('[[ "$st" == "closed" ]]');
     expect(bt).toContain("bluetoothctl connect");
+    expect(bt).toMatch(/scan bredr/);
   });
 });

@@ -42,6 +42,8 @@ const RFCOMM = "/dev/rfcomm0";
 const SPP_UUID = "00001101-0000-1000-8000-00805f9b34fb";
 const NAME_RE = /lextel|ms-?2000|ms-?800|ms-?600|ms-?1000|ms-?1200|ms-?1800|hc-?0[56]|linvor|monitor.?station/i;
 const SKIP_SPP_MAC = new Set(["000000000000", "30317DBAC263"]);
+/** Prazo do open() do /dev/rfcomm0 antes de nova tentativa (mini-UART). */
+const SPP_OPEN_MS = 12_000;
 
 export type LextelDevice = {
   addr: string;
@@ -765,10 +767,17 @@ function killPidTree(pid: number | undefined) {
   }
 }
 
+function sppEstablishing(): boolean {
+  if (!opening || !attachedAt) return false;
+  return Date.now() - attachedAt < SPP_OPEN_MS;
+}
+
 function linkAlive() {
   // No Linux, o objeto do stream existe antes do open(). RFCOMM preso em
   // open() não é link: senão o recover acha que está vivo e não tenta de novo.
   if (process.platform === "win32") return Boolean(stream || sppChild);
+  // Pump ou stream no meio do open(): keepalive/IC-705 não pode chamar bind de novo.
+  if (sppEstablishing() && (pumpChild || stream)) return true;
   if (pumpChild && opened) return true;
   return opened && Boolean(stream);
 }
@@ -854,6 +863,7 @@ async function remapIfWrongCom() {
 
 async function recoverLink() {
   if (!wantOpen) return;
+  if (sppEstablishing()) return;
   if (recoverBusy || connectBusy) {
     scheduleReconnect();
     return;
@@ -997,7 +1007,7 @@ function attachFd(path: string) {
     reconnectDelay = nextReconnectDelay(reconnectDelay, "drop");
     closeStream();
     scheduleReconnect();
-  }, 12_000);
+  }, SPP_OPEN_MS);
   openTimer.unref?.();
   rs.on("open", () => {
     opened = true;
@@ -1161,7 +1171,7 @@ function attachPump(path: string) {
     reconnectDelay = nextReconnectDelay(reconnectDelay, "drop");
     closeStream();
     scheduleReconnect();
-  }, 12_000);
+  }, SPP_OPEN_MS);
   openTimer.unref?.();
   child.stderr?.setEncoding("utf8");
   child.stderr?.on("data", (chunk: string) => {
@@ -1510,7 +1520,14 @@ export async function lextelKeepalive(): Promise<LextelSnapshot> {
   if (!wantOpen && saved.autoConnect && phase !== "scanning" && phase !== "pairing") {
     const { isServiceAutostart } = await import("./services");
     if (isServiceAutostart("lextel")) void lextelAutoConnect();
-  } else if (!connectBusy && !recoverBusy && !autoRunning && wantOpen && !linkAlive()) {
+  } else if (
+    !connectBusy &&
+    !recoverBusy &&
+    !autoRunning &&
+    wantOpen &&
+    !linkAlive() &&
+    !sppEstablishing()
+  ) {
     reconnectDelay = 400;
     clearReconnect();
     void recoverLink();
@@ -1569,7 +1586,7 @@ export async function lextelAutoConnect(): Promise<void> {
 const recoverWatch = setInterval(() => {
   if (!wantOpen || recoverBusy || connectBusy || autoRunning) return;
   if (phase === "scanning" || phase === "pairing") return;
-  if (opening && attachedAt && Date.now() - attachedAt < 12_000) return;
+  if (opening && attachedAt && Date.now() - attachedAt < SPP_OPEN_MS) return;
   if (linkAlive()) {
     if (
       process.platform === "linux" &&

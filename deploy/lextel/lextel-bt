@@ -487,7 +487,8 @@ case "$cmd" in
     esac
     if (( secs < 5 )); then secs=5; fi
     if (( secs > 20 )); then secs=20; fi
-    timeout "$secs" bluetoothctl --timeout "$secs" scan on >/dev/null 2>&1 || true
+    timeout "$secs" bluetoothctl --timeout "$secs" scan bredr >/dev/null 2>&1 || \
+      timeout "$secs" bluetoothctl --timeout "$secs" scan on >/dev/null 2>&1 || true
     bluetoothctl scan off >/dev/null 2>&1 || true
     print_devices
     ;;
