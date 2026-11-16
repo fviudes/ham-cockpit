@@ -254,6 +254,11 @@ settle_bind() {
   # O ACL do release precisa cair antes do nó novo. Sem esta pausa o
   # open pagina o mesmo link estourado.
   sleep 0.4
+  info="$(bt_info)"
+  if echo "$info" | grep -q 'Connected: no'; then
+    timeout 12 bluetoothctl connect "$mac" >/dev/null 2>&1 || true
+    sleep 0.5
+  fi
   if ! rfcomm bind "$RFCOMM_N" "$mac" "$channel" 2>/dev/null; then
     bluetoothctl disconnect "$mac" >/dev/null 2>&1 || true
     sleep 0.5

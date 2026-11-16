@@ -37,6 +37,9 @@ describe("shell do waterfall no painel", () => {
   it("mantém altura fixa no card RF (escala no FitTile)", () => {
     const src = readFileSync(resolve("client/src/console/waterfall-panel.tsx"), "utf8");
     expect(src).toMatch(/relative h-64 overflow-hidden/);
+    expect(src).toContain("panel-waterfall-feed");
+    expect(src).toContain('aria-label="Tempo"');
+    expect(src).toContain("#10b981");
     const board = readFileSync(resolve("client/src/console/panel-board.tsx"), "utf8");
     expect(board).toContain('className={fill ? "flex h-full min-h-0 w-full flex-col" : "w-full"}');
     expect(board).toContain("fillFitTile");
@@ -118,9 +121,10 @@ describe("waterfall centrado no VFO", () => {
     expect(sampleAt(bins, data, 6_900_000)).toBeNull();
   });
 
-  it("marca o tempo de 5 em 5 segundos", () => {
-    const marks = timeMarks(21, 1, 200);
-    expect(marks.map((mark) => mark.label)).toEqual(["0", "-5s", "-10s", "-15s"]);
+  it("marca o tempo de 5 em 5 segundos e LIVE no topo", () => {
+    const marks = timeMarks(20, 200);
+    expect(marks[0]?.label).toBe("LIVE");
+    expect(marks.map((mark) => mark.label)).toEqual(["LIVE", "-5s", "-10s", "-15s"]);
   });
 
   it("coloca marcas de frequência dentro da barra", () => {

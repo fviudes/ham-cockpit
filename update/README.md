@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.13.01** (`version.json`).
+Versão atual neste canal: **0.1.13.02** (`version.json`).
 
 ## Versionamento
 
@@ -22,12 +22,12 @@ Cada pacote OTA é **cumulativo**: substitui o console inteiro. Basta aplicar a 
 
 ```json
 {
-  "version": "0.1.13.01",
+  "version": "0.1.13.02",
   "channel": "main",
-  "file": "ham-cockpit-0.1.13.01.tgz",
-  "sha256": "4ea4d85345ea8fe68875e42d80a7438518f7efc243cb2d74f6a0de1656a383bd",
-  "bytes": 5125329,
-  "notes": "Ham Cockpit v0.1.13.01 — OTA cumulativo: Lextel MS-2000 SPP — keepalive/recover não interrompem open() em andamento; lextel-bt scan usa bredr com fallback."
+  "file": "ham-cockpit-0.1.13.02.tgz",
+  "sha256": "67aee0116d89fe27fe04a30bd6e7a03aeb6346fba05c27809c8417d9f4091091",
+  "bytes": 5126437,
+  "notes": "Ham Cockpit v0.1.13.02 — OTA cumulativo: waterfall — dropdown Tempo (5–60 s), barra verde/LIVE, espectro com fill verde→amarelo→vermelho, feed persiste ao sair do painel; MS-2000 SPP — reconnect BlueZ + ACL antes do rfcomm bind."
 }
 ```
 

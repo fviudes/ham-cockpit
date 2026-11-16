@@ -1481,7 +1481,11 @@ async function lextelConnectBody(body: { addr?: string; pin?: string; name?: str
     persist();
     // rebind só quando o open anterior devolveu ENODEV (o nó sumiu).
     // clean do mesmo MAC não é link morto: o helper tem de manter esse bind.
-    await runHelper(["bind", addr, saved.pin, String(ch), rfcommStale ? "rebind" : ""], 12_000);
+    if (rfcommStale || sppOpenMisses >= 1) {
+      await runHelper(["reconnect", addr, saved.pin, String(ch)], 22_000);
+    } else {
+      await runHelper(["bind", addr, saved.pin, String(ch), ""], 12_000);
+    }
     attach(RFCOMM);
   } catch (err) {
     const msg = helperText(err);

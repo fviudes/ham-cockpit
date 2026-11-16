@@ -9,6 +9,15 @@ export const WATERFALL_HALF_HZ = 150_000;
 export const PANEL_SPAN_STEPS_HZ = SCOPE_SPAN_STEPS_HZ;
 export const PANEL_SPAN_HZ = SCOPE_SPAN_HZ;
 
+export const PANEL_HISTORY_SEC_OPTIONS = [5, 10, 15, 20, 25, 30, 40, 50, 60] as const;
+export const PANEL_HISTORY_SEC_DEFAULT = 25;
+
+/** Quantas linhas cabem na janela de histórico escolhida. */
+export function panelHistoryCap(historySec: number, intervalMs: number): number {
+  const slot = holdSweepInterval(0, intervalMs > 0 ? intervalMs : DEFAULT_SWEEP_MS);
+  return Math.max(8, Math.ceil((historySec * 1000) / slot));
+}
+
 export const panelSpanHz = normalizeScopeSpan;
 
 /** Escala 0–160 do espectro CI-V Icom (USB/LAN/BLE). */
@@ -213,13 +222,12 @@ export function waterfallBands(
   return bands;
 }
 
-export function timeMarks(rowCount: number, secPerRow: number, height: number): { y: number; label: string }[] {
-  if (height < 8) return [];
-  const marks: { y: number; label: string }[] = [{ y: 0, label: "0" }];
-  if (rowCount < 2 || secPerRow <= 0) return marks;
-  const total = (rowCount - 1) * secPerRow;
-  for (let sec = 5; sec <= total + 0.05; sec += 5) {
-    const y = (sec / total) * height;
+export function timeMarks(historySec: number, height: number): { y: number; label: string }[] {
+  if (height < 8 || historySec <= 0) return [];
+  const marks: { y: number; label: string }[] = [{ y: 0, label: "LIVE" }];
+  const step = historySec <= 30 ? 5 : 10;
+  for (let sec = step; sec <= historySec + 0.05; sec += step) {
+    const y = (sec / historySec) * height;
     if (y > height - 10) break;
     marks.push({ y, label: `-${sec}s` });
   }

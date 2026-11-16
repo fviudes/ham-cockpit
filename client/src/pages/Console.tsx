@@ -8,6 +8,8 @@ import { HeaderSMeter } from "@/console/header-smeter";
 import { PcAudioCard } from "@/console/pc-audio-card";
 import { LangToggle, UpdatesMenu, UserMenu } from "@/console/widgets";
 import { RadioPage } from "@/console/radio";
+import { civScopeOn } from "@shared/icom-scope";
+import { PanelWaterfallCollector } from "@/console/waterfall-panel";
 import { ManualPage } from "@/console/manual";
 import { AdminPage, StatusPage } from "@/console/system";
 import { Ser2netPage } from "@/console/ser2net";
@@ -40,7 +42,7 @@ import {
   Wifi,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { APP_LOGO, APP_VERSION } from "@shared/brand";
 import { licenseGateOf, licenseMenusOpen, type LicenseGate } from "@shared/license";
@@ -374,6 +376,16 @@ function Shell({ onLogout }: { onLogout: () => void }) {
   const liveRadio = s.radios.items.find((r) => r.connected) || primaryRadio;
   const bleReady = s.ic705.phase === "ready" && s.ic705.ble;
   const route = resolvePrimaryRoute(s.radios.items, { bleReady });
+  const via = route.live ? route.transport : "none";
+  const equipmentId = route.radio?.equipmentId;
+  const bleScope = via === "ble" && (civScopeOn(equipmentId, "bluetooth") || !equipmentId);
+  const lanScope = via === "lan" && (civScopeOn(equipmentId, "lan") || (!equipmentId && route.radio?.maker === "icom"));
+  const serialScope = via === "hamlib" && Boolean(route.radio?.scope) && civScopeOn(equipmentId, "serial");
+  const wfFeed = bleScope ? "ble" : lanScope ? "lan" : serialScope ? "serial" : "off";
+  const wfRfScope = wfFeed !== "off";
+  const tuneRef = useRef(s.freq);
+  tuneRef.current = s.vfo === "B" ? s.freqB : s.freq;
+  const getTuneHz = useCallback(() => tuneRef.current, []);
   const liveSignal = route.live && route.transport !== "none";
   const gattUp = s.ic705.phase === "ready" || s.ic705.civ;
   const makerLabel = (r: typeof liveRadio) =>
@@ -649,6 +661,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
             />
           </div>
         </header>
+        <PanelWaterfallCollector getTuneHz={getTuneHz} feed={wfFeed} rfScope={wfRfScope} via={via} />
         <main
           className={
             page === "radio" || page === "digital"

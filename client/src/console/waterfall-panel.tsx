@@ -1,32 +1,39 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
-import { civScopeOn, normalizeScopeSpan, type ScopeSweep } from "@shared/icom-scope";
+import { civScopeOn } from "@shared/icom-scope";
 import type { I18nKey } from "./i18n";
 import { resolvePrimaryRoute, sendPrimaryCmd } from "./radio-cmd";
-import { ic705Ble } from "./ic705-ble";
-import { subscribeScope } from "./scope-bus";
 import { useConsole } from "./state";
 import {
-  audioSweep,
   FRAME_MS,
+  PANEL_HISTORY_SEC_DEFAULT,
+  PANEL_HISTORY_SEC_OPTIONS,
   freqTicks,
   holdSweepInterval,
   clickedTuneHz,
   hzAtClick,
   mhzLabel,
   panelBinCount,
+  panelHistoryCap,
   PANEL_SPAN_HZ,
   PANEL_SPAN_STEPS_HZ,
   panelView,
-  panelizeRfSweep,
   sampleAt,
   sweepDisplayFull,
   sweepIntervalMs,
   timeMarks,
   waterfallBands,
 } from "./waterfall-view";
+import {
+  panelWaterfallGetSpan,
+  panelWaterfallSendSpan,
+  panelWaterfallSetHistorySec,
+  panelWaterfallSetSpan,
+  panelWaterfallSubscribe,
+  panelWaterfallSnapshot,
+  stopPanelWaterfallFeed,
+  syncPanelWaterfallFeed,
+} from "./panel-waterfall-feed";
 import { PanelTitle } from "./widgets";
-
-const HISTORY = 96;
 
 function ampColor(level: number, full: number): [number, number, number] {
   const t = Math.max(0, Math.min(1, level / full));
@@ -52,8 +59,29 @@ function ampColor(level: number, full: number): [number, number, number] {
 
 const GUTTER = 36;
 const BAR_H = 16;
-const FREQ_BAR = "#c47a22";
-const BAR_INK = "#fff6e8";
+/** Mesmos tons dos chips de serviço no cabeçalho (bg #10b981/15 · texto #34d399). */
+const FREQ_BAR = "#10b981";
+const BAR_FILL = "rgba(16, 185, 129, 0.18)";
+const BAR_INK = "#34d399";
+
+function signalRgb(t: number): [number, number, number] {
+  const v = Math.max(0, Math.min(1, t));
+  const stops: [number, number, number][] = [
+    [52, 211, 153],
+    [251, 191, 36],
+    [239, 68, 68],
+  ];
+  const scaled = v * (stops.length - 1);
+  const i = Math.min(stops.length - 2, Math.floor(scaled));
+  const f = scaled - i;
+  const a = stops[i]!;
+  const b = stops[i + 1]!;
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * f),
+    Math.round(a[1] + (b[1] - a[1]) * f),
+    Math.round(a[2] + (b[2] - a[2]) * f),
+  ];
+}
 
 /** X do clique em px de layout, mesmo espaço do desenho mesmo com o card em escala. */
 function layoutX(canvas: HTMLCanvasElement, clientX: number): number | null {
@@ -109,6 +137,7 @@ function paint(
   rows: Trace[],
   tuneHz: number,
   spanHz: number,
+  historySec: number,
   atlasRef: { current: Atlas | null },
   sweepMsRef: { current: number },
   gen: number,
@@ -141,17 +170,21 @@ function paint(
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = "#05080c";
   ctx.fillRect(0, 0, bw, bh);
-  ctx.fillStyle = FREQ_BAR;
+  ctx.fillStyle = BAR_FILL;
   ctx.fillRect(Math.floor(plotW * dpr), 0, Math.max(0, bw - Math.floor(plotW * dpr)), bh);
 
-  if (fallH > 0 && rows.length && view && edge) {
+  const historyCap = panelHistoryCap(historySec, intervalMs);
+  const visibleRows = rows.filter((row) => now - row.at <= historySec * 1000);
+
+  if (fallH > 0 && visibleRows.length && view && edge) {
     const fallPx = Math.max(1, Math.round(fallH * dpr));
-    const rowPx = fallPx / HISTORY;
+    const rowPx = fallPx / Math.max(1, historyCap);
     const key = `${plotPx}|${tuneHz}|${spanHz}|${gen}`;
     if (!atlasRef.current || atlasRef.current.key !== key) {
-      atlasRef.current = { key, canvas: buildAtlas(rows, tuneHz, spanHz, plotPx) };
+      atlasRef.current = { key, canvas: buildAtlas(visibleRows, tuneHz, spanHz, plotPx) };
     }
-    const bands = waterfallBands(times, intervalMs, rowPx, now, fallPx);
+    const timesVis = visibleRows.map((row) => row.at);
+    const bands = waterfallBands(timesVis, intervalMs, rowPx, now, fallPx);
     const fallTopPx = Math.round(fallTop * dpr);
     ctx.imageSmoothingEnabled = false;
     for (let b = bands.length - 1; b >= 0; b--) {
@@ -167,11 +200,22 @@ function paint(
   }
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const latest = rows[0];
+  const latest = visibleRows[0];
   if (latest && latest.bins.length && view && edge) {
     const full = sweepDisplayFull(latest.bins, latest.rf);
+    const baseY = specH - 0.5;
+    for (let x = 0; x < plotW; x++) {
+      const hz = view.startHz + ((x + 0.5) / plotW) * span;
+      const sample = latest.rf
+        ? (latest.bins[Math.min(latest.bins.length - 1, Math.max(0, Math.floor(((hz - latest.startHz) / span) * latest.bins.length)))] ?? 0)
+        : (sampleAt(latest.bins, latest, hz) ?? 0);
+      const y = specH - 4 - (sample / full) * (specH - 8);
+      const [r, g, b] = signalRgb(sample / full);
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.fillRect(x, y, 1, Math.max(1, baseY - y));
+    }
     ctx.beginPath();
-    ctx.strokeStyle = "#7ee0ff";
+    ctx.strokeStyle = "#34d399";
     ctx.lineWidth = 1.25;
     for (let x = 0; x < plotW; x++) {
       const hz = view.startHz + ((x + 0.5) / plotW) * span;
@@ -210,15 +254,40 @@ function paint(
   ctx.lineWidth = 1.25;
   ctx.stroke();
 
-  const secPerRow = intervalMs / 1000;
-  const markRows = rows.length > 1 ? HISTORY + 1 : rows.length;
   ctx.font = "9px IBM Plex Mono, ui-monospace, monospace";
   ctx.fillStyle = BAR_INK;
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
-  for (const mark of timeMarks(markRows, secPerRow, fallH)) {
+  for (const mark of timeMarks(historySec, fallH)) {
     ctx.fillText(mark.label, plotW + 4, fallTop + mark.y);
   }
+}
+
+/** Mantém o feed do waterfall vivo ao trocar de menu no console. */
+export function PanelWaterfallCollector({
+  getTuneHz,
+  feed,
+  rfScope,
+  via,
+}: {
+  getTuneHz: () => number;
+  feed: "ble" | "lan" | "serial" | "off";
+  rfScope: boolean;
+  via: string;
+}) {
+  useEffect(() => {
+    syncPanelWaterfallFeed({
+      feed,
+      rfScope,
+      via,
+      getTuneHz,
+      getSpanHz: () => panelWaterfallGetSpan(),
+    });
+  }, [feed, rfScope, via, getTuneHz]);
+
+  useEffect(() => () => stopPanelWaterfallFeed(), []);
+
+  return null;
 }
 
 /** Card do painel. O sweep chega pelo BLE ou pela rede; o CI-V USB fica com o rigctld. */
@@ -232,11 +301,13 @@ export function WaterfallViz() {
   const tuneRef = useRef(0);
   tuneRef.current = s.vfo === "B" ? s.freqB : s.freq;
   const [spanHz, setSpanHz] = useState(PANEL_SPAN_HZ);
+  const [historySec, setHistorySec] = useState(PANEL_HISTORY_SEC_DEFAULT);
   const spanRef = useRef(spanHz);
   spanRef.current = spanHz;
+  const historyRef = useRef(historySec);
+  historyRef.current = historySec;
   const [live, setLive] = useState(false);
   const [serialFail, setSerialFail] = useState(false);
-  const scopeWsRef = useRef<WebSocket | null>(null);
   const route = resolvePrimaryRoute(s.radios.items, {
     bleReady: s.ic705.phase === "ready" && s.ic705.ble,
   });
@@ -257,20 +328,44 @@ export function WaterfallViz() {
         : "waterfallIdle";
 
   useEffect(() => {
-    rowsRef.current = [];
-    atlasRef.current = null;
-    sweepMsRef.current = 0;
-    genRef.current = 0;
-    setLive(false);
-    setSerialFail(false);
+    panelWaterfallSetSpan(spanHz);
+  }, [spanHz]);
+
+  useEffect(() => {
+    panelWaterfallSetHistorySec(historySec);
+  }, [historySec]);
+
+  useEffect(() => {
+    const pull = () => {
+      const shot = panelWaterfallSnapshot();
+      rowsRef.current = shot.rows;
+      genRef.current = shot.gen;
+      sweepMsRef.current = shot.sweepMs;
+      setLive(shot.live);
+      setSerialFail(shot.serialFail);
+    };
+    pull();
+    return panelWaterfallSubscribe(pull);
+  }, []);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
     let raf = 0;
     let last = 0;
     let running = true;
-    let socket: WebSocket | null = null;
     const draw = () => {
       if (!canvas) return;
-      paint(canvas, rowsRef.current, tuneRef.current, spanRef.current, atlasRef, sweepMsRef, genRef.current, Date.now());
+      paint(
+        canvas,
+        rowsRef.current,
+        tuneRef.current,
+        spanRef.current,
+        historyRef.current,
+        atlasRef,
+        sweepMsRef,
+        genRef.current,
+        Date.now(),
+      );
     };
     const loop = (ts: number) => {
       if (!running) return;
@@ -280,130 +375,14 @@ export function WaterfallViz() {
       draw();
     };
     raf = requestAnimationFrame(loop);
-    const pushRow = (sweep: ScopeSweep, rf: boolean) => {
-      const tuned = rf
-        ? panelizeRfSweep(sweep, tuneRef.current, spanRef.current)
-        : sweep;
-      const next = rowsRef.current;
-      next.unshift({
-        bins: tuned.bins,
-        at: Date.now(),
-        startHz: tuned.startHz,
-        endHz: tuned.endHz,
-        rf,
-      });
-      if (next.length > HISTORY) next.pop();
-      genRef.current += 1;
-      setLive(true);
-    };
-
-    let stop = () => {};
-    let audio: WebSocket | null = null;
-    if (!rfScope) {
-      let lastAudio = 0;
-      try {
-        const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-        audio = new WebSocket(`${proto}//${window.location.host}/ws/radio-audio`);
-        audio.binaryType = "arraybuffer";
-        audio.addEventListener("message", (event) => {
-          if (!(event.data instanceof ArrayBuffer) || event.data.byteLength < 2) return;
-          const now = Date.now();
-          if (now - lastAudio < 80) return;
-          lastAudio = now;
-          const bytes = event.data.byteLength - (event.data.byteLength % 2);
-          const pcm = new Int16Array(event.data.slice(0, bytes));
-          const tune = tuneRef.current > 0 ? tuneRef.current : 14_074_000;
-          pushRow(audioSweep(pcm, tune, spanRef.current), false);
-        });
-      } catch {
-        audio = null;
-      }
-    }
-    if (via === "ble") {
-      const unsub = subscribeScope((sweep) => pushRow(sweep, true));
-      let alive = true;
-      const armBleScope = (attempt = 0) => {
-        void ic705Ble.setScope(true).then((ok) => {
-          if (!alive && ok) void ic705Ble.setScope(false).catch(() => undefined);
-          if (alive && !ok && attempt < 8) window.setTimeout(() => armBleScope(attempt + 1), 400);
-        }).catch(() => {
-          if (alive && attempt < 8) window.setTimeout(() => armBleScope(attempt + 1), 400);
-        });
-      };
-      armBleScope();
-      stop = () => {
-        alive = false;
-        unsub();
-        void ic705Ble.setScope(false).catch(() => undefined);
-      };
-    } else if (feed === "lan" || feed === "serial") {
-      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-      try {
-        socket = new WebSocket(`${proto}//${window.location.host}/ws/scope?via=${feed}`);
-        scopeWsRef.current = socket;
-      } catch {
-        socket = null;
-        scopeWsRef.current = null;
-      }
-      if (socket) {
-        socket.addEventListener("open", () => {
-          socket?.send(JSON.stringify({ type: "span", spanHz: normalizeScopeSpan(spanRef.current) }));
-        });
-        socket.addEventListener("close", () => {
-          if (scopeWsRef.current === socket) scopeWsRef.current = null;
-        });
-        socket.addEventListener("message", (event) => {
-          if (typeof event.data !== "string") return;
-          try {
-            const body = JSON.parse(event.data) as {
-              type?: string;
-              startHz?: number;
-              endHz?: number;
-              mode?: number;
-              bins?: number[];
-            };
-            if (body.type === "error") {
-              setSerialFail(true);
-              return;
-            }
-            if (body.type !== "sweep" || !Array.isArray(body.bins)) return;
-            pushRow(
-              {
-                startHz: Number(body.startHz) || 0,
-                endHz: Number(body.endHz) || 0,
-                mode: Number(body.mode) || 0,
-                bins: Uint8Array.from(body.bins),
-                oor: false,
-              },
-              true,
-            );
-          } catch {
-            /* quadro incompleto */
-          }
-        });
-      }
-      stop = () => socket?.close();
-    }
-
     return () => {
       running = false;
       cancelAnimationFrame(raf);
-      stop();
-      scopeWsRef.current = null;
-      audio?.close();
     };
-  }, [feed, rfScope]);
+  }, []);
 
   useEffect(() => {
-    const span = normalizeScopeSpan(spanHz);
-    if (via === "ble") {
-      void ic705Ble.setScopeSpan(span).catch(() => undefined);
-      return;
-    }
-    const ws = scopeWsRef.current;
-    if ((feed === "lan" || feed === "serial") && ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "span", spanHz: span }));
-    }
+    panelWaterfallSendSpan(spanHz, feed, via);
   }, [spanHz, feed, via]);
 
   const tuneClicked = (event: MouseEvent<HTMLDivElement>) => {
@@ -445,6 +424,23 @@ export function WaterfallViz() {
     <>
       <div className="mb-1 flex items-center justify-between gap-2">
         <PanelTitle>{tx("panelWaterfall")}</PanelTitle>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+        <label className="flex items-center gap-1 text-[10px] tracking-wide text-[#8ea0b3] uppercase">
+          Tempo
+          <select
+            aria-label="Tempo"
+            className="h-6 rounded border border-[#1c2a32] bg-[#0b1520] px-1 font-['IBM_Plex_Mono'] text-[11px] normal-case text-[#e8eef4]"
+            value={historySec}
+            data-history-sec={historySec}
+            onChange={(event) => setHistorySec(Number(event.target.value))}
+          >
+            {PANEL_HISTORY_SEC_OPTIONS.map((sec) => (
+              <option key={sec} value={sec}>
+                {sec} s
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="flex items-center gap-1 text-[10px] tracking-wide text-[#8ea0b3] uppercase">
           Largura
           <select
@@ -464,6 +460,7 @@ export function WaterfallViz() {
             ))}
           </select>
         </label>
+        </div>
       </div>
       <div
         className="relative h-64 overflow-hidden bg-[#05080c]"
