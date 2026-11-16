@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { addTile, defaultTiles } from "../client/src/console/panel-layout";
 import { audioSweep } from "../client/src/console/waterfall-view";
@@ -20,6 +22,25 @@ import {
   timeMarks,
   waterfallBands,
 } from "../client/src/console/waterfall-view";
+
+describe("tap CI-V do painel", () => {
+  it("liga o espectro na serial com 27 10/11 ao abrir o card", () => {
+    const src = readFileSync(resolve("server/civ-scope-tap.ts"), "utf8");
+    expect(src).toContain("function applyScopeOutput");
+    expect(src).toMatch(/const frames = scopeTx\(tap, on\)/);
+    expect(src).toContain("sendFrames(tap, frames)");
+    expect(src).toContain("if (outputWanted) applyScopeOutput(true, true)");
+  });
+});
+
+describe("shell do waterfall no painel", () => {
+  it("preenche a célula do FitTile em vez de h-64 fixo", () => {
+    const src = readFileSync(resolve("client/src/console/waterfall-panel.tsx"), "utf8");
+    expect(src).toContain('data-waterfall="1"');
+    expect(src).toContain("min-h-0 flex-1");
+    expect(src).not.toMatch(/relative h-64 overflow-hidden/);
+  });
+});
 
 describe("card do waterfall no painel", () => {
   it("não entra no layout padrão e aparece ao adicionar", () => {

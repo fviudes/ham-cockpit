@@ -1,8 +1,8 @@
 {
-  "version": "0.1.12.07",
+  "version": "0.1.12.08",
   "channel": "main",
-  "file": "ham-cockpit-0.1.12.07.tgz",
-  "sha256": "3f678776440286258f45d908c75417b28fa8259a086e858ebc61986010040e7e",
-  "bytes": 5124978,
-  "notes": "Corrige cascata FT8 após layout digital: FitTile com altura do card e canvas em fill."
+  "file": "ham-cockpit-0.1.12.08.tgz",
+  "sha256": "91e650b7b47d81f77b631e748a13a5e249aeb928e2371710b8565b42622e79e6",
+  "bytes": 5125211,
+  "notes": "Waterfall do painel RF: religa 27 10/11 no tap CI-V ao abrir o card e preenche a célula no FitTile."
 }

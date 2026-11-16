@@ -442,8 +442,8 @@ export function WaterfallViz() {
 
   const view = panelView(tuneRef.current, spanHz);
   return (
-    <>
-      <div className="mb-1 flex items-center justify-between gap-2">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
+      <div className="mb-1 flex shrink-0 items-center justify-between gap-2">
         <PanelTitle>{tx("panelWaterfall")}</PanelTitle>
         <label className="flex items-center gap-1 text-[10px] tracking-wide text-[#8ea0b3] uppercase">
           Largura
@@ -466,8 +466,9 @@ export function WaterfallViz() {
         </label>
       </div>
       <div
-        className="relative h-64 overflow-hidden bg-[#05080c]"
+        className="relative min-h-0 flex-1 overflow-hidden bg-[#05080c]"
         title={tx("waterfallTune")}
+        data-waterfall="1"
         onMouseMove={aimPlot}
         onMouseLeave={(event) => {
           event.currentTarget.style.cursor = "";
@@ -475,13 +476,13 @@ export function WaterfallViz() {
         }}
         onClick={tuneClicked}
       >
-        <canvas ref={canvasRef} className="h-full w-full" title={tx("waterfallTune")} />
+        <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full" title={tx("waterfallTune")} />
         {live ? null : (
           <p className="pointer-events-none absolute inset-0 grid place-items-center px-4 text-center text-xs leading-relaxed text-[#8ea0b3]">
             {tx(hint)}
           </p>
         )}
       </div>
-    </>
+    </div>
   );
 }

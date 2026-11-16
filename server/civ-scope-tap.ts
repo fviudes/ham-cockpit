@@ -125,11 +125,23 @@ function rearmScope(_state: Tap, _why: string, _force = false): void {
   // 27 10/27 11 no meio do f/m deixa o CI-V mudo e o chip fica vermelho.
 }
 
-function applyScopeOutput(on: boolean): void {
-  if (!tap || tap.output === on) return;
+function applyScopeOutput(on: boolean, force = false): void {
+  if (!tap) return;
+  if (!force && tap.output === on) return;
   tap.output = on;
-  tap.pendingOff = false;
-  if (on) tap.armedAt = Date.now();
+  if (on) {
+    tap.armedAt = Date.now();
+    tap.sawScope = false;
+    tap.samples = 0;
+    tap.pendingOff = false;
+  } else {
+    tap.pendingOff = true;
+  }
+  const frames = scopeTx(tap, on);
+  const hex = frames.map((frame) => Buffer.from(frame).toString("hex")).join(" ");
+  console.log(`civ-scope-tap: saída do espectro ${on ? "ligada" : "desligada"} ${hex}`);
+  if (!sendFrames(tap, frames)) return;
+  if (!on) tap.pendingOff = false;
 }
 
 export function serialScopeOutput(on: boolean): void {
@@ -146,6 +158,7 @@ export async function withSerialScopeQuiet<T>(fn: () => Promise<T>): Promise<T> 
     return await fn();
   } finally {
     rigQuiet = false;
+    if (outputWanted) applyScopeOutput(true, true);
   }
 }
 
@@ -226,6 +239,11 @@ function connectUp(state: Tap): void {
     state.lastRxAt = 0;
     state.upDelay = 200;
     state.pendingOff = false;
+    if (outputWanted) {
+      state.output = true;
+      state.armedAt = Date.now();
+      sendFrames(state, scopeTx(state, true));
+    }
   });
   sock.on("data", (chunk: Buffer) => {
     const now = Date.now();
