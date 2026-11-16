@@ -44,9 +44,10 @@ describe("shell do waterfall no painel", () => {
     expect(src).toMatch(/relative h-64 overflow-hidden/);
     expect(src).toContain("panel-waterfall-feed");
     expect(src).toContain('aria-label="Tempo"');
-    expect(src).toContain("#10b981");
-    expect(src).toContain("FREQ_BAR");
-    expect(src).not.toContain("BAR_FILL");
+    expect(src).toContain("BAR_FILL");
+    expect(src).toContain("BAR_INK");
+    expect(src).not.toContain("FREQ_BAR");
+    expect(src).toContain("WATERFALL_WAIT_OVERLAY_MS = 3000");
     const board = readFileSync(resolve("client/src/console/panel-board.tsx"), "utf8");
     expect(board).toContain('className={fill ? "flex h-full min-h-0 w-full flex-col" : "w-full"}');
     expect(board).toContain("fillFitTile");

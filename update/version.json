@@ -1,8 +1,8 @@
 {
-  "version": "0.1.13.07",
+  "version": "0.1.13.08",
   "channel": "main",
-  "file": "ham-cockpit-0.1.13.07.tgz",
-  "sha256": "80a5422c40f1673ee9ac1ad7eea604a5db3c7be5b136c47f8d4185a0caeb2aa3",
-  "bytes": 5128970,
-  "notes": "Ham Cockpit v0.1.13.07 — waterfall: reidratação do scope/tap após reconexão do rádio, eixo tempo/live alinhado ao verde #10b981; S-meter com subida suave (τ 72/95 ms) e prioridade CI-V na fila Hamlib e no poll BLE."
+  "file": "ham-cockpit-0.1.13.08.tgz",
+  "sha256": "764c59986f1bc4e3679e6cabda3258ee34269cf77bed9deec8c7af519b586fa5",
+  "bytes": 5129045,
+  "notes": "Ham Cockpit v0.1.13.08 — waterfall: barra de frequências com o mesmo fundo/ink do eixo tempo (BAR_FILL), overlay Aguardando só após 3 s."
 }

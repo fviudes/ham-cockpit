@@ -60,9 +60,11 @@ function ampColor(level: number, full: number): [number, number, number] {
 
 const GUTTER = 36;
 const BAR_H = 16;
-/** Mesmos tons dos chips de serviço no cabeçalho (bg #10b981/15 · texto #34d399). */
-const FREQ_BAR = "#10b981";
+/** Eixo tempo/LIVE (gutter) e barra de frequências: fundo #10b981/18 · texto #34d399. */
+const BAR_FILL = "rgba(16, 185, 129, 0.18)";
 const BAR_INK = "#34d399";
+/** Aguarda sweeps antes de mostrar "Aguardando o waterfall do rádio". */
+const WATERFALL_WAIT_OVERLAY_MS = 3000;
 
 function signalRgb(t: number): [number, number, number] {
   const v = Math.max(0, Math.min(1, t));
@@ -172,7 +174,7 @@ function paint(
   ctx.fillRect(0, 0, bw, bh);
   const gutterPx = Math.max(0, bw - Math.floor(plotW * dpr));
   const plotXPx = Math.floor(plotW * dpr);
-  ctx.fillStyle = FREQ_BAR;
+  ctx.fillStyle = BAR_FILL;
   ctx.fillRect(plotXPx, 0, gutterPx, bh);
 
   const historyCap = panelHistoryCap(historySec, intervalMs);
@@ -231,7 +233,7 @@ function paint(
     ctx.stroke();
   }
 
-  ctx.fillStyle = FREQ_BAR;
+  ctx.fillStyle = BAR_FILL;
   ctx.fillRect(0, specH, plotW, BAR_H);
   if (view) {
     ctx.font = "9px IBM Plex Mono, ui-monospace, monospace";
@@ -309,6 +311,7 @@ export function WaterfallViz() {
   historyRef.current = historySec;
   const [live, setLive] = useState(false);
   const liveUi = useRef(false);
+  const [showWaitOverlay, setShowWaitOverlay] = useState(false);
   const [serialFail, setSerialFail] = useState(false);
   const serialUi = useRef(false);
   const route = resolvePrimaryRoute(s.radios.items, {
@@ -329,6 +332,21 @@ export function WaterfallViz() {
       : via === "hamlib"
         ? "waterfallSerialOff"
         : "waterfallIdle";
+
+  useEffect(() => {
+    if (live) {
+      setShowWaitOverlay(false);
+      return;
+    }
+    const waitingSweep = !serialFail && (feed === "serial" || feed === "ble" || feed === "lan");
+    if (!waitingSweep) {
+      setShowWaitOverlay(true);
+      return;
+    }
+    setShowWaitOverlay(false);
+    const id = window.setTimeout(() => setShowWaitOverlay(true), WATERFALL_WAIT_OVERLAY_MS);
+    return () => window.clearTimeout(id);
+  }, [live, serialFail, feed]);
 
   useEffect(() => {
     panelWaterfallSetSpan(spanHz);
@@ -492,7 +510,7 @@ export function WaterfallViz() {
         onClick={tuneClicked}
       >
         <canvas ref={canvasRef} className="h-full w-full" title={tx("waterfallTune")} />
-        {live ? null : (
+        {live || !showWaitOverlay ? null : (
           <p className="pointer-events-none absolute inset-0 grid place-items-center px-4 text-center text-xs leading-relaxed text-[#8ea0b3]">
             {tx(hint)}
           </p>
