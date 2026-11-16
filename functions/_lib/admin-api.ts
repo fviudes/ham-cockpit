@@ -169,6 +169,19 @@ async function licenseDetail(ctx: Ctx, id: string): Promise<Response> {
   });
 }
 
+async function licenseDelete(ctx: Ctx, id: string, adminId: string): Promise<Response> {
+  const l = await ctx.env.DB.prepare("SELECT * FROM licenses WHERE id = ?1").bind(id).first<LicenseRow>();
+  if (!l) throw new HttpError(404, "license_not_found");
+  await ctx.env.DB.batch([
+    ctx.env.DB.prepare("UPDATE licenses SET transferred_from = NULL WHERE transferred_from = ?1").bind(id),
+    ctx.env.DB.prepare("DELETE FROM license_events WHERE license_id = ?1").bind(id),
+    ctx.env.DB.prepare("UPDATE payments SET license_id = NULL, license_token = NULL WHERE license_id = ?1").bind(id),
+    ctx.env.DB.prepare("DELETE FROM licenses WHERE id = ?1").bind(id),
+  ]);
+  await audit(ctx, adminId, "license_delete", id, { serial: maskSerial(l.serial), type: l.type, status: l.status }, undefined);
+  return json({ ok: true });
+}
+
 async function pricingGet(ctx: Ctx, url: URL): Promise<Response> {
   const price = await getPrice(ctx);
   const history = await ctx.env.DB.prepare("SELECT id, usd_cents, fx_spread_bps, rounding, quote_ttl_seconds, effective_from, created_by FROM price_settings ORDER BY id DESC LIMIT 10").all();
@@ -655,6 +668,10 @@ export async function adminRoute(ctx: Ctx, request: Request, path: string): Prom
   if ((m = path.match(/^\/licenses\/(lic_[0-9a-z]{16})$/)) && method === "GET") {
     await need();
     return licenseDetail(ctx, m[1]);
+  }
+  if ((m = path.match(/^\/licenses\/(lic_[0-9a-z]{16})$/)) && method === "DELETE") {
+    const a = await need("admin");
+    return licenseDelete(ctx, m[1], a.id);
   }
   if ((m = path.match(/^\/licenses\/(lic_[0-9a-z]{16})$/)) && method === "PATCH") {
     const a = await need("admin");

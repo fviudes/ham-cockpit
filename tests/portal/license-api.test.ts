@@ -250,6 +250,13 @@ describe("admin: licenças", () => {
     const aud = await p.admin(s, "GET", "/api/admin/audit");
     const actions = aud.body.audit.map((a: { action: string }) => a.action);
     expect(actions).toContain("license_patch");
+
+    const del = await p.admin(s, "DELETE", `/api/admin/licenses/${lid}`);
+    expect(del.status).toBe(200);
+    expect((await p.admin(s, "GET", `/api/admin/licenses/${lid}`)).status).toBe(404);
+    expect((await p.admin(s, "GET", "/api/admin/licenses").then(r => r.body.items.find((x: { id: string }) => x.id === lid)))).toBeUndefined();
+    const aud2 = await p.admin(s, "GET", "/api/admin/audit");
+    expect(aud2.body.audit.map((a: { action: string }) => a.action)).toContain("license_delete");
   });
 });
 

@@ -366,6 +366,19 @@ export default function AdminPortalPage() {
     await refresh();
   };
 
+  const deleteLicense = async (l: LicRow) => {
+    if (!window.confirm(t(ADM.confirmDeleteLicense))) return;
+    setErr("");
+    const r = await api<{ message?: string }>(`/api/admin/licenses/${l.id}`, { method: "DELETE", csrf });
+    if (!r.ok) {
+      setErr(r.body.message || "Não foi possível excluir a licença.");
+      return;
+    }
+    if (editingLic?.id === l.id) setEditingLic(null);
+    if (expandedToken === l.id) setExpandedToken(null);
+    await refresh();
+  };
+
   const openCreateUser = () => {
     setEditingUser(null);
     setFormUsername("");
@@ -870,9 +883,14 @@ export default function AdminPortalPage() {
                               {formatLicensedAt(l.licensedAt ?? l.issuedAt)}
                             </td>
                             <td className="px-2 py-2">
-                              <button type="button" className={btnGhost} onClick={() => openEditLicense(l)}>
-                                {t(ADM.editLicense)}
-                              </button>
+                              <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap">
+                                <button type="button" className={btnGhost} onClick={() => openEditLicense(l)}>
+                                  {t(ADM.editLicense)}
+                                </button>
+                                <button type="button" className={btnGhost} onClick={() => void deleteLicense(l)}>
+                                  {t(ADM.deleteLicense)}
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );

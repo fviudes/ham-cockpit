@@ -138,6 +138,11 @@ export const ADM = {
   hideFull: { pt: "Ocultar", en: "Hide" } satisfies Pair,
   cancel: { pt: "Cancelar", en: "Cancel" } satisfies Pair,
   editLicense: { pt: "Editar", en: "Edit" } satisfies Pair,
+  deleteLicense: { pt: "Excluir", en: "Delete" } satisfies Pair,
+  confirmDeleteLicense: {
+    pt: "Excluir esta licença? O aparelho deixa de ter essa chave no portal. Esta ação não pode ser desfeita.",
+    en: "Delete this license? The device will no longer have this key in the portal. This cannot be undone.",
+  } satisfies Pair,
   type: { pt: "Tipo", en: "Type" } satisfies Pair,
   typeTrial: { pt: "Trial", en: "Trial" } satisfies Pair,
   typeDefinitive: { pt: "Definitiva", en: "Perpetual" } satisfies Pair,
