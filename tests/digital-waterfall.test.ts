@@ -175,6 +175,15 @@ describe("cascata no estilo do wide graph", () => {
     expect(Math.abs(dequantDb(quantizeDb(-40)) + 40)).toBeLessThan(1);
   });
 
+  it("o tile do grid preserva altura para a cascata em modo fill", () => {
+    const page = readFileSync(new URL("../client/src/console/digital-modes.tsx", import.meta.url), "utf8");
+    const board = readFileSync(new URL("../client/src/console/panel-board.tsx", import.meta.url), "utf8");
+    expect(board).toContain("h-full min-h-0 w-full flex-col");
+    expect(page).toContain("fill");
+    expect(page).toContain("getBoundingClientRect");
+    expect(page).toContain("absolute inset-0");
+  });
+
   it("sair da rota não apaga o log nem pede para desligar", () => {
     const page = readFileSync(new URL("../client/src/console/digital-modes.tsx", import.meta.url), "utf8");
     const rx = readFileSync(new URL("../server/digital-rx.ts", import.meta.url), "utf8");

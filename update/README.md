@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.12.06** (`version.json`).
+Versão atual neste canal: **0.1.12.07** (`version.json`).
 
 ## Versionamento
 
@@ -20,12 +20,12 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.12.06",
+  "version": "0.1.12.07",
   "channel": "main",
-  "file": "ham-cockpit-0.1.12.06.tgz",
-  "sha256": "d2e3086bd55d4937cfe347c272f2bf8b44cc3e1e95af34a6b34305c9bc472bcf",
-  "bytes": 5124998,
-  "notes": "Modos digitais: alça de arraste em todos os cards e conteúdo que acompanha o redimensionamento."
+  "file": "ham-cockpit-0.1.12.07.tgz",
+  "sha256": "3f678776440286258f45d908c75417b28fa8259a086e858ebc61986010040e7e",
+  "bytes": 5124978,
+  "notes": "Corrige cascata FT8 após layout digital: FitTile com altura do card e canvas em fill."
 }
 ```
 

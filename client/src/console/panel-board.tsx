@@ -66,7 +66,7 @@ export function FitTile({ children }: { children: ReactNode }) {
 
   return (
     <div ref={viewRef} className="h-full min-h-0 w-full overflow-hidden">
-      <div ref={innerRef} className="w-full">
+      <div ref={innerRef} className="flex h-full min-h-0 w-full flex-col">
         {children}
       </div>
     </div>

@@ -1505,9 +1505,10 @@ function Waterfall({
       const view = scroller.current;
       const node = canvas.current;
       const scale = scaleRef.current;
-      if (!view || !node) return;
-      const w = Math.max(1, Math.floor(view.clientWidth || 320));
-      const h = Math.max(1, Math.floor(view.clientHeight || 256));
+        if (!view || !node) return;
+        const box = view.getBoundingClientRect();
+        const w = Math.max(1, Math.floor(view.clientWidth || box.width || 320));
+        const h = Math.max(1, Math.floor(view.clientHeight || box.height || 256));
       node.width = w;
       node.height = h;
       const ctx = node.getContext("2d");
@@ -1596,7 +1597,7 @@ function Waterfall({
     const obs = new ResizeObserver(() => paintRef.current());
     if (box) obs.observe(box);
     return () => obs.disconnect();
-  }, [rows, start, end, gain, zero, flatten, spec, palette, rx, tx, emptyLabel]);
+  }, [rows, revision, start, end, gain, zero, flatten, spec, palette, rx, tx, emptyLabel, fill]);
 
   return (
     <div className={fill ? "flex min-h-0 flex-1 flex-col" : undefined}>
@@ -1609,13 +1610,13 @@ function Waterfall({
         data-step-ms={stepMs ?? ""}
         className={
           fill
-            ? "min-h-[120px] flex-1 overflow-hidden rounded-md border border-[rgba(79,195,247,0.14)] bg-[#03080d]"
+            ? "relative min-h-[120px] flex-1 overflow-hidden rounded-md border border-[rgba(79,195,247,0.14)] bg-[#03080d]"
             : "h-64 overflow-hidden rounded-md border border-[rgba(79,195,247,0.14)] bg-[#03080d]"
         }
       >
         <canvas
           ref={canvas}
-          className={fill ? "block h-full w-full" : "block h-64 w-full"}
+          className={fill ? "absolute inset-0 block h-full w-full" : "block h-64 w-full"}
           onClick={(e) => {
             const rect = e.currentTarget.getBoundingClientRect();
             const hz = start + ((e.clientX - rect.left) / Math.max(1, rect.width)) * Math.max(1, end - start);
