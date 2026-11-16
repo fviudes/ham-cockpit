@@ -935,35 +935,19 @@ export function StatusPage() {
           <TimeLine values={netRxSeries} max={netMax} color="#ffb300" tickFmt={(n) => formatBps(n)} overlay={netTxSeries} overlayColor="#60a5fa" />
         </Panel>
       </div>
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <Panel>
-          <PanelTitle>{tx("cpuTemp")}</PanelTitle>
-          <p className="mb-1 font-['IBM_Plex_Mono'] text-2xl text-[#f87171]">
-            {tempC == null ? "—" : `${tempC.toFixed(1)} °C`}
-          </p>
-          <p className="mb-2 text-[10px] tracking-wide text-[#8ea0b3] uppercase">{tx("last5min")}</p>
-          {/* -mx-5 cancela o padding do Panel: o traçado vai de uma borda à outra. */}
-          <div className="-mx-5">
-            <TimeLine flush values={tempSeries} max={85} color="#f87171" tickFmt={(n) => `${n}°`} />
-          </div>
-        </Panel>
-        <Panel>
-          <PanelTitle>{tx("disk")}</PanelTitle>
-          <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-            <DiskChart used={diskUsed} free={diskFree} usedLabel={tx("diskUsed")} freeLabel={tx("diskFree")} />
-            <div className="min-w-0 flex-1 space-y-2">
-              <Mini k={tx("diskTotal")} v={formatBytes(diskTotal)} />
-              <Mini k={tx("diskFree")} v={formatBytes(diskFree)} />
-              <Mini k={tx("diskUsed")} v={formatBytes(diskUsed)} />
-            </div>
-          </div>
-        </Panel>
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <Panel>
           <PanelTitle>{tx("diskIo")}</PanelTitle>
-          <p className="mb-1 font-['IBM_Plex_Mono'] text-2xl text-[#a78bfa]">
-            {diskRead == null && diskWrite == null
-              ? "—"
-              : `↓ ${formatBps(diskRead ?? 0)} · ↑ ${formatBps(diskWrite ?? 0)}`}
+          <p className="mb-1 font-['IBM_Plex_Mono'] text-2xl">
+            {diskRead == null && diskWrite == null ? (
+              "—"
+            ) : (
+              <>
+                <span className="text-[#a78bfa]">↓ {formatBps(diskRead ?? 0)}</span>
+                <span className="text-[#5d7184]"> · </span>
+                <span className="text-[#60a5fa]">↑ {formatBps(diskWrite ?? 0)}</span>
+              </>
+            )}
           </p>
           <p className="mb-2 text-[10px] tracking-wide text-[#8ea0b3] uppercase">{tx("last5min")}</p>
           <TimeLine
@@ -974,6 +958,28 @@ export function StatusPage() {
             overlay={diskWriteSeries}
             overlayColor="#60a5fa"
           />
+        </Panel>
+        <Panel>
+          <PanelTitle>{tx("cpuTemp")}</PanelTitle>
+          <p className="mb-1 font-['IBM_Plex_Mono'] text-2xl text-[#f87171]">
+            {tempC == null ? "—" : `${tempC.toFixed(1)} °C`}
+          </p>
+          <p className="mb-2 text-[10px] tracking-wide text-[#8ea0b3] uppercase">{tx("last5min")}</p>
+          <TimeLine values={tempSeries} max={85} color="#f87171" tickFmt={(n) => `${n}°`} />
+        </Panel>
+        <Panel>
+          <PanelTitle>{tx("disk")}</PanelTitle>
+          <p className="mb-1 font-['IBM_Plex_Mono'] text-2xl text-[#f59e0b]">
+            {diskTotal > 0
+              ? `${((diskUsed / diskTotal) * 100).toFixed(1)}% · ${formatBytes(diskUsed)} / ${formatBytes(diskTotal)}`
+              : "—"}
+          </p>
+          <p className="mb-2 text-[10px] tracking-wide text-[#8ea0b3] uppercase">
+            {tx("diskFree")}: {formatBytes(diskFree)}
+          </p>
+          <div className="flex h-28 items-center justify-center">
+            <DiskChart used={diskUsed} free={diskFree} usedLabel={tx("diskUsed")} freeLabel={tx("diskFree")} size="sm" />
+          </div>
         </Panel>
       </div>
       <Panel className="mt-4 overflow-hidden">
@@ -1292,11 +1298,13 @@ function DiskChart({
   free,
   usedLabel,
   freeLabel,
+  size = "md",
 }: {
   used: number;
   free: number;
   usedLabel: string;
   freeLabel: string;
+  size?: "sm" | "md";
 }) {
   const total = Math.max(0, used + free);
   const usedPct = total > 0 ? used / total : 0;
@@ -1306,8 +1314,9 @@ function DiskChart({
   const usedLen = usedPct * c;
   const freeLen = freePct * c;
   const usedPctLabel = total > 0 ? Math.round(usedPct * 100) : 0;
+  const box = size === "sm" ? "h-28 w-28" : "h-36 w-36";
   return (
-    <div className="relative mx-auto h-36 w-36 shrink-0">
+    <div className={`relative mx-auto shrink-0 ${box}`}>
       <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90" role="img" aria-label={`${usedLabel} / ${freeLabel}`}>
         <circle cx="60" cy="60" r={r} fill="none" stroke="#16232e" strokeWidth="14" />
         <circle

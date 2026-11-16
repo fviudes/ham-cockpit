@@ -1,8 +1,8 @@
 {
-  "version": "0.1.13.09",
+  "version": "0.1.13.10",
   "channel": "main",
-  "file": "ham-cockpit-0.1.13.09.tgz",
-  "sha256": "73a5ccf215fb6ef254d8f8341cc73f79536a04dd768f063d67f4379ec770f5dd",
-  "bytes": 5130418,
-  "notes": "Ham Cockpit v0.1.13.09 — Status I/O disco; Pi 8GB RAM/cache; waterfall largura CI-V; S-meter 20 FPS; PC Audio idle; chips serviço; áudio zero CPU OFF."
+  "file": "ham-cockpit-0.1.13.10.tgz",
+  "sha256": "5d4d09f09d7c9aaa541943ba84541dc54c9ab65c71be467b86acf587b6ed35a6",
+  "bytes": 5130720,
+  "notes": "Ham Cockpit v0.1.13.10 — Status: ordem Disco I/O · temperatura · disco; cores leitura/gravação no card Disco I/O."
 }

@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.13.08** (`version.json`).
+Versão atual neste canal: **0.1.13.10** (`version.json`).
 
 ## Versionamento
 
@@ -22,12 +22,12 @@ Cada pacote OTA é **cumulativo**: substitui o console inteiro. Basta aplicar a 
 
 ```json
 {
-  "version": "0.1.13.08",
+  "version": "0.1.13.10",
   "channel": "main",
-  "file": "ham-cockpit-0.1.13.08.tgz",
-  "sha256": "764c59986f1bc4e3679e6cabda3258ee34269cf77bed9deec8c7af519b586fa5",
-  "bytes": 5129045,
-  "notes": "Ham Cockpit v0.1.13.08 — waterfall: barra de frequências com o mesmo fundo/ink do eixo tempo (BAR_FILL), overlay Aguardando só após 3 s."
+  "file": "ham-cockpit-0.1.13.10.tgz",
+  "sha256": "5d4d09f09d7c9aaa541943ba84541dc54c9ab65c71be467b86acf587b6ed35a6",
+  "bytes": 5130720,
+  "notes": "Ham Cockpit v0.1.13.10 — Status: ordem Disco I/O · temperatura · disco; cores leitura/gravação no card Disco I/O."
 }
 ```
 
