@@ -184,9 +184,9 @@ def emit(pct):
 def beat():
     while not stop:
         elapsed = time.time() - t0
-        # Assíntota em 0.99 da faixa (não 0.97) — hooks longos passam de 85/93.
-        frac = 1 - pow(2, -elapsed / max(eta, 1.5))
-        emit(lo + (hi - lo) * min(0.99, frac))
+        # Rampa até 90% da faixa no ETA; o restante só nos emits explícitos pós-comando.
+        frac = min(0.90, elapsed / max(eta, 1.5))
+        emit(lo + (hi - lo) * frac)
         time.sleep(0.4)
 
 th = threading.Thread(target=beat, daemon=True)
@@ -231,7 +231,7 @@ with urllib.request.urlopen(req, timeout=120) as r, open(dest, "wb") as out:
             eta = int((total - n) / rate) if rate > 0 else 0
         else:
             # Sem Content-Length: sobe em curva até hi, ETA pela taxa recente.
-            frac = min(0.97, 1 - pow(2, -n / (12 * 1024 * 1024)))
+            frac = min(0.99, 1 - pow(2, -n / (12 * 1024 * 1024)))
             eta = int(max(8, (12 * 1024 * 1024 - n) / rate)) if rate > 0 else 20
         pct = int(lo + (hi - lo) * frac)
         print(
@@ -510,14 +510,15 @@ apply_app() {
       cp -a "$APP_HOME/mmdvm/$_ini" "$APP_HOME/mmdvm/${_ini}.ota-bak" || true
     fi
   done
-  # Hooks (único lugar): faixa 78→98 para a UI não “travar” em 85/93.
+  # Hooks: heartbeat só até 92%; 93–100 são marcos explícitos (evita UI presa em ~97%).
   if [[ -x "$APP_HOME/ota-hooks.sh" ]]; then
     emit_progress app 78 hooks 1
-    if ! run_with_heartbeat app hooks 78 98 45 bash "$APP_HOME/ota-hooks.sh"; then
+    if ! run_with_heartbeat app hooks 78 92 45 bash "$APP_HOME/ota-hooks.sh"; then
       echo "ota-hooks.sh falhou — VERSION não avançada (reaplicável)" >&2
       return 1
     fi
   fi
+  emit_progress app 94 finalize 1
   # Commit atômico da versão só após apply bem-sucedido.
   if [[ -f "$src/versions.json" ]]; then
     cp -a "$src/versions.json" "$APP_HOME/versions.json"
@@ -539,6 +540,7 @@ apply_app() {
     chown root:root "$APP_HOME/bin/station-upd" 2>/dev/null || true
     chmod 0755 "$APP_HOME/bin/station-upd"
   fi
+  emit_progress app 97 finalize 1
   emit_progress app 99 restart 1
   NEED_CONSOLE_RESTART=1
   emit_progress app 100 done 1

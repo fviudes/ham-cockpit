@@ -22,6 +22,9 @@ export type ProcessUnit = {
   active: string;
   sub: string;
   description: string;
+  cpuPct: number | null;
+  memPct: number | null;
+  memBytes: number | null;
 };
 
 export type ProcessList = {
@@ -64,6 +67,11 @@ async function listRunningRaw(): Promise<string> {
   return run("systemctl", ["list-units", "--type=service", "--state=running", "--no-pager", "--output=json"], 12_000);
 }
 
+function finiteNum(v: unknown): number | null {
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  return v;
+}
+
 function parseUnits(raw: string): ProcessUnit[] {
   const start = raw.indexOf("[");
   if (start < 0) throw new Error("resposta do systemctl sem JSON");
@@ -72,17 +80,41 @@ function parseUnits(raw: string): ProcessUnit[] {
   const items: ProcessUnit[] = [];
   for (const row of data) {
     if (!row || typeof row !== "object") continue;
-    const rec = row as { unit?: unknown; active?: unknown; sub?: unknown; description?: unknown };
+    const rec = row as {
+      unit?: unknown;
+      active?: unknown;
+      sub?: unknown;
+      description?: unknown;
+      cpuPct?: unknown;
+      memPct?: unknown;
+      memBytes?: unknown;
+    };
     const unit = typeof rec.unit === "string" ? rec.unit : "";
     if (!validServiceUnit(unit)) continue;
     const active = typeof rec.active === "string" ? rec.active : "";
     const sub = typeof rec.sub === "string" ? rec.sub : "";
     if (active === "inactive" || active === "failed" || sub === "dead" || sub === "failed" || sub === "exited") continue;
     const description = typeof rec.description === "string" ? rec.description.replace(/\s+/g, " ").trim().slice(0, 180) : "";
-    items.push({ unit, active: active || "active", sub: sub || "running", description });
+    const cpuPct = finiteNum(rec.cpuPct);
+    const memPct = finiteNum(rec.memPct);
+    const memBytesRaw = finiteNum(rec.memBytes);
+    items.push({
+      unit,
+      active: active || "active",
+      sub: sub || "running",
+      description,
+      cpuPct: cpuPct != null ? Math.round(cpuPct * 10) / 10 : null,
+      memPct: memPct != null ? Math.round(memPct * 10) / 10 : null,
+      memBytes: memBytesRaw != null ? Math.max(0, Math.round(memBytesRaw)) : null,
+    });
   }
   items.sort((a, b) => a.unit.localeCompare(b.unit));
   return items;
+}
+
+/** Testável: mesma lógica de parse do helper em campo. */
+export function parseProcessUnitsJson(raw: string): ProcessUnit[] {
+  return parseUnits(raw);
 }
 
 export async function processesList(): Promise<ProcessList> {

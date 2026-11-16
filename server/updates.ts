@@ -50,6 +50,7 @@ export type UpdateJob = {
   bytes: number;
   totalBytes: number;
   etaSec: number;
+  doneSeen: boolean;
 };
 
 export type UpdateItem = {
@@ -427,10 +428,19 @@ function ingestProgress(id: UpdateId, text: string) {
       if (typeof j.bytes === "number" && Number.isFinite(j.bytes)) job.bytes = Math.max(0, Math.round(j.bytes));
       if (typeof j.totalBytes === "number" && Number.isFinite(j.totalBytes)) job.totalBytes = Math.max(0, Math.round(j.totalBytes));
       if (typeof j.etaSec === "number" && Number.isFinite(j.etaSec)) job.etaSec = Math.max(0, Math.round(j.etaSec));
+      if (typeof j.pct === "number" && j.pct >= 100 && j.stage === "done") job.doneSeen = true;
     } catch {
       /* ignore */
     }
   }
+}
+
+/** Testável: extrai o JSON final do stdout do station-upd. */
+export function lastJsonObject(text: string): string {
+  const start = text.lastIndexOf('{"ok"');
+  if (start >= 0) return text.slice(start);
+  const alt = text.lastIndexOf("{");
+  return alt >= 0 ? text.slice(alt) : text;
 }
 
 /**
@@ -491,13 +501,6 @@ export async function updatesRefresh(): Promise<UpdatesSnapshot> {
   return runCheck("refresh");
 }
 
-function lastJsonObject(text: string): string {
-  const start = text.lastIndexOf('{"ok"');
-  if (start >= 0) return text.slice(start);
-  const alt = text.lastIndexOf("{");
-  return alt >= 0 ? text.slice(alt) : text;
-}
-
 function spawnApply(sid: UpdateId): Promise<UpdatesSnapshot> {
   const bin = helperPath();
   const job: UpdateJob = {
@@ -510,6 +513,7 @@ function spawnApply(sid: UpdateId): Promise<UpdatesSnapshot> {
     bytes: 0,
     totalBytes: 0,
     etaSec: 0,
+    doneSeen: false,
   };
   jobs.set(sid, job);
   return new Promise((resolve) => {
@@ -539,13 +543,16 @@ function spawnApply(sid: UpdateId): Promise<UpdatesSnapshot> {
           .filter((l) => l.trim() && !l.includes("HC_PROGRESS "))
           .slice(-8)
           .join("\n");
-      if (code === 0 && parsed) {
+      const finishedOk = job.doneSeen || (code === 0 && Boolean(parsed));
+      if (finishedOk) {
         job.status = "ok";
         job.pct = 100;
         job.determinate = true;
         job.stage = "done";
         job.error = "";
-        const over = applyRemotes(parsed, await fetchRemotes());
+        job.doneSeen = true;
+        const rem = await fetchRemotes(true);
+        const over = applyRemotes(parsed ?? cache?.snap ?? baseline(), rem);
         // Mantém 100% no poll por alguns segundos (restart do console apaga a memória).
         cache = {
           at: Date.now(),
@@ -559,6 +566,7 @@ function spawnApply(sid: UpdateId): Promise<UpdatesSnapshot> {
                     stage: "done",
                     determinate: true,
                     updatable: false,
+                    current: sid === "app" ? appCurrent() || row.current : row.current,
                   }
                 : row,
             ),
@@ -634,6 +642,7 @@ export async function updatesApply(id: string): Promise<UpdatesSnapshot> {
       bytes: 0,
       totalBytes: 0,
       etaSec: 0,
+      doneSeen: false,
     });
     const run = applyChain.then(() => spawnApply(sid));
     applyChain = run.then(

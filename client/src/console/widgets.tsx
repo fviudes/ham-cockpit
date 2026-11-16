@@ -397,6 +397,7 @@ const UPD_STAGE: Record<string, I18nKey> = {
   download: "updStageDownload",
   install: "updStageInstall",
   hooks: "updStageHooks",
+  finalize: "updStageFinalize",
   restart: "updStageRestart",
   done: "updStageDone",
   error: "updFail",

@@ -9,7 +9,34 @@ type ProcRow = {
   active: string;
   sub: string;
   description: string;
+  cpuPct?: number | null;
+  memPct?: number | null;
+  memBytes?: number | null;
 };
+
+function fmtCpu(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  return `${v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+}
+
+function fmtMem(row: ProcRow): string {
+  const pct = row.memPct;
+  const bytes = row.memBytes;
+  if (pct != null && Number.isFinite(pct)) {
+    const base = `${pct.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+    if (bytes != null && bytes > 0) return `${base} · ${fmtBytes(bytes)}`;
+    return base;
+  }
+  if (bytes != null && bytes > 0) return fmtBytes(bytes);
+  return "—";
+}
+
+function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} KiB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} MiB`;
+  return `${(n / (1024 * 1024 * 1024)).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} GiB`;
+}
 
 type ProcList = {
   ok?: boolean;
@@ -167,9 +194,11 @@ export function ProcessesPage({ embedded = false }: { embedded?: boolean }) {
         ) : null}
         {items.length > 0 ? (
           <div className="divide-y divide-[rgba(79,195,247,0.08)]">
-            <div className="hidden grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_auto] gap-3 pb-2 font-['IBM_Plex_Mono'] text-[10px] tracking-[0.14em] text-[#5d7184] uppercase sm:grid">
+            <div className="hidden grid-cols-[minmax(0,1.2fr)_minmax(0,0.55fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_auto] gap-3 pb-2 font-['IBM_Plex_Mono'] text-[10px] tracking-[0.14em] text-[#5d7184] uppercase sm:grid">
               <span>{tx("procColUnit")}</span>
               <span>{tx("procColState")}</span>
+              <span>{tx("procColCpu")}</span>
+              <span>{tx("procColMem")}</span>
               <span />
             </div>
             {items.map((row) => {
@@ -178,18 +207,23 @@ export function ProcessesPage({ embedded = false }: { embedded?: boolean }) {
               return (
                 <div
                   key={row.unit}
-                  className="grid gap-3 py-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)_auto] sm:items-center"
+                  className="grid gap-3 py-3 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,0.55fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_auto] sm:items-center"
                 >
                   <div className="min-w-0">
                     <p className="truncate font-['IBM_Plex_Mono'] text-sm font-semibold text-white">{row.unit}</p>
                     {row.description ? <p className="truncate text-xs text-[#8ea0b3]">{row.description}</p> : null}
                     {isConsoleUnit(row.unit) ? <p className="mt-1 text-xs text-[#ffb300]">{tx("procSelfHint")}</p> : null}
+                    <p className="mt-1 font-['IBM_Plex_Mono'] text-[11px] text-[#5d7184] sm:hidden">
+                      {tx("procColCpu")}: {fmtCpu(row.cpuPct)} · {tx("procColMem")}: {fmtMem(row)}
+                    </p>
                   </div>
                   <div>
                     <Chip active={row.sub === "running" || row.active === "active"} tone={row.sub === "running" ? "ok" : "cyan"}>
                       {state}
                     </Chip>
                   </div>
+                  <div className="hidden font-['IBM_Plex_Mono'] text-xs text-[#c5d4e3] sm:block">{fmtCpu(row.cpuPct)}</div>
+                  <div className="hidden font-['IBM_Plex_Mono'] text-xs text-[#c5d4e3] sm:block">{fmtMem(row)}</div>
                   <div className="flex flex-wrap gap-2">
                     <GhostBtn danger disabled={locked} onClick={() => void act(row.unit, "stop")}>
                       {rowBusy && busy?.startsWith("stop:") ? "…" : tx("procStop")}

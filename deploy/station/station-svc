@@ -87,7 +87,81 @@ valid_service_unit() {
 }
 
 if [[ "$cmd" == "list-running" ]]; then
-  systemctl list-units --type=service --state=running --no-pager --output=json
+  python3 - <<'PY'
+import json, subprocess, sys
+
+def num(s):
+    s = (s or "").strip()
+    try:
+        return float(s) if s and s not in ("-", "[not set]") else None
+    except ValueError:
+        return None
+
+def main_pid(unit: str) -> int:
+    raw = subprocess.check_output(
+        ["systemctl", "show", unit, "-p", "MainPID", "--value"], text=True, stderr=subprocess.DEVNULL
+    ).strip()
+    try:
+        return int(raw or "0")
+    except ValueError:
+        return 0
+
+def cgroup_mem(unit: str) -> int | None:
+    raw = subprocess.check_output(
+        ["systemctl", "show", unit, "-p", "MemoryCurrent", "--value"],
+        text=True,
+        stderr=subprocess.DEVNULL,
+    ).strip()
+    n = num(raw)
+    return int(n) if n is not None and n >= 0 else None
+
+def ps_stats(pid: int) -> tuple[float | None, float | None, int | None]:
+    if pid <= 0:
+        return None, None, None
+    try:
+        out = subprocess.check_output(
+            ["ps", "-p", str(pid), "-o", "%cpu=", "%mem=", "rss="],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None, None, None
+    parts = out.split()
+    if len(parts) < 3:
+        return None, None, None
+    cpu = num(parts[0])
+    mem_pct = num(parts[1])
+    rss = num(parts[2])
+    rss_kb = int(rss) if rss is not None else None
+    return cpu, mem_pct, rss_kb
+
+raw = subprocess.check_output(
+    ["systemctl", "list-units", "--type=service", "--state=running", "--no-pager", "--output=json"],
+    text=True,
+)
+units = json.loads(raw or "[]")
+out = []
+for row in units:
+    if not isinstance(row, dict):
+        continue
+    unit = str(row.get("unit") or "")
+    if not unit:
+        continue
+    pid = main_pid(unit)
+    cpu, mem_pct, rss_kb = ps_stats(pid)
+    mem_bytes = cgroup_mem(unit)
+    if mem_bytes is None and rss_kb is not None:
+        mem_bytes = rss_kb * 1024
+    item = dict(row)
+    if cpu is not None:
+        item["cpuPct"] = round(cpu, 1)
+    if mem_pct is not None:
+        item["memPct"] = round(mem_pct, 1)
+    if mem_bytes is not None:
+        item["memBytes"] = int(mem_bytes)
+    out.append(item)
+json.dump(out, sys.stdout)
+PY
   exit 0
 fi
 
