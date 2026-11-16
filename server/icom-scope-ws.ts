@@ -22,6 +22,8 @@ import { consoleSessionOk } from "./console-session";
 import { subscribeScopeFrame } from "./icom-scope-hub";
 import { icomLanCmd } from "./icom-lan";
 import { currentSerialHamlib } from "./radios";
+import { broadcastScopeSweeps, forgetScopeClient, flushScopePending } from "./scope-broadcast";
+import { tryWsSendText } from "./ws-backpressure";
 
 const attached = new WeakSet<Server>();
 const lanAsm = new ScopeAssembler();
@@ -49,7 +51,7 @@ function askScopeCenter(via: "serial" | "lan", span = false, spanHz?: number) {
 }
 
 function sendJson(ws: WebSocket, body: unknown) {
-  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(body));
+  tryWsSendText(ws, JSON.stringify(body));
 }
 
 type ScopeAsk = { kind: "center" } | { kind: "span"; spanHz?: number };
@@ -68,14 +70,7 @@ function readScopeAsk(data: unknown): ScopeAsk | null {
 }
 
 function broadcast(group: Set<WebSocket>, sweep: ScopeSweep) {
-  const body = {
-    type: "sweep",
-    startHz: sweep.startHz,
-    endHz: sweep.endHz,
-    mode: sweep.mode,
-    bins: Array.from(sweep.bins),
-  };
-  for (const ws of group) sendJson(ws, body);
+  broadcastScopeSweeps(group, sweep);
 }
 
 async function setLanScope(on: boolean) {
@@ -173,10 +168,12 @@ async function bind(ws: WebSocket, via: string) {
       });
     }
     ws.on("message", (data) => {
+      flushScopePending(ws);
       const ask = readScopeAsk(data);
       if (ask) askScopeCenter("serial", ask.kind === "span", ask.kind === "span" ? ask.spanHz : undefined);
     });
     ws.on("close", () => {
+      forgetScopeClient(ws);
       serialClients.delete(ws);
       if (serialClients.size === 0) void setSerialScope(false);
     });
@@ -188,10 +185,12 @@ async function bind(ws: WebSocket, via: string) {
   if (!result.ok) sendJson(ws, { type: "error", reason: "lan" });
   else sendJson(ws, { type: "ready", via: "lan" });
   ws.on("message", (data) => {
+    flushScopePending(ws);
     const ask = readScopeAsk(data);
     if (ask) askScopeCenter("lan", ask.kind === "span", ask.kind === "span" ? ask.spanHz : undefined);
   });
   ws.on("close", () => {
+    forgetScopeClient(ws);
     lanClients.delete(ws);
     if (lanClients.size === 0) void setLanScope(false);
   });

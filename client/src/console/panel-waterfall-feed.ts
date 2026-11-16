@@ -1,4 +1,4 @@
-import { normalizeScopeSpan, type ScopeSweep } from "@shared/icom-scope";
+import { decodeScopeBins, normalizeScopeSpan, type ScopeSweep } from "@shared/icom-scope";
 import { ic705Ble } from "./ic705-ble";
 import { subscribeScope } from "./scope-bus";
 import {
@@ -185,6 +185,7 @@ export function syncPanelWaterfallFeed(opts: FeedOpts) {
         if (scopeWs === socket) scopeWs = null;
       });
       socket.addEventListener("message", (event) => {
+        if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
         if (typeof event.data !== "string") return;
         try {
           const body = JSON.parse(event.data) as {
@@ -193,19 +194,21 @@ export function syncPanelWaterfallFeed(opts: FeedOpts) {
             endHz?: number;
             mode?: number;
             bins?: number[];
+            binsB64?: string;
           };
           if (body.type === "error") {
             serialFail = true;
             emit();
             return;
           }
-          if (body.type !== "sweep" || !Array.isArray(body.bins)) return;
+          const bins = body.type === "sweep" ? decodeScopeBins(body) : null;
+          if (!bins) return;
           push(
             {
               startHz: Number(body.startHz) || 0,
               endHz: Number(body.endHz) || 0,
               mode: Number(body.mode) || 0,
-              bins: Uint8Array.from(body.bins),
+              bins,
               oor: false,
             },
             true,

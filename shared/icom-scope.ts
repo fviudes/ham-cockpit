@@ -135,6 +135,19 @@ export type ScopeSweep = {
   oor: boolean;
 };
 
+/** Wire `binsB64` (servidor) ou legado `bins: number[]`. */
+export function decodeScopeBins(body: { binsB64?: string; bins?: number[] }): Uint8Array | null {
+  if (typeof body.binsB64 === "string" && body.binsB64.length > 0) {
+    if (typeof Buffer !== "undefined") return Uint8Array.from(Buffer.from(body.binsB64, "base64"));
+    const bin = atob(body.binsB64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  if (Array.isArray(body.bins) && body.bins.length > 0) return Uint8Array.from(body.bins);
+  return null;
+}
+
 const BINS = 689;
 
 export function isScopeWaveform(frame: Uint8Array): boolean {

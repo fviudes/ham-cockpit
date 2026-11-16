@@ -14,6 +14,7 @@ import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
 import { pickAlsaCapture } from "../shared/pc-audio";
 import { consoleSessionOk } from "./console-session";
+import { tryWsSendBinary, tryWsSendText } from "./ws-backpressure";
 
 const attached = new WeakSet<Server>();
 let capture: ChildProcess | null = null;
@@ -47,7 +48,7 @@ function arecordBin(): string {
 }
 
 function sendJson(ws: WebSocket, body: unknown) {
-  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(body));
+  tryWsSendText(ws, JSON.stringify(body));
 }
 
 function killChild() {
@@ -107,9 +108,9 @@ function releaseStaleCapture() {
 
 function fanPcm(chunk: Buffer) {
   pcmSink?.(chunk);
-  if (captureOwner && captureOwner.readyState === WebSocket.OPEN) captureOwner.send(chunk);
+  if (captureOwner && captureOwner.readyState === WebSocket.OPEN) tryWsSendBinary(captureOwner, chunk);
   for (const ws of taps) {
-    if (ws.readyState === WebSocket.OPEN) ws.send(chunk);
+    if (ws.readyState === WebSocket.OPEN) tryWsSendBinary(ws, chunk);
   }
 }
 

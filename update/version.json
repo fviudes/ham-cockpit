@@ -1,8 +1,8 @@
 {
-  "version": "0.1.13.04",
+  "version": "0.1.13.05",
   "channel": "main",
-  "file": "ham-cockpit-0.1.13.04.tgz",
-  "sha256": "5fff0076f8201c230bd64d9a6659fdebab0a0cfea914c6251ff1ce794ed4b73b",
-  "bytes": 5126693,
-  "notes": "Ham Cockpit v0.1.13.04 — OTA cumulativo: pausa scope/waterfall/S-meter com aba oculta, menos re-render no waterfall; período FT8 em 00.0/15; inclui 0.1.13.03 (S-meter ~30 Hz, EMA)."
+  "file": "ham-cockpit-0.1.13.05.tgz",
+  "sha256": "9c6a2c7838e17134f08e432c83a5a7d3123afc0be7b16d37e0990b2100dea5cb",
+  "bytes": 5127665,
+  "notes": "Ham Cockpit v0.1.13.05 — OTA cumulativo: backpressure WebSocket (drop/coalesce), scope 12 Hz com binsB64, cache S-meter 28 ms, poll Hamlib pausa com aba oculta; menos Recv-Q e CPU."
 }

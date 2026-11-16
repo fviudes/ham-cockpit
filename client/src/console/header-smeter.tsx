@@ -160,6 +160,10 @@ function useLiveSmeter(live: boolean): number | null {
     let stopped = false;
     const run = async () => {
       while (!stopped) {
+        if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+          await new Promise((resolve) => window.setTimeout(resolve, 500));
+          continue;
+        }
         let result: Awaited<ReturnType<typeof pollPrimarySmeter>> = null;
         try {
           result = await pollPrimarySmeter(radiosRef.current, {

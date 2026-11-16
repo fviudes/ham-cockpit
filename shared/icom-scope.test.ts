@@ -11,6 +11,7 @@ import {
   scopeOutputStale,
   scopePayload,
   scopeRadioWoke,
+  decodeScopeBins,
   scopeSwitchFrames,
 } from "./icom-scope";
 
@@ -150,5 +151,15 @@ describe("scope CI-V 0x27", () => {
     expect(isScopeWaveform(frame)).toBe(true);
     expect(Array.from(scopePayload(frame) ?? [])).toEqual([0x00, 0x00, 0x01, 0x01]);
     expect(isScopeWaveform(Uint8Array.from([0xfe, 0xfe, 0xe0, 0xa4, 0x27, 0x10, 0x01, 0xfd]))).toBe(false);
+  });
+});
+
+describe("decodeScopeBins", () => {
+  it("aceita binsB64 e legado number[]", () => {
+    const raw = Uint8Array.from([1, 2, 3]);
+    const b64 = Buffer.from(raw).toString("base64");
+    expect(decodeScopeBins({ binsB64: b64 })?.join(",")).toBe("1,2,3");
+    expect(decodeScopeBins({ bins: [4, 5] })?.join(",")).toBe("4,5");
+    expect(decodeScopeBins({})).toBeNull();
   });
 });

@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import { IcomControl, type IcomMode, type IcomModelId } from "icom-wlan-node";
 import { isScopeWaveform, scopeSpanData } from "../shared/icom-scope";
 import { bcdMeterRaw, civRawToUiSMeter } from "../shared/smeter";
+import { readSmeterCache, writeSmeterCache } from "./smeter-cache";
 import { publishScopeFrame } from "./icom-scope-hub";
 
 const execFileAsync = promisify(execFile);
@@ -469,7 +470,12 @@ export async function icomLanCmd(
 ): Promise<{ ok: boolean; error?: string; reply?: unknown }> {
   if (cmd === "smeter") {
     if (!rig || phase !== "ready") return { ok: true, reply: { skipped: true } };
-    return { ok: true, reply: await readLanSmeter() };
+    const key = "lan-smeter";
+    const hit = readSmeterCache<{ smeter?: number; skipped?: boolean }>(key);
+    if (hit) return { ok: true, reply: hit };
+    const reply = await readLanSmeter();
+    writeSmeterCache(key, reply);
+    return { ok: true, reply };
   }
   if (!rig || phase !== "ready") {
     return { ok: false, error: "Icom LAN não conectado" };

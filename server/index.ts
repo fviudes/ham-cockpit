@@ -13,6 +13,7 @@ import { decodeSlot } from "./digital-decode";
 import { digitalRxCommand, digitalRxSnapshot, digitalWaterfallSince } from "./digital-rx";
 import { haltDigitalTx, scheduleDigitalTx, txSnapshot } from "./digital-tx";
 import { attachScopeWs } from "./icom-scope-ws";
+import { readSmeterCache, smeterCacheKey, writeSmeterCache } from "./smeter-cache";
 import { attachTerminal } from "./term";
 import { createUser, deleteUser, listUsers, sshStatus } from "./users";
 import {
@@ -551,7 +552,14 @@ async function startServer() {
         res.status(200).json({ ok: false, reply: "", error: "porta inválida" });
         return;
       }
+      const key = smeterCacheKey({ host, port, t: "hamlib" });
+      const hit = readSmeterCache<{ ok: boolean; reply: string; error?: string }>(key);
+      if (hit) {
+        res.status(200).json(hit);
+        return;
+      }
       const out = await hubRigctl(port, "\\get_level STRENGTH", host, 200);
+      writeSmeterCache(key, out);
       res.status(200).json(out);
     } catch (err) {
       res.status(200).json({ ok: false, reply: "", error: String(err) });
