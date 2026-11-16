@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.13.06** (`version.json`).
+Versão atual neste canal: **0.1.13.07** (`version.json`).
 
 ## Versionamento
 
@@ -22,11 +22,11 @@ Cada pacote OTA é **cumulativo**: substitui o console inteiro. Basta aplicar a 
 
 ```json
 {
-  "version": "0.1.13.06",
+  "version": "0.1.13.07",
   "channel": "main",
-  "file": "ham-cockpit-0.1.13.06.tgz",
-  "sha256": "04db2eb8b60fe6ffccd0efad3dbaa6475b104f14aeeb854b2f90882dd3632502",
-  "bytes": 5127858,
+  "file": "ham-cockpit-0.1.13.07.tgz",
+  "sha256": "2304830b1bfd8cac97394574dd1852629a28566dfcf55e0183b98404e0ef7a40",
+  "bytes": 5128221,
   "notes": "Ham Cockpit v0.1.13.06 — corrige waterfall do painel RF: cliente decodifica binsB64 do scope WebSocket; feed não derruba ao trocar de aba (backpressure 12 Hz mantido)."
 }
 ```

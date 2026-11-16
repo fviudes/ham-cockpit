@@ -30,6 +30,8 @@ describe("tap CI-V do painel", () => {
     expect(src).toMatch(/const frames = scopeTx\(tap, on\)/);
     expect(src).toContain("sendFrames(tap, frames)");
     expect(src).toContain("if (outputWanted) applyScopeOutput(true, true)");
+    expect(src).toContain("connectUp(state)");
+    expect(src).toContain("ensureRigctldOnTap");
   });
 });
 

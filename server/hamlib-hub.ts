@@ -691,6 +691,11 @@ export function hubRigctl(
         resolve({ ok: false, reply: "", error: "ocupado" });
         return;
       }
+      // Poll f/m antigo no fio não segura o dB na fila.
+      if (lane.current && isPollCommand(lane.current.command) && !isSmeterPoll(lane.current.command)) {
+        const age = lane.currentSince ? Date.now() - lane.currentSince : 0;
+        if (age >= 120) preemptStalePoll(lane);
+      }
     }
     const admission = rigCommandAdmission(
       cmd,

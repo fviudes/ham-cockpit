@@ -28,8 +28,11 @@ let serialFail = false;
 let live = false;
 let listeners = new Set<() => void>();
 let activeKey = "";
+let activeOpts: FeedOpts | null = null;
 let stopFeed: (() => void) | null = null;
 let scopeWs: WebSocket | null = null;
+let scopeReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let lastSweepAt = 0;
 let historySec = PANEL_HISTORY_SEC_DEFAULT;
 let spanHz = PANEL_SPAN_HZ;
 
@@ -59,7 +62,26 @@ function pushRow(sweep: ScopeSweep, rf: boolean, tuneHz: number, spanHz: number)
   pruneRows(Date.now());
   gen += 1;
   live = true;
+  lastSweepAt = tuned.at;
   emit();
+}
+
+function clearScopeReconnect() {
+  if (scopeReconnectTimer) {
+    clearTimeout(scopeReconnectTimer);
+    scopeReconnectTimer = null;
+  }
+}
+
+function scheduleScopeReconnect() {
+  if (!activeOpts || scopeReconnectTimer) return;
+  const feed = activeOpts.feed;
+  if (feed !== "lan" && feed !== "serial") return;
+  scopeReconnectTimer = window.setTimeout(() => {
+    scopeReconnectTimer = null;
+    if (!activeOpts || activeOpts.feed !== feed) return;
+    syncPanelWaterfallFeed(activeOpts);
+  }, 1500);
 }
 
 export function panelWaterfallSubscribe(fn: () => void) {
@@ -108,10 +130,12 @@ export function syncPanelWaterfallFeed(opts: FeedOpts) {
   const key = `${opts.feed}|${opts.rfScope}|${opts.via}`;
   spanHz = opts.getSpanHz();
   if (key === activeKey && stopFeed) return;
+  clearScopeReconnect();
   stopFeed?.();
   stopFeed = null;
   scopeWs = null;
   activeKey = key;
+  activeOpts = opts;
   serialFail = false;
 
   if (opts.feed === "off") {
@@ -179,13 +203,16 @@ export function syncPanelWaterfallFeed(opts: FeedOpts) {
     }
     if (socket) {
       socket.addEventListener("open", () => {
+        serialFail = false;
         socket?.send(JSON.stringify({ type: "span", spanHz: normalizeScopeSpan(opts.getSpanHz()) }));
       });
       socket.addEventListener("close", () => {
         if (scopeWs === socket) scopeWs = null;
+        live = false;
+        emit();
+        scheduleScopeReconnect();
       });
       socket.addEventListener("message", (event) => {
-        if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
         if (typeof event.data !== "string") return;
         try {
           const body = JSON.parse(event.data) as {
@@ -229,8 +256,26 @@ export function syncPanelWaterfallFeed(opts: FeedOpts) {
 }
 
 export function stopPanelWaterfallFeed() {
+  clearScopeReconnect();
   stopFeed?.();
   stopFeed = null;
   scopeWs = null;
   activeKey = "";
+  activeOpts = null;
+}
+
+/** Reabre o feed LAN/serial quando o scope some sem cair o WebSocket. */
+export function panelWaterfallKickIfStale(maxMs = 4500) {
+  const opts = activeOpts;
+  if (!opts || !stopFeed) return;
+  if (opts.feed !== "lan" && opts.feed !== "serial") return;
+  const now = Date.now();
+  if (lastSweepAt > 0 && now - lastSweepAt < maxMs) return;
+  if (lastSweepAt === 0 && now - (scopeWs ? 0 : maxMs) < maxMs && live) return;
+  clearScopeReconnect();
+  stopFeed();
+  stopFeed = null;
+  scopeWs = null;
+  activeKey = "";
+  syncPanelWaterfallFeed(opts);
 }

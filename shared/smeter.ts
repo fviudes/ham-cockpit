@@ -64,9 +64,9 @@ export function nextSmeterWaitMs(result: number | null | false): number {
   return SMETER_BUSY_MS;
 }
 
-/** Subida: ~85% do salto em um quadro de 33 ms (quase imediato). */
-export const SMETER_TAU_ATTACK_MS = 18;
-/** Descida: mais lenta para não tremer em ruído de medição. */
+/** Subida: mesma ideia da descida — EMA contínua, sem salto de um quadro. */
+export const SMETER_TAU_ATTACK_MS = 72;
+/** Descida: um pouco mais lenta que a subida para não tremer em ruído. */
 export const SMETER_TAU_DECAY_MS = 95;
 /** Legado nos testes que citam uma única τ. */
 export const SMETER_TAU_MS = SMETER_TAU_ATTACK_MS;

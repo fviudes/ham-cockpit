@@ -64,16 +64,16 @@ describe("S-meter rápido", () => {
   it("um quadro não fecha o salto e a subida é mais rápida que a descida", () => {
     const up = stepSmeter(0, 9, SMETER_FRAME_MS);
     const down = stepSmeter(9, 0, SMETER_FRAME_MS);
-    expect(up).toBeGreaterThan(5);
-    expect(up).toBeLessThan(9);
+    expect(up).toBeGreaterThan(0.8);
+    expect(up).toBeLessThan(5);
     expect(up).toBeGreaterThan(9 - down);
     let risen = 0;
-    for (let i = 0; i < 4; i++) risen = stepSmeter(risen, 9, SMETER_FRAME_MS);
+    for (let i = 0; i < 12; i++) risen = stepSmeter(risen, 9, SMETER_FRAME_MS);
     expect(risen).toBeGreaterThan(8.5);
     expect(risen).toBeLessThanOrEqual(9);
     const late = stepSmeter(0, 9, 500);
     expect(late).toBeCloseTo(stepSmeter(0, 9, SMETER_DT_CAP_MS), 5);
-    expect(late).toBeGreaterThan(7);
+    expect(late).toBeGreaterThan(3);
   });
 
   it("lê zero como S9 e ignora a linha RPRT", () => {

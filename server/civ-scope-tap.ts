@@ -56,6 +56,34 @@ let onRevive: (() => void) | null = null;
 let rigQuiet = false;
 let outputWanted = false;
 let scopeSpanHz = SCOPE_SPAN_HZ;
+let scopeWatchTimer: ReturnType<typeof setInterval> | null = null;
+
+/** O wrapper só troca para 4012 na subida; com o tap já escutando, reinicia uma vez. */
+async function ensureRigctldOnTap(): Promise<void> {
+  if (process.platform !== "linux" || !tap) return;
+  if (await rigctldUsesTap()) return;
+  await hamlibCtl("start");
+}
+
+function startScopeWatch() {
+  if (scopeWatchTimer) return;
+  scopeWatchTimer = setInterval(() => {
+    const state = tap;
+    if (!state || !outputWanted || !state.output || rigQuiet) return;
+    const now = Date.now();
+    if (now < state.replyUntil) return;
+    if (scopeOutputStale(state.lastScopeAt, state.armedAt, now)) {
+      rearmScope(state, "watchdog sem varredura");
+    }
+  }, 900);
+  scopeWatchTimer.unref?.();
+}
+
+function stopScopeWatch() {
+  if (!scopeWatchTimer) return;
+  clearInterval(scopeWatchTimer);
+  scopeWatchTimer = null;
+}
 
 export function onSerialScopeRevive(fn: () => void): () => void {
   onRevive = fn;
@@ -121,8 +149,20 @@ function sendFrames(state: Tap, frames: Uint8Array[]): boolean {
   return writeFrames(state, frames);
 }
 
-function rearmScope(_state: Tap, _why: string, _force = false): void {
-  // 27 10/27 11 no meio do f/m deixa o CI-V mudo e o chip fica vermelho.
+/** Religa 27 10/11 só fora do prazo de resposta do rigctld — senão o CI-V trava. */
+function rearmScope(state: Tap, why: string, force = false): void {
+  if (!state.output || !outputWanted || rigQuiet) return;
+  const now = Date.now();
+  if (!force && now - state.armedAt < SCOPE_WAKE_MS) return;
+  if (!force && now < state.replyUntil) return;
+  const frames = scopeTx(state, true);
+  if (!sendFrames(state, frames)) return;
+  state.armedAt = now;
+  state.samples = 0;
+  state.sawScope = false;
+  const hex = frames.map((frame) => Buffer.from(frame).toString("hex")).join(" ");
+  console.log(`civ-scope-tap: ${why}; religando espectro ${hex}`);
+  onRevive?.();
 }
 
 function applyScopeOutput(on: boolean, force = false): void {
@@ -243,10 +283,12 @@ function connectUp(state: Tap): void {
       state.output = true;
       state.armedAt = Date.now();
       sendFrames(state, scopeTx(state, true));
+      onRevive?.();
     }
   });
   sock.on("data", (chunk: Buffer) => {
     const now = Date.now();
+    const woke = scopeRadioWoke(state.lastRxAt, state.upSince, now);
     state.lastRxAt = now;
     const pending = new Uint8Array(state.upRest.length + chunk.length);
     pending.set(state.upRest, 0);
@@ -265,6 +307,13 @@ function connectUp(state: Tap): void {
     const down = state.down;
     const rigWaiting = now < state.replyUntil;
     if (down && !down.destroyed && peeled.forward.length && rigWaiting) down.write(Buffer.from(peeled.forward));
+    const freq = isCivFrequencyReply(peeled.forward);
+    if (state.output && (woke || freq) && scopeOutputStale(state.lastScopeAt, state.armedAt, now)) {
+      rearmScope(state, freq ? "frequência CI-V sem espectro" : "rádio respondeu após silêncio");
+    } else if (!state.output && state.pendingOff && (woke || freq) && sendFrames(state, scopeTx(state, false))) {
+      state.pendingOff = false;
+      console.log("civ-scope-tap: rádio respondeu; espectro desligado");
+    }
   });
   sock.on("error", () => {
     // Erro de escrita não fecha a sessão. dropUp aqui derruba o TCP do
@@ -292,6 +341,7 @@ function radioEndpoint(row: StationRadio): { host: string; port: number } | null
 function closeTap(): Promise<void> {
   const cur = tap;
   tap = null;
+  stopScopeWatch();
   if (!cur) return Promise.resolve();
   cur.down?.destroy();
   dropUp(cur);
@@ -397,6 +447,8 @@ function openTap(row: StationRadio, endpoint: { host: string; port: number }): P
         server.once("error", reject);
         server.listen(CIV_SCOPE_TAP_PORT, CIV_SCOPE_TAP_HOST, () => {
           server.off("error", reject);
+          const state = tap;
+          if (state && !state.up) connectUp(state);
           resolve();
         });
       }),
@@ -412,6 +464,9 @@ export async function prepareSerialScopeTap(): Promise<boolean> {
     return false;
   }
   await openTap(row, endpoint);
+  if (tap && !tap.up) connectUp(tap);
+  startScopeWatch();
+  void ensureRigctldOnTap();
   return true;
 }
 
