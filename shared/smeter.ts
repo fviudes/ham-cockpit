@@ -42,12 +42,12 @@ export function hamlibStrengthToUiSMeter(dbRelS9: number): number {
 
 /**
  * CI-V/Hamlib: uma STRENGTH por vez; o intervalo evita rajada que vira “ocupado”.
- * ~30 Hz mantém o ponteiro próximo do sinal sem engolir f/m/t.
+ * ~20 Hz equilibra fluidez e carga no CI-V/Hamlib.
  */
-export const SMETER_POLL_MS = Math.round(1000 / 30);
+export const SMETER_POLL_MS = Math.round(1000 / 20);
 
-/** Desenho do ponteiro e da barra: na casa de 30 quadros por segundo. */
-export const SMETER_FRAME_MS = Math.round(1000 / 30);
+/** Desenho do ponteiro e da barra: ~20 quadros por segundo. */
+export const SMETER_FRAME_MS = Math.round(1000 / 20);
 
 /** CI-V enviado (BLE): aguarda a resposta antes de outro pedido. */
 export const SMETER_INFLIGHT_MS = 33;
@@ -64,10 +64,10 @@ export function nextSmeterWaitMs(result: number | null | false): number {
   return SMETER_BUSY_MS;
 }
 
-/** Subida: mesma ideia da descida — EMA contínua, sem salto de um quadro. */
-export const SMETER_TAU_ATTACK_MS = 72;
+/** Subida: resposta visível em ~50 ms sem salto de quadro. */
+export const SMETER_TAU_ATTACK_MS = 55;
 /** Descida: um pouco mais lenta que a subida para não tremer em ruído. */
-export const SMETER_TAU_DECAY_MS = 95;
+export const SMETER_TAU_DECAY_MS = 78;
 /** Legado nos testes que citam uma única τ. */
 export const SMETER_TAU_MS = SMETER_TAU_ATTACK_MS;
 /** Quadro atrasado não percorre a curva inteira. */

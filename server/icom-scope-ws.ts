@@ -22,7 +22,7 @@ import { consoleSessionOk } from "./console-session";
 import { subscribeScopeFrame } from "./icom-scope-hub";
 import { icomLanCmd } from "./icom-lan";
 import { currentSerialHamlib } from "./radios";
-import { broadcastScopeSweeps, forgetScopeClient, flushScopePending } from "./scope-broadcast";
+import { broadcastScopeSweeps, forgetScopeClient, flushScopePending, setScopeClientSpan } from "./scope-broadcast";
 import { tryWsSendText } from "./ws-backpressure";
 
 const attached = new WeakSet<Server>();
@@ -170,7 +170,10 @@ async function bind(ws: WebSocket, via: string) {
     ws.on("message", (data) => {
       flushScopePending(ws);
       const ask = readScopeAsk(data);
-      if (ask) askScopeCenter("serial", ask.kind === "span", ask.kind === "span" ? ask.spanHz : undefined);
+      if (ask?.kind === "span") {
+        setScopeClientSpan(ws, ask.spanHz);
+        askScopeCenter("serial", true, ask.spanHz);
+      } else if (ask?.kind === "center") askScopeCenter("serial", false);
     });
     ws.on("close", () => {
       forgetScopeClient(ws);
@@ -187,7 +190,10 @@ async function bind(ws: WebSocket, via: string) {
   ws.on("message", (data) => {
     flushScopePending(ws);
     const ask = readScopeAsk(data);
-    if (ask) askScopeCenter("lan", ask.kind === "span", ask.kind === "span" ? ask.spanHz : undefined);
+    if (ask?.kind === "span") {
+      setScopeClientSpan(ws, ask.spanHz);
+      askScopeCenter("lan", true, ask.spanHz);
+    } else if (ask?.kind === "center") askScopeCenter("lan", false);
   });
   ws.on("close", () => {
     forgetScopeClient(ws);

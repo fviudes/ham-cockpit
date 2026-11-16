@@ -147,7 +147,7 @@ export class PcAudioPlayer {
       let socket: WebSocket;
       try {
         const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-        socket = new WebSocket(`${proto}//${window.location.host}/ws/radio-audio`);
+        socket = new WebSocket(`${proto}//${window.location.host}/ws/radio-audio?role=pc-audio`);
       } catch {
         finish("no-device");
         return;

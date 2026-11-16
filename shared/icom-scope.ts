@@ -135,6 +135,31 @@ export type ScopeSweep = {
   oor: boolean;
 };
 
+function scopeSampleAt(bins: Uint8Array, edge: { startHz: number; endHz: number }, hz: number): number {
+  if (bins.length < 1 || edge.endHz <= edge.startHz) return 0;
+  if (hz < edge.startHz || hz > edge.endHz) return 0;
+  const t = (hz - edge.startHz) / (edge.endHz - edge.startHz);
+  const i = Math.min(bins.length - 1, Math.max(0, Math.floor(t * (bins.length - 1))));
+  return bins[i] ?? 0;
+}
+
+/** Recorta o quadro na largura pedida (centro = meio do sweep do rádio). */
+export function cropScopeSweep(sweep: ScopeSweep, spanHz: number): ScopeSweep {
+  const span = normalizeScopeSpan(spanHz);
+  const radioSpan = sweep.endHz - sweep.startHz;
+  if (!(radioSpan > 0) || span >= radioSpan - 1_000) return sweep;
+  const center = (sweep.startHz + sweep.endHz) / 2;
+  const startHz = center - span / 2;
+  const endHz = center + span / 2;
+  const cols = Math.max(8, Math.round((span / radioSpan) * sweep.bins.length));
+  const bins = new Uint8Array(cols);
+  for (let i = 0; i < cols; i++) {
+    const hz = startHz + ((i + 0.5) / cols) * span;
+    bins[i] = scopeSampleAt(sweep.bins, sweep, hz);
+  }
+  return { startHz, endHz, mode: sweep.mode, bins, oor: sweep.oor };
+}
+
 /** Wire `binsB64` (servidor) ou legado `bins: number[]`. */
 export function decodeScopeBins(body: { binsB64?: string; bins?: number[] }): Uint8Array | null {
   if (typeof body.binsB64 === "string" && body.binsB64.length > 0) {

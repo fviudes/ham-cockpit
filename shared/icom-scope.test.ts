@@ -3,6 +3,7 @@ import {
   ScopeAssembler,
   bcdHz,
   civScopeOn,
+  cropScopeSweep,
   isCivFrequencyReply,
   isScopeWaveform,
   scopeCenterFrame,
@@ -151,6 +152,20 @@ describe("scope CI-V 0x27", () => {
     expect(isScopeWaveform(frame)).toBe(true);
     expect(Array.from(scopePayload(frame) ?? [])).toEqual([0x00, 0x00, 0x01, 0x01]);
     expect(isScopeWaveform(Uint8Array.from([0xfe, 0xfe, 0xe0, 0xa4, 0x27, 0x10, 0x01, 0xfd]))).toBe(false);
+  });
+});
+
+describe("cropScopeSweep", () => {
+  it("recorta o quadro na largura pedida", () => {
+    const bins = new Uint8Array(100);
+    bins.fill(40);
+    bins[25] = 120;
+    bins[75] = 10;
+    const wide = { startHz: 7_000_000, endHz: 7_200_000, mode: 0, bins, oor: false };
+    const narrow = cropScopeSweep(wide, 100_000);
+    expect(narrow.endHz - narrow.startHz).toBe(100_000);
+    expect(narrow.bins.length).toBeLessThan(bins.length);
+    expect(narrow.bins.length).toBeGreaterThanOrEqual(8);
   });
 });
 

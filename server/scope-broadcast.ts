@@ -1,4 +1,4 @@
-import type { ScopeSweep } from "../shared/icom-scope";
+import { cropScopeSweep, normalizeScopeSpan, SCOPE_SPAN_HZ, type ScopeSweep } from "../shared/icom-scope";
 import type { WebSocket } from "ws";
 import { tryWsSendText, wsSendWouldBlock } from "./ws-backpressure";
 
@@ -24,14 +24,14 @@ export function scopeSweepWire(sweep: ScopeSweep): ScopeWireSweep {
   };
 }
 
-type ClientSlot = { pending: ScopeSweep | null };
+type ClientSlot = { pending: ScopeSweep | null; spanHz: number };
 
 const slots = new WeakMap<WebSocket, ClientSlot>();
 
 function slot(ws: WebSocket): ClientSlot {
   let hit = slots.get(ws);
   if (!hit) {
-    hit = { pending: null };
+    hit = { pending: null, spanHz: SCOPE_SPAN_HZ };
     slots.set(ws, hit);
   }
   return hit;
@@ -41,8 +41,18 @@ export function forgetScopeClient(ws: WebSocket) {
   slots.delete(ws);
 }
 
+export function setScopeClientSpan(ws: WebSocket, spanHz?: number) {
+  if (spanHz == null || !Number.isFinite(spanHz)) return;
+  slot(ws).spanHz = normalizeScopeSpan(spanHz);
+}
+
+function wireSweep(ws: WebSocket, sweep: ScopeSweep): ScopeSweep {
+  const span = slot(ws).spanHz;
+  return cropScopeSweep(sweep, span);
+}
+
 function sendOne(ws: WebSocket, sweep: ScopeSweep): boolean {
-  const json = JSON.stringify(scopeSweepWire(sweep));
+  const json = JSON.stringify(scopeSweepWire(wireSweep(ws, sweep)));
   return tryWsSendText(ws, json);
 }
 

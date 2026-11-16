@@ -44,6 +44,8 @@ export type HostSample = {
   cpuTempC: number | null;
   netRxBps: number | null;
   netTxBps: number | null;
+  diskReadBps: number | null;
+  diskWriteBps: number | null;
 };
 
 export type HostStatus = {
@@ -68,6 +70,8 @@ export type HostStatus = {
   ramTotalBytes: number;
   netRxBps: number | null;
   netTxBps: number | null;
+  diskReadBps: number | null;
+  diskWriteBps: number | null;
   sampleMs: number;
   windowMs: number;
   samples: HostSample[];
@@ -76,6 +80,7 @@ export type HostStatus = {
 const samples: HostSample[] = [];
 let cpuPrev: { idle: number; total: number } | null = null;
 let netPrev: { t: number; rx: number; tx: number } | null = null;
+let diskIoPrev: { t: number; readSectors: number; writeSectors: number; dev: string } | null = null;
 let sampler: ReturnType<typeof setInterval> | null = null;
 let sampling = false;
 let identity: { hardware: string; soc: string; osPretty: string; serial: string | null; serialDisplay: string | null } | null =
@@ -393,6 +398,60 @@ function readNetTotals(): { rx: number; tx: number } {
   }
 }
 
+const DISK_SECTOR_BYTES = 512;
+
+function blockDeviceForPath(mountPath: string): string | null {
+  if (process.platform !== "linux" || !existsSync("/proc/mounts")) return null;
+  try {
+    const want = mountPath.replace(/\/+$/, "") || "/";
+    const text = readFileSync("/proc/mounts", "utf8");
+  for (const line of text.split(/\r?\n/)) {
+      const cols = line.split(/\s+/);
+      if (cols.length < 2) continue;
+      const mnt = cols[1].replace(/\\040/g, " ");
+      if (mnt !== want) continue;
+      const src = cols[0];
+      const m = src.match(/\/dev\/(mmcblk\d+)(?:p\d+)?$/) || src.match(/\/dev\/(nvme\d+n\d+)(?:p\d+)?$/);
+      if (m) return m[1];
+      const base = src.replace(/^\/dev\//, "").replace(/p?\d+$/, "");
+      if (base) return base;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function diskSectorTotals(dev: string): { read: number; write: number } {
+  if (!existsSync("/proc/diskstats")) return { read: 0, write: 0 };
+  try {
+    const text = readFileSync("/proc/diskstats", "utf8");
+    for (const line of text.split(/\r?\n/)) {
+      const cols = line.trim().split(/\s+/);
+      if (cols[2] !== dev) continue;
+      return { read: Number(cols[5]) || 0, write: Number(cols[9]) || 0 };
+    }
+  } catch {
+    /* ignore */
+  }
+  return { read: 0, write: 0 };
+}
+
+function diskBpsFromDelta(diskPath: string): { read: number | null; write: number | null } {
+  const dev = blockDeviceForPath(diskPath);
+  if (!dev) return { read: null, write: null };
+  const now = Date.now();
+  const cur = diskSectorTotals(dev);
+  const prev = diskIoPrev;
+  diskIoPrev = { t: now, readSectors: cur.read, writeSectors: cur.write, dev };
+  if (!prev || prev.dev !== dev || now <= prev.t) return { read: null, write: null };
+  const dt = (now - prev.t) / 1000;
+  if (dt <= 0) return { read: null, write: null };
+  const read = Math.max(0, ((cur.read - prev.readSectors) * DISK_SECTOR_BYTES) / dt);
+  const write = Math.max(0, ((cur.write - prev.writeSectors) * DISK_SECTOR_BYTES) / dt);
+  return { read, write };
+}
+
 function netBpsFromDelta(): { rx: number | null; tx: number | null } {
   const now = Date.now();
   const cur = readNetTotals();
@@ -541,9 +600,11 @@ function pruneSamples(now: number) {
 async function sampleOnce(): Promise<HostSample> {
   const t = Date.now();
   const ram = readRam();
+  const disk = readDisk();
   const cpuPct = cpuPctFromDelta();
   const cpuTempC = await readCpuTempC();
   const net = netBpsFromDelta();
+  const diskIo = diskBpsFromDelta(disk.path);
   const row: HostSample = {
     t,
     cpuPct,
@@ -553,6 +614,8 @@ async function sampleOnce(): Promise<HostSample> {
     cpuTempC,
     netRxBps: net.rx,
     netTxBps: net.tx,
+    diskReadBps: diskIo.read,
+    diskWriteBps: diskIo.write,
   };
   samples.push(row);
   pruneSamples(t);
@@ -602,6 +665,8 @@ function emptyStatus(error: string): HostStatus {
     ramTotalBytes: 0,
     netRxBps: null,
     netTxBps: null,
+    diskReadBps: null,
+    diskWriteBps: null,
     sampleMs: HOST_SAMPLE_MS,
     windowMs: HOST_WINDOW_MS,
     samples: [],
@@ -649,6 +714,8 @@ export async function hostStatus(): Promise<HostStatus> {
       ramTotalBytes: ram.total,
       netRxBps: row?.netRxBps ?? null,
       netTxBps: row?.netTxBps ?? null,
+      diskReadBps: row?.diskReadBps ?? null,
+      diskWriteBps: row?.diskWriteBps ?? null,
       sampleMs: HOST_SAMPLE_MS,
       windowMs: HOST_WINDOW_MS,
       samples: samples.slice(),

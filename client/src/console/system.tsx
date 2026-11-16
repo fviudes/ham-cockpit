@@ -714,6 +714,8 @@ type HostSample = {
   cpuTempC: number | null;
   netRxBps?: number | null;
   netTxBps?: number | null;
+  diskReadBps?: number | null;
+  diskWriteBps?: number | null;
 };
 
 type HostSnap = {
@@ -737,6 +739,8 @@ type HostSnap = {
   ramTotalBytes?: number;
   netRxBps?: number | null;
   netTxBps?: number | null;
+  diskReadBps?: number | null;
+  diskWriteBps?: number | null;
   sampleMs?: number;
   windowMs?: number;
   samples?: HostSample[];
@@ -794,7 +798,7 @@ function slotSeries(
   samples: HostSample[] | undefined,
   windowMs: number,
   sampleMs: number,
-  key: keyof Pick<HostSample, "cpuPct" | "ramPct" | "cpuTempC" | "netRxBps" | "netTxBps">,
+  key: keyof Pick<HostSample, "cpuPct" | "ramPct" | "cpuTempC" | "netRxBps" | "netTxBps" | "diskReadBps" | "diskWriteBps">,
 ): Array<number | null> {
   const step = Math.max(1000, sampleMs || 5000);
   const win = Math.max(step, windowMs || 300_000);
@@ -862,16 +866,27 @@ export function StatusPage() {
   const tempSeries = slotSeries(host?.samples, windowMs, sampleMs, "cpuTempC");
   const netRxSeries = slotSeries(host?.samples, windowMs, sampleMs, "netRxBps");
   const netTxSeries = slotSeries(host?.samples, windowMs, sampleMs, "netTxBps");
+  const diskReadSeries = slotSeries(host?.samples, windowMs, sampleMs, "diskReadBps");
+  const diskWriteSeries = slotSeries(host?.samples, windowMs, sampleMs, "diskWriteBps");
   const cpuPct = host?.cpuPct;
   const ramPct = host?.ramPct;
   const netRx = host?.netRxBps ?? null;
   const netTx = host?.netTxBps ?? null;
+  const diskRead = host?.diskReadBps ?? null;
+  const diskWrite = host?.diskWriteBps ?? null;
   const netMax = Math.max(
     8 * 1024,
     ...netRxSeries.filter((v): v is number => v != null),
     ...netTxSeries.filter((v): v is number => v != null),
     netRx ?? 0,
     netTx ?? 0,
+  );
+  const diskMax = Math.max(
+    64 * 1024,
+    ...diskReadSeries.filter((v): v is number => v != null),
+    ...diskWriteSeries.filter((v): v is number => v != null),
+    diskRead ?? 0,
+    diskWrite ?? 0,
   );
   const ramUsed = host?.ramUsedBytes ?? 0;
   const ramTotal = host?.ramTotalBytes ?? 0;
@@ -942,6 +957,23 @@ export function StatusPage() {
               <Mini k={tx("diskUsed")} v={formatBytes(diskUsed)} />
             </div>
           </div>
+        </Panel>
+        <Panel>
+          <PanelTitle>{tx("diskIo")}</PanelTitle>
+          <p className="mb-1 font-['IBM_Plex_Mono'] text-2xl text-[#a78bfa]">
+            {diskRead == null && diskWrite == null
+              ? "—"
+              : `↓ ${formatBps(diskRead ?? 0)} · ↑ ${formatBps(diskWrite ?? 0)}`}
+          </p>
+          <p className="mb-2 text-[10px] tracking-wide text-[#8ea0b3] uppercase">{tx("last5min")}</p>
+          <TimeLine
+            values={diskReadSeries}
+            max={diskMax}
+            color="#a78bfa"
+            tickFmt={(n) => formatBps(n)}
+            overlay={diskWriteSeries}
+            overlayColor="#60a5fa"
+          />
         </Panel>
       </div>
       <Panel className="mt-4 overflow-hidden">

@@ -4,7 +4,6 @@ import { subscribeScope } from "./scope-bus";
 import {
   PANEL_HISTORY_SEC_DEFAULT,
   PANEL_SPAN_HZ,
-  audioSweep,
   holdSweepInterval,
   panelHistoryCap,
   panelizeRfSweep,
@@ -152,27 +151,6 @@ export function syncPanelWaterfallFeed(opts: FeedOpts) {
   };
 
   let stop = () => {};
-  let audio: WebSocket | null = null;
-  if (!opts.rfScope) {
-    let lastAudio = 0;
-    try {
-      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-      audio = new WebSocket(`${proto}//${window.location.host}/ws/radio-audio`);
-      audio.binaryType = "arraybuffer";
-      audio.addEventListener("message", (event) => {
-        if (!(event.data instanceof ArrayBuffer) || event.data.byteLength < 2) return;
-        const now = Date.now();
-        if (now - lastAudio < 80) return;
-        lastAudio = now;
-        const bytes = event.data.byteLength - (event.data.byteLength % 2);
-        const pcm = new Int16Array(event.data.slice(0, bytes));
-        const tune = opts.getTuneHz() > 0 ? opts.getTuneHz() : 14_074_000;
-        push(audioSweep(pcm, tune, opts.getSpanHz()), false);
-      });
-    } catch {
-      audio = null;
-    }
-  }
 
   if (opts.via === "ble") {
     const unsub = subscribeScope((sweep) => push(sweep, true));
@@ -254,7 +232,6 @@ export function syncPanelWaterfallFeed(opts: FeedOpts) {
   stopFeed = () => {
     stop();
     scopeWs = null;
-    audio?.close();
   };
 }
 

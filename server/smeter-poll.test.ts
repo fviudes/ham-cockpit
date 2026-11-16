@@ -54,11 +54,11 @@ describe("S-meter rápido", () => {
     expect(nextSmeterWaitMs(null)).toBeLessThanOrEqual(60);
   });
 
-  it("desenha na casa de 30 quadros por segundo", () => {
-    expect(SMETER_FRAME_MS).toBe(33);
-    expect(SMETER_FRAME_MS).toBe(Math.round(1000 / 30));
-    expect(1000 / SMETER_FRAME_MS).toBeGreaterThan(28);
-    expect(1000 / SMETER_FRAME_MS).toBeLessThan(32);
+  it("desenha na casa de 20 quadros por segundo", () => {
+    expect(SMETER_FRAME_MS).toBe(50);
+    expect(SMETER_FRAME_MS).toBe(Math.round(1000 / 20));
+    expect(1000 / SMETER_FRAME_MS).toBeGreaterThan(18);
+    expect(1000 / SMETER_FRAME_MS).toBeLessThan(22);
   });
 
   it("um quadro não fecha o salto e a subida é mais rápida que a descida", () => {

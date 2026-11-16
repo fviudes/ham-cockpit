@@ -18,6 +18,8 @@ RuntimeDirectoryMode=0755
 WorkingDirectory=/opt/ham-cockpit
 Environment=NODE_ENV=production
 Environment=PORT=3000
+# Heap V8 reservado (~512 MB) — sobra RAM para page cache do SO no Pi 8 GB.
+Environment=NODE_OPTIONS=--max-old-space-size=512
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 NoNewPrivileges=false
 ExecStart=/usr/bin/node /opt/ham-cockpit/index.js

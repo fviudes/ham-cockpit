@@ -14,12 +14,23 @@ log() { echo "hc-tune: $*" >&2; }
 RUNNING=0
 [[ -d /run/systemd/system ]] && RUNNING=1
 
-# ── 1. Swap em arquivo (RAM ≤ 3 GB) ──────────────────────────────────────────
+# ── 1. Swap em arquivo (tamanho conforme RAM) ────────────────────────────────
 ensure_swap() {
-  local mem_kb avail_kb size_mb
+  local mem_kb avail_kb size_mb=0
   mem_kb="$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)"
-  [[ "$mem_kb" -gt 0 && "$mem_kb" -le 3145728 ]] || return 0
-  if [[ "$mem_kb" -le 1310720 ]]; then size_mb=1024; else size_mb=2048; fi
+  [[ "$mem_kb" -gt 0 ]] || return 0
+  if [[ "$mem_kb" -le 1310720 ]]; then
+    size_mb=1024
+  elif [[ "$mem_kb" -le 3145728 ]]; then
+    size_mb=2048
+  elif [[ "$mem_kb" -le 6291456 ]]; then
+    size_mb=2048
+  elif [[ "$mem_kb" -le 8388608 ]]; then
+    # 8 GB: swap mínimo — hc-tune prefere RAM + page cache (ver vm.*).
+    size_mb=512
+  else
+    size_mb=1024
+  fi
 
   if [[ ! -f /swapfile ]]; then
     avail_kb="$(df -Pk / | awk 'NR==2 {print $4}')"
@@ -45,11 +56,21 @@ ensure_swap() {
 # ── 2. sysctl + journald enxutos ─────────────────────────────────────────────
 ensure_sysctl_journald() {
   install -d -m 0755 /etc/sysctl.d /etc/systemd/journald.conf.d
-  cat >/etc/sysctl.d/99-ham-cockpit.conf <<'EOF'
-# Ham Cockpit — Pi com pouca RAM: usa swap cedo em vez de congelar.
-vm.swappiness=40
-vm.vfs_cache_pressure=120
-vm.min_free_kbytes=16384
+  local mem_kb
+  mem_kb="$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)"
+  local swappiness=40 vfs_cp=120 min_free=16384
+  # Pi 8 GB (lab): prefere RAM e page cache; evita swap até pressão real.
+  if [[ "$mem_kb" -gt 6291456 ]]; then
+    swappiness=5
+    vfs_cp=50
+    min_free=262144
+    log "sysctl Pi 8 GB: swappiness=${swappiness}, min_free_kbytes=${min_free}"
+  fi
+  cat >/etc/sysctl.d/99-ham-cockpit.conf <<EOF
+# Ham Cockpit — vm (Pi 1–3 GB: swap cedo; 8 GB: prefira cache em RAM).
+vm.swappiness=${swappiness}
+vm.vfs_cache_pressure=${vfs_cp}
+vm.min_free_kbytes=${min_free}
 EOF
   cat >/etc/systemd/journald.conf.d/ham-cockpit.conf <<'EOF'
 [Journal]

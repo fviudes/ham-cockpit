@@ -1,8 +1,8 @@
 {
-  "version": "0.1.13.08",
+  "version": "0.1.13.09",
   "channel": "main",
-  "file": "ham-cockpit-0.1.13.08.tgz",
-  "sha256": "764c59986f1bc4e3679e6cabda3258ee34269cf77bed9deec8c7af519b586fa5",
-  "bytes": 5129045,
-  "notes": "Ham Cockpit v0.1.13.08 — waterfall: barra de frequências com o mesmo fundo/ink do eixo tempo (BAR_FILL), overlay Aguardando só após 3 s."
+  "file": "ham-cockpit-0.1.13.09.tgz",
+  "sha256": "73a5ccf215fb6ef254d8f8341cc73f79536a04dd768f063d67f4379ec770f5dd",
+  "bytes": 5130418,
+  "notes": "Ham Cockpit v0.1.13.09 — Status I/O disco; Pi 8GB RAM/cache; waterfall largura CI-V; S-meter 20 FPS; PC Audio idle; chips serviço; áudio zero CPU OFF."
 }

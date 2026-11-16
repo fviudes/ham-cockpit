@@ -3,7 +3,7 @@ import { AcomPage, HamplusPage, Ic705Page, LdgPage, LextelPage, Lp100aPage, Pals
 import { DEFAULT_USER, type I18nKey } from "@/console/i18n";
 import { resolvePrimaryRoute, sendPrimaryCmd } from "@/console/radio-cmd";
 import { ConsoleProvider, useConsole } from "@/console/state";
-import { SVC_LABEL, serviceLive } from "@/console/services-ui";
+import { buildHeaderServiceChips, HeaderServiceRows } from "@/console/header-services";
 import { HeaderSMeter } from "@/console/header-smeter";
 import { PcAudioCard } from "@/console/pc-audio-card";
 import { LangToggle, UpdatesMenu, UserMenu } from "@/console/widgets";
@@ -114,17 +114,6 @@ const NAV: { group: "navSetup" | "navOp" | "navDev" | "navNet" | "navSys"; items
   },
 ];
 
-type HeaderChip = {
-  key: string;
-  label: string;
-  className: string;
-  onClick?: () => void;
-  disabled?: boolean;
-};
-
-const HEADER_CHIP =
-  "min-w-0 max-w-max grow basis-0 shrink truncate rounded-md px-1 py-1 text-left font-['IBM_Plex_Mono'] text-[10px] font-semibold disabled:opacity-40 @[28rem]:px-2 @[28rem]:text-[11px]";
-
 /** Hz → kHz, com os dois dígitos abaixo de 1 kHz que o mostrador já exibia (passo de 10 Hz). */
 function formatHeaderKhz(hz: number): string {
   const abs = Math.max(0, Math.round(hz));
@@ -163,52 +152,6 @@ function LcdLamp({ label, tone }: { label: ReactNode; tone: "amber" | "rx" | "tx
     <span className={`lcd-lamp lcd-14 lcd-lamp-${tone} inline-flex items-center justify-center border`}>
       {label}
     </span>
-  );
-}
-
-function HeaderChipView({ chip }: { chip: HeaderChip }) {
-  const cls = `${HEADER_CHIP} ${chip.className}`;
-  if (chip.onClick) {
-    return (
-      <button type="button" title={chip.label} disabled={chip.disabled} onClick={chip.onClick} className={cls}>
-        {chip.label}
-      </button>
-    );
-  }
-  return (
-    <span title={chip.label} className={cls}>
-      {chip.label}
-    </span>
-  );
-}
-
-/** Três linhas, de cima para baixo. A quarta peça só entra na linha de cima da coluna à direita. */
-function HeaderServiceRows({
-  chips,
-  identity,
-  notices,
-}: {
-  chips: HeaderChip[];
-  identity?: ReactNode;
-  notices?: ReactNode;
-}) {
-  return (
-    <div className="@container col-start-3 row-span-2 grid h-full min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-2 overflow-hidden">
-      <div className="col-start-1 min-h-0 min-w-0 overflow-hidden rounded-md border border-[rgba(79,195,247,0.28)] bg-[#0b1520] px-1.5">
-        <div className="grid h-full grid-flow-col grid-rows-3 items-center justify-start gap-x-1">
-          {chips.map((chip) => (
-            <HeaderChipView key={chip.key} chip={chip} />
-          ))}
-        </div>
-      </div>
-      <div className="col-start-2 flex h-full min-h-0 items-stretch gap-2">
-        <div aria-hidden="true" className="w-px shrink-0 self-stretch bg-[rgba(79,195,247,0.4)]" />
-        <div className="grid shrink-0 grid-rows-2 items-center justify-items-end gap-1 pr-1">
-          <div className="flex items-center justify-end gap-2">{identity}</div>
-          <div className="flex min-h-0 items-center justify-end gap-1.5">{notices}</div>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -372,8 +315,6 @@ function Shell({ onLogout }: { onLogout: () => void }) {
   const vfoHz = vfoLetter === "B" ? s.freqB : s.freq;
   const vfoKhz = formatHeaderKhz(vfoHz);
   const vfoMode = vfoLetter === "B" ? s.modeB : s.mode;
-  const primaryRadio = s.radios.items.find((r) => r.primary);
-  const liveRadio = s.radios.items.find((r) => r.connected) || primaryRadio;
   const bleReady = s.ic705.phase === "ready" && s.ic705.ble;
   const route = resolvePrimaryRoute(s.radios.items, { bleReady });
   const via = route.live ? route.transport : "none";
@@ -387,32 +328,6 @@ function Shell({ onLogout }: { onLogout: () => void }) {
   tuneRef.current = s.vfo === "B" ? s.freqB : s.freq;
   const getTuneHz = useCallback(() => tuneRef.current, []);
   const liveSignal = route.live && route.transport !== "none";
-  const gattUp = s.ic705.phase === "ready" || s.ic705.civ;
-  const makerLabel = (r: typeof liveRadio) =>
-    !r ? "" : r.maker === "tentec" ? "Ten-Tec" : r.maker[0]!.toUpperCase() + r.maker.slice(1);
-  const radioChip =
-    route.transport === "lan" && route.live
-      ? `${primaryRadio?.deviceName || primaryRadio?.name || tx("ic705")} · LAN CI-V`
-      : gattUp || (route.transport === "ble" && route.live)
-        ? `${s.ic705.bleName || primaryRadio?.deviceName || liveRadio?.deviceName || tx("ic705")} · CI-V`
-        : route.live && route.radio
-          ? `${makerLabel(route.radio)} ${route.radio.link === "network" ? "Rede" : route.radio.link === "bluetooth" ? "BT" : "USB"}`
-          : liveRadio && !(liveRadio.link === "bluetooth" && liveRadio.proto === "civ")
-            ? `${makerLabel(liveRadio)} ${liveRadio.link === "network" ? "Rede" : liveRadio.link === "bluetooth" ? "BT" : "USB"}`
-            : `${tx("ic705")} —`;
-  const previewAll =
-    import.meta.env.DEV &&
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("chips") === "all";
-  const liveSvcs = s.services.filter(
-    (row) =>
-      row.id !== "radio" &&
-      row.id !== "lextel" &&
-      row.id !== "web" &&
-      row.id !== "dhcp" &&
-      (previewAll || serviceLive(row.id, s, row.running)),
-  );
-
   useEffect(() => {
     setOpen(false);
   }, [page]);
@@ -439,34 +354,12 @@ function Shell({ onLogout }: { onLogout: () => void }) {
   const gate: LicenseGate = license?.gate ?? licenseGateOf(license?.state);
   const menusOpen = licenseMenusOpen(gate);
   const licenseReady = license !== null;
-  const chipOn = "bg-[#10b981]/15 text-[#34d399]";
-  const chipOff = "bg-white/5 text-[#8ea0b3]";
-  const radioOn = s.radios.items.some((r) => r.connected) || s.ic705.phase === "ready";
-  const headerChips: HeaderChip[] = [
-    {
-      key: "radio",
-      label: radioChip,
-      className: radioOn ? chipOn : chipOff,
-      disabled: !menusOpen,
-      onClick: () => {
-        if (menusOpen) navigate("/console/ic705");
-      },
-    },
-    {
-      key: "lextel",
-      label: `MS-2000 ${s.lextel.connected ? "SPP" : "—"}`,
-      className: s.lextel.connected ? chipOn : chipOff,
-      disabled: !menusOpen,
-      onClick: () => {
-        if (menusOpen) navigate("/console/lextel");
-      },
-    },
-    ...liveSvcs.map((row) => ({
-      key: row.id,
-      label: tx(SVC_LABEL[row.id]),
-      className: chipOn,
-    })),
-  ];
+  const headerChips = buildHeaderServiceChips({
+    s,
+    tx,
+    menusOpen,
+    onNavigate: navigate,
+  });
 
   useEffect(() => {
     if (sessionStorage.getItem(POST_LOGIN_KEY) === "1") {

@@ -107,6 +107,7 @@ function releaseStaleCapture() {
 }
 
 function fanPcm(chunk: Buffer) {
+  if (!pcmSink && !captureOwner && taps.size === 0) return;
   pcmSink?.(chunk);
   if (captureOwner && captureOwner.readyState === WebSocket.OPEN) tryWsSendBinary(captureOwner, chunk);
   for (const ws of taps) {
@@ -219,7 +220,17 @@ export function endDigitalCapture() {
   killChild();
 }
 
-async function bindRadioAudio(ws: WebSocket) {
+function radioAudioRole(req: IncomingMessage): "pc-audio" | "tap" {
+  try {
+    const url = new URL(req.url || "/", "http://127.0.0.1");
+    if (url.searchParams.get("role") === "pc-audio") return "pc-audio";
+  } catch {
+    /* padrão */
+  }
+  return "tap";
+}
+
+async function bindRadioAudio(ws: WebSocket, role: "pc-audio" | "tap") {
   releaseStaleCapture();
   if (playbackHold) {
     sendJson(ws, { type: "error", reason: "busy" });
@@ -227,7 +238,16 @@ async function bindRadioAudio(ws: WebSocket) {
     return;
   }
   if (digitalWanted || captureKind === "digital" || capture) {
-    attachTap(ws);
+    if (role === "pc-audio" || digitalWanted) attachTap(ws);
+    else {
+      sendJson(ws, { type: "error", reason: "off" });
+      ws.close();
+    }
+    return;
+  }
+  if (role !== "pc-audio") {
+    sendJson(ws, { type: "error", reason: "off" });
+    ws.close();
     return;
   }
   captureReserved = ws;
@@ -265,8 +285,9 @@ export function attachRadioAudio(server: Server) {
       socket.destroy();
       return;
     }
+    const role = radioAudioRole(req);
     wss.handleUpgrade(req, socket, head, (ws) => {
-      void bindRadioAudio(ws);
+      void bindRadioAudio(ws, role);
     });
   });
 }
