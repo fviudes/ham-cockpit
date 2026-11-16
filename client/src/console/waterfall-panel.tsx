@@ -1,18 +1,19 @@
 import { useEffect, useRef, useState, type MouseEvent } from "react";
-import { civScopeOn, type ScopeSweep } from "@shared/icom-scope";
+import { civScopeOn, normalizeScopeSpan, type ScopeSweep } from "@shared/icom-scope";
 import type { I18nKey } from "./i18n";
 import { resolvePrimaryRoute, sendPrimaryCmd } from "./radio-cmd";
 import { ic705Ble } from "./ic705-ble";
 import { subscribeScope } from "./scope-bus";
 import { useConsole } from "./state";
-import { spectrumColumns } from "./digital-spectrum";
 import {
+  audioSweep,
   FRAME_MS,
   freqTicks,
   holdSweepInterval,
   clickedTuneHz,
   hzAtClick,
   mhzLabel,
+  panelBinCount,
   PANEL_SPAN_HZ,
   PANEL_SPAN_STEPS_HZ,
   panelView,
@@ -61,41 +62,6 @@ function layoutX(canvas: HTMLCanvasElement, clientX: number): number | null {
 
 type Trace = { bins: Uint8Array; at: number; startHz: number; endHz: number };
 
-/** Bloco de 2048 amostras. O FFT do painel cobre a largura selecionada, não 0–3000 Hz. */
-function pcmBlock(pcm: Int16Array): Int16Array {
-  const n = 2048;
-  if (pcm.length === n) return pcm;
-  const out = new Int16Array(n);
-  const src = pcm.length > n ? pcm.subarray(pcm.length - n) : pcm;
-  out.set(src, n - src.length);
-  return out;
-}
-
-/** Um bin por raia do FFT de 2048 pontos. A contagem acompanha a largura do painel. */
-function panelBinCount(spanHz: number): number {
-  const binHz = 48_000 / 2048;
-  return Math.max(8, Math.round(Math.max(1, spanHz) / binHz));
-}
-
-/** 0 Hz do codec fica no VFO. O que passa da borda da largura selecionada fica de fora. */
-function audioSweep(pcm: Int16Array, tune: number, spanHz: number): ScopeSweep {
-  const view = panelView(tune, spanHz);
-  const span = Math.max(1, view.endHz - view.startHz);
-  const columns = panelBinCount(span);
-  const audioLimit = Math.min(span / 2, 24_000);
-  const audioCols = Math.max(8, Math.round((audioLimit / span) * columns));
-  const audio = spectrumColumns(pcmBlock(pcm), 48_000, 0, Math.max(200, audioLimit), audioCols);
-  const bins = new Uint8Array(columns);
-  for (let i = 0; i < audio.length; i++) {
-    const audioHz = (audioLimit * (i + 0.5)) / audio.length;
-    const rf = tune + audioHz;
-    if (rf < view.startHz || rf > view.endHz) continue;
-    const col = Math.min(columns - 1, Math.floor(((rf - view.startHz) / span) * columns));
-    const v = Math.round((audio[i] ?? 0) * 255);
-    if (v > (bins[col] ?? 0)) bins[col] = v;
-  }
-  return { startHz: view.startHz, endHz: view.endHz, mode: 0, bins, oor: false };
-}
 type Atlas = { key: string; canvas: HTMLCanvasElement };
 
 /** Uma linha de espectro por varredura. Cada linha fica no próprio startHz/endHz. */
@@ -273,6 +239,7 @@ export function WaterfallViz() {
   const lanScope = via === "lan" && (civScopeOn(equipmentId, "lan") || (!equipmentId && route.radio?.maker === "icom"));
   const serialScope = via === "hamlib" && Boolean(route.radio?.scope) && civScopeOn(equipmentId, "serial");
   const feed = bleScope ? "ble" : lanScope ? "lan" : serialScope ? "serial" : "off";
+  const rfScope = feed !== "off";
 
   const hint: I18nKey = serialFail
     ? "waterfallSerialFail"
@@ -321,23 +288,27 @@ export function WaterfallViz() {
 
     let stop = () => {};
     let audio: WebSocket | null = null;
+    let scopeSocket: WebSocket | null = null;
     let lastAudio = 0;
-    try {
-      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-      audio = new WebSocket(`${proto}//${window.location.host}/ws/radio-audio`);
-      audio.binaryType = "arraybuffer";
-      audio.addEventListener("message", (event) => {
-        if (!(event.data instanceof ArrayBuffer) || event.data.byteLength < 2) return;
-        const now = Date.now();
-        if (now - lastAudio < 80) return;
-        lastAudio = now;
-        const bytes = event.data.byteLength - (event.data.byteLength % 2);
-        const pcm = new Int16Array(event.data.slice(0, bytes));
-        const tune = tuneRef.current > 0 ? tuneRef.current : 14_074_000;
-        onSweep(audioSweep(pcm, tune, spanRef.current));
-      });
-    } catch {
-      audio = null;
+    /** Com scope CI-V ativo, o PCM não entra na fila — evita pico falso no centro. */
+    if (!rfScope) {
+      try {
+        const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+        audio = new WebSocket(`${proto}//${window.location.host}/ws/radio-audio`);
+        audio.binaryType = "arraybuffer";
+        audio.addEventListener("message", (event) => {
+          if (!(event.data instanceof ArrayBuffer) || event.data.byteLength < 2) return;
+          const now = Date.now();
+          if (now - lastAudio < 80) return;
+          lastAudio = now;
+          const bytes = event.data.byteLength - (event.data.byteLength % 2);
+          const pcm = new Int16Array(event.data.slice(0, bytes));
+          const tune = tuneRef.current > 0 ? tuneRef.current : 14_074_000;
+          onSweep(audioSweep(pcm, tune, spanRef.current));
+        });
+      } catch {
+        audio = null;
+      }
     }
     if (via === "ble") {
       const unsub = subscribeScope(onSweep);
@@ -353,8 +324,10 @@ export function WaterfallViz() {
     } else if (feed === "lan" || feed === "serial") {
       const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
       try {
-        socket = new WebSocket(`${proto}//${window.location.host}/ws/scope?via=${feed}`);
+        scopeSocket = new WebSocket(`${proto}//${window.location.host}/ws/scope?via=${feed}`);
+        socket = scopeSocket;
       } catch {
+        scopeSocket = null;
         socket = null;
       }
       if (socket) {
@@ -394,7 +367,26 @@ export function WaterfallViz() {
       stop();
       audio?.close();
     };
-  }, [feed]);
+  }, [feed, rfScope]);
+
+  useEffect(() => {
+    const span = normalizeScopeSpan(spanHz);
+    if (via === "ble") {
+      void ic705Ble.setScopeSpan(span).catch(() => undefined);
+      return;
+    }
+    if (feed !== "lan" && feed !== "serial") return;
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    try {
+      const ws = new WebSocket(`${proto}//${window.location.host}/ws/scope?via=${feed}`);
+      ws.addEventListener("open", () => {
+        ws.send(JSON.stringify({ type: "span", spanHz: span }));
+        ws.close();
+      });
+    } catch {
+      /* estação aplica span no próximo scope ON */
+    }
+  }, [spanHz, feed, via]);
 
   const tuneClicked = (event: MouseEvent<HTMLDivElement>) => {
     const canvas = canvasRef.current;

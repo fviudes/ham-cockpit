@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.12.01** (`version.json`).
+Versão atual neste canal: **0.1.12.02** (`version.json`).
 
 ## Versionamento
 
@@ -20,12 +20,12 @@ Guia completo: [docs/versionamento.md](../docs/versionamento.md).
 
 ```json
 {
-  "version": "0.1.12.01",
+  "version": "0.1.12.02",
   "channel": "main",
-  "file": "ham-cockpit-0.1.12.01.tgz",
-  "sha256": "87f1861e93e005deab843d63c2ed1072d783715442378a1a1d51234188e96845",
-  "bytes": 5122548,
-  "notes": "Ham Cockpit v0.1.12.01 — Imagem base 0.1.12. Lextel MS-2000: religa o SPP após RFCOMM config/closed e rebind após open sem dados. Inclui cascata FT8 sem rolagem (0.1.11)."
+  "file": "ham-cockpit-0.1.12.02.tgz",
+  "sha256": "dfe3cf87535fb4dc73d6aa6c506ae62fa65dadc4331c10904289c09b4c5a2a72",
+  "bytes": 5122965,
+  "notes": "Waterfall: largura 200 kHz alinhada ao scope, sem pico falso no centro (scope CI-V separado do PCM)."
 }
 ```
 

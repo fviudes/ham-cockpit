@@ -465,7 +465,14 @@ class Ic705BleLink {
     return true;
   }
 
-  /** 27 14 e 27 15: modo centro no passo de ±250 kHz que cobre a vista. */
+  /** 27 15: largura total do scope (padrão 200 kHz = ±100 kHz). */
+  async setScopeSpan(spanHz?: number) {
+    if (!this.connected || this.hsBusy) return false;
+    await this.ask(...scopeSpanData(spanHz));
+    return true;
+  }
+
+  /** 27 14 e 27 15: modo centro na largura pedida. */
   async widenScope() {
     if (!this.connected || this.hsBusy) return false;
     await this.ask(0x27, 0x14, 0x00, 0x00);

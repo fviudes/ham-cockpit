@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addTile, defaultTiles } from "../client/src/console/panel-layout";
+import { audioSweep } from "../client/src/console/waterfall-view";
 import {
   centeredSpan,
   panelView,
@@ -28,11 +29,26 @@ describe("card do waterfall no painel", () => {
   });
 });
 
+describe("fallback de áudio no waterfall", () => {
+  it("usa a largura da vista e não um único bin central", () => {
+    const tune = 7_100_000;
+    const pcm = new Int16Array(2048);
+    for (let i = 0; i < pcm.length; i++) pcm[i] = (((i * 17_893) % 40_000) - 20_000) as number;
+    const sweep = audioSweep(pcm, tune, 200_000);
+    expect(sweep.endHz - sweep.startHz).toBe(200_000);
+    expect(sweep.bins.length).toBeGreaterThan(100);
+    let lit = 0;
+    for (let c = 0; c < sweep.bins.length; c++) if ((sweep.bins[c] ?? 0) > 0) lit++;
+    expect(lit).toBeGreaterThan(12);
+    expect(lit).toBeLessThan(sweep.bins.length / 2);
+  });
+});
+
 describe("largura selecionada no painel", () => {
   it("usa o span do painel, não a janela fixa de ±150 kHz nem 0–3000 Hz", () => {
     const tune = 7_100_000;
     const wide = panelView(tune, PANEL_SPAN_HZ);
-    expect(wide.endHz - wide.startHz).toBe(500_000);
+    expect(wide.endHz - wide.startHz).toBe(200_000);
     expect((wide.startHz + wide.endHz) / 2).toBe(tune);
     const narrow = panelView(tune, 100_000);
     expect(narrow.startHz).toBe(7_050_000);

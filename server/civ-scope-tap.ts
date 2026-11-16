@@ -14,8 +14,10 @@ import {
   scopeCenterFrame,
   scopeOutputStale,
   scopeRadioWoke,
+  normalizeScopeSpan,
   scopeSpanFrame,
   scopeSwitchFrames,
+  SCOPE_SPAN_HZ,
 } from "../shared/icom-scope";
 import { hamlibCtl } from "./ser2net-store";
 import { currentSerialHamlib, type StationRadio } from "./radios";
@@ -53,6 +55,7 @@ let onFrame: ((frame: Uint8Array) => void) | null = null;
 let onRevive: (() => void) | null = null;
 let rigQuiet = false;
 let outputWanted = false;
+let scopeSpanHz = SCOPE_SPAN_HZ;
 
 export function onSerialScopeRevive(fn: () => void): () => void {
   onRevive = fn;
@@ -76,7 +79,7 @@ function scopeTx(state: Tap, on: boolean): Uint8Array[] {
   const frames = scopeSwitchFrames(state.civ, on);
   if (on) {
     frames.push(scopeCenterFrame(state.civ));
-    frames.push(scopeSpanFrame(state.civ));
+    frames.push(scopeSpanFrame(state.civ, scopeSpanHz));
   }
   return frames;
 }
@@ -149,8 +152,12 @@ export async function withSerialScopeQuiet<T>(fn: () => Promise<T>): Promise<T> 
 /** O card pede centro a cada varredura. Esse 27 14 no CI-V derruba o f/m. */
 export function serialScopeCenter(): void {}
 
-/** O mesmo para o passo. O 27 00 que o rádio já manda continua no waterfall. */
-export function serialScopeSpan(): void {}
+/** Repete 27 15 com a largura pedida no painel (sem novo 27 14). */
+export function serialScopeSpan(spanHz?: number): void {
+  if (spanHz != null) scopeSpanHz = normalizeScopeSpan(spanHz);
+  if (!tap?.output || rigQuiet) return;
+  sendFrames(tap, [scopeSpanFrame(tap.civ, scopeSpanHz)]);
+}
 
 function writeUp(state: Tap, buf: Buffer): void {
   state.chain = state.chain.then(

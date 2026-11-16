@@ -387,8 +387,8 @@ export function ManualPage() {
             ]}
           />
           <P
-            pt="O card Waterfall mostra o espectro em cima, a barra de frequências no meio e a cachoeira embaixo. A escala de tempo fica à direita, fora do gráfico. A linha vertical da frequência do rádio permanece no centro: ao girar o VFO a linha fica e o gráfico se desloca. O seletor Largura define a faixa: o eixo e a cascata vão do início ao fim dessa largura, com o VFO no meio. O padrão é 500 kHz."
-            en="The Waterfall card shows the spectrum on top, the frequency bar in the middle and the waterfall below. The time scale sits on the right, outside the graph. The vertical line of the radio frequency stays in the center: turning the VFO keeps the line in place and the graph shifts. The Span selector sets the range: the axis and the waterfall run from the start to the end of that width, with the VFO in the middle. The default is 500 kHz."
+            pt="O card Waterfall mostra o espectro em cima, a barra de frequências no meio e a cachoeira embaixo. A escala de tempo fica à direita, fora do gráfico. A linha vertical da frequência do rádio permanece no centro: ao girar o VFO a linha fica e o gráfico se desloca. O seletor Largura define a faixa: o eixo e a cascata vão do início ao fim dessa largura, com o VFO no meio. O padrão é 200 kHz (±100 kHz)."
+            en="The Waterfall card shows the spectrum on top, the frequency bar in the middle and the waterfall below. The time scale sits on the right, outside the graph. The vertical line of the radio frequency stays in the center: turning the VFO keeps the line in place and the graph shifts. The Span selector sets the range: the axis and the waterfall run from the start to the end of that width, with the VFO in the middle. The default is 200 kHz (±100 kHz each side)."
           />
           <P
             pt="No Hamlib 4.6.5 os passos de span do IC-705 são 5, 10, 20, 50, 100, 200, 500 e 1000 kHz. O seletor Largura usa esses passos. A escuta FT8 não troca essa faixa pela janela de 0–3000 Hz: o card continua na largura escolhida no painel."

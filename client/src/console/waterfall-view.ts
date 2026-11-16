@@ -1,20 +1,49 @@
+import { normalizeScopeSpan, SCOPE_SPAN_HZ, SCOPE_SPAN_STEPS_HZ, type ScopeSweep } from "@shared/icom-scope";
+import { spectrumColumns } from "./digital-spectrum";
+
 export type HzEdge = { startHz: number; endHz: number };
 
-/** Metade da janela antiga do card: 150 kHz para cada lado da linha do VFO. */
+/** Metade da janela legada usada em testes: 150 kHz para cada lado do VFO (300 kHz total). */
 export const WATERFALL_HALF_HZ = 150_000;
 
-/**
- * Passos de largura do IC-705 (Hamlib `spectrum_spans`), em Hz totais.
- * O scope da estação pede 500 kHz. O card não pode ficar preso em ±150 kHz.
- */
-export const PANEL_SPAN_STEPS_HZ = [5_000, 10_000, 20_000, 50_000, 100_000, 200_000, 500_000, 1_000_000] as const;
+export const PANEL_SPAN_STEPS_HZ = SCOPE_SPAN_STEPS_HZ;
+export const PANEL_SPAN_HZ = SCOPE_SPAN_HZ;
 
-/** Largura configurada do scope: 500 kHz, não a janela fixa de 300 kHz. */
-export const PANEL_SPAN_HZ = 500_000;
+export const panelSpanHz = normalizeScopeSpan;
 
-export function panelSpanHz(spanHz: number): number {
-  const n = Math.round(spanHz);
-  return (PANEL_SPAN_STEPS_HZ as readonly number[]).includes(n) ? n : PANEL_SPAN_HZ;
+function pcmBlock(pcm: Int16Array): Int16Array {
+  const n = 2048;
+  if (pcm.length === n) return pcm;
+  const out = new Int16Array(n);
+  const src = pcm.length > n ? pcm.subarray(pcm.length - n) : pcm;
+  out.set(src, n - src.length);
+  return out;
+}
+
+/** Um bin por raia do FFT de 2048 pontos. A contagem acompanha a largura do painel. */
+export function panelBinCount(spanHz: number): number {
+  const binHz = 48_000 / 2048;
+  return Math.max(8, Math.round(Math.max(1, spanHz) / binHz));
+}
+
+/** Fallback PCM (scope CI-V desligado). Banda simétrica em torno do VFO. */
+export function audioSweep(pcm: Int16Array, tune: number, spanHz: number): ScopeSweep {
+  const view = panelView(tune, spanHz);
+  const span = Math.max(1, view.endHz - view.startHz);
+  const half = Math.min(span / 2, 24_000);
+  const columns = panelBinCount(span);
+  const audioCols = Math.max(8, Math.round((half * 2 / span) * columns));
+  const audio = spectrumColumns(pcmBlock(pcm), 48_000, -half, half, audioCols);
+  const bins = new Uint8Array(columns);
+  for (let i = 0; i < audio.length; i++) {
+    const audioHz = -half + ((half * 2 * (i + 0.5)) / audio.length);
+    const rf = tune + audioHz;
+    if (rf < view.startHz || rf > view.endHz) continue;
+    const col = Math.min(columns - 1, Math.floor(((rf - view.startHz) / span) * columns));
+    const v = Math.round((audio[i] ?? 0) * 255);
+    if (v > (bins[col] ?? 0)) bins[col] = v;
+  }
+  return { startHz: view.startHz, endHz: view.endHz, mode: 0, bins, oor: false };
 }
 
 /** O VFO fica no centro. A vista tem exatamente a largura selecionada no painel. */

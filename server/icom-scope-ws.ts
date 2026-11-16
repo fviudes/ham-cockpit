@@ -27,28 +27,31 @@ let unlistenSerial: (() => void) | null = null;
 let serialAsmLogged = false;
 let centerAt = 0;
 
-function askScopeCenter(via: "serial" | "lan", span = false) {
+function askScopeCenter(via: "serial" | "lan", span = false, spanHz?: number) {
   const now = Date.now();
-  if (now - centerAt < 800) return;
+  if (!span && now - centerAt < 800) return;
   centerAt = now;
   if (via === "serial") {
-    if (span) serialScopeSpan();
+    if (span) serialScopeSpan(spanHz);
     else serialScopeCenter();
     return;
   }
-  void icomLanCmd(span ? "scopeSpan" : "scopeCenter");
+  void icomLanCmd(span ? "scopeSpan" : "scopeCenter", spanHz != null ? { spanHz } : {});
 }
 
 function sendJson(ws: WebSocket, body: unknown) {
   if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(body));
 }
 
-function readScopeAsk(data: unknown): "center" | "span" | null {
+type ScopeAsk = { kind: "center" } | { kind: "span"; spanHz?: number };
+
+function readScopeAsk(data: unknown): ScopeAsk | null {
   const text = typeof data === "string" ? data : Buffer.isBuffer(data) ? data.toString("utf8") : "";
   if (!text) return null;
   try {
-    const type = (JSON.parse(text) as { type?: string }).type;
-    if (type === "center" || type === "span") return type;
+    const body = JSON.parse(text) as { type?: string; spanHz?: number };
+    if (body.type === "center") return { kind: "center" };
+    if (body.type === "span") return { kind: "span", spanHz: body.spanHz };
     return null;
   } catch {
     return null;
@@ -155,7 +158,7 @@ async function bind(ws: WebSocket, via: string) {
     } else sendJson(ws, { type: "ready", via: "serial" });
     ws.on("message", (data) => {
       const ask = readScopeAsk(data);
-      if (ask) askScopeCenter("serial", ask === "span");
+      if (ask) askScopeCenter("serial", ask.kind === "span", ask.kind === "span" ? ask.spanHz : undefined);
     });
     ws.on("close", () => {
       serialClients.delete(ws);
@@ -170,7 +173,7 @@ async function bind(ws: WebSocket, via: string) {
   else sendJson(ws, { type: "ready", via: "lan" });
   ws.on("message", (data) => {
     const ask = readScopeAsk(data);
-    if (ask) askScopeCenter("lan", ask === "span");
+    if (ask) askScopeCenter("lan", ask.kind === "span", ask.kind === "span" ? ask.spanHz : undefined);
   });
   ws.on("close", () => {
     lanClients.delete(ws);

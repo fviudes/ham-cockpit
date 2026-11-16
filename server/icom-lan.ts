@@ -580,8 +580,9 @@ export async function icomLanCmd(
         return { ok: true };
       }
       case "scopeSpan": {
+        const spanHz = body.spanHz != null ? Number(body.spanHz) : undefined;
         rig.sendCiv(civPayload(0x27, 0x14, 0x00, 0x00));
-        rig.sendCiv(civPayload(...scopeSpanData()));
+        rig.sendCiv(civPayload(...scopeSpanData(spanHz)));
         return { ok: true };
       }
       case "civ": {

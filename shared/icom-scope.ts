@@ -54,26 +54,32 @@ export function scopeCenterFrame(to: number): Uint8Array {
   return Uint8Array.from([0xfe, 0xfe, to & 0xff, 0xe0, 0x27, 0x14, 0x00, 0x00, 0xfd]);
 }
 
+/** Passos de largura do scope Icom (Hamlib `spectrum_spans`), em Hz totais. */
+export const SCOPE_SPAN_STEPS_HZ = [5_000, 10_000, 20_000, 50_000, 100_000, 200_000, 500_000, 1_000_000] as const;
+
 /**
- * Largura total do scope em modo centro.
- * Hamlib 4.6.5, rigs/icom/ic7300.c, caps do IC-705 (`spectrum_spans`):
- * 5, 10, 20, 50, 100, 200, 500 e 1000 kHz. Não há 300 kHz.
- * 500 kHz (±250 kHz) é o passo que o card do painel usa como largura padrão.
- * O seletor Largura do card escolhe o passo; o eixo acompanha essa largura.
+ * Largura padrão do card e do comando 27 15: 200 kHz (±100 kHz em torno do VFO).
+ * Hamlib 4.6.5: 5, 10, 20, 50, 100, 200, 500 e 1000 kHz — não há 300 kHz.
  */
-export const SCOPE_SPAN_HZ = 500_000;
+export const SCOPE_SPAN_HZ = 200_000;
+
+export function normalizeScopeSpan(spanHz: number): number {
+  const n = Math.round(spanHz);
+  return (SCOPE_SPAN_STEPS_HZ as readonly number[]).includes(n) ? n : SCOPE_SPAN_HZ;
+}
 
 /**
  * Comando 27 15, como o Hamlib 4.6.5 manda em icom.c (`RIG_LEVEL_SPECTRUM_SPAN`).
  * O IC-705 não é RIG_TARGETABLE_SPECTRUM, então o primeiro dado é o VFO 0.
  * Os cinco bytes seguintes são o BCD da metade do span (valor ±).
  */
-export function scopeSpanData(): number[] {
-  return [0x27, 0x15, 0x00, ...bcd5(SCOPE_SPAN_HZ / 2)];
+export function scopeSpanData(spanHz: number = SCOPE_SPAN_HZ): number[] {
+  const half = normalizeScopeSpan(spanHz) / 2;
+  return [0x27, 0x15, 0x00, ...bcd5(half)];
 }
 
-export function scopeSpanFrame(to: number): Uint8Array {
-  return Uint8Array.from([0xfe, 0xfe, to & 0xff, 0xe0, ...scopeSpanData(), 0xfd]);
+export function scopeSpanFrame(to: number, spanHz: number = SCOPE_SPAN_HZ): Uint8Array {
+  return Uint8Array.from([0xfe, 0xfe, to & 0xff, 0xe0, ...scopeSpanData(spanHz), 0xfd]);
 }
 
 /** 27 10 liga o scope. 27 11 liga a saída do 27 00. Desliga na ordem inversa. */
