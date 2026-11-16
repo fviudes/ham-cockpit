@@ -17,7 +17,9 @@ import {
   PANEL_SPAN_HZ,
   PANEL_SPAN_STEPS_HZ,
   panelView,
+  panelizeRfSweep,
   sampleAt,
+  sweepDisplayFull,
   sweepIntervalMs,
   timeMarks,
   waterfallBands,
@@ -25,8 +27,6 @@ import {
 import { PanelTitle } from "./widgets";
 
 const HISTORY = 96;
-/** Sem quadro CI-V neste intervalo, usa PCM (fallback estreito ±24 kHz). */
-const SCOPE_RF_STALE_MS = 2_500;
 
 function ampColor(level: number, full: number): [number, number, number] {
   const t = Math.max(0, Math.min(1, level / full));
@@ -62,7 +62,7 @@ function layoutX(canvas: HTMLCanvasElement, clientX: number): number | null {
   return ((clientX - rect.left) / rect.width) * canvas.clientWidth;
 }
 
-type Trace = { bins: Uint8Array; at: number; startHz: number; endHz: number };
+type Trace = { bins: Uint8Array; at: number; startHz: number; endHz: number; rf: boolean };
 
 type Atlas = { key: string; canvas: HTMLCanvasElement };
 
@@ -81,13 +81,17 @@ function buildAtlas(rows: Trace[], tuneHz: number, spanHz: number, plotPx: numbe
   for (let i = 0; i < rows.length; i++) {
     const rowEdge = rows[i]!;
     const bins = rowEdge.bins;
-    let peak = 0;
-    for (let b = 0; b < bins.length; b++) if (bins[b]! > peak) peak = bins[b]!;
-    const full = peak > 160 ? 200 : 160;
+    const full = sweepDisplayFull(bins, rowEdge.rf);
     const row = i * canvas.width * 4;
     for (let x = 0; x < canvas.width; x++) {
       const hz = view.startHz + ((x + 0.5) / canvas.width) * span;
-      const sample = sampleAt(bins, rowEdge, hz);
+      const sample = rowEdge.rf
+        ? (() => {
+            const t = (hz - rowEdge.startHz) / span;
+            const idx = Math.min(bins.length - 1, Math.max(0, Math.floor(t * bins.length)));
+            return bins[idx] ?? 0;
+          })()
+        : sampleAt(bins, rowEdge, hz);
       const [r, g, b] = sample == null ? [5, 8, 12] : ampColor(sample, full);
       const o = row + x * 4;
       data[o] = r;
@@ -165,15 +169,15 @@ function paint(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const latest = rows[0];
   if (latest && latest.bins.length && view && edge) {
-    let peak = 0;
-    for (let i = 0; i < latest.bins.length; i++) if (latest.bins[i]! > peak) peak = latest.bins[i]!;
-    const full = peak > 160 ? 200 : 160;
+    const full = sweepDisplayFull(latest.bins, latest.rf);
     ctx.beginPath();
     ctx.strokeStyle = "#7ee0ff";
     ctx.lineWidth = 1.25;
     for (let x = 0; x < plotW; x++) {
       const hz = view.startHz + ((x + 0.5) / plotW) * span;
-      const sample = sampleAt(latest.bins, latest, hz) ?? 0;
+      const sample = latest.rf
+        ? (latest.bins[Math.min(latest.bins.length - 1, Math.max(0, Math.floor(((hz - latest.startHz) / span) * latest.bins.length)))] ?? 0)
+        : (sampleAt(latest.bins, latest, hz) ?? 0);
       const y = specH - 4 - (sample / full) * (specH - 8);
       if (x === 0) ctx.moveTo(x + 0.5, y);
       else ctx.lineTo(x + 0.5, y);
@@ -264,7 +268,6 @@ export function WaterfallViz() {
     let last = 0;
     let running = true;
     let socket: WebSocket | null = null;
-    let lastRfAt = 0;
     const draw = () => {
       if (!canvas) return;
       paint(canvas, rowsRef.current, tuneRef.current, spanRef.current, atlasRef, sweepMsRef, genRef.current, Date.now());
@@ -277,14 +280,17 @@ export function WaterfallViz() {
       draw();
     };
     raf = requestAnimationFrame(loop);
-    const onSweep = (sweep: ScopeSweep, rf = false) => {
-      if (rf) lastRfAt = Date.now();
+    const pushRow = (sweep: ScopeSweep, rf: boolean) => {
+      const tuned = rf
+        ? panelizeRfSweep(sweep, tuneRef.current, spanRef.current)
+        : sweep;
       const next = rowsRef.current;
       next.unshift({
-        bins: sweep.bins,
+        bins: tuned.bins,
         at: Date.now(),
-        startHz: sweep.startHz,
-        endHz: sweep.endHz,
+        startHz: tuned.startHz,
+        endHz: tuned.endHz,
+        rf,
       });
       if (next.length > HISTORY) next.pop();
       genRef.current += 1;
@@ -293,27 +299,28 @@ export function WaterfallViz() {
 
     let stop = () => {};
     let audio: WebSocket | null = null;
-    let lastAudio = 0;
-    try {
-      const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-      audio = new WebSocket(`${proto}//${window.location.host}/ws/radio-audio`);
-      audio.binaryType = "arraybuffer";
-      audio.addEventListener("message", (event) => {
-        if (!(event.data instanceof ArrayBuffer) || event.data.byteLength < 2) return;
-        const now = Date.now();
-        if (now - lastAudio < 80) return;
-        if (rfScope && now - lastRfAt < SCOPE_RF_STALE_MS) return;
-        lastAudio = now;
-        const bytes = event.data.byteLength - (event.data.byteLength % 2);
-        const pcm = new Int16Array(event.data.slice(0, bytes));
-        const tune = tuneRef.current > 0 ? tuneRef.current : 14_074_000;
-        onSweep(audioSweep(pcm, tune, spanRef.current), false);
-      });
-    } catch {
-      audio = null;
+    if (!rfScope) {
+      let lastAudio = 0;
+      try {
+        const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+        audio = new WebSocket(`${proto}//${window.location.host}/ws/radio-audio`);
+        audio.binaryType = "arraybuffer";
+        audio.addEventListener("message", (event) => {
+          if (!(event.data instanceof ArrayBuffer) || event.data.byteLength < 2) return;
+          const now = Date.now();
+          if (now - lastAudio < 80) return;
+          lastAudio = now;
+          const bytes = event.data.byteLength - (event.data.byteLength % 2);
+          const pcm = new Int16Array(event.data.slice(0, bytes));
+          const tune = tuneRef.current > 0 ? tuneRef.current : 14_074_000;
+          pushRow(audioSweep(pcm, tune, spanRef.current), false);
+        });
+      } catch {
+        audio = null;
+      }
     }
     if (via === "ble") {
-      const unsub = subscribeScope((sweep) => onSweep(sweep, true));
+      const unsub = subscribeScope((sweep) => pushRow(sweep, true));
       let alive = true;
       const armBleScope = (attempt = 0) => {
         void ic705Ble.setScope(true).then((ok) => {
@@ -339,6 +346,9 @@ export function WaterfallViz() {
         scopeWsRef.current = null;
       }
       if (socket) {
+        socket.addEventListener("open", () => {
+          socket?.send(JSON.stringify({ type: "span", spanHz: normalizeScopeSpan(spanRef.current) }));
+        });
         socket.addEventListener("close", () => {
           if (scopeWsRef.current === socket) scopeWsRef.current = null;
         });
@@ -357,7 +367,7 @@ export function WaterfallViz() {
               return;
             }
             if (body.type !== "sweep" || !Array.isArray(body.bins)) return;
-            onSweep(
+            pushRow(
               {
                 startHz: Number(body.startHz) || 0,
                 endHz: Number(body.endHz) || 0,

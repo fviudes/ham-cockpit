@@ -1,8 +1,8 @@
 {
-  "version": "0.1.12.03",
+  "version": "0.1.12.04",
   "channel": "main",
-  "file": "ham-cockpit-0.1.12.03.tgz",
-  "sha256": "a64a291102f3c7505711fea85a267e18bff0c0feaf46981fe77d380ba2ec5947",
-  "bytes": 5123167,
-  "notes": "Waterfall: volta a mostrar após 2,5 s sem CI-V (PCM) e reenvio do span na serial."
+  "file": "ham-cockpit-0.1.12.04.tgz",
+  "sha256": "e57284f8337d323bcfb73264569e8a05a10b6e6e75333ac4b2ae182eb3700641",
+  "bytes": 5123404,
+  "notes": "Menu mostra versão instalada; waterfall usa só CI-V com escala Icom 0-160."
 }

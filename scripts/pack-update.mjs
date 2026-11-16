@@ -137,6 +137,28 @@ function run(cmd, args) {
   execFileSync(cmd, args, { cwd: ROOT, stdio: "inherit", shell: process.platform === "win32" });
 }
 
+function syncVersionStamp(version) {
+  const brandPath = join(ROOT, "shared", "brand.ts");
+  let brand = readFileSync(brandPath, "utf8");
+  brand = brand.replace(/export const APP_VERSION = "[^"]+"/, `export const APP_VERSION = "${version}"`);
+  writeFileSync(brandPath, brand, "utf8");
+  const pkgPath = join(ROOT, "package.json");
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf8"));
+  pkg.version = version;
+  writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`, "utf8");
+  const versionsPath = join(STATION, "versions.json");
+  const versions = JSON.parse(readFileSync(versionsPath, "utf8"));
+  versions.app = version;
+  writeFileSync(versionsPath, `${JSON.stringify(versions, null, 2)}\n`, "utf8");
+  for (const i18nPath of [
+    join(ROOT, "client", "src", "console", "i18n.ts"),
+  ]) {
+    let i18n = readFileSync(i18nPath, "utf8");
+    i18n = i18n.replace(/version: "v[^"]+"/g, `version: "v${version}"`);
+    writeFileSync(i18nPath, i18n, "utf8");
+  }
+}
+
 function main() {
   const skipBuild = process.argv.includes("--skip-build");
   const notesArg = argValue("--notes");
@@ -148,6 +170,7 @@ function main() {
   const parts = version.split(".");
   const kind = parts.length === 4 ? "OTA-only (4 partes)" : "base de imagem / OTA alinhado (3 partes)";
   console.log(`versão ${version} — ${kind}`);
+  syncVersionStamp(version);
 
   if (!skipBuild) {
     console.log("compilando console (pnpm build)…");

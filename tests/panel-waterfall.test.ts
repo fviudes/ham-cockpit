@@ -4,7 +4,10 @@ import { audioSweep } from "../client/src/console/waterfall-view";
 import {
   centeredSpan,
   panelView,
+  panelizeRfSweep,
   PANEL_SPAN_HZ,
+  SCOPE_BIN_FULL,
+  sweepDisplayFull,
   FRAME_MS,
   freqTicks,
   clickedTuneHz,
@@ -41,6 +44,23 @@ describe("fallback de áudio no waterfall", () => {
     for (let c = 0; c < sweep.bins.length; c++) if ((sweep.bins[c] ?? 0) > 0) lit++;
     expect(lit).toBeGreaterThan(12);
     expect(lit).toBeLessThan(sweep.bins.length / 2);
+  });
+});
+
+describe("espectro CI-V no painel", () => {
+  it("reamostra o quadro do rádio na vista do VFO", () => {
+    const tune = 7_140_000;
+    const bins = new Uint8Array(475);
+    bins[0] = 10;
+    bins[237] = 120;
+    bins[474] = 20;
+    const raw = { startHz: 7_040_000, endHz: 7_240_000, mode: 0, bins, oor: false };
+    const out = panelizeRfSweep(raw, tune, 200_000);
+    expect(out.startHz).toBe(7_040_000);
+    expect(out.endHz).toBe(7_240_000);
+    expect(out.bins.length).toBe(475);
+    expect(out.bins[237]).toBe(120);
+    expect(sweepDisplayFull(out.bins, true)).toBe(SCOPE_BIN_FULL);
   });
 });
 

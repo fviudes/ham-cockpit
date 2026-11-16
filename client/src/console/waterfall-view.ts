@@ -11,6 +11,29 @@ export const PANEL_SPAN_HZ = SCOPE_SPAN_HZ;
 
 export const panelSpanHz = normalizeScopeSpan;
 
+/** Escala 0–160 do espectro CI-V Icom (USB/LAN/BLE). */
+export const SCOPE_BIN_FULL = 160;
+
+/** Reamostra o quadro do rádio na vista VFO ± largura do painel. */
+export function panelizeRfSweep(sweep: ScopeSweep, tuneHz: number, spanHz: number): ScopeSweep {
+  const view = panelView(tuneHz, spanHz);
+  const span = Math.max(1, view.endHz - view.startHz);
+  const cols = Math.max(8, sweep.bins.length);
+  const bins = new Uint8Array(cols);
+  for (let i = 0; i < cols; i++) {
+    const hz = view.startHz + ((i + 0.5) / cols) * span;
+    bins[i] = sampleAt(sweep.bins, sweep, hz) ?? 0;
+  }
+  return { startHz: view.startHz, endHz: view.endHz, mode: sweep.mode, bins, oor: sweep.oor };
+}
+
+export function sweepDisplayFull(bins: Uint8Array, rf: boolean): number {
+  let peak = 0;
+  for (let i = 0; i < bins.length; i++) if (bins[i]! > peak) peak = bins[i]!;
+  if (rf) return SCOPE_BIN_FULL;
+  return peak > SCOPE_BIN_FULL ? 200 : SCOPE_BIN_FULL;
+}
+
 function pcmBlock(pcm: Int16Array): Int16Array {
   const n = 2048;
   if (pcm.length === n) return pcm;

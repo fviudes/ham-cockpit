@@ -362,6 +362,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
   const [loc, navigate] = useLocation();
   const mobile = useIsMobile();
   const [open, setOpen] = useState(false);
+  const [installedVer, setInstalledVer] = useState(APP_VERSION);
   const user = sessionStorage.getItem(AUTH_USER_KEY) || DEFAULT_USER;
   const page = (loc.replace(/^\/console\/?/, "").split(/[?#]/)[0] || "radio") as PageId;
   const Page = PAGES[page] ?? RadioPage;
@@ -403,6 +404,25 @@ function Shell({ onLogout }: { onLogout: () => void }) {
   useEffect(() => {
     setOpen(false);
   }, [page]);
+
+  useEffect(() => {
+    let alive = true;
+    const pull = () => {
+      void fetch("/api/host", { credentials: "same-origin" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((body: { appVersion?: string } | null) => {
+          if (!alive || !body?.appVersion) return;
+          setInstalledVer(body.appVersion);
+        })
+        .catch(() => undefined);
+    };
+    pull();
+    const timer = window.setInterval(pull, 30_000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   const gate: LicenseGate = license?.gate ?? licenseGateOf(license?.state);
   const menusOpen = licenseMenusOpen(gate);
@@ -503,7 +523,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
               ) : null}
             </p>
             <p className="whitespace-nowrap font-['Space_Grotesk'] text-lg font-semibold text-white">{tx("brand")}</p>
-            <p className="whitespace-nowrap text-[11px] text-[#8ea0b3]">v{APP_VERSION} · Ubuntu Server</p>
+            <p className="whitespace-nowrap text-[11px] text-[#8ea0b3]">v{installedVer} · Ubuntu Server</p>
             <p
               className={`mt-2 inline-flex max-w-full truncate rounded-md border px-2 py-0.5 text-[10px] font-semibold tracking-wide ${licBadgeClass}`}
               title={licBadgeText}
