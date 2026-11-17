@@ -7,7 +7,7 @@ const dict = {
   pt: {
     brand: "Ham Cockpit",
     tagline: "Gateway da estação",
-    version: "v0.1.14.01",
+    version: "v0.1.14.02",
     vfoHdmiExit: "Tecle CTRL+X para sair para o console",
     loginTitle: "Acessar o console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -952,6 +952,7 @@ const dict = {
     svcDhcpHint: "DHCP e DNS do AP em 192.168.4.1.",
     svcWebHint: "Console HTTP (nginx + ham-cockpit).",
     svcOpen: "Abrir Serviços",
+    headerHotspot: "Hotspot",
     supportTab: "Suporte",
     supportTitle: "Suporte",
     supportHint:
@@ -981,7 +982,7 @@ const dict = {
   en: {
     brand: "Ham Cockpit",
     tagline: "Station gateway",
-    version: "v0.1.14.01",
+    version: "v0.1.14.02",
     vfoHdmiExit: "Press CTRL+X to return to the console",
     loginTitle: "Sign in to the console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -1924,6 +1925,7 @@ const dict = {
     svcDhcpHint: "AP DHCP and DNS on 192.168.4.1.",
     svcWebHint: "HTTP console (nginx + ham-cockpit).",
     svcOpen: "Open Services",
+    headerHotspot: "Hotspot",
     supportTab: "Support",
     supportTitle: "Support",
     supportHint:

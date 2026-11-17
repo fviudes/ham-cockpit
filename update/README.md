@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.14.01** (`version.json`).
+Versão atual neste canal: **0.1.14.02** (`version.json`).
 
 ## Versionamento
 
@@ -22,12 +22,12 @@ Cada pacote OTA é **cumulativo**: substitui o console inteiro. Basta aplicar a 
 
 ```json
 {
-  "version": "0.1.14.01",
+  "version": "0.1.14.02",
   "channel": "main",
-  "file": "ham-cockpit-0.1.14.01.tgz",
-  "sha256": "003633a4090672518b2245b1607b198c71d831f6ef8a0e2a829e9c3eeaf41945",
-  "bytes": 5139883,
-  "notes": "Ham Cockpit v0.1.14.01 — Release cumulativa 0.1.14: Contêineres/Processos, limites Wavelog e atualização manual OTA (upload .tgz no Admin)."
+  "file": "ham-cockpit-0.1.14.02.tgz",
+  "sha256": "4995e84cab8604f3b7d72d213bfea6fd5add122fe2373e0a3033872380646c56",
+  "bytes": 5139906,
+  "notes": "Ham Cockpit v0.1.14.02 — Release cumulativa 0.1.14: chip Hotspot (MMDVM Host) no menu superior; inclui 0.1.14.01."
 }
 ```
 

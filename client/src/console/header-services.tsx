@@ -71,7 +71,7 @@ type HeaderServicesProps = {
   onNavigate: (path: string) => void;
 };
 
-/** Ícones fixos do topo: 8 serviços, 3 por coluna, estilo lâmpada. */
+/** Ícones fixos do topo: 9 serviços, 3×3, estilo lâmpada (mmdvmhost = Hotspot). */
 export function buildHeaderServiceChips({ s, tx, menusOpen, onNavigate }: HeaderServicesProps): HeaderChip[] {
   const running = (id: (typeof s.services)[number]["id"]) => s.services.find((row) => row.id === id)?.running ?? false;
   const go = (path: string) => {
@@ -98,5 +98,6 @@ export function buildHeaderServiceChips({ s, tx, menusOpen, onNavigate }: Header
       "/console/wifi",
     ),
     chip("bluetooth", tx(SVC_LABEL.bluetooth), running("bluetooth") || s.ble.connected, "/console/bluetooth"),
+    chip("mmdvm", tx("headerHotspot"), running("mmdvm"), "/console/mmdvm"),
   ];
 }
