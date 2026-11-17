@@ -10,7 +10,11 @@ const execFileAsync = promisify(execFile);
 /** Teto do .tgz enviado na atualização manual (pacote OTA completo). */
 export const OTA_UPLOAD_MAX = 600 * 1024 * 1024;
 
-const UPLOAD_SLACK = 2 * 1024 * 1024;
+/** Folga no Content-Length declarado (overhead multipart). */
+export const OTA_UPLOAD_SLACK = 2 * 1024 * 1024;
+
+/** Valor para `client_max_body_size` no nginx (OTA_UPLOAD_MAX + folga). */
+export const OTA_NGINX_CLIENT_MAX_BODY = "650m";
 const PKG_RE = /^ham-cockpit-\d+\.\d+\.\d+(?:\.\d+)?\.tgz$/i;
 const SHA_RE = /^[a-f0-9]{64}$/i;
 
@@ -83,7 +87,7 @@ export function otaReadUpload(req: UploadReq): Promise<OtaUpload> {
   const boundary = multipartBoundary(headerOne(req, "content-type"));
   if (!boundary) return Promise.resolve({ ok: false, error: "Envie o pacote OTA como arquivo .tgz." });
   const declared = Number(headerOne(req, "content-length") || "0");
-  if (Number.isFinite(declared) && declared > OTA_UPLOAD_MAX + UPLOAD_SLACK) {
+  if (Number.isFinite(declared) && declared > OTA_UPLOAD_MAX + OTA_UPLOAD_SLACK) {
     req.resume?.();
     req.on("data", () => undefined);
     return Promise.resolve({ ok: false, error: "Arquivo grande demais (limite de 600 MB)." });
@@ -104,6 +108,7 @@ export function otaReadUpload(req: UploadReq): Promise<OtaUpload> {
     let currentName = "";
     let fileBytes = 0;
     let done = false;
+    let closing = false;
     let fieldChunks: Buffer[] = [];
     let closed: Promise<void> = Promise.resolve();
 
@@ -193,6 +198,7 @@ export function otaReadUpload(req: UploadReq): Promise<OtaUpload> {
           if (buf.length < after + 2) return;
           const mark = buf.subarray(after, after + 2).toString("utf8");
           if (mark === "--") {
+            closing = true;
             buf = Buffer.alloc(0);
             closePart();
             void closed
@@ -252,9 +258,9 @@ export function otaReadUpload(req: UploadReq): Promise<OtaUpload> {
       pump();
     });
     req.on("end", () => {
-      if (done) return;
+      if (done || closing) return;
       if (mode !== "start" || filename) pump();
-      if (!done) fail("Envio incompleto.");
+      if (!done && !closing) fail("Envio incompleto.");
     });
     req.on("error", () => fail("Falha na leitura do envio."));
   });

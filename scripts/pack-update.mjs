@@ -198,6 +198,7 @@ function main() {
   cpSync(distPublic, join(stage, "public"), { recursive: true });
   cpSync(join(STATION, "runtime-package.json"), join(stage, "package.json"));
   cpSync(join(STATION, "ota-hooks.sh"), join(stage, "ota-hooks.sh"));
+  cpSync(join(STATION, "nginx-ham-cockpit.conf"), join(stage, "nginx-ham-cockpit.conf"));
   cpSync(join(STATION, "sudoers-hamcockpit"), join(stage, "sudoers-hamcockpit"));
   cpSync(join(ROOT, "VERSION"), join(stage, "VERSION"));
   cpSync(join(STATION, "versions.json"), join(stage, "versions.json"));

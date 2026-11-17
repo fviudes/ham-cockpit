@@ -633,12 +633,12 @@ function vitePluginUpdates(): Plugin {
             return sendJson(res, result.ok ? 200 : 400, result);
           }
           if (req.method === "POST" && url === "/api/updates/manual") {
-            return sendJson(res, 400, {
-              ok: false,
-              error: "Atualização manual por arquivo só está disponível na estação (Ubuntu).",
-            });
-          }
-          if (req.method === "POST" && url === "/api/updates/manual") {
+            if (process.platform !== "linux") {
+              return sendJson(res, 400, {
+                ok: false,
+                error: "Atualização manual por arquivo só está disponível na estação (Ubuntu).",
+              });
+            }
             const cookie = req.headers.cookie ?? "";
             if (!consoleSessionOk(cookie)) {
               return sendJson(res, 401, { ok: false, error: "Sessão expirada. Entre de novo." });

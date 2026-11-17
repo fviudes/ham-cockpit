@@ -88,7 +88,14 @@ const __dirname = path.dirname(__filename);
 async function startServer() {
   const app = express();
   const server = createServer(app);
-  app.use(express.json({ limit: "32kb" }));
+  const JSON_BODY_LIMIT = "32kb";
+  const MULTIPART_UPLOAD_PATHS = new Set(["/api/updates/manual", "/api/backup/restore-file"]);
+  app.use((req, res, next) => {
+    if (MULTIPART_UPLOAD_PATHS.has(req.path)) return next();
+    const ct = String(req.headers["content-type"] || "").toLowerCase();
+    if (ct.includes("multipart/form-data")) return next();
+    express.json({ limit: JSON_BODY_LIMIT })(req, res, next);
+  });
   attachTerminal(server);
   attachRadioAudio(server);
   attachScopeWs(server);

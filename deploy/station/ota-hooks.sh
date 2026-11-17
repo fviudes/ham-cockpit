@@ -33,6 +33,20 @@ safe_install() {
   install "${opts[@]}" "$src" "$dest"
 }
 
+ensure_nginx_upload_limit() {
+  local src="$ROOT/nginx-ham-cockpit.conf"
+  [[ -f "$src" ]] || return 0
+  command -v nginx >/dev/null 2>&1 || return 0
+  safe_install -m 0644 "$src" /etc/nginx/sites-available/ham-cockpit
+  ln -sfn /etc/nginx/sites-available/ham-cockpit /etc/nginx/sites-enabled/ham-cockpit 2>/dev/null || true
+  rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
+  if nginx -t >/dev/null 2>&1; then
+    systemctl reload nginx.service 2>/dev/null \
+      || systemctl try-reload-or-restart nginx.service 2>/dev/null \
+      || true
+  fi
+}
+
 MMDVM_BINS=(MMDVMHost DMRGateway YSFGateway ircddbgatewayd NextionDriver)
 
 mmdvm_missing() {
@@ -417,6 +431,7 @@ if [[ -f "$ROOT/mmdvm-arm64.tgz" ]]; then
 fi
 ensure_mmdvm_bins || true
 ensure_mmdvm_runtime_pkgs || true
+ensure_nginx_upload_limit || true
 
 # Hamlib ≥4.6 no prefixo privado — não sobrescreve o apt 4.5.5.
 # O rigctld do rádio precisa deste prefixo: o 4.5.5 abre Icom host:port em UDP
