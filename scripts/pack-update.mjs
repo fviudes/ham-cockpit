@@ -52,6 +52,7 @@ const BIN_FROM_STATION = [
   "build-ft8-decode.sh",
   "ftx-encode.c",
   "ham-cockpit-watch.sh",
+  "ham-cockpit-net-failover.sh",
 ];
 
 const BIN_EXTRA = [
@@ -75,6 +76,8 @@ const SYSTEMD_UNITS = [
   "first-boot.service",
   "ham-cockpit-watch.service",
   "ham-cockpit-watch.timer",
+  "ham-cockpit-net-failover.service",
+  "ham-cockpit-net-failover.timer",
   "ham-cockpit-support-vpn.service",
   "ham-cockpit-support-user.service",
 ];

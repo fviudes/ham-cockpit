@@ -7,7 +7,7 @@ const dict = {
   pt: {
     brand: "Ham Cockpit",
     tagline: "Gateway da estação",
-    version: "v0.1.14.03",
+    version: "v0.1.14.04",
     vfoHdmiExit: "Tecle CTRL+X para sair para o console",
     loginTitle: "Acessar o console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -371,7 +371,8 @@ const dict = {
     netLink: "Tipo de conexão",
     netLinkWifi: "Wi‑Fi",
     netLinkEth: "Cabo (Ethernet)",
-    netLinkHint: "Escolha se o Pi usa o cabo de rede ou o Wi‑Fi da casa como uplink. O AP 192.168.4.1 continua disponível no campo.",
+    netLinkHint:
+      "Escolha se o Pi usa o cabo de rede ou o Wi‑Fi da casa como uplink. Com Cabo (Ethernet) selecionado, perder o cabo liga automaticamente as redes salvas (na ordem da lista); quando o cabo voltar, o uplink volta ao Ethernet. Com Wi‑Fi selecionado, o Pi permanece na STA e o cabo não toma o uplink. O AP 192.168.4.1 continua disponível no campo.",
     netDhcp: "DHCP (automático)",
     netStatic: "IP fixo",
     netDns1: "DNS primário",
@@ -984,7 +985,7 @@ const dict = {
   en: {
     brand: "Ham Cockpit",
     tagline: "Station gateway",
-    version: "v0.1.14.03",
+    version: "v0.1.14.04",
     vfoHdmiExit: "Press CTRL+X to return to the console",
     loginTitle: "Sign in to the console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -1348,7 +1349,8 @@ const dict = {
     netLink: "Uplink",
     netLinkWifi: "Wi‑Fi",
     netLinkEth: "Wired (Ethernet)",
-    netLinkHint: "Choose whether the Pi uses Ethernet or house Wi‑Fi as uplink. The 192.168.4.1 AP remains for field use.",
+    netLinkHint:
+      "Choose whether the Pi uses Ethernet or house Wi‑Fi as uplink. With Wired (Ethernet) selected, losing the cable auto-connects saved networks (list order); when the cable returns, uplink switches back to Ethernet. With Wi‑Fi selected, the STA stays up and the cable does not take over uplink. The 192.168.4.1 AP remains for field use.",
     netDhcp: "DHCP (automatic)",
     netStatic: "Static IP",
     netDns1: "Primary DNS",

@@ -4,6 +4,7 @@ set -euo pipefail
 
 WLAN="${CATBRIDGE_WLAN:-wlan0}"
 AP_CONN="Ham-Cockpit-AP"
+NET_CFG="${HC_NET_CONFIG:-/opt/ham-cockpit/net/config.json}"
 
 eth_dev() {
   local d
@@ -153,8 +154,67 @@ case "${1:-}" in
   managed)
     nmcli -t -f NAME,TYPE,AUTOCONNECT con show | awk -F: '$2=="802-11-wireless" && $1!="Ham-Cockpit-AP" {print $1 "\t" $3}'
     ;;
+  failover)
+    [[ -f "$NET_CFG" ]] || { echo "config de rede ausente" >&2; exit 2; }
+    rfkill unblock wifi 2>/dev/null || true
+    nmcli radio wifi on 2>/dev/null || true
+    nmcli device wifi rescan ifname "$WLAN" >/dev/null 2>&1 || nmcli device wifi rescan >/dev/null 2>&1 || true
+    sleep 2
+    mapfile -t _ORDER < <(python3 - "$NET_CFG" <<'PY'
+import json, sys
+path = sys.argv[1]
+try:
+    data = json.load(open(path, encoding="utf-8"))
+except Exception:
+    raise SystemExit
+seen = set()
+order = []
+for entry in data.get("managed") or []:
+    if not isinstance(entry, dict):
+        continue
+    ssid = str(entry.get("ssid") or "").strip()
+    if not ssid or ssid in seen:
+        continue
+    seen.add(ssid)
+    order.append(ssid)
+sta = str(data.get("staSsid") or "").strip()
+sta_psk = str(data.get("staPass") or "").strip()
+by_ssid = {
+    str(m.get("ssid") or "").strip(): str(m.get("psk") or "").strip()
+    for m in (data.get("managed") or [])
+    if isinstance(m, dict) and m.get("ssid")
+}
+if sta and sta not in seen:
+    order.insert(0, sta)
+    seen.add(sta)
+for ssid in order:
+    psk = sta_psk if ssid == sta else by_ssid.get(ssid, "")
+    print(f"{ssid}\t{psk}")
+PY
+)
+    if [[ "${#_ORDER[@]}" -eq 0 ]]; then
+      echo "nenhuma rede salva" >&2
+      exit 1
+    fi
+    _fail_try=0
+    for row in "${_ORDER[@]}"; do
+      ssid="${row%%$'\t'*}"
+      psk="${row#*$'\t'}"
+      [[ -n "$ssid" ]] || continue
+      _fail_try=1
+      if [[ -z "$psk" ]]; then
+        if nmcli -w 45 device wifi connect "$ssid" ifname "$WLAN"; then
+          exit 0
+        fi
+      elif nmcli -w 45 device wifi connect "$ssid" password "$psk" ifname "$WLAN"; then
+        exit 0
+      fi
+    done
+    [[ "$_fail_try" -eq 1 ]] && exit 1
+    exit 2
+    ;;
   *)
-    echo "uso: station-net scan|connect SSID|forget SSID|link wifi|ethernet|ipv4 ...|hostname NAME|ap SSID|managed" >&2
+    echo "uso: station-net scan|connect SSID|forget SSID|link wifi|ethernet|failover|ipv4 ...|hostname NAME|ap SSID|managed" >&2
     exit 1
     ;;
 esac

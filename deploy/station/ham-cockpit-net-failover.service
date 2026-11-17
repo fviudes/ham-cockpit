@@ -1,0 +1,11 @@
+[Unit]
+Description=Ham Cockpit — uplink Wi‑Fi se o cabo cair
+Documentation=file:///opt/ham-cockpit/bin/ham-cockpit-net-failover.sh
+After=NetworkManager.service network.target
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/ham-cockpit/bin/ham-cockpit-net-failover.sh
+Nice=10
+TimeoutStartSec=120

@@ -300,6 +300,14 @@ if [[ -d "$ROOT/systemd" ]]; then
     systemctl enable ham-cockpit-watch.timer 2>/dev/null || true
     systemctl start ham-cockpit-watch.timer 2>/dev/null || true
   fi
+  if [[ -f "$ROOT/bin/ham-cockpit-net-failover.sh" ]]; then
+    sed -i 's/\r$//' "$ROOT/bin/ham-cockpit-net-failover.sh" 2>/dev/null || true
+    safe_install -m 0755 "$ROOT/bin/ham-cockpit-net-failover.sh" /opt/ham-cockpit/bin/ham-cockpit-net-failover.sh
+  fi
+  if [[ -f /etc/systemd/system/ham-cockpit-net-failover.timer ]]; then
+    systemctl enable ham-cockpit-net-failover.timer 2>/dev/null || true
+    systemctl start ham-cockpit-net-failover.timer 2>/dev/null || true
+  fi
 fi
 
 if [[ -d "$ROOT/bin" ]]; then

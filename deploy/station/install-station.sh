@@ -73,6 +73,7 @@ install -o root -g root -m 0755 "$ROOT/deploy/ser2net/ser2net-clear-locks" /opt/
 install -o root -g root -m 0755 "$HERE/station-net" /opt/ham-cockpit/bin/station-net
 install -o root -g root -m 0755 "$HERE/station-svc" /opt/ham-cockpit/bin/station-svc
 install -o root -g root -m 0755 "$HERE/ham-cockpit-watch.sh" /opt/ham-cockpit/bin/ham-cockpit-watch.sh
+install -o root -g root -m 0755 "$HERE/ham-cockpit-net-failover.sh" /opt/ham-cockpit/bin/ham-cockpit-net-failover.sh
 install -o root -g root -m 0755 "$HERE/station-upd" /opt/ham-cockpit/bin/station-upd
 install -o root -g root -m 0755 "$HERE/station-backup" /opt/ham-cockpit/bin/station-backup
 install -o root -g root -m 0755 "$HERE/station-support-vpn" /opt/ham-cockpit/bin/station-support-vpn
@@ -231,6 +232,8 @@ install -m 0644 "$HERE/ham-cockpit.target" /etc/systemd/system/ham-cockpit.targe
 install -m 0644 "$HERE/ham-cockpit.service" /etc/systemd/system/ham-cockpit.service
 install -m 0644 "$HERE/ham-cockpit-watch.service" /etc/systemd/system/ham-cockpit-watch.service
 install -m 0644 "$HERE/ham-cockpit-watch.timer" /etc/systemd/system/ham-cockpit-watch.timer
+install -m 0644 "$HERE/ham-cockpit-net-failover.service" /etc/systemd/system/ham-cockpit-net-failover.service
+install -m 0644 "$HERE/ham-cockpit-net-failover.timer" /etc/systemd/system/ham-cockpit-net-failover.timer
 install -m 0644 "$HERE/ham-cockpit-ap.service" /etc/systemd/system/ham-cockpit-ap.service
 install -m 0644 "$HERE/first-boot.service" /etc/systemd/system/first-boot.service
 install -m 0644 "$ROOT/deploy/ser2net/ser2net.service" /etc/systemd/system/ser2net.service
@@ -537,6 +540,7 @@ allow_ser2net_ports || echo "install-station: AVISO — portas ser2net no firewa
 install -d /opt/ham-cockpit/systemd
 for u in ham-cockpit.service ham-cockpit-ap.service ham-cockpit.target first-boot.service \
   ham-cockpit-watch.service ham-cockpit-watch.timer \
+  ham-cockpit-net-failover.service ham-cockpit-net-failover.timer \
   ham-cockpit-vfo.service ham-cockpit-vfo-idle.service ham-cockpit-support-vpn.service \
   ham-cockpit-vpn-input.service wavelog.service; do
   if [[ -f "/etc/systemd/system/$u" ]]; then
@@ -593,7 +597,7 @@ enable_units ssh.service
 enable_units sshd.service
 enable_units docker.service docker.socket nginx.service NetworkManager.service avahi-daemon.service
 enable_units ham-cockpit.target ham-cockpit.service ham-cockpit-ap.service first-boot.service
-enable_units ham-cockpit-watch.timer
+enable_units ham-cockpit-watch.timer ham-cockpit-net-failover.timer
 # Enable só. Unidade já ativa não é reiniciada: o restart derruba o CI-V.
 enable_units ser2net.service 'rigctld@ic705.service' wavelog.service waveloggate.service
 # Hamlib do Ubuntu 4.5.5 abre UDP no Icom e o CI-V morre. SPE é RFC2217 na

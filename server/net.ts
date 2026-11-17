@@ -140,6 +140,21 @@ function rememberSsid(ssid: string, psk?: string) {
   saved.managed = [{ ssid, psk: psk || rest.find((m) => m.ssid === ssid)?.psk }, ...rest].slice(0, 12);
 }
 
+/** Ordem STA para failover no Pi (managed salva + SSID ativo se ausente da lista). */
+export function wifiFailoverSsidOrder(managed: ManagedNet[], staSsid = ""): string[] {
+  const seen = new Set<string>();
+  const order: string[] = [];
+  for (const m of managed) {
+    const ssid = String(m?.ssid || "").trim();
+    if (!ssid || seen.has(ssid)) continue;
+    seen.add(ssid);
+    order.push(ssid);
+  }
+  const sta = staSsid.trim();
+  if (sta && !seen.has(sta)) order.unshift(sta);
+  return order;
+}
+
 function run(cmd: string, args: string[], input?: string, timeout = 20_000): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });

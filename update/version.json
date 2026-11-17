@@ -1,8 +1,8 @@
 {
-  "version": "0.1.14.03",
+  "version": "0.1.14.04",
   "channel": "main",
-  "file": "ham-cockpit-0.1.14.03.tgz",
-  "sha256": "5da2800f28eec6d5608272fb1716b2e589e6c1c446e8fdcb29c370bf0b192809",
-  "bytes": 5141369,
-  "notes": "Ham Cockpit v0.1.14.03 — Release cumulativa 0.1.14: MAC Ethernet e Wi‑Fi no painel Rede (Status); inclui 0.1.14.02."
+  "file": "ham-cockpit-0.1.14.04.tgz",
+  "sha256": "3437ff22932a471c8c73cb841255a5d0e4df12d349f57f08099820379c70acf0",
+  "bytes": 5143000,
+  "notes": "Ham Cockpit v0.1.14.04 — Release cumulativa 0.1.14: failover Wi‑Fi ao perder cabo (ordem das redes salvas); MAC Ethernet e Wi‑Fi no Status; inclui 0.1.14.03."
 }

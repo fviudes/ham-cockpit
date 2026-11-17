@@ -727,8 +727,8 @@ export function ManualPage() {
 
         <Section id="wifi" title={t(TOC[22]!.title)}>
           <P
-            pt="Aba WiFi: (1) nome do Pi na rede, que vira nome.local; (2) tipo de conexão: cabo de rede ou Wi‑Fi da casa; (3) Procurar redes e Conectar, com a senha; (4) DHCP ou IP fixo (IP, máscara, gateway e DNS primário e secundário); (5) Wi‑Fi próprio do Ham Cockpit em 192.168.4.1, para usar no campo. As redes salvas voltam sozinhas quando o Pi liga."
-            en="WiFi tab: (1) device name, which becomes name.local on the LAN; (2) uplink — Ethernet cable or house Wi‑Fi; (3) Scan networks and Connect with the password; (4) DHCP or static IP (address, mask, gateway, primary and secondary DNS); (5) Ham Cockpit AP at 192.168.4.1 for the field. Saved networks rejoin on Pi boot."
+            pt="Aba WiFi: (1) nome do Pi na rede, que vira nome.local; (2) tipo de conexão: cabo de rede ou Wi‑Fi da casa — com Cabo selecionado, se o cabo cair o Pi tenta as redes salvas na ordem da lista e volta ao cabo quando o link físico retornar; (3) Procurar redes e Conectar, com a senha; (4) DHCP ou IP fixo (IP, máscara, gateway e DNS primário e secundário); (5) Wi‑Fi próprio do Ham Cockpit em 192.168.4.1, para usar no campo. As redes salvas voltam sozinhas quando o Pi liga."
+            en="WiFi tab: (1) device name, which becomes name.local on the LAN; (2) uplink — Ethernet or house Wi‑Fi — with Wired selected, losing the cable tries saved networks in list order and returns to Ethernet when the physical link is back; (3) Scan networks and Connect with the password; (4) DHCP or static IP (address, mask, gateway, primary and secondary DNS); (5) Ham Cockpit AP at 192.168.4.1 for the field. Saved networks rejoin on Pi boot."
           />
           <Screen name="console-rede-wifi" className="my-4" />
           <GoTab page="wifi" label={t({ pt: "Abrir WiFi", en: "Open WiFi" })} />
