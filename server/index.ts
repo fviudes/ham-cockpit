@@ -31,7 +31,8 @@ import { netConnect, netForget, netSave, netScan, netSetAp, netSetHostname, netS
 import { processesAction, processesList } from "./processes";
 import { containersAction, containersList } from "./containers";
 import { servicesApplyBoot, servicesPower, servicesSetAutostart, servicesStatus } from "./services";
-import { updatesApply, updatesRefresh, updatesStatus } from "./updates";
+import { updatesApply, updatesApplyManualFile, updatesRefresh, updatesStatus } from "./updates";
+import { otaDropUpload, otaReadUpload, otaValidatePackage } from "./updates-upload";
 import { layoutGet, layoutSave } from "./layouts";
 import { isLoopback, vfoDisplayExit } from "./vfo-display";
 import { ldgCmd, ldgConnect, ldgDisconnect, ldgPeek, ldgSave, ldgStatus } from "./ldg";
@@ -72,7 +73,13 @@ import {
 } from "./hamlib-hub";
 import { icomLanCmd, icomLanStatus } from "./icom-lan";
 import { registerLicenseRoutes } from "./license";
-import { consoleSessionClearCookie, consoleSessionCookie, consoleSessionOk, consoleSessionToken } from "./console-session";
+import {
+  consoleSessionAdmin,
+  consoleSessionClearCookie,
+  consoleSessionCookie,
+  consoleSessionOk,
+  consoleSessionToken,
+} from "./console-session";
 import { supportVpnSet, supportVpnStatus } from "./support-vpn";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -724,6 +731,39 @@ async function startServer() {
       res.status(body.ok ? 200 : 400).json(body);
     } catch (err) {
       res.status(500).json({ ok: false, items: [], pending: 0, error: String(err) });
+    }
+  });
+  app.post("/api/updates/manual", async (req, res) => {
+    if (!consoleSessionOk(req.headers.cookie)) {
+      res.status(401).json({ ok: false, error: "Sessão expirada. Entre de novo." });
+      return;
+    }
+    if (!consoleSessionAdmin(req.headers.cookie)) {
+      res.status(403).json({ ok: false, error: "Só o usuário admin pode aplicar pacotes OTA manualmente." });
+      return;
+    }
+    let uploaded = "";
+    try {
+      const upload = await otaReadUpload(req);
+      if (!upload.ok) {
+        res.status(400).json(upload);
+        return;
+      }
+      uploaded = upload.path;
+      const valid = await otaValidatePackage(upload.path);
+      if (!valid.ok) {
+        otaDropUpload(uploaded);
+        uploaded = "";
+        res.status(400).json(valid);
+        return;
+      }
+      const body = await updatesApplyManualFile(upload.path, upload.sha256);
+      otaDropUpload(upload.path);
+      uploaded = "";
+      res.status(body.ok ? 200 : 400).json(body);
+    } catch (err) {
+      if (uploaded) otaDropUpload(uploaded);
+      if (!res.headersSent) res.status(500).json({ ok: false, items: [], pending: 0, error: String(err) });
     }
   });
 

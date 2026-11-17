@@ -66,32 +66,47 @@ export function consoleSessionClearCookie(): string {
   return `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
 }
 
-export function consoleSessionOk(cookieHeader: string | undefined | null): boolean {
-  if (!cookieHeader) return false;
+type SessionPayload = { u: string; exp: number };
+
+function sessionPayload(cookieHeader: string | undefined | null): SessionPayload | null {
+  if (!cookieHeader) return null;
   const raw = cookieHeader
     .split(";")
     .map((part) => part.trim())
     .find((part) => part.startsWith(`${COOKIE}=`));
-  if (!raw) return false;
+  if (!raw) return null;
   let token = raw.slice(COOKIE.length + 1);
   try {
     token = decodeURIComponent(token);
   } catch {
-    return false;
+    return null;
   }
   const dot = token.lastIndexOf(".");
-  if (dot <= 0) return false;
+  if (dot <= 0) return null;
   const payload = token.slice(0, dot);
   const sig = token.slice(dot + 1);
   const expect = createHmac("sha256", secret()).update(payload).digest("base64url");
   const a = Buffer.from(sig);
   const b = Buffer.from(expect);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return false;
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
   try {
     const body = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { u?: string; exp?: number };
-    if (!ACCOUNTS.some((acc) => acc.user === body.u)) return false;
-    return typeof body.exp === "number" && body.exp >= Date.now() / 1000;
+    if (!body.u || !ACCOUNTS.some((acc) => acc.user === body.u)) return null;
+    if (typeof body.exp !== "number" || body.exp < Date.now() / 1000) return null;
+    return { u: body.u, exp: body.exp };
   } catch {
-    return false;
+    return null;
   }
+}
+
+export function consoleSessionUser(cookieHeader: string | undefined | null): string | null {
+  return sessionPayload(cookieHeader)?.u ?? null;
+}
+
+export function consoleSessionAdmin(cookieHeader: string | undefined | null): boolean {
+  return consoleSessionUser(cookieHeader) === "admin";
+}
+
+export function consoleSessionOk(cookieHeader: string | undefined | null): boolean {
+  return sessionPayload(cookieHeader) !== null;
 }

@@ -501,7 +501,7 @@ export async function updatesRefresh(): Promise<UpdatesSnapshot> {
   return runCheck("refresh");
 }
 
-function spawnApply(sid: UpdateId): Promise<UpdatesSnapshot> {
+function spawnApplyArgs(sid: UpdateId, args: string[]): Promise<UpdatesSnapshot> {
   const bin = helperPath();
   const job: UpdateJob = {
     id: sid,
@@ -517,7 +517,7 @@ function spawnApply(sid: UpdateId): Promise<UpdatesSnapshot> {
   };
   jobs.set(sid, job);
   return new Promise((resolve) => {
-    const child = spawn("sudo", ["-n", bin, "apply", sid], {
+    const child = spawn("sudo", ["-n", bin, ...args], {
       windowsHide: true,
     });
     let stdout = "";
@@ -609,7 +609,54 @@ function spawnApply(sid: UpdateId): Promise<UpdatesSnapshot> {
   });
 }
 
+function spawnApply(sid: UpdateId): Promise<UpdatesSnapshot> {
+  return spawnApplyArgs(sid, ["apply", sid]);
+}
+
 let applyChain: Promise<void> = Promise.resolve();
+
+export async function updatesApplyManualFile(pkgPath: string, sha256 = ""): Promise<UpdatesSnapshot> {
+  const sid: UpdateId = "app";
+  const existing = jobs.get(sid);
+  if (existing?.status === "running") {
+    const cur = cache?.snap ?? (await updatesStatus());
+    return snapshot(cur.items, cur.os, true, "");
+  }
+  if (process.platform !== "linux" || !existsSync(helperPath())) {
+    const cur = await updatesStatus();
+    return {
+      ...cur,
+      ok: false,
+      error: "O aplicativo roda no Ubuntu Server da estação. Neste host só a verificação está disponível.",
+    };
+  }
+  try {
+    jobs.set(sid, {
+      id: sid,
+      status: "running",
+      pct: 1,
+      determinate: true,
+      stage: "queued",
+      error: "",
+      bytes: 0,
+      totalBytes: 0,
+      etaSec: 0,
+      doneSeen: false,
+    });
+    const helperArgs = ["apply-file", pkgPath];
+    const sha = sha256.trim().toLowerCase();
+    if (sha) helperArgs.push(sha);
+    const run = applyChain.then(() => spawnApplyArgs("app", helperArgs));
+    applyChain = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return await run;
+  } catch (err) {
+    const cur = await updatesStatus(true);
+    return { ...cur, ok: false, error: String(err) };
+  }
+}
 
 export async function updatesApply(id: string): Promise<UpdatesSnapshot> {
   if (!UPDATE_IDS.includes(id as UpdateId)) {

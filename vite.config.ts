@@ -15,7 +15,13 @@ import { attachRadioAudio } from "./server/radio-audio";
 import { attachScopeWs } from "./server/icom-scope-ws";
 import { attachTerminal } from "./server/term";
 import { createUser, deleteUser, listUsers, sshStatus } from "./server/users";
-import { consoleSessionClearCookie, consoleSessionCookie, consoleSessionOk, consoleSessionToken } from "./server/console-session";
+import {
+  consoleSessionAdmin,
+  consoleSessionClearCookie,
+  consoleSessionCookie,
+  consoleSessionOk,
+  consoleSessionToken,
+} from "./server/console-session";
 import { supportVpnSet, supportVpnStatus } from "./server/support-vpn";
 import { wavelogDatabase, wavelogDbUpdate, wavelogDown, wavelogStatus, wavelogUp } from "./server/wavelog-status";
 import { wlgDown, wlgStatus, wlgUp } from "./server/wlg-status";
@@ -23,7 +29,8 @@ import { netConnect, netForget, netSave, netScan, netSetAp, netSetHostname, netS
 import { processesAction, processesList } from "./server/processes";
 import { containersAction, containersList } from "./server/containers";
 import { servicesApplyBoot, servicesSetAutostart, servicesStatus } from "./server/services";
-import { updatesApply, updatesRefresh, updatesStatus } from "./server/updates";
+import { updatesApply, updatesApplyManualFile, updatesRefresh, updatesStatus } from "./server/updates";
+import { otaDropUpload, otaReadUpload, otaValidatePackage } from "./server/updates-upload";
 import { layoutGet, layoutSave } from "./server/layouts";
 import { ldgCmd, ldgConnect, ldgDisconnect, ldgPeek, ldgSave } from "./server/ldg";
 import {
@@ -624,6 +631,39 @@ function vitePluginUpdates(): Plugin {
             const body = raw ? (JSON.parse(raw) as { id?: string }) : {};
             const result = await updatesApply(String(body.id || ""));
             return sendJson(res, result.ok ? 200 : 400, result);
+          }
+          if (req.method === "POST" && url === "/api/updates/manual") {
+            return sendJson(res, 400, {
+              ok: false,
+              error: "Atualização manual por arquivo só está disponível na estação (Ubuntu).",
+            });
+          }
+          if (req.method === "POST" && url === "/api/updates/manual") {
+            const cookie = req.headers.cookie ?? "";
+            if (!consoleSessionOk(cookie)) {
+              return sendJson(res, 401, { ok: false, error: "Sessão expirada. Entre de novo." });
+            }
+            if (!consoleSessionAdmin(cookie)) {
+              return sendJson(res, 403, { ok: false, error: "Só o usuário admin pode aplicar pacotes OTA manualmente." });
+            }
+            let uploaded = "";
+            try {
+              const upload = await otaReadUpload(req);
+              if (!upload.ok) return sendJson(res, 400, upload);
+              uploaded = upload.path;
+              const valid = await otaValidatePackage(upload.path);
+              if (!valid.ok) {
+                otaDropUpload(uploaded);
+                return sendJson(res, 400, valid);
+              }
+              const body = await updatesApplyManualFile(upload.path, upload.sha256);
+              otaDropUpload(upload.path);
+              uploaded = "";
+              return sendJson(res, body.ok ? 200 : 400, body);
+            } catch (err) {
+              if (uploaded) otaDropUpload(uploaded);
+              return sendJson(res, 500, { ok: false, items: [], pending: 0, error: String(err) });
+            }
           }
         } catch (err) {
           return sendJson(res, 500, { ok: false, items: [], pending: 0, error: String(err) });

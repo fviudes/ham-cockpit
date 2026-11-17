@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { consoleSessionClearCookie, consoleSessionCookie, consoleSessionOk, consoleSessionToken } from "./console-session";
+import {
+  consoleSessionAdmin,
+  consoleSessionClearCookie,
+  consoleSessionCookie,
+  consoleSessionOk,
+  consoleSessionToken,
+  consoleSessionUser,
+} from "./console-session";
 
 function cookieOf(token: string): string {
   const set = consoleSessionCookie(token);
@@ -17,5 +24,8 @@ describe("login do console", () => {
     expect(consoleSessionOk(cookieOf(admin!))).toBe(true);
     expect(consoleSessionOk(cookieOf(suporte!))).toBe(true);
     expect(consoleSessionOk(consoleSessionClearCookie().split(";")[0])).toBe(false);
+    expect(consoleSessionUser(cookieOf(admin!))).toBe("admin");
+    expect(consoleSessionAdmin(cookieOf(admin!))).toBe(true);
+    expect(consoleSessionAdmin(cookieOf(suporte!))).toBe(false);
   });
 });

@@ -7,7 +7,7 @@ const dict = {
   pt: {
     brand: "Ham Cockpit",
     tagline: "Gateway da estação",
-    version: "v0.1.14",
+    version: "v0.1.14.01",
     vfoHdmiExit: "Tecle CTRL+X para sair para o console",
     loginTitle: "Acessar o console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -524,8 +524,19 @@ const dict = {
     updateHelp:
       "O card Ham Cockpit lê github.com/fviudes/ham-cockpit/update na branch main (versão x.y.zz ou OTA x.y.zz.NN). Os outros cartões comparam a versão instalada com a publicada (apt ou Docker). Atualizar aplica só esse componente. Um reboot pode ser preciso depois do sistema operacional.",
     pickPackage: "Selecionar pacote",
+    updManual: "Atualização manual",
+    updManualTitle: "Pacote OTA local",
+    updManualHelp:
+      "Selecione o arquivo ham-cockpit-VERSÃO.tgz (pacote completo do console). O SHA256 é opcional.",
+    updManualSha: "SHA256 (opcional)",
+    updManualApply: "Aplicar pacote",
+    updManualConfirm: "Aplicar este pacote substitui o console inteiro. Continuar?",
+    updManualBad: "Use um arquivo ham-cockpit-VERSÃO.tgz.",
+    updManualBig: "Arquivo grande demais (limite de 600 MB).",
+    updStageVerify: "Conferindo SHA256",
     updApp: "Ham Cockpit",
-    updAppHint: "Console da estação. Versões publicadas em github.com/fviudes/ham-cockpit na pasta update, na branch main.",
+    updAppHint:
+      "Console da estação (GitHub ou pacote .tgz local em Atualização manual). Versões em github.com/fviudes/ham-cockpit/update na main.",
     updOs: "Sistema operacional",
     updSer2net: "SER2NET",
     updHamlib: "HamLib",
@@ -970,7 +981,7 @@ const dict = {
   en: {
     brand: "Ham Cockpit",
     tagline: "Station gateway",
-    version: "v0.1.14",
+    version: "v0.1.14.01",
     vfoHdmiExit: "Press CTRL+X to return to the console",
     loginTitle: "Sign in to the console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -1487,8 +1498,19 @@ const dict = {
     updateHelp:
       "The Ham Cockpit card reads github.com/fviudes/ham-cockpit/update on main (version x.y.zz or OTA x.y.zz.NN). The other cards compare the installed version with the published one (apt or Docker). Update applies only that component. The OS may need a reboot afterwards.",
     pickPackage: "Select package",
+    updManual: "Manual update",
+    updManualTitle: "Local OTA package",
+    updManualHelp:
+      "Select the ham-cockpit-VERSION.tgz file (full console package). SHA256 is optional.",
+    updManualSha: "SHA256 (optional)",
+    updManualApply: "Apply package",
+    updManualConfirm: "This package replaces the entire console. Continue?",
+    updManualBad: "Use a ham-cockpit-VERSION.tgz file.",
+    updManualBig: "File too large (600 MB limit).",
+    updStageVerify: "Checking SHA256",
     updApp: "Ham Cockpit",
-    updAppHint: "Station console. Versions are published in github.com/fviudes/ham-cockpit under update/ on the main branch.",
+    updAppHint:
+      "Station console (GitHub or local .tgz via Manual update). Versions at github.com/fviudes/ham-cockpit/update on main.",
     updOs: "Operating system",
     updSer2net: "SER2NET",
     updHamlib: "HamLib",

@@ -393,6 +393,7 @@ const UPD_LABEL: Record<UpdateId, I18nKey> = {
 const UPD_STAGE: Record<string, I18nKey> = {
   queued: "updStageQueued",
   prepare: "updStagePrepare",
+  verify: "updStageVerify",
   update: "updStageIndexes",
   download: "updStageDownload",
   install: "updStageInstall",

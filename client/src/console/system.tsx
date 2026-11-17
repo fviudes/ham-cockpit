@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { APP_VERSION } from "@shared/brand";
@@ -489,9 +489,15 @@ const UPD_HINT: Record<UpdateId, I18nKey> = {
   wlg: "updWlgHint",
 };
 
+const OTA_UPLOAD_MAX = 600 * 1024 * 1024;
+
 export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
   const { s, tx, setS, pushLog } = useConsole();
   const [checking, setChecking] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualFile, setManualFile] = useState<File | null>(null);
+  const [manualSha, setManualSha] = useState("");
+  const otaFileRef = useRef<HTMLInputElement>(null);
 
   const applySnap = (j: {
     ok?: boolean;
@@ -572,6 +578,84 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
       toast.error(tx("updFail"));
     } finally {
       setChecking(false);
+    }
+  };
+
+  const applyManual = async () => {
+    const file = manualFile;
+    if (!file) {
+      toast.error(tx("updManualBad"));
+      return;
+    }
+    if (!/^ham-cockpit-\d+\.\d+\.\d+(?:\.\d+)?\.tgz$/i.test(file.name)) {
+      toast.error(tx("updManualBad"));
+      return;
+    }
+    if (file.size <= 0 || file.size > OTA_UPLOAD_MAX) {
+      toast.error(tx("updManualBig"));
+      return;
+    }
+    if (!window.confirm(tx("updManualConfirm"))) return;
+    const appId: UpdateId = "app";
+    setS((p) => ({
+      ...p,
+      updates: {
+        ...p.updates,
+        jobs: [
+          ...p.updates.jobs.filter((row) => row.id !== appId),
+          { id: appId, status: "running", pct: 2, determinate: true, stage: "prepare", error: "" },
+        ],
+        items: p.updates.items.map((row) =>
+          row.id === appId ? { ...row, applying: true, progress: 2, stage: "prepare", determinate: true } : row,
+        ),
+      },
+    }));
+    setManualOpen(false);
+    window.setTimeout(() => window.dispatchEvent(new Event("hc-updates-wake")), 800);
+    try {
+      const fd = new FormData();
+      fd.append("file", file, file.name);
+      const sha = manualSha.trim();
+      if (sha) fd.append("sha256", sha);
+      const r = await fetch("/api/updates/manual", { method: "POST", body: fd, credentials: "same-origin" });
+      const text = await r.text();
+      const ct = r.headers.get("content-type") || "";
+      if (!ct.includes("json")) {
+        throw new Error(text.slice(0, 120).trim() || `resposta não JSON (${r.status})`);
+      }
+      const j = JSON.parse(text) as Parameters<typeof applySnap>[0] & { error?: string };
+      applySnap(j);
+      if (!r.ok || j.ok === false) {
+        toast.error(j.error || tx("updFail"));
+        return;
+      }
+      setS((p) => ({
+        ...p,
+        updates: {
+          ...p.updates,
+          items: p.updates.items.map((row) =>
+            row.id === appId
+              ? { ...row, applying: false, progress: 100, stage: "done", determinate: true }
+              : row,
+          ),
+        },
+      }));
+      toast.success(tx("updOk"));
+      pushLog("SYS", `${tx("updManual")} → ${file.name}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : tx("updFail"));
+      setS((p) => ({
+        ...p,
+        updates: {
+          ...p.updates,
+          items: p.updates.items.map((row) => (row.id === appId ? { ...row, applying: false } : row)),
+          jobs: p.updates.jobs.filter((row) => row.id !== appId),
+        },
+      }));
+    } finally {
+      setManualFile(null);
+      setManualSha("");
+      if (otaFileRef.current) otaFileRef.current.value = "";
     }
   };
 
@@ -690,13 +774,25 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
                 </div>
               </div>
               {row.error ? <p className="mb-3 text-xs text-[#f87171]">{row.error}</p> : null}
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <PrimaryBtn
                   disabled={!row.updatable || applying}
                   onClick={() => void applyOne(row.id)}
                 >
                   {applying ? tx("updApplying") : tx("updApply")}
                 </PrimaryBtn>
+                {row.id === "app" ? (
+                  <GhostBtn
+                    disabled={applying}
+                    onClick={() => {
+                      setManualFile(null);
+                      setManualSha("");
+                      setManualOpen(true);
+                    }}
+                  >
+                    {tx("updManual")}
+                  </GhostBtn>
+                ) : null}
                 <ActionProgress
                   active={applying}
                   value={row.progress}
@@ -709,6 +805,57 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
           );
         })}
       </div>
+      {manualOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="hc-ota-manual-title"
+        >
+          <Panel className="w-full max-w-lg border-[#4fc3f7]/40">
+            <PanelTitle id="hc-ota-manual-title">{tx("updManualTitle")}</PanelTitle>
+            <p className="mb-4 text-sm leading-relaxed text-[#8ea0b3]">{tx("updManualHelp")}</p>
+            <input
+              ref={otaFileRef}
+              type="file"
+              accept=".tgz,application/gzip,application/x-gzip"
+              className="hidden"
+              onChange={(e) => setManualFile(e.target.files?.[0] ?? null)}
+            />
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <GhostBtn onClick={() => otaFileRef.current?.click()}>{tx("pickPackage")}</GhostBtn>
+              {manualFile ? (
+                <span className="font-['IBM_Plex_Mono'] text-[11px] text-[#4fc3f7]">{manualFile.name}</span>
+              ) : null}
+            </div>
+            <Field label={tx("updManualSha")}>
+              <ConsoleInput
+                className="font-['IBM_Plex_Mono'] text-xs"
+                value={manualSha}
+                onChange={(e) => setManualSha(e.target.value)}
+                placeholder="sha256…"
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </Field>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <PrimaryBtn disabled={!manualFile} onClick={() => void applyManual()}>
+                {tx("updManualApply")}
+              </PrimaryBtn>
+              <GhostBtn
+                onClick={() => {
+                  setManualOpen(false);
+                  setManualFile(null);
+                  setManualSha("");
+                  if (otaFileRef.current) otaFileRef.current.value = "";
+                }}
+              >
+                {tx("close")}
+              </GhostBtn>
+            </div>
+          </Panel>
+        </div>
+      ) : null}
     </div>
   );
 }

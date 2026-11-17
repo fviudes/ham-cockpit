@@ -359,8 +359,187 @@ set_env_kv() {
 
 # Copia o console (dist) + bin/ sem apagar configs da estação
 # (layouts, net, services, equipment, radios, ldg, lp100a, mmdvm…).
+apply_app_install() {
+  local pkg="$1"
+  local ver="${2:-}"
+  local tmp src unit need_npm=1
+  tmp="$(mktemp -d)"
+  # shellcheck disable=SC2064
+  trap "rm -rf '$tmp'" RETURN
+  emit_progress app 58 install 1
+  run_with_heartbeat app install 58 68 12 tar -xzf "$pkg" -C "$tmp"
+  src="$(find "$tmp" -maxdepth 4 -type d -name public -printf '%h\n' 2>/dev/null | head -n 1 || true)"
+  if [[ -z "${src:-}" ]]; then
+    src="$(find "$tmp" -maxdepth 4 -name index.js | head -n 1 || true)"
+    [[ -n "${src:-}" ]] && src="$(dirname "$src")"
+  fi
+  if [[ -z "${src:-}" || ! -f "$src/index.js" || ! -d "$src/public" ]]; then
+    echo "pacote de update sem dist/ (index.js + public/)" >&2
+    return 1
+  fi
+  emit_progress app 70 install 1
+  mkdir -p "$APP_HOME" "$APP_HOME/bin"
+  if [[ -f "$src/package.json" && -f "$APP_HOME/package.json" ]] \
+    && cmp -s "$src/package.json" "$APP_HOME/package.json" \
+    && [[ -d "$APP_HOME/node_modules/express" ]]; then
+    need_npm=0
+  fi
+  cp -a "$src/index.js" "$APP_HOME/index.js"
+  rm -rf "$APP_HOME/public"
+  cp -a "$src/public" "$APP_HOME/public"
+  if [[ -f "$src/package.json" ]]; then
+    cp -a "$src/package.json" "$APP_HOME/package.json"
+  fi
+  if [[ -f "$src/ota-hooks.sh" ]]; then
+    cp -a "$src/ota-hooks.sh" "$APP_HOME/ota-hooks.sh"
+    chmod 0755 "$APP_HOME/ota-hooks.sh"
+  fi
+  if [[ -f "$src/sudoers-hamcockpit" ]]; then
+    cp -a "$src/sudoers-hamcockpit" "$APP_HOME/sudoers-hamcockpit"
+  fi
+  if [[ -f "$src/mmdvm-arm64.tgz" ]]; then
+    if [[ ! -f "$APP_HOME/mmdvm-arm64.tgz" ]] || ! cmp -s "$src/mmdvm-arm64.tgz" "$APP_HOME/mmdvm-arm64.tgz"; then
+      cp -a "$src/mmdvm-arm64.tgz" "$APP_HOME/mmdvm-arm64.tgz"
+    fi
+  fi
+  if [[ -f "$src/hamlib-arm64.tgz" ]]; then
+    if [[ ! -f "$APP_HOME/hamlib-arm64.tgz" ]] || ! cmp -s "$src/hamlib-arm64.tgz" "$APP_HOME/hamlib-arm64.tgz"; then
+      cp -a "$src/hamlib-arm64.tgz" "$APP_HOME/hamlib-arm64.tgz"
+    fi
+  fi
+  if [[ -f "$src/hamlib-models.json" ]]; then
+    cp -a "$src/hamlib-models.json" "$APP_HOME/hamlib-models.json"
+  fi
+  if [[ -d "$src/bin" ]]; then
+    local _f _base _self _dest
+    _self="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
+    for _f in "$src"/bin/*; do
+      [[ -e "$_f" ]] || continue
+      _base="$(basename "$_f")"
+      if [[ -d "$_f" ]]; then
+        mkdir -p "$APP_HOME/bin/$_base"
+        cp -a "$_f/." "$APP_HOME/bin/$_base/"
+        continue
+      fi
+      if [[ "$_base" == "station-upd" ]]; then
+        _dest="$(readlink -f "$APP_HOME/bin/station-upd" 2>/dev/null || echo "$APP_HOME/bin/station-upd")"
+        if [[ "$_self" == "$_dest" ]]; then
+          cp -a "$_f" "$APP_HOME/bin/station-upd.ota-next"
+          continue
+        fi
+      fi
+      cp -a "$_f" "$APP_HOME/bin/$_base"
+    done
+    find "$APP_HOME/bin" -maxdepth 1 -type f -exec chmod 0755 {} +
+  fi
+  if [[ -d "$src/wavelog-gate" ]]; then
+    mkdir -p "$APP_HOME/wavelog-gate" /opt/wavelog-gate
+    cp -a "$src/wavelog-gate/." "$APP_HOME/wavelog-gate/"
+    cp -a "$src/wavelog-gate/." /opt/wavelog-gate/
+    chown -R hamcockpit:hamcockpit /opt/wavelog-gate 2>/dev/null || true
+  fi
+  if [[ -d "$src/wavelog" ]]; then
+    mkdir -p "$APP_HOME/wavelog"
+    cp -a "$src/wavelog/." "$APP_HOME/wavelog/"
+  fi
+  if [[ -d "$src/systemd" ]]; then
+    mkdir -p "$APP_HOME/systemd"
+    cp -a "$src/systemd/." "$APP_HOME/systemd/"
+    for unit in "$src"/systemd/*.service "$src"/systemd/*.target; do
+      [[ -f "$unit" ]] || continue
+      install -m 0644 "$unit" "/etc/systemd/system/$(basename "$unit")"
+    done
+    systemctl daemon-reload 2>/dev/null || true
+  fi
+  emit_progress app 70 install 1
+  if [[ "$need_npm" -eq 0 ]]; then
+    echo "OTA: package.json inalterado + node_modules OK — pulando npm install" >&2
+    emit_progress app 78 install 1
+  elif [[ -f "$APP_HOME/package.json" ]]; then
+    run_with_heartbeat app install 70 78 15 \
+      bash -c "cd \"$APP_HOME\" && HC_OTA_APPLY=1 npm install --omit=dev" || true
+  fi
+  mkdir -p "$APP_HOME/mmdvm"
+  if [[ -f "$APP_HOME/mmdvm/mmdvmhost.ini" ]]; then
+    cp -a "$APP_HOME/mmdvm/mmdvmhost.ini" "$APP_HOME/mmdvm/mmdvmhost.ini.ota-bak" || true
+  fi
+  for _ini in dmrgateway.ini ysfgateway.ini ircddbgateway.conf ircddbgateway; do
+    if [[ -f "$APP_HOME/mmdvm/$_ini" ]]; then
+      cp -a "$APP_HOME/mmdvm/$_ini" "$APP_HOME/mmdvm/${_ini}.ota-bak" || true
+    fi
+  done
+  if [[ -x "$APP_HOME/ota-hooks.sh" ]]; then
+    emit_progress app 78 hooks 1
+    if ! run_with_heartbeat app hooks 78 92 45 bash "$APP_HOME/ota-hooks.sh"; then
+      echo "ota-hooks.sh falhou — VERSION não avançada (reaplicável)" >&2
+      return 1
+    fi
+  fi
+  emit_progress app 94 finalize 1
+  if [[ -f "$src/versions.json" ]]; then
+    cp -a "$src/versions.json" "$APP_HOME/versions.json"
+  fi
+  if [[ -n "${ver:-}" ]]; then
+    printf '%s\n' "$ver" >"$APP_HOME/VERSION"
+  elif [[ -f "$src/VERSION" ]]; then
+    cp -a "$src/VERSION" "$APP_HOME/VERSION"
+  fi
+  chown -R hamcockpit:hamcockpit "$APP_HOME" 2>/dev/null || chown -R catbridge:catbridge "$APP_HOME" 2>/dev/null || true
+  if [[ -d "$APP_HOME/bin" ]]; then
+    chown root:root "$APP_HOME"/bin/* 2>/dev/null || true
+    chmod 0755 "$APP_HOME"/bin/* 2>/dev/null || true
+  fi
+  if [[ -f "$APP_HOME/bin/station-upd.ota-next" ]]; then
+    mv -f "$APP_HOME/bin/station-upd.ota-next" "$APP_HOME/bin/station-upd"
+    chown root:root "$APP_HOME/bin/station-upd" 2>/dev/null || true
+    chmod 0755 "$APP_HOME/bin/station-upd"
+  fi
+  emit_progress app 97 finalize 1
+  emit_progress app 99 restart 1
+  NEED_CONSOLE_RESTART=1
+  emit_progress app 100 done 1
+}
+
+apply_app_file() {
+  local f="$1"
+  local sha="${2:-}"
+  local ver="" base real cache_dir
+  emit_progress app 3 prepare 1
+  if [[ -z "${f:-}" || ! -f "$f" || ! -r "$f" ]]; then
+    echo "pacote não encontrado ou sem leitura: ${f:-}" >&2
+    return 1
+  fi
+  real="$(readlink -f "$f" 2>/dev/null || realpath "$f" 2>/dev/null || echo "$f")"
+  case "$real" in
+    /var/tmp/hc-ota-*|/tmp/hc-ota-*|/var/cache/ham-cockpit/ota/*) ;;
+    *)
+      echo "caminho do pacote OTA não permitido" >&2
+      return 1
+      ;;
+  esac
+  base="$(basename "$real")"
+  if [[ ! "$base" =~ ^ham-cockpit-[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?\.tgz$ ]]; then
+    echo "nome do arquivo deve ser ham-cockpit-VERSÃO.tgz" >&2
+    return 1
+  fi
+  ver="${base#ham-cockpit-}"
+  ver="${ver%.tgz}"
+  if [[ -n "${sha:-}" ]]; then
+    emit_progress app 10 verify 1
+    if ! echo "$sha  $real" | sha256sum -c --status 2>/dev/null; then
+      echo "sha256 do pacote não confere — abortando" >&2
+      return 1
+    fi
+  fi
+  emit_progress app 15 download 1
+  apply_app_install "$real" "$ver" || return 1
+  cache_dir=/var/cache/ham-cockpit/ota
+  mkdir -p "$cache_dir"
+  cp -a "$real" "$cache_dir/$base" 2>/dev/null || true
+}
+
 apply_app() {
-  local meta ver file sha tmp src unit cache_dir cached need_dl=1 need_npm=1
+  local meta ver file sha tmp cache_dir cached need_dl=1
   emit_progress app 3 prepare 1
   meta="$(github_app_meta)"
   if [[ -z "${meta:-}" ]]; then
@@ -399,151 +578,7 @@ apply_app() {
     fi
     cp -a "$tmp/pkg.tgz" "$cached"
   fi
-  emit_progress app 58 install 1
-  run_with_heartbeat app install 58 68 12 tar -xzf "$tmp/pkg.tgz" -C "$tmp"
-  src="$(find "$tmp" -maxdepth 4 -type d -name public -printf '%h\n' 2>/dev/null | head -n 1 || true)"
-  if [[ -z "${src:-}" ]]; then
-    src="$(find "$tmp" -maxdepth 4 -name index.js | head -n 1 || true)"
-    [[ -n "${src:-}" ]] && src="$(dirname "$src")"
-  fi
-  if [[ -z "${src:-}" || ! -f "$src/index.js" || ! -d "$src/public" ]]; then
-    echo "pacote de update sem dist/ (index.js + public/)" >&2
-    return 1
-  fi
-  emit_progress app 70 install 1
-  mkdir -p "$APP_HOME" "$APP_HOME/bin"
-  # Só sobrescreve artefatos do pacote; pastas de config existentes permanecem.
-  # npm: compara package.json ANTES de sobrescrever (evita resolve no registry a cada OTA).
-  if [[ -f "$src/package.json" && -f "$APP_HOME/package.json" ]] \
-    && cmp -s "$src/package.json" "$APP_HOME/package.json" \
-    && [[ -d "$APP_HOME/node_modules/express" ]]; then
-    need_npm=0
-  fi
-  cp -a "$src/index.js" "$APP_HOME/index.js"
-  rm -rf "$APP_HOME/public"
-  cp -a "$src/public" "$APP_HOME/public"
-  if [[ -f "$src/package.json" ]]; then
-    cp -a "$src/package.json" "$APP_HOME/package.json"
-  fi
-  if [[ -f "$src/ota-hooks.sh" ]]; then
-    cp -a "$src/ota-hooks.sh" "$APP_HOME/ota-hooks.sh"
-    chmod 0755 "$APP_HOME/ota-hooks.sh"
-  fi
-  if [[ -f "$src/sudoers-hamcockpit" ]]; then
-    cp -a "$src/sudoers-hamcockpit" "$APP_HOME/sudoers-hamcockpit"
-  fi
-  # Bridges opcionais (pacotes antigos / --with-bridges). Só copia se mudou.
-  if [[ -f "$src/mmdvm-arm64.tgz" ]]; then
-    if [[ ! -f "$APP_HOME/mmdvm-arm64.tgz" ]] || ! cmp -s "$src/mmdvm-arm64.tgz" "$APP_HOME/mmdvm-arm64.tgz"; then
-      cp -a "$src/mmdvm-arm64.tgz" "$APP_HOME/mmdvm-arm64.tgz"
-    fi
-  fi
-  if [[ -f "$src/hamlib-arm64.tgz" ]]; then
-    if [[ ! -f "$APP_HOME/hamlib-arm64.tgz" ]] || ! cmp -s "$src/hamlib-arm64.tgz" "$APP_HOME/hamlib-arm64.tgz"; then
-      cp -a "$src/hamlib-arm64.tgz" "$APP_HOME/hamlib-arm64.tgz"
-    fi
-  fi
-  if [[ -f "$src/hamlib-models.json" ]]; then
-    cp -a "$src/hamlib-models.json" "$APP_HOME/hamlib-models.json"
-  fi
-  if [[ -d "$src/bin" ]]; then
-    # Não sobrescreve o station-upd em execução: bash relê o arquivo e pode
-    # executar fragmentos (ex. "opt/wavelog-gate") como comando.
-    local _f _base _self _dest
-    _self="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
-    for _f in "$src"/bin/*; do
-      [[ -e "$_f" ]] || continue
-      _base="$(basename "$_f")"
-      if [[ -d "$_f" ]]; then
-        mkdir -p "$APP_HOME/bin/$_base"
-        cp -a "$_f/." "$APP_HOME/bin/$_base/"
-        continue
-      fi
-      if [[ "$_base" == "station-upd" ]]; then
-        _dest="$(readlink -f "$APP_HOME/bin/station-upd" 2>/dev/null || echo "$APP_HOME/bin/station-upd")"
-        if [[ "$_self" == "$_dest" ]]; then
-          cp -a "$_f" "$APP_HOME/bin/station-upd.ota-next"
-          continue
-        fi
-      fi
-      cp -a "$_f" "$APP_HOME/bin/$_base"
-    done
-    find "$APP_HOME/bin" -maxdepth 1 -type f -exec chmod 0755 {} +
-  fi
-  if [[ -d "$src/wavelog-gate" ]]; then
-    mkdir -p "$APP_HOME/wavelog-gate" /opt/wavelog-gate
-    cp -a "$src/wavelog-gate/." "$APP_HOME/wavelog-gate/"
-    # Espelha também em /opt/wavelog-gate (ota-hooks pode ter abortado antes).
-    cp -a "$src/wavelog-gate/." /opt/wavelog-gate/
-    chown -R hamcockpit:hamcockpit /opt/wavelog-gate 2>/dev/null || true
-  fi
-  if [[ -d "$src/wavelog" ]]; then
-    mkdir -p "$APP_HOME/wavelog"
-    cp -a "$src/wavelog/." "$APP_HOME/wavelog/"
-  fi
-  if [[ -d "$src/systemd" ]]; then
-    mkdir -p "$APP_HOME/systemd"
-    cp -a "$src/systemd/." "$APP_HOME/systemd/"
-    for unit in "$src"/systemd/*.service "$src"/systemd/*.target; do
-      [[ -f "$unit" ]] || continue
-      install -m 0644 "$unit" "/etc/systemd/system/$(basename "$unit")"
-    done
-    systemctl daemon-reload 2>/dev/null || true
-  fi
-  emit_progress app 70 install 1
-  if [[ "$need_npm" -eq 0 ]]; then
-    echo "OTA: package.json inalterado + node_modules OK — pulando npm install" >&2
-    emit_progress app 78 install 1
-  elif [[ -f "$APP_HOME/package.json" ]]; then
-    # HC_OTA_APPLY=1 → postinstall NÃO roda ota-hooks (evita double work + teto ~85%).
-    run_with_heartbeat app install 70 78 15 \
-      bash -c "cd \"$APP_HOME\" && HC_OTA_APPLY=1 npm install --omit=dev" || true
-  fi
-  # Backup do INI do operador ANTES dos hooks. Nunca copiar template por cima.
-  # (3× no lab: OTA apagou indicativo/ID na tela; stop Host derruba PartOf.)
-  mkdir -p "$APP_HOME/mmdvm"
-  if [[ -f "$APP_HOME/mmdvm/mmdvmhost.ini" ]]; then
-    cp -a "$APP_HOME/mmdvm/mmdvmhost.ini" "$APP_HOME/mmdvm/mmdvmhost.ini.ota-bak" || true
-  fi
-  for _ini in dmrgateway.ini ysfgateway.ini ircddbgateway.conf ircddbgateway; do
-    if [[ -f "$APP_HOME/mmdvm/$_ini" ]]; then
-      cp -a "$APP_HOME/mmdvm/$_ini" "$APP_HOME/mmdvm/${_ini}.ota-bak" || true
-    fi
-  done
-  # Hooks: heartbeat só até 92%; 93–100 são marcos explícitos (evita UI presa em ~97%).
-  if [[ -x "$APP_HOME/ota-hooks.sh" ]]; then
-    emit_progress app 78 hooks 1
-    if ! run_with_heartbeat app hooks 78 92 45 bash "$APP_HOME/ota-hooks.sh"; then
-      echo "ota-hooks.sh falhou — VERSION não avançada (reaplicável)" >&2
-      return 1
-    fi
-  fi
-  emit_progress app 94 finalize 1
-  # Commit atômico da versão só após apply bem-sucedido.
-  if [[ -f "$src/versions.json" ]]; then
-    cp -a "$src/versions.json" "$APP_HOME/versions.json"
-  fi
-  if [[ -n "${ver:-}" ]]; then
-    printf '%s\n' "$ver" >"$APP_HOME/VERSION"
-  elif [[ -f "$src/VERSION" ]]; then
-    cp -a "$src/VERSION" "$APP_HOME/VERSION"
-  fi
-  chown -R hamcockpit:hamcockpit "$APP_HOME" 2>/dev/null || chown -R catbridge:catbridge "$APP_HOME" 2>/dev/null || true
-  # Helpers root ficam root:root (sudoers -n).
-  if [[ -d "$APP_HOME/bin" ]]; then
-    chown root:root "$APP_HOME"/bin/* 2>/dev/null || true
-    chmod 0755 "$APP_HOME"/bin/* 2>/dev/null || true
-  fi
-  # Troca atômica do station-upd só no fim (após hooks).
-  if [[ -f "$APP_HOME/bin/station-upd.ota-next" ]]; then
-    mv -f "$APP_HOME/bin/station-upd.ota-next" "$APP_HOME/bin/station-upd"
-    chown root:root "$APP_HOME/bin/station-upd" 2>/dev/null || true
-    chmod 0755 "$APP_HOME/bin/station-upd"
-  fi
-  emit_progress app 97 finalize 1
-  emit_progress app 99 restart 1
-  NEED_CONSOLE_RESTART=1
-  emit_progress app 100 done 1
+  apply_app_install "$tmp/pkg.tgz" "$ver"
 }
 
 compose_wavelog() {
@@ -898,9 +933,17 @@ case "$cmd" in
     timeout 25 apt-get update -qq || true
     UPD_POLICY=1 check_all
     ;;
+  apply-file)
+    apply_app_file "$id" "${3:-}"
+    check_all
+    if [[ "${NEED_CONSOLE_RESTART:-0}" == 1 ]]; then
+      schedule_console_restart
+    fi
+    ;;
   apply)
     case "$id" in
       app) apply_app ;;
+      app-file) apply_app_file "$3" "${4:-}" ;;
       os) apply_os ;;
       ser2net)
         apply_pkg ser2net ser2net
@@ -952,7 +995,7 @@ case "$cmd" in
     fi
     ;;
   *)
-    echo "uso: station-upd check|refresh|apply ID" >&2
+    echo "uso: station-upd check|refresh|apply ID|apply-file CAMINHO [.tgz] [sha256]" >&2
     exit 1
     ;;
 esac
