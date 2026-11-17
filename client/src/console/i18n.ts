@@ -7,7 +7,7 @@ const dict = {
   pt: {
     brand: "Ham Cockpit",
     tagline: "Gateway da estação",
-    version: "v0.1.14.02",
+    version: "v0.1.14.03",
     vfoHdmiExit: "Tecle CTRL+X para sair para o console",
     loginTitle: "Acessar o console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -587,6 +587,8 @@ const dict = {
     diskFree: "Disponível",
     diskTotal: "Total",
     network: "Rede",
+    netMacEth: "MAC Ethernet",
+    netMacWifi: "MAC Wi‑Fi",
     manualTitle: "Manual do operador",
     manual1: "1. Primeira conexão",
     manual1body:
@@ -982,7 +984,7 @@ const dict = {
   en: {
     brand: "Ham Cockpit",
     tagline: "Station gateway",
-    version: "v0.1.14.02",
+    version: "v0.1.14.03",
     vfoHdmiExit: "Press CTRL+X to return to the console",
     loginTitle: "Sign in to the console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -1562,6 +1564,8 @@ const dict = {
     diskFree: "Available",
     diskTotal: "Total",
     network: "Network",
+    netMacEth: "Ethernet MAC",
+    netMacWifi: "Wi‑Fi MAC",
     manualTitle: "Operator's manual",
     manual1: "1. First connection",
     manual1body:

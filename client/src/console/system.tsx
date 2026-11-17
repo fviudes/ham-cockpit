@@ -896,6 +896,8 @@ type HostSnap = {
   netTxBps?: number | null;
   diskReadBps?: number | null;
   diskWriteBps?: number | null;
+  ethernetMac?: string | null;
+  wifiMac?: string | null;
   sampleMs?: number;
   windowMs?: number;
   samples?: HostSample[];
@@ -1161,7 +1163,18 @@ export function StatusPage() {
           <Mini k="SSID" v={s.wifi.staSsid || "—"} />
           <Mini k="Gateway" v={s.wifi.liveGw || s.wifi.gw || "—"} />
           <Mini k="mDNS" v={`${s.wifi.hostname || "ham-cockpit"}.local`} />
-          <Mini k="MAC" v="D8:3A:DD:A4:F2:11" />
+          <Mini
+            k={tx("netMacEth")}
+            v={host?.ethernetMac?.trim() || "—"}
+            copyText={host?.ethernetMac?.trim() || ""}
+            copyable={Boolean(host?.ethernetMac?.trim())}
+          />
+          <Mini
+            k={tx("netMacWifi")}
+            v={host?.wifiMac?.trim() || "—"}
+            copyText={host?.wifiMac?.trim() || ""}
+            copyable={Boolean(host?.wifiMac?.trim())}
+          />
           <Mini
             k={tx("ic705")}
             v={

@@ -1,8 +1,8 @@
 {
-  "version": "0.1.14.02",
+  "version": "0.1.14.03",
   "channel": "main",
-  "file": "ham-cockpit-0.1.14.02.tgz",
-  "sha256": "4995e84cab8604f3b7d72d213bfea6fd5add122fe2373e0a3033872380646c56",
-  "bytes": 5139906,
-  "notes": "Ham Cockpit v0.1.14.02 — Release cumulativa 0.1.14: chip Hotspot (MMDVM Host) no menu superior; inclui 0.1.14.01."
+  "file": "ham-cockpit-0.1.14.03.tgz",
+  "sha256": "5da2800f28eec6d5608272fb1716b2e589e6c1c446e8fdcb29c370bf0b192809",
+  "bytes": 5141369,
+  "notes": "Ham Cockpit v0.1.14.03 — Release cumulativa 0.1.14: MAC Ethernet e Wi‑Fi no painel Rede (Status); inclui 0.1.14.02."
 }

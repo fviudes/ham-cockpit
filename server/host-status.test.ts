@@ -4,6 +4,9 @@ import {
   diskDeviceNamesForSource,
   diskSectorCountersFromCols,
   diskSectorTotalsFromText,
+  netIfaceKind,
+  normalizeMacAddress,
+  pickPreferredNetIface,
 } from "./host-status";
 
 describe("host-status", () => {
@@ -28,6 +31,29 @@ describe("host-status", () => {
   it("lê setores em linha legada de partição (7 campos)", () => {
     const cols = "179 33 mmcblk0p2 58214 813270 46364 370858".split(/\s+/);
     expect(diskSectorCountersFromCols(cols)).toEqual({ read: 813270, write: 370858 });
+  });
+
+  it("normaliza endereço MAC", () => {
+    expect(normalizeMacAddress("d8:3a:dd:a4:f2:11")).toBe("D8:3A:DD:A4:F2:11");
+    expect(normalizeMacAddress("  D8-3A-DD-A4-F2-11  ")).toBe(null);
+    expect(normalizeMacAddress("not-a-mac")).toBe(null);
+  });
+
+  it("classifica interfaces eth/wlan do Pi", () => {
+    expect(netIfaceKind("eth0")).toBe("ethernet");
+    expect(netIfaceKind("end0")).toBe("ethernet");
+    expect(netIfaceKind("enp1s0")).toBe("ethernet");
+    expect(netIfaceKind("wlan0")).toBe("wifi");
+    expect(netIfaceKind("wlP2p33s0")).toBe("wifi");
+    expect(netIfaceKind("lo")).toBe("other");
+    expect(netIfaceKind("docker0")).toBe("other");
+  });
+
+  it("prioriza eth0/wlan0 entre várias interfaces", () => {
+    const names = ["docker0", "wlan0", "eth0", "veth123"];
+    expect(pickPreferredNetIface(names, "ethernet")).toBe("eth0");
+    expect(pickPreferredNetIface(names, "wifi")).toBe("wlan0");
+    expect(pickPreferredNetIface(["end0", "wlan1"], "ethernet")).toBe("end0");
   });
 
   it("não confunde setor gravado com merges na partição legada", () => {

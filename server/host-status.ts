@@ -72,6 +72,10 @@ export type HostStatus = {
   netTxBps: number | null;
   diskReadBps: number | null;
   diskWriteBps: number | null;
+  /** MAC da interface Ethernet (cabo), se existir. */
+  ethernetMac: string | null;
+  /** MAC da interface Wi‑Fi (STA), se existir. */
+  wifiMac: string | null;
   sampleMs: number;
   windowMs: number;
   samples: HostSample[];
@@ -375,6 +379,122 @@ function formatCpuModel(model: string, n: number): string {
   const mhz = os.cpus()[0]?.speed;
   const hz = mhz && mhz > 0 ? ` · ${n}×${mhz >= 1000 ? `${(mhz / 1000).toFixed(1)} GHz` : `${mhz} MHz`}` : n > 1 ? ` · ${n} núcleos` : "";
   return `${model}${hz}`;
+}
+
+const MAC_ADDR_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i;
+
+/** Normaliza MAC lido do sysfs ou do `ip link` (AA:BB:… em maiúsculas). */
+export function normalizeMacAddress(raw: string): string | null {
+  const s = String(raw || "")
+    .trim()
+    .toLowerCase();
+  if (!MAC_ADDR_RE.test(s)) return null;
+  return s
+    .split(":")
+    .map((p) => p.padStart(2, "0"))
+    .join(":")
+    .toUpperCase();
+}
+
+/** Tipo de interface para escolha de eth/wlan (nomes Pi: eth0, end0, wlan0, wl*). */
+export function netIfaceKind(name: string): "wifi" | "ethernet" | "other" {
+  const n = name.toLowerCase();
+  if (n === "lo" || n.startsWith("veth") || n.startsWith("br-") || n === "docker0" || n.startsWith("tun") || n.startsWith("tap"))
+    return "other";
+  if (/^(wlan|wl)/.test(n) || /wi-?fi|wireless|802\.11/.test(n)) return "wifi";
+  if (/^(eth|end|en[op])/.test(n) || /ethernet|cabo/.test(n)) return "ethernet";
+  return "other";
+}
+
+const PREFERRED_ETH_IFACES = ["eth0", "end0", "enp1s0", "eno1"];
+const PREFERRED_WLAN_IFACES = ["wlan0"];
+
+/** Escolhe iface preferida (ordem station-net) ou a primeira do tipo. */
+export function pickPreferredNetIface(names: string[], kind: "wifi" | "ethernet"): string | null {
+  const preferred = kind === "ethernet" ? PREFERRED_ETH_IFACES : PREFERRED_WLAN_IFACES;
+  const set = new Set(names);
+  for (const p of preferred) {
+    if (set.has(p)) return p;
+  }
+  for (const n of names) {
+    if (netIfaceKind(n) === kind) return n;
+  }
+  return null;
+}
+
+export function readMacFromSysclass(iface: string): string | null {
+  if (process.platform !== "linux" || !iface || netIfaceKind(iface) === "other") return null;
+  const path = join("/sys/class/net", iface, "address");
+  try {
+    if (!existsSync(path)) return null;
+    return normalizeMacAddress(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+export function listLinuxNetIfaces(): string[] {
+  const root = "/sys/class/net";
+  if (process.platform !== "linux" || !existsSync(root)) return [];
+  try {
+    return readdirSync(root).filter((n) => netIfaceKind(n) !== "other").sort();
+  } catch {
+    return [];
+  }
+}
+
+export function networkMacFromSysclass(): { ethernetMac: string | null; wifiMac: string | null } {
+  const names = listLinuxNetIfaces();
+  const eth = pickPreferredNetIface(names, "ethernet");
+  const wlan = pickPreferredNetIface(names, "wifi");
+  return {
+    ethernetMac: eth ? readMacFromSysclass(eth) : null,
+    wifiMac: wlan ? readMacFromSysclass(wlan) : null,
+  };
+}
+
+async function readMacFromIpLink(iface: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync("ip", ["link", "show", iface], { timeout: 4000 });
+    const m = String(stdout).match(/link\/ether\s+([0-9a-f:]{17})/i);
+    return m?.[1] ? normalizeMacAddress(m[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function networkMacFromOs(): { ethernetMac: string | null; wifiMac: string | null } {
+  let ethernetMac: string | null = null;
+  let wifiMac: string | null = null;
+  for (const [name, addrs] of Object.entries(os.networkInterfaces())) {
+    if (!addrs?.length) continue;
+    const kind = netIfaceKind(name);
+    if (kind === "other") continue;
+    const raw = addrs.map((a) => a.mac).find((m) => m && m !== "00:00:00:00:00:00");
+    const mac = raw ? normalizeMacAddress(raw) : null;
+    if (!mac) continue;
+    if (kind === "ethernet" && !ethernetMac) ethernetMac = mac;
+    if (kind === "wifi" && !wifiMac) wifiMac = mac;
+  }
+  return { ethernetMac, wifiMac };
+}
+
+async function readNetworkMacs(): Promise<{ ethernetMac: string | null; wifiMac: string | null }> {
+  if (process.platform === "win32") return networkMacFromOs();
+  const fromSys = networkMacFromSysclass();
+  if (fromSys.ethernetMac && fromSys.wifiMac) return fromSys;
+  const names = listLinuxNetIfaces();
+  let { ethernetMac, wifiMac } = fromSys;
+  if (!ethernetMac) {
+    const eth = pickPreferredNetIface(names, "ethernet");
+    if (eth) ethernetMac = await readMacFromIpLink(eth);
+  }
+  if (!wifiMac) {
+    const wlan = pickPreferredNetIface(names, "wifi");
+    if (wlan) wifiMac = await readMacFromIpLink(wlan);
+  }
+  if (!ethernetMac && !wifiMac) return networkMacFromOs();
+  return { ethernetMac, wifiMac };
 }
 
 function readNetTotals(): { rx: number; tx: number } {
@@ -719,6 +839,8 @@ function emptyStatus(error: string): HostStatus {
     netTxBps: null,
     diskReadBps: null,
     diskWriteBps: null,
+    ethernetMac: null,
+    wifiMac: null,
     sampleMs: HOST_SAMPLE_MS,
     windowMs: HOST_WINDOW_MS,
     samples: [],
@@ -740,7 +862,7 @@ export async function hostStatus(): Promise<HostStatus> {
         }
       }
     }
-    const [id, disk] = await Promise.all([readIdentity(), Promise.resolve(readDisk())]);
+    const [id, disk, macs] = await Promise.all([readIdentity(), Promise.resolve(readDisk()), readNetworkMacs()]);
     const used = Math.max(0, disk.total - disk.free);
     const ram = readRam();
     const row = samples[samples.length - 1];
@@ -768,6 +890,8 @@ export async function hostStatus(): Promise<HostStatus> {
       netTxBps: row?.netTxBps ?? null,
       diskReadBps: row?.diskReadBps ?? null,
       diskWriteBps: row?.diskWriteBps ?? null,
+      ethernetMac: macs.ethernetMac,
+      wifiMac: macs.wifiMac,
       sampleMs: HOST_SAMPLE_MS,
       windowMs: HOST_WINDOW_MS,
       samples: samples.slice(),
