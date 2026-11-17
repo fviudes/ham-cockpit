@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.14.05** (`version.json`).
+Versão atual neste canal: **0.1.15** (`version.json`).
 
 ## Versionamento
 
@@ -22,12 +22,12 @@ Cada pacote OTA é **cumulativo**: substitui o console inteiro. Basta aplicar a 
 
 ```json
 {
-  "version": "0.1.14.05",
+  "version": "0.1.15",
   "channel": "main",
-  "file": "ham-cockpit-0.1.14.05.tgz",
-  "sha256": "03f2b883d62503adac5f4eb6eb31d2b024c8c974174c72acac3df1fdbc92138b",
-  "bytes": 5143669,
-  "notes": "Ham Cockpit v0.1.14.05 — Release cumulativa 0.1.14: upload manual de pacotes OTA até 600 MB (nginx + Express); inclui 0.1.14.04."
+  "file": "ham-cockpit-0.1.15.tgz",
+  "sha256": "5426b19101c6f4b38019da90830bdec1e0aef9e687c073c012a32995ed7017d4",
+  "bytes": 5143482,
+  "notes": "Ham Cockpit v0.1.15 — Imagem e OTA cumulativos: consolida toda a linha 0.1.14 (Processos CPU/memória, Admin Contêineres, upload manual OTA até 600 MB, chip Hotspot MMDVM, MAC na rede, failover Wi-Fi, libhamlib-utils no instalador). Nova base de imagem para instalação limpa no Pi."
 }
 ```
 

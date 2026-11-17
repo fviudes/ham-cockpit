@@ -43,7 +43,7 @@ describe("updates", () => {
       "",
       sha,
       `--${boundary}`,
-      'Content-Disposition: form-data; name="file"; filename="ham-cockpit-0.1.14.05.tgz"',
+      'Content-Disposition: form-data; name="file"; filename="ham-cockpit-0.1.15.tgz"',
       "Content-Type: application/gzip",
       "",
       payload,
@@ -65,7 +65,7 @@ describe("updates", () => {
     const upload = await otaReadUpload(req);
     expect(upload.ok).toBe(true);
     if (!upload.ok) return;
-    expect(upload.filename).toBe("ham-cockpit-0.1.14.05.tgz");
+    expect(upload.filename).toBe("ham-cockpit-0.1.15.tgz");
     expect(upload.sha256).toBe(sha);
     const { readFileSync, rmSync } = await import("node:fs");
     expect(readFileSync(upload.path, "utf8")).toBe(payload);
