@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { SERVICE_IDS, type ServiceId } from "../shared/const";
+import { mmdvmServiceHealthy } from "./mmdvm";
 
 const execFileAsync = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -319,13 +320,14 @@ function emptyFacts(): ServiceLinuxFacts {
 
 export async function servicesStatus(): Promise<ServicesSnapshot> {
   const facts = process.platform === "linux" ? await linuxFacts() : emptyFacts();
+  const mmdvmOk = process.platform === "linux" ? await mmdvmServiceHealthy().catch(() => false) : false;
   return {
     ok: true,
     folder: dataDir(),
     items: SERVICE_IDS.map((id) => ({
       id,
       autostart: boot[id] !== false,
-      running: serviceLinuxRunning(id, facts),
+      running: id === "mmdvm" ? mmdvmOk : serviceLinuxRunning(id, facts),
       unit: UNITS[id],
       power: POWER_IDS.has(id),
     })),

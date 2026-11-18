@@ -17,4 +17,28 @@ describe("applyConfig duplex", () => {
     });
     expect(host.General?.Duplex).toBe("1");
   });
+
+  it("liga baliza de rede com Duplex=1 quando networkBeacon está ativo", () => {
+    const host: Record<string, Record<string, string>> = {
+      General: { Duplex: "1" },
+      Info: {},
+      Modem: {},
+      DMR: { BeaconInterval: "60" },
+      "D-Star": {},
+      "DMR Network": { Type: "Gateway" },
+    };
+    const gw: Record<string, Record<string, string>> = {};
+    const ysf: Record<string, Record<string, string>> = {};
+    const dstar: Record<string, string> = {};
+    applyConfig(host, gw, ysf, dstar, {
+      duplex: true,
+      networkBeacon: true,
+      callsign: "PY2TST",
+      dmrId: "1234567",
+      rxHz: 433_475_000,
+      txHz: 433_475_000,
+    });
+    expect(host.DMR?.Beacons).toBe("1");
+    expect(host.DMR?.BeaconInterval).toBeUndefined();
+  });
 });

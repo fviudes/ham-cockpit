@@ -30,7 +30,7 @@ function emptyNet() {
     liveIp: "",
     liveMask: "",
     liveGw: "",
-    scan: [] as { ssid: string; rssi: number; open: boolean }[],
+    scan: [] as { ssid: string; rssi: number; open: boolean; mhz?: number }[],
     managed: [] as { ssid: string }[],
     error: "",
     note: "",
@@ -76,7 +76,9 @@ export function WifiPage() {
         liveMask: typeof j.liveMask === "string" ? j.liveMask : p.wifi.liveMask,
         liveGw: typeof j.liveGw === "string" ? j.liveGw : p.wifi.liveGw,
         managed: Array.isArray(j.managed) ? (j.managed as { ssid: string }[]).filter((n) => n && n.ssid) : p.wifi.managed,
-        scan: Array.isArray(j.scan) ? (j.scan as { ssid: string; rssi: number; open: boolean }[]).filter((n) => n && n.ssid) : p.wifi.scan,
+        scan: Array.isArray(j.scan)
+          ? (j.scan as { ssid: string; rssi: number; open: boolean; mhz?: number }[]).filter((n) => n && n.ssid)
+          : p.wifi.scan,
         error: typeof j.error === "string" ? j.error : p.wifi.error,
         note: typeof j.note === "string" ? j.note : p.wifi.note,
       },
@@ -288,9 +290,12 @@ export function WifiPage() {
           <p className="text-sm text-[#8ea0b3]">{scanning ? tx("scanningNets") : tx("noNets")}</p>
         ) : (
           <div className="space-y-2">
-            {w.scan.map((n) => (
+            {w.scan.map((n) => {
+              const band =
+                n.mhz != null && n.mhz >= 5000 ? tx("netBand5") : n.mhz != null && n.mhz < 5000 ? tx("netBand24") : "";
+              return (
               <button
-                key={n.ssid}
+                key={`${n.ssid}-${n.mhz ?? "x"}`}
                 type="button"
                 onClick={() => setS((p) => ({ ...p, wifi: { ...p.wifi, staSsid: n.ssid } }))}
                 className={`flex w-full items-center justify-between rounded-lg border px-3 py-2.5 text-left hover:border-[#4fc3f7]/40 ${
@@ -300,12 +305,14 @@ export function WifiPage() {
                 <div>
                   <p className="text-sm text-white">{n.ssid}</p>
                   <p className="font-['IBM_Plex_Mono'] text-[11px] text-[#8ea0b3]">
-                    {n.open ? tx("openNet") : "WPA2"} · {n.rssi} dBm
+                    {n.open ? tx("openNet") : "WPA2"}
+                    {band ? ` · ${band}` : ""} · {n.rssi} dBm
                   </p>
                 </div>
                 <Bars rssi={n.rssi} />
               </button>
-            ))}
+            );
+            })}
           </div>
         )}
       </Panel>

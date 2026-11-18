@@ -132,7 +132,7 @@ export function MmdvmPage() {
       ...p,
       mmdvm: {
         ...p.mmdvm,
-        running: Boolean(j.hostRunning),
+        running: Boolean(j.ok ?? j.hostRunning),
         gatewayRunning: Boolean(j.gatewayRunning),
         callsign: j.callsign || p.mmdvm.callsign,
         dmrId: j.dmrId || p.mmdvm.dmrId,
@@ -245,7 +245,7 @@ export function MmdvmPage() {
     setSt((p) => (p ? { ...p, ...partial } : p));
   };
 
-  const save = async (restart = false) => {
+  const save = async (applyOnly = false) => {
     if (!st) return;
     setBusy(true);
     try {
@@ -285,26 +285,23 @@ export function MmdvmPage() {
         oledType: st.oledType,
         modes: st.modes,
         networks: st.networks,
+        networkBeacon: st.networkBeacon !== false,
+        bmApiKey: st.bmApiKey ?? "",
+        restart: !applyOnly,
+        applyOnly,
       });
       if (next.error) {
         toast.error(next.error);
         return;
       }
       applyFull(next);
-      if (restart) {
-        const rst = await callMmdvm("/api/mmdvm/restart", "POST");
-        if (rst.error) {
-          toast.error(rst.error);
-          applyFull(rst);
-          return;
-        }
-        applyFull(rst);
-        pushLog("MMDVM", `${callsign} · INI salvo · host+gateway reiniciados`);
-        toast.success(tx("mmdvmRestarted"));
-      } else {
-        pushLog("MMDVM", `${callsign} · ${next.hostIni || st.hostIni}`);
-        toast.success(tx("mmdvmSaved"));
-      }
+      pushLog(
+        "MMDVM",
+        applyOnly
+          ? `${callsign} · INI salvo (sem reinício)`
+          : `${callsign} · INI salvo · host+gateway reiniciados`,
+      );
+      toast.success(applyOnly ? tx("mmdvmSaved") : tx("mmdvmRestarted"));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
     } finally {
@@ -641,6 +638,15 @@ export function MmdvmPage() {
               <option value="1">{tx("mmdvmDuplex")}</option>
             </ConsoleSelect>
           </Field>
+          <Field label={tx("mmdvmNetworkBeacon")}>
+            <ConsoleSelect
+              value={st?.networkBeacon !== false ? "1" : "0"}
+              onChange={(e) => patch({ networkBeacon: e.target.value === "1" })}
+            >
+              <option value="1">{tx("on")}</option>
+              <option value="0">{tx("off")}</option>
+            </ConsoleSelect>
+          </Field>
           <Field label={tx("mmdvmBoard")}>
             <ConsoleSelect
               value={st?.modemBoard ?? "mmdvmhshat"}
@@ -882,6 +888,30 @@ export function MmdvmPage() {
             </div>
           ))}
         </div>
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          <Field label={tx("mmdvmBmPassword")}>
+            <ConsoleInput
+              type="password"
+              autoComplete="off"
+              value={nets.find((n) => n.id === "bm")?.password ?? ""}
+              onChange={(e) => {
+                const password = e.target.value;
+                patch({
+                  networks: nets.map((n) => (n.id === "bm" ? { ...n, password } : n)),
+                });
+              }}
+            />
+          </Field>
+          <Field label={tx("mmdvmBmApiKey")}>
+            <ConsoleInput
+              type="password"
+              autoComplete="off"
+              value={st?.bmApiKey ?? ""}
+              placeholder={tx("mmdvmBmApiKeyHint")}
+              onChange={(e) => patch({ bmApiKey: e.target.value })}
+            />
+          </Field>
+        </div>
         <div className="mt-4 flex flex-wrap items-end gap-3">
           <Field label={tx("mmdvmTalkgroup")}>
             <ConsoleSelect value={tg} onChange={(e) => setTg(e.target.value)}>
@@ -906,16 +936,18 @@ export function MmdvmPage() {
             disabled={busy || !tg}
             onClick={async () => {
               try {
-                const res = await fetch("/api/mmdvm/remote", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ cmd: `talkgroup ${slot} ${tg}` }),
+                const j = await callMmdvm("/api/mmdvm/link", "POST", {
+                  mode: "dmr",
+                  target: tg,
+                  slot,
                 });
-                const j = (await res.json()) as { ok?: boolean; error?: string; reply?: string };
-                if (j.ok) {
-                  toast.success(`${tx("mmdvmLinkTg")} TS${slot} ${tg}`);
-                  pushLog("MMDVM", `RemoteCommand talkgroup ${slot} ${tg}${j.reply ? ` · ${j.reply}` : ""}`);
-                } else toast.error(j.error || tx("apiFail"));
+                if (j.error) {
+                  toast.error(j.error);
+                  return;
+                }
+                applyFull(j);
+                toast.success(`${tx("mmdvmLinkTg")} TS${slot} ${tg}`);
+                pushLog("MMDVM", `BM talkgroup ${slot} ${tg}`);
               } catch (err) {
                 toast.error(err instanceof Error ? err.message : String(err));
               }
@@ -929,11 +961,11 @@ export function MmdvmPage() {
       <Panel className="mt-6 border-t border-[rgba(79,195,247,0.15)] pt-4">
         <div className="flex flex-wrap gap-2">
           <PrimaryBtn disabled={busy} onClick={() => void save(false)}>
-            {tx("save")}
-          </PrimaryBtn>
-          <PrimaryBtn disabled={busy} onClick={() => void save(true)}>
             {tx("mmdvmRestart")}
           </PrimaryBtn>
+          <GhostBtn disabled={busy} onClick={() => void save(true)}>
+            {tx("mmdvmSaveOnly")}
+          </GhostBtn>
           <GhostBtn
             disabled={busy}
             onClick={async () => {

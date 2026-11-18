@@ -286,6 +286,15 @@ function main() {
   }
   cpSync(hamlibModels, join(stage, "hamlib-models.json"));
 
+  const mmdvmAudio = join(ROOT, "deploy", "mmdvm", "dmrgateway-audio");
+  if (existsSync(mmdvmAudio)) {
+    mkdirSync(join(stage, "mmdvm", "dmrgateway-audio"), { recursive: true });
+    cpSync(mmdvmAudio, join(stage, "mmdvm", "dmrgateway-audio"), { recursive: true });
+    console.log("incluindo voz DMRGateway (dmrgateway-audio)");
+  } else {
+    console.warn("AVISO: deploy/mmdvm/dmrgateway-audio ausente — DynVoice sem arquivos no pacote");
+  }
+
   // Bridges (~21 MiB) ficam em update/*.tgz no canal — NÃO embutir no pacote a cada OTA.
   // Hooks baixam só se binários faltarem. Use --with-bridges para pacote de reparo.
   const withBridges = process.argv.includes("--with-bridges");

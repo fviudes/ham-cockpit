@@ -170,6 +170,12 @@ export type MmdvmConfig = {
   oledType: number;
   modes: Record<MmdvmMode, boolean>;
   networks: MmdvmNetwork[];
+  /** Baliza DMR ao conectar na rede (WPSD Network Beacon Mode). Padrão ligado. */
+  networkBeacon: boolean;
+  /** Chave API BrandMeister (v2) para link de TG pelo console — opcional. */
+  bmApiKey: string;
+  /** Idioma dos anúncios DynVoice (arquivos .ambe em DMRGateway/Audio). */
+  voiceLanguage: string;
 };
 
 export type GwUnit = "mmdvmhost" | "dmrgateway" | "ysfgateway" | "ircddbgateway" | "nextiondriver";
@@ -222,6 +228,42 @@ function dataDir(): string {
   const local = join(ROOT, "data", "mmdvm");
   mkdirSync(local, { recursive: true });
   return local;
+}
+
+const BM_API_ETC = "/etc/bmapi.key";
+
+function bmApiKeyPath(): string {
+  return firstExisting([BM_API_ETC, join(dataDir(), "bm-api.key")]) || join(dataDir(), "bm-api.key");
+}
+
+function readBmApiKey(): string {
+  const p = bmApiKeyPath();
+  if (!existsSync(p)) return "";
+  try {
+    const raw = readFileSync(p, "utf8");
+    const ini = raw.includes("[") ? iniGet(parseIniFile(p), "key", "apikey", "") : raw.trim();
+    const key = (ini || raw.trim()).replace(/\s+/g, "");
+    return key.length > 20 ? key : "";
+  } catch {
+    return "";
+  }
+}
+
+async function writeBmApiKey(key: string): Promise<void> {
+  const trimmed = key.replace(/\s+/g, "").trim();
+  const body = trimmed
+    ? `[key]\napikey=${trimmed}\n`
+    : "";
+  const local = join(dataDir(), "bm-api.key");
+  if (body) writeFileSync(local, body, { mode: 0o600 });
+  else if (existsSync(local)) unlinkSync(local);
+  if (linux() && trimmed) {
+    try {
+      await writeProtected(BM_API_ETC, body);
+    } catch {
+      /* sem sudo */
+    }
+  }
 }
 
 function shippedHostIni() {
@@ -448,8 +490,19 @@ function defaultConfig(): MmdvmConfig {
     nextionDriver: true,
     oledType: 3,
     modes: { dstar: false, dmr: true, ysf: false, p25: false, nxdn: false, m17: false, pocsag: false },
+    networkBeacon: true,
+    bmApiKey: "",
+    voiceLanguage: "pt_PT",
     networks: [
-      { id: "bm", section: "DMR Network 1", name: "BrandMeister", enabled: true, address: "3101.repeater.net", port: 62031, password: "passw0rd" },
+      {
+        id: "bm",
+        section: "DMR Network 1",
+        name: "BrandMeister",
+        enabled: true,
+        address: "3108.brandmeister.network",
+        port: 62031,
+        password: "",
+      },
       { id: "dmrplus", section: "DMR Network 2", name: "DMR+", enabled: false, address: "94.198.196.128", port: 8880, password: "passw0rd" },
       { id: "tgif", section: "DMR Network 3", name: "TGIF", enabled: false, address: "tgif.network", port: 62031, password: "passw0rd" },
       { id: "xlx", section: "XLX Network", name: "XLX", enabled: false, address: "xlx.example.net", port: 62030, password: "" },
@@ -518,6 +571,14 @@ function configFromFiles(): MmdvmConfig {
     oledType: iniNum(host, "OLED", "Type", base.oledType),
     modes,
     networks: nets,
+    networkBeacon: (() => {
+      const beacons = iniGet(host, "DMR", "Beacons", "1");
+      const interval = iniGet(host, "DMR", "BeaconInterval", "");
+      if (beacons !== "1") return false;
+      return !interval;
+    })(),
+    voiceLanguage: iniGet(gw, "Voice", "Language", base.voiceLanguage),
+    bmApiKey: readBmApiKey(),
   };
 }
 
@@ -569,17 +630,29 @@ export function applyConfig(host: Ini, gw: Ini, ysf: Ini, dstar: Conf, cfg: Part
   setKv(host, "Remote Control", "Enable", "1");
   setKv(host, "Remote Control", "Address", "127.0.0.1");
   setKv(host, "Remote Control", "Port", String(cur.remotePort || 7642));
-  setKv(host, "DMR", "Beacons", cur.duplex ? "0" : "1");
-  setKv(host, "DMR", "BeaconDuration", "3");
-  if (!cur.duplex) {
-    // WPSD «Network Beacon Mode»: sem BeaconInterval no INI (baliza ao conectar na rede).
+  const networkBeacon = cur.networkBeacon !== false;
+  if (networkBeacon) {
+    setKv(host, "DMR", "Beacons", "1");
+    setKv(host, "DMR", "BeaconDuration", "3");
     if (host.DMR) delete host.DMR.BeaconInterval;
-  } else if (!iniGet(host, "DMR", "BeaconInterval")) {
-    setKv(host, "DMR", "BeaconInterval", "60");
+  } else if (cur.duplex) {
+    setKv(host, "DMR", "Beacons", "1");
+    setKv(host, "DMR", "BeaconDuration", "3");
+    if (!iniGet(host, "DMR", "BeaconInterval")) setKv(host, "DMR", "BeaconInterval", "60");
+  } else {
+    setKv(host, "DMR", "Beacons", "0");
+    if (host.DMR) delete host.DMR.BeaconInterval;
   }
-  setKv(gw, "Voice", "Enabled", "1");
-  setKv(gw, "Voice", "Language", "en_US");
-  setKv(gw, "Voice", "Directory", "/usr/local/etc/DMRGateway/Audio");
+  const voiceDir = "/usr/local/etc/DMRGateway/Audio";
+  const voiceLang = (cur.voiceLanguage || "pt_PT").trim() || "pt_PT";
+  const voiceDeck = join(ROOT, "deploy", "mmdvm", "dmrgateway-audio");
+  const voiceOn =
+    existsSync(join(voiceDir, `${voiceLang}.ambe`)) ||
+    existsSync(join(voiceDir, `${voiceLang}.indx`)) ||
+    existsSync(join(voiceDeck, `${voiceLang}.ambe`));
+  setKv(gw, "Voice", "Enabled", voiceOn ? "1" : "0");
+  setKv(gw, "Voice", "Language", voiceLang);
+  setKv(gw, "Voice", "Directory", voiceDir);
   setKv(host, "DMR Network", "Type", "Gateway");
   setKv(host, "DMR Network", "Address", "127.0.0.1");
   setKv(host, "DMR Network", "Port", "62031");
@@ -1262,8 +1335,9 @@ function upgradeHostRemoteAndBeacons(hostPath: string) {
     setKv(host, "Remote Control", "Address", "127.0.0.1");
     changed = true;
   }
-  const duplex = iniGet(host, "General", "Duplex", "0") === "1";
-  if (!duplex && iniGet(host, "DMR", "Beacons", "0") !== "1") {
+  const netType = (iniGet(host, "DMR Network", "Type", "Gateway") || "Gateway").toLowerCase();
+  const interval = iniGet(host, "DMR", "BeaconInterval", "");
+  if (netType === "gateway" && !interval && iniGet(host, "DMR", "Beacons", "0") !== "1") {
     setKv(host, "DMR", "Beacons", "1");
     if (!iniGet(host, "DMR", "BeaconDuration")) setKv(host, "DMR", "BeaconDuration", "3");
     if (host.DMR) delete host.DMR.BeaconInterval;
@@ -1397,10 +1471,18 @@ export async function mmdvmStatus(): Promise<MmdvmStatus> {
   const baseErr = hostBin || !onAppliance ? "" : "MMDVM Host não está neste host — instale o binário WPSD/g4klx em /usr/local/bin/MMDVMHost";
   const error = [baseErr, hints].filter(Boolean).join(" — ");
   const networkStatus = await dmrgatewayNetworkStatus(cfg.networks, gatewayRunning);
+  const remotePort = cfg.remotePort || 7642;
+  const remoteOk = hostRunning ? (await remoteTcp(remotePort, "mode")).ok : false;
+  const bmOn = cfg.networks.some((n) => n.id === "bm" && n.enabled);
+  const stackOk =
+    hostRunning &&
+    gatewayRunning &&
+    remoteOk &&
+    (!bmOn || networkStatus.bm === "conectado");
   return {
     ...cfg,
     modemBoard,
-    ok: hostRunning,
+    ok: stackOk,
     installed,
     appliance: onAppliance,
     hostRunning,
@@ -1490,6 +1572,9 @@ function pickConfig(body: Record<string, unknown>): Partial<MmdvmConfig> {
     oledType: num("oledType", cur.oledType),
     modes,
     networks,
+    networkBeacon: typeof body.networkBeacon === "boolean" ? body.networkBeacon : cur.networkBeacon,
+    bmApiKey: typeof body.bmApiKey === "string" ? String(body.bmApiKey) : cur.bmApiKey,
+    voiceLanguage: str("voiceLanguage", cur.voiceLanguage),
   };
 }
 
@@ -1504,6 +1589,7 @@ export async function mmdvmSave(body: Record<string, unknown>): Promise<MmdvmSta
   const gw = parseIniFile(existsSync(gwPath) ? gwPath : shippedGwIni());
   const ysf = parseIniFile(existsSync(ysfPath) ? ysfPath : shippedYsfIni());
   const dstar = parseConfFile(existsSync(dstarPath) ? dstarPath : shippedDstarConf());
+  const cur = configFromFiles();
   const cfg = pickConfig(body);
   const call = String(cfg.callsign ?? "")
     .toUpperCase()
@@ -1520,15 +1606,29 @@ export async function mmdvmSave(body: Record<string, unknown>): Promise<MmdvmSta
     const st = await mmdvmStatus();
     return { ...st, error: "Id DMR deve ser maior que 1000 (não use 0 / 0000000)" };
   }
+  const bmNet = (cfg.networks ?? cur.networks).find((n) => n.id === "bm" && n.enabled);
+  if (bmNet) {
+    const pass = String(bmNet.password ?? "").trim();
+    if (!pass || pass === "passw0rd") {
+      const st = await mmdvmStatus();
+      return { ...st, error: "Informe a senha BrandMeister do hotspot (selfcare) — não use passw0rd de exemplo" };
+    }
+  }
   applyConfig(host, gw, ysf, dstar, cfg);
   await writeProtected(hostPath, stringifyIni(host));
   await writeProtected(gwPath, stringifyIni(gw));
   await writeProtected(ysfPath, stringifyIni(ysf));
   await writeDstarConf(dstarPath, stringifyConf(dstar, "# Ham Cockpit ircDDBGateway"));
-  // Liga/desliga NextionDriver conforme a config salva.
+  if (typeof body.bmApiKey === "string") await writeBmApiKey(String(body.bmApiKey));
+  const restart = body.restart !== false && body.applyOnly !== true;
   if (linux()) {
     if (cfg.displayType === "Nextion" && cfg.nextionDriver) await controlUnit("restart", "nextiondriver");
     else await controlUnit("stop", "nextiondriver");
+    if (restart) {
+      await controlUnit("restart", "dmrgateway");
+      await new Promise((r) => setTimeout(r, 800));
+      await controlUnit("restart", "mmdvmhost");
+    }
   }
   return mmdvmStatus();
 }
@@ -1658,6 +1758,45 @@ export async function mmdvmLink(body: {
     await controlUnit("restart", "ysfgateway");
     return mmdvmStatus();
   }
+  if (mode === "dmr" || mode === "brandmeister" || mode === "bm") {
+    const tg = Number(String(body.target ?? "").replace(/\D/g, ""));
+    const slot = Math.min(2, Math.max(1, Number(String(body.slot ?? "2").replace(/\D/g, "") || "2")));
+    if (!Number.isFinite(tg) || tg < 1) {
+      const st = await mmdvmStatus();
+      return { ...st, error: "talkgroup inválido" };
+    }
+    const key = readBmApiKey();
+    if (!key) {
+      const st = await mmdvmStatus();
+      const priv = `9${String(tg).padStart(3, "0").slice(-3)}`;
+      return {
+        ...st,
+        error: `Cadastre a chave API BrandMeister (perfil BM) ou no HT ligue no privado ${priv} no slot ${slot}`,
+      };
+    }
+    const id = configFromFiles().dmrId.replace(/\D/g, "");
+    try {
+      const res = await fetch(`https://api.brandmeister.network/v2/device/${id}/talkgroup`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json",
+          "User-Agent": `Ham Cockpit ${id}`,
+        },
+        body: JSON.stringify({ group: tg, slot }),
+        signal: AbortSignal.timeout(12_000),
+      });
+      if (!res.ok) {
+        const st = await mmdvmStatus();
+        const detail = (await res.text()).slice(0, 120);
+        return { ...st, error: `BrandMeister API HTTP ${res.status}${detail ? ` — ${detail}` : ""}` };
+      }
+      return mmdvmStatus();
+    } catch (err) {
+      const st = await mmdvmStatus();
+      return { ...st, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
   if (mode === "dstar") {
     const dstarPath = dstarIniPath();
     const dstar = parseConfFile(existsSync(dstarPath) ? dstarPath : shippedDstarConf());
@@ -1757,21 +1896,33 @@ function remoteTcp(port: number, line: string): Promise<{ ok: boolean; reply: st
 
 export async function mmdvmRemote(cmd: string): Promise<{ ok: boolean; reply: string; error?: string }> {
   seedIfMissing();
+  let line = cmd.replace(/[\r\n]/g, " ").trim();
+  if (!line) return { ok: false, reply: "", error: "comando vazio" };
+  const tgOnly = line.match(/^tg(?:\s+|:)(\d{1,8})(?:\s+(\d))?$/i);
+  const talkgroup = line.match(/^talkgroup\s+(\d)\s+(\d{1,8})$/i);
+  if (tgOnly || talkgroup) {
+    const slot = talkgroup ? talkgroup[1]! : tgOnly![2] || "2";
+    const tg = talkgroup ? talkgroup[2]! : tgOnly![1]!;
+    const st = await mmdvmLink({ mode: "dmr", target: tg, slot });
+    if (st.error) return { ok: false, reply: "", error: st.error };
+    return { ok: true, reply: "OK" };
+  }
   const port = configFromFiles().remotePort || 7642;
   const prep = await ensureMmdvmRemoteReady(port);
   if (prep) return { ok: false, reply: "", error: prep };
-  let line = cmd.replace(/[\r\n]/g, " ").trim();
-  if (!line) return { ok: false, reply: "", error: "comando vazio" };
-  // Atalhos amigáveis → Remote Control do MMDVMHost (g4klx).
-  const tgOnly = line.match(/^tg(?:\s+|:)(\d{1,8})(?:\s+(\d))?$/i);
-  const talkgroup = line.match(/^talkgroup\s+(\d)\s+(\d{1,8})$/i);
-  if (tgOnly) {
-    const slot = tgOnly[2] || "2";
-    line = `talkgroup ${slot} ${tgOnly[1]}`;
-  } else if (talkgroup) {
-    line = `talkgroup ${talkgroup[1]} ${talkgroup[2]}`;
-  } else if (/^page\s+/i.test(line)) {
+  if (/^page\s+/i.test(line)) {
     /* POCSAG page — keep as-is */
   }
   return remoteTcp(port, line);
+}
+
+let serviceHealthCache = { at: 0, ok: false };
+
+/** Chip do console: Host+Gateway ativos, remote 7642 e BM conectado quando habilitado. */
+export async function mmdvmServiceHealthy(): Promise<boolean> {
+  if (!linux()) return false;
+  if (Date.now() - serviceHealthCache.at < 20_000) return serviceHealthCache.ok;
+  const st = await mmdvmStatus();
+  serviceHealthCache = { at: Date.now(), ok: Boolean(st.ok) };
+  return serviceHealthCache.ok;
 }

@@ -269,6 +269,11 @@ if [[ -d "$ROOT/deploy/mmdvm" ]]; then
     "$ROOT/deploy/mmdvm/ysfgateway.ini" "$ROOT/deploy/mmdvm/ircddbgateway.conf" \
     /opt/ham-cockpit/deploy/mmdvm/ 2>/dev/null || true
 fi
+if [[ -d "$ROOT/deploy/mmdvm/dmrgateway-audio" ]]; then
+  mkdir -p /usr/local/etc/DMRGateway/Audio
+  install -m 0644 "$ROOT/deploy/mmdvm/dmrgateway-audio"/*.ambe "$ROOT/deploy/mmdvm/dmrgateway-audio"/*.indx \
+    /usr/local/etc/DMRGateway/Audio/ 2>/dev/null || true
+fi
 install_unit() {
   local name="$1"
   install -m 0644 "$ROOT/deploy/mmdvm/$name" "/etc/systemd/system/$name"

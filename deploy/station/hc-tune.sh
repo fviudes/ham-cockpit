@@ -119,6 +119,25 @@ fix_crlf() {
 }
 
 # ── 5. ser2net: YAML sem conexões não pode ser só comentário ─────────────────
+# ── 6. País BR no Wi‑Fi (5 GHz / DFS no Pi; evita “country 98: DFS-FCC” após reboot) ─
+ensure_wifi_regdom() {
+  rfkill unblock wifi 2>/dev/null || true
+  rfkill unblock wlan 2>/dev/null || true
+  iw reg set BR 2>/dev/null || true
+  mkdir -p /etc/wpa_supplicant
+  if [[ ! -f /etc/wpa_supplicant/wpa_supplicant.conf ]] || ! grep -q 'country=' /etc/wpa_supplicant/wpa_supplicant.conf 2>/dev/null; then
+    printf 'country=BR\nctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\nupdate_config=1\n' \
+      >/etc/wpa_supplicant/wpa_supplicant.conf
+  else
+    sed -i 's/^country=.*/country=BR/' /etc/wpa_supplicant/wpa_supplicant.conf 2>/dev/null || true
+  fi
+  if command -v crda >/dev/null 2>&1 && [[ ! -f /etc/default/crda ]]; then
+    printf 'REGDOMAIN=BR\n' >/etc/default/crda
+  elif [[ -f /etc/default/crda ]] && ! grep -q '^REGDOMAIN=BR' /etc/default/crda 2>/dev/null; then
+    sed -i 's/^REGDOMAIN=.*/REGDOMAIN=BR/' /etc/default/crda 2>/dev/null || printf 'REGDOMAIN=BR\n' >>/etc/default/crda
+  fi
+}
+
 fix_ser2net_yaml() {
   local y=/opt/ser2net/ser2net.yaml
   [[ -f "$y" ]] || return 0
@@ -140,5 +159,6 @@ ensure_swap
 ensure_sysctl_journald
 mask_bloat
 fix_crlf
+ensure_wifi_regdom
 fix_ser2net_yaml
 exit 0

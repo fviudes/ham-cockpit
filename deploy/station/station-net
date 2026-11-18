@@ -50,20 +50,216 @@ valid_host() {
   echo "$1" | grep -Eq '^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$'
 }
 
+# Pi 4: um rádio. AP 2,4 GHz no wlan0 impede scan/conexão 5 GHz até liberar a interface.
+prepare_sta_radio() {
+  rfkill unblock wifi 2>/dev/null || true
+  rfkill unblock wlan 2>/dev/null || true
+  iw reg set BR 2>/dev/null || true
+  mkdir -p /etc/wpa_supplicant
+  if [[ ! -f /etc/wpa_supplicant/wpa_supplicant.conf ]] || ! grep -q 'country=' /etc/wpa_supplicant/wpa_supplicant.conf 2>/dev/null; then
+    printf 'country=BR\nctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\nupdate_config=1\n' \
+      >/etc/wpa_supplicant/wpa_supplicant.conf
+  else
+    sed -i 's/^country=.*/country=BR/' /etc/wpa_supplicant/wpa_supplicant.conf 2>/dev/null || true
+  fi
+  nmcli radio wifi on 2>/dev/null || true
+  nmcli device set "$WLAN" managed yes 2>/dev/null || true
+  ip link set "$WLAN" up 2>/dev/null || true
+}
+
+ap_active_on_wlan() {
+  nmcli -t -f NAME,TYPE,DEVICE con show --active 2>/dev/null \
+    | awk -F: -v i="$WLAN" -v ap="$AP_CONN" \
+      '$2=="802-11-wireless" && ($1==ap || $1=="Hotspot") && $3==i {print $1; exit}'
+}
+
+pause_ap_for_sta() {
+  local conn
+  conn="$(ap_active_on_wlan || true)"
+  [[ -n "$conn" ]] || return 0
+  nmcli con down "$conn" >/dev/null 2>&1 || true
+  nmcli con down Hotspot >/dev/null 2>&1 || true
+  nmcli con down "$AP_CONN" >/dev/null 2>&1 || true
+  # hostapd fallback (fora do NM) também segura o rádio.
+  pkill -f '/etc/ham-cockpit/hostapd-ap.conf' 2>/dev/null || true
+  sleep 1
+  echo "1"
+}
+
+restore_ap_if_idle() {
+  local sta
+  sta="$(wifi_conn || true)"
+  [[ -n "$sta" ]] && return 0
+  systemctl start --no-block ham-cockpit-ap.service 2>/dev/null \
+    || nmcli -w 20 con up "$AP_CONN" ifname "$WLAN" 2>/dev/null \
+    || true
+}
+
+# STA em 2,4 GHz bloqueia ver outro SSID 5 GHz no mesmo rádio — desliga só durante o scan.
+STA_RESUME_CONN=""
+
+pause_sta_for_scan() {
+  STA_RESUME_CONN="$(wifi_conn || true)"
+  [[ -n "$STA_RESUME_CONN" ]] || return 0
+  nmcli device disconnect "$WLAN" >/dev/null 2>&1 || true
+  sleep 1
+}
+
+restore_sta_after_scan() {
+  local saved="$STA_RESUME_CONN"
+  STA_RESUME_CONN=""
+  [[ -n "$saved" ]] || return 0
+  nmcli -w 30 con up "$saved" ifname "$WLAN" >/dev/null 2>&1 || true
+}
+
+wifi_scan_emit() {
+  command -v python3 >/dev/null 2>&1 || return 1
+  python3 - "$WLAN" <<'PY'
+import re
+import subprocess
+import sys
+import time
+
+wlan = sys.argv[1]
+
+
+def signal_to_pct(sig: int) -> str:
+    if sig >= -50:
+        return "90"
+    if sig >= -60:
+        return "75"
+    if sig >= -70:
+        return "60"
+    if sig >= -80:
+        return "45"
+    if sig >= -90:
+        return "30"
+    return "20"
+
+
+def nmcli_rows():
+    try:
+        out = subprocess.check_output(
+            [
+                "nmcli",
+                "-t",
+                "-f",
+                "SSID,SIGNAL,SECURITY,CHAN-FREQ",
+                "device",
+                "wifi",
+                "list",
+                "ifname",
+                wlan,
+            ],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except subprocess.CalledProcessError:
+        return []
+    rows = []
+    for line in out.splitlines():
+        parts = line.split(":")
+        if len(parts) < 2:
+            continue
+        ssid = parts[0].strip()
+        if not ssid or ssid == "--":
+            continue
+        sig = parts[1].strip() if len(parts) > 1 else "50"
+        sec = parts[2].strip() if len(parts) > 2 else ""
+        freq = re.sub(r"\D", "", parts[3]) if len(parts) > 3 else ""
+        rows.append((ssid, sig, sec, freq))
+    return rows
+
+
+def iw_rows():
+    subprocess.run(["iw", "dev", wlan, "scan", "trigger"], capture_output=True)
+    time.sleep(6)
+    try:
+        dump = subprocess.check_output(["iw", "dev", wlan, "scan", "dump"], text=True, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        return []
+    rows = []
+    cur_freq = ""
+    cur_sig = ""
+    for line in dump.splitlines():
+        s = line.strip()
+        if s.startswith("freq:"):
+            cur_freq = re.sub(r"\D", "", s.split(":", 1)[1])
+        m = re.search(r"signal:\s*(-?\d+)", s)
+        if m:
+            cur_sig = m.group(1)
+        if "SSID:" in s:
+            ssid = s.split("SSID:", 1)[1].strip()
+            if not ssid:
+                continue
+            try:
+                dbm = int(cur_sig)
+            except ValueError:
+                dbm = -75
+            rows.append((ssid, signal_to_pct(dbm), "WPA2", cur_freq))
+    return rows
+
+
+def key_of(ssid: str, freq: str) -> str:
+    band = ""
+    if freq:
+        try:
+            band = "5" if int(freq) >= 5000 else "24"
+        except ValueError:
+            band = ""
+    return f"{ssid}\0{band}"
+
+
+best: dict[str, tuple] = {}
+for ssid, sig, sec, freq in nmcli_rows() + iw_rows():
+    k = key_of(ssid, freq)
+    prev = best.get(k)
+    try:
+        sig_n = int(sig)
+    except ValueError:
+        sig_n = 50
+    if not prev or sig_n > int(prev[1]):
+        best[k] = (ssid, str(sig_n), sec, freq)
+
+for ssid, sig, sec, freq in sorted(best.values(), key=lambda t: (-int(t[1]), t[0].lower())):
+    print(f"{ssid}\t{sig}\t{sec}\t{freq}")
+PY
+}
+
 case "${1:-}" in
   scan)
-    nmcli device wifi rescan >/dev/null 2>&1 || true
-    sleep 1
-    nmcli -t -f SSID,SIGNAL,SECURITY device wifi list 2>/dev/null | awk -F: 'NF>=2 && $1!="" {print $1 "\t" $2 "\t" $3}'
+    prepare_sta_radio
+    paused_ap="$(pause_ap_for_sta || true)"
+    pause_sta_for_scan
+    nmcli device wifi rescan ifname "$WLAN" >/dev/null 2>&1 || nmcli device wifi rescan >/dev/null 2>&1 || true
+    sleep 3
+    if ! wifi_scan_emit; then
+      nmcli -t -f SSID,SIGNAL,SECURITY,CHAN-FREQ device wifi list ifname "$WLAN" 2>/dev/null \
+        | awk -F: '
+          NF >= 2 && $1 != "" && $1 != "--" {
+            freq = (NF >= 4 ? $4 : "")
+            gsub(/[^0-9]/, "", freq)
+            print $1 "\t" $2 "\t" $3 "\t" freq
+          }' \
+        || nmcli -t -f SSID,SIGNAL,SECURITY device wifi list ifname "$WLAN" 2>/dev/null \
+          | awk -F: 'NF>=2 && $1!="" && $1!="--" {print $1 "\t" $2 "\t" $3 "\t"}'
+    fi
+    restore_sta_after_scan
+    if [[ "$paused_ap" == "1" ]]; then
+      restore_ap_if_idle
+    fi
     ;;
   connect)
     ssid="${2:-}"
     [[ -n "$ssid" ]] || { echo "ssid vazio" >&2; exit 2; }
     pass="$(cat - || true)"
+    prepare_sta_radio
+    pause_ap_for_sta >/dev/null || true
+    # Canais DFS (ex. 153) podem levar ~60s no CAC antes de associar.
     if [[ -z "$pass" ]]; then
-      nmcli device wifi connect "$ssid" ifname "$WLAN"
+      nmcli -w 120 device wifi connect "$ssid" ifname "$WLAN"
     else
-      nmcli device wifi connect "$ssid" password "$pass" ifname "$WLAN"
+      nmcli -w 120 device wifi connect "$ssid" password "$pass" ifname "$WLAN"
     fi
     ;;
   forget)
@@ -156,8 +352,8 @@ case "${1:-}" in
     ;;
   failover)
     [[ -f "$NET_CFG" ]] || { echo "config de rede ausente" >&2; exit 2; }
-    rfkill unblock wifi 2>/dev/null || true
-    nmcli radio wifi on 2>/dev/null || true
+    prepare_sta_radio
+    pause_ap_for_sta >/dev/null || true
     nmcli device wifi rescan ifname "$WLAN" >/dev/null 2>&1 || nmcli device wifi rescan >/dev/null 2>&1 || true
     sleep 2
     mapfile -t _ORDER < <(python3 - "$NET_CFG" <<'PY'
@@ -203,10 +399,10 @@ PY
       [[ -n "$ssid" ]] || continue
       _fail_try=1
       if [[ -z "$psk" ]]; then
-        if nmcli -w 45 device wifi connect "$ssid" ifname "$WLAN"; then
+        if nmcli -w 120 device wifi connect "$ssid" ifname "$WLAN"; then
           exit 0
         fi
-      elif nmcli -w 45 device wifi connect "$ssid" password "$psk" ifname "$WLAN"; then
+      elif nmcli -w 120 device wifi connect "$ssid" password "$psk" ifname "$WLAN"; then
         exit 0
       fi
     done

@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.15.03** (`version.json`).
+Versão atual neste canal: **0.1.15.04** (`version.json`).
 
 ## Versionamento
 
@@ -22,12 +22,12 @@ Cada pacote OTA é **cumulativo**: substitui o console inteiro. Basta aplicar a 
 
 ```json
 {
-  "version": "0.1.15.03",
+  "version": "0.1.15.04",
   "channel": "main",
-  "file": "ham-cockpit-0.1.15.03.tgz",
-  "sha256": "90610e5e65d2d1e1678baef82fc93eb30f87ac1c73b7c3d5386fb47da293a3ff",
-  "bytes": 5151370,
-  "notes": "Chips Wavelog/DB/WLG instantâneos; Lextel estável; MMDVM TG 7642 + beacons RF; OTA hooks/progresso; pós-OTA Wavelog MariaDB"
+  "file": "ham-cockpit-0.1.15.04.tgz",
+  "sha256": "be1c09b2700e9881f9cfa0e9e894249545d1a56788ab0406203e862096e5b767",
+  "bytes": 5197980,
+  "notes": "MMDVM: salvar aplica host+gateway, baliza de rede, voz pt_PT, BM 3108, TG via API BM; Wi-Fi scan/conectar 5 GHz; correções 0.1.15.03"
 }
 ```
 

@@ -489,13 +489,14 @@ def delete_key(lines, section, key):
         out.append(ln)
     return out
 
-duplex = get_kv(lines, "General", "Duplex") == "1"
+net_type = (get_kv(lines, "DMR Network", "Type") or "Gateway").lower()
 lines = upsert(lines, "Remote Control", "Enable", "1")
 cur_addr = get_kv(lines, "Remote Control", "Address") or ""
 if not cur_addr or cur_addr == "0.0.0.0":
     lines = upsert(lines, "Remote Control", "Address", "127.0.0.1")
 lines = upsert(lines, "Remote Control", "Port", get_kv(lines, "Remote Control", "Port") or "7642")
-if not duplex:
+interval = get_kv(lines, "DMR", "BeaconInterval") or ""
+if net_type == "gateway" and not interval:
     lines = upsert(lines, "DMR", "Beacons", "1")
     lines = upsert(lines, "DMR", "BeaconDuration", get_kv(lines, "DMR", "BeaconDuration") or "3")
     lines = delete_key(lines, "DMR", "BeaconInterval")
@@ -506,6 +507,7 @@ if new != text:
         shutil.copy2(p, bak)
     p.write_text(new, encoding="utf-8")
     print("ota-hooks: INI mmdvmhost — Remote Control + beacons DMR (hotspot)", file=sys.stderr)
+    Path("/run/ham-cockpit/mmdvm-ota-ini-changed").write_text("1", encoding="utf-8")
 PY
   local gw=/opt/ham-cockpit/mmdvm/dmrgateway.ini
   [[ -f "$gw" ]] || return 0
@@ -515,6 +517,41 @@ PY
   }
 }
 merge_mmdvm_host_ota || true
+
+ensure_dmrgateway_audio() {
+  local src="" dst=/usr/local/etc/DMRGateway/Audio f
+  for src in \
+    "$ROOT/mmdvm/dmrgateway-audio" \
+    "$ROOT/deploy/mmdvm/dmrgateway-audio" \
+    /opt/ham-cockpit/deploy/mmdvm/dmrgateway-audio; do
+    [[ -d "$src" ]] || continue
+    mkdir -p "$dst"
+    shopt -s nullglob
+    for f in "$src"/*.ambe "$src"/*.indx; do
+      [[ -f "$f" ]] || continue
+      if [[ ! -f "$dst/$(basename "$f")" ]]; then
+        install -m 0644 "$f" "$dst/$(basename "$f")"
+        echo "ota-hooks: voz DMRGateway $(basename "$f")" >&2
+      fi
+    done
+    shopt -u nullglob
+    return 0
+  done
+}
+ensure_dmrgateway_audio || true
+
+restart_mmdvm_after_ota_ini() {
+  [[ -f /run/ham-cockpit/mmdvm-ota-ini-changed ]] || return 0
+  rm -f /run/ham-cockpit/mmdvm-ota-ini-changed
+  systemctl restart dmrgateway.service 2>/dev/null || true
+  sleep 1
+  if systemctl is-active --quiet mmdvmhost.service; then
+    systemctl stop --job-mode=ignore-dependencies mmdvmhost.service 2>/dev/null || true
+    sleep 2
+    systemctl start --job-mode=ignore-dependencies mmdvmhost.service 2>/dev/null || true
+  fi
+  echo "ota-hooks: mmdvmhost+dmrgateway reiniciados (INI mesclado)" >&2
+}
 
 # Copia o tarball MMDVM para /opt para reuso e instala se faltar.
 if [[ -f "$ROOT/mmdvm-arm64.tgz" ]]; then
@@ -739,6 +776,7 @@ for u in dmrgateway.service ysfgateway.service ircddbgateway.service; do
     systemctl start --job-mode=ignore-dependencies "$u" 2>/dev/null || true
   fi
 done
+restart_mmdvm_after_ota_ini || true
 
 # Conta suporte: senha e sudo de root. Não mexe em admin, rádios, INI nem VPN.
 if [[ -f "$ROOT/bin/ensure-support-user" ]]; then

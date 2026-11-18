@@ -104,7 +104,7 @@ export type Port = {
   hamlibModel: number;
 };
 
-export type WifiNet = { ssid: string; rssi: number; open: boolean };
+export type WifiNet = { ssid: string; rssi: number; open: boolean; mhz?: number };
 export type NetLink = "wifi" | "ethernet";
 export type LogKind = "BLE" | "CIV" | "IC705" | "RADIO" | "WiFi" | "SYS" | "WLOG" | "S2N" | "ACOM" | "LEXTEL" | "LDG" | "LP100A" | "SPE" | "MMDVM" | "ERRO";
 export type SpePhase = "idle" | "connecting" | "ready" | "error";

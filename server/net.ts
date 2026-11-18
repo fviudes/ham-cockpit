@@ -13,7 +13,7 @@ const HOST_RE = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
 const IPV4_RE = /^(?:\d{1,3}\.){3}\d{1,3}$/;
 
 export type NetLink = "wifi" | "ethernet";
-export type WifiNet = { ssid: string; rssi: number; open: boolean };
+export type WifiNet = { ssid: string; rssi: number; open: boolean; mhz?: number };
 export type ManagedNet = { ssid: string };
 
 export type NetSnapshot = {
@@ -250,11 +250,22 @@ async function winScan(): Promise<WifiNet[]> {
   return Array.from(bySsid.values()).sort((a, b) => b.rssi - a.rssi);
 }
 
+function parseChanMhz(raw: string): number | undefined {
+  const n = Number.parseInt(String(raw || "").replace(/\D/g, ""), 10);
+  if (!Number.isFinite(n) || n < 2412 || n > 5895) return undefined;
+  return n;
+}
+
+function wifiNetKey(ssid: string, mhz?: number) {
+  const band = mhz == null ? "" : mhz >= 5000 ? "5" : "24";
+  return `${ssid}\0${band}`;
+}
+
 async function linuxScan(): Promise<WifiNet[]> {
   const r = existsSync(HELPER)
     ? await helper(["scan"])
-    : await run("nmcli", ["-t", "-f", "SSID,SIGNAL,SECURITY", "device", "wifi", "list"]);
-  const bySsid = new Map<string, WifiNet>();
+    : await run("nmcli", ["-t", "-f", "SSID,SIGNAL,SECURITY,CHAN-FREQ", "device", "wifi", "list"]);
+  const byKey = new Map<string, WifiNet>();
   for (const line of r.stdout.split(/\r?\n/)) {
     const parts = line.split("\t");
     const ssid = (parts[0] || "").trim();
@@ -262,10 +273,13 @@ async function linuxScan(): Promise<WifiNet[]> {
     const rssi = signalToRssi(parts[1] || "40");
     const sec = (parts[2] || "").trim();
     const open = !sec || sec === "--" || /^none$/i.test(sec);
-    const prev = bySsid.get(ssid);
-    if (!prev || rssi > prev.rssi) bySsid.set(ssid, { ssid, rssi, open });
+    const mhz = parseChanMhz(parts[3] || "");
+    const key = wifiNetKey(ssid, mhz);
+    const prev = byKey.get(key);
+    const row: WifiNet = { ssid, rssi, open, ...(mhz != null ? { mhz } : {}) };
+    if (!prev || rssi > prev.rssi) byKey.set(key, row);
   }
-  return Array.from(bySsid.values()).sort((a, b) => b.rssi - a.rssi);
+  return Array.from(byKey.values()).sort((a, b) => b.rssi - a.rssi);
 }
 
 type LiveIf = {
@@ -468,7 +482,20 @@ export async function netScan(): Promise<NetSnapshot> {
   lastNote = "";
   try {
     lastScan = process.platform === "win32" ? await winScan() : await linuxScan();
-    if (!lastScan.length) lastNote = process.platform === "win32" ? "Nenhuma rede Wi‑Fi visível. Ligue o adaptador wireless." : "Nenhuma rede visível. Confira a antena wlan0.";
+    if (!lastScan.length) {
+      lastNote =
+        process.platform === "win32"
+          ? "Nenhuma rede Wi‑Fi visível. Ligue o adaptador wireless."
+          : "Nenhuma rede visível. Confira wlan0. O scan pausa hotspot/STA para ver 5 GHz (DFS pode demorar ~10 s).";
+    } else if (process.platform === "linux") {
+      const has5 = lastScan.some((n) => (n.mhz ?? 0) >= 5000);
+      if (!has5) {
+        lastNote =
+          "Nenhuma rede 5 GHz nesta busca. Canais DFS (ex. 153) demoram mais; repita Procurar. Se estiver só no Wi‑Fi do AP da estação, use cabo Ethernet para não perder o console.";
+      } else if (lastScan.some((n) => (n.mhz ?? 0) >= 5500)) {
+        lastNote = "Redes 5 GHz visíveis (inclui canais DFS). Conectar pode levar até ~1 min na primeira associação.";
+      }
+    }
   } catch (err) {
     lastError = err instanceof Error ? err.message : String(err);
     lastScan = [];

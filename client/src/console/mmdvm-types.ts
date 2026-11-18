@@ -71,6 +71,9 @@ export type MmdvmApi = {
   oledType: number;
   modes: Record<ModeId, boolean>;
   networks: Network[];
+  networkBeacon?: boolean;
+  bmApiKey?: string;
+  voiceLanguage?: string;
   paused: Record<ModeId, boolean>;
   networkStatus?: Record<NetworkId, NetworkLinkStatus>;
   tx: boolean;
