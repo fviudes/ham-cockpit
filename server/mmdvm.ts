@@ -174,6 +174,8 @@ export type MmdvmConfig = {
 
 export type GwUnit = "mmdvmhost" | "dmrgateway" | "ysfgateway" | "ircddbgateway" | "nextiondriver";
 
+export type MmdvmNetworkLinkStatus = "conectado" | "conectando" | "desconectado";
+
 export type MmdvmStatus = MmdvmConfig & {
   ok: boolean;
   installed: boolean;
@@ -201,6 +203,7 @@ export type MmdvmStatus = MmdvmConfig & {
   nextion: MmdvmNextion;
   /** Instant Mode Manager — pause runtime (não grava Enable permanente no INI). */
   paused: Record<MmdvmMode, boolean>;
+  networkStatus: Record<MmdvmNetwork["id"], MmdvmNetworkLinkStatus>;
   error: string;
 };
 
@@ -518,7 +521,7 @@ function configFromFiles(): MmdvmConfig {
   };
 }
 
-function applyConfig(host: Ini, gw: Ini, ysf: Ini, dstar: Conf, cfg: Partial<MmdvmConfig>) {
+export function applyConfig(host: Ini, gw: Ini, ysf: Ini, dstar: Conf, cfg: Partial<MmdvmConfig>) {
   const cur = { ...defaultConfig(), ...configFromFiles(), ...cfg };
   // Preferir o callsign enviado no PUT; nunca voltar ao placeholder se o operador mandou outro.
   const rawCall = String(cfg.callsign ?? cur.callsign ?? "")
@@ -550,10 +553,7 @@ function applyConfig(host: Ini, gw: Ini, ysf: Ini, dstar: Conf, cfg: Partial<Mmd
   if (board.id !== "custom") {
     if (board.port) modemPort = board.port;
     if (board.uartSpeed > 0) uartSpeed = board.uartSpeed;
-    if (board.duplex !== null) {
-      setKv(host, "General", "Duplex", board.duplex ? "1" : "0");
-      // Não sobrescrever TXFrequency aqui — o valor do console já foi gravado acima.
-    }
+    // Duplex vem do PUT (cur.duplex) — preset só altera duplex quando o cliente troca a placa.
     if (board.slot1 === false) setKv(host, "DMR Network", "Slot1", "0");
     if (board.slot1 === true) setKv(host, "DMR Network", "Slot1", "1");
   }
@@ -781,6 +781,50 @@ function readModemBoard(): MmdvmBoardId {
     /* missing */
   }
   return "mmdvmhshat";
+}
+
+/** Lê a linha de firmware que o MMDVMHost grava ao abrir a UART (WPSD: DVModemFWVersion). */
+function modemFirmwareFromLog(logText: string): string {
+  const m = logText.match(/description:\s*([^\n]+)/i);
+  return m?.[1]?.trim() ?? "";
+}
+
+/**
+ * O console persiste o preset em modem-board.json; se o operador escolheu o preset errado
+ * (ex. Dual_Band simplex vs HS Dual Hat), alinhamos a UI com o que o Host reportou no log.
+ */
+function effectiveModemBoard(stored: MmdvmBoardId, fw: string, duplexIni: boolean): MmdvmBoardId {
+  if (/MMDVM_HS_Dual_Hat/i.test(fw)) return "mmdvmhsdualhatgpio";
+  if (duplexIni && stored === "mmdvmhsdualbandgpio") return "mmdvmhsdualhatgpio";
+  return stored;
+}
+
+/** Avisos não bloqueantes (operador / console) — verificado no log vivo, sem RemoteCommand. */
+function mmdvmOperatorHints(logText: string, cfg: MmdvmConfig, fw: string): string {
+  const parts: string[] = [];
+  if (/MMDVM_HS_Dual_Hat/i.test(fw) && !cfg.duplex) {
+    parts.push(
+      "Firmware MMDVM_HS_Dual_Hat, mas Duplex=0 — use o preset «MMDVM HS Dual (v1.3 / HAT)» e salve",
+    );
+  }
+  const wrong = logText.match(/wrong repeater\s*\([^)]*?\b([A-Z])\b[^)]*\)/i);
+  if (wrong) {
+    const radioMod = wrong[1]!.toUpperCase();
+    if (radioMod && radioMod !== cfg.dstarModule.toUpperCase()) {
+      parts.push(
+        `D-Star: rádio no módulo ${radioMod}, Host em ${cfg.dstarModule} — ajuste o módulo ou RPT1 no rádio`,
+      );
+    }
+  }
+  return parts.join(" · ");
+}
+
+function dstarLinksEmpty(logDir: string): boolean {
+  try {
+    return statSync(join(logDir, "Links.log")).size === 0;
+  } catch {
+    return true;
+  }
 }
 
 function writeModemBoard(board: MmdvmBoardId) {
@@ -1148,6 +1192,67 @@ function seedIfMissing() {
   if (!hostPath.includes(`${join("deploy", "mmdvm")}`)) upgradeHostDisplaySections(hostPath);
 }
 
+const NET_REMOTE_KEY: Record<MmdvmNetwork["id"], string> = {
+  bm: "net1",
+  dmrplus: "net2",
+  tgif: "net3",
+  xlx: "xlx",
+};
+
+function mapRemoteLink(raw: string | undefined): MmdvmNetworkLinkStatus {
+  const v = (raw || "").toLowerCase();
+  if (v === "conn" || v === "connected") return "conectado";
+  if (v === "linking" || v === "login" || v === "logging" || v === "try") return "conectando";
+  return "desconectado";
+}
+
+function parseDmrgatewayStatus(reply: string): Record<string, string> {
+  const lines = reply.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const line = lines.length >= 2 ? lines[1]! : lines[0] ?? "";
+  const out: Record<string, string> = {};
+  for (const tok of line.split(/\s+/)) {
+    const idx = tok.indexOf(":");
+    if (idx < 1) continue;
+    out[tok.slice(0, idx)] = tok.slice(idx + 1);
+  }
+  return out;
+}
+
+async function dmrgatewayNetworkStatus(
+  networks: MmdvmNetwork[],
+  gatewayRunning: boolean,
+): Promise<Record<MmdvmNetwork["id"], MmdvmNetworkLinkStatus>> {
+  const out: Record<MmdvmNetwork["id"], MmdvmNetworkLinkStatus> = {
+    bm: "desconectado",
+    dmrplus: "desconectado",
+    tgif: "desconectado",
+    xlx: "desconectado",
+  };
+  for (const n of networks) {
+    if (!n.enabled) out[n.id] = "desconectado";
+  }
+  if (!gatewayRunning) return out;
+  const gw = parseIniFile(gatewayIniPath());
+  const remoteOn = iniGet(gw, "Remote Control", "Enable", "0") === "1";
+  const remotePort = iniNum(gw, "Remote Control", "Port", 7643);
+  let remoteMap: Record<string, string> = {};
+  if (remoteOn && remotePort > 0) {
+    const res = await remoteTcp(remotePort, "status");
+    if (res.ok && res.reply) remoteMap = parseDmrgatewayStatus(res.reply);
+  }
+  for (const n of networks) {
+    if (!n.enabled) continue;
+    const key = NET_REMOTE_KEY[n.id];
+    const raw = remoteMap[key];
+    if (raw) {
+      out[n.id] = mapRemoteLink(raw);
+      continue;
+    }
+    out[n.id] = gatewayRunning ? "conectando" : "desconectado";
+  }
+  return out;
+}
+
 export async function mmdvmStatus(): Promise<MmdvmStatus> {
   seedIfMissing();
   const cfg = configFromFiles();
@@ -1161,7 +1266,10 @@ export async function mmdvmStatus(): Promise<MmdvmStatus> {
   const ysfIni = ysfIniPath();
   const dstarIni = dstarIniPath();
   const logs = logDir();
-  const heard = parseLastHeard(readLogTail(logs, "MMDVM"));
+  const hostLog = readLogTail(logs, "MMDVM", 120_000);
+  const heard = parseLastHeard(hostLog);
+  const fw = modemFirmwareFromLog(hostLog);
+  const modemBoard = effectiveModemBoard(cfg.modemBoard, fw, cfg.duplex);
   const hostRunning = await unitActive("mmdvmhost");
   const gatewayRunning = await unitActive("dmrgateway");
   const ysfRunning = await unitActive("ysfgateway");
@@ -1171,8 +1279,17 @@ export async function mmdvmStatus(): Promise<MmdvmStatus> {
   const onAppliance = linux();
   const installed = Boolean(hostBin) || existsSync(hostIni);
   const nextion = await buildNextion(cfg, heard, hostRunning);
+  const hintCfg = { ...cfg, modemBoard };
+  let hints = mmdvmOperatorHints(hostLog, hintCfg, fw);
+  if (cfg.modes.dstar && cfg.dstarReflector && dstarRunning && dstarLinksEmpty(logs)) {
+    hints = [hints, "D-Star: Links.log vazio — REF ainda não linkado no ircDDBGateway"].filter(Boolean).join(" · ");
+  }
+  const baseErr = hostBin || !onAppliance ? "" : "MMDVM Host não está neste host — instale o binário WPSD/g4klx em /usr/local/bin/MMDVMHost";
+  const error = [baseErr, hints].filter(Boolean).join(" — ");
+  const networkStatus = await dmrgatewayNetworkStatus(cfg.networks, gatewayRunning);
   return {
     ...cfg,
+    modemBoard,
     ok: hostRunning,
     installed,
     appliance: onAppliance,
@@ -1196,8 +1313,8 @@ export async function mmdvmStatus(): Promise<MmdvmStatus> {
     lastHeard: heard,
     nextion,
     paused,
-    // Só alerta de binário ausente no Pi; no Windows/dev a console edita INI sem Host local.
-    error: hostBin || !onAppliance ? "" : "MMDVM Host não está neste host — instale o binário WPSD/g4klx em /usr/local/bin/MMDVMHost",
+    networkStatus,
+    error,
   };
 }
 

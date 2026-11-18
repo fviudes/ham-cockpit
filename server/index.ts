@@ -61,6 +61,7 @@ import {
   mmdvmSave,
   mmdvmStatus,
 } from "./mmdvm";
+import { loadMmdvmCatalog } from "./mmdvm-catalog";
 import {
   hubCatalog,
   hubPlanOne,
@@ -871,6 +872,13 @@ async function startServer() {
   app.get("/api/mmdvm", async (_req, res) => {
     try {
       res.json(await mmdvmStatus());
+    } catch (err) {
+      res.status(500).json({ ok: false, error: String(err) });
+    }
+  });
+  app.get("/api/mmdvm/catalog", (_req, res) => {
+    try {
+      res.json(loadMmdvmCatalog());
     } catch (err) {
       res.status(500).json({ ok: false, error: String(err) });
     }

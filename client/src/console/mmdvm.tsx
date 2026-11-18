@@ -1,7 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import {
+  dmrMasterValue,
+  parseDmrMasterValue,
+  type ModeId,
+  type MmdvmApi,
+  type MmdvmCatalog,
+  type Network,
+  type NetworkId,
+  type NetworkLinkStatus,
+} from "./mmdvm-types";
 import { useConsole } from "./state";
-import { Chip, ConsoleInput, ConsoleSelect, Field, GhostBtn, Lcd, PageHead, Panel, PanelTitle, PrimaryBtn } from "./widgets";
+import { Chip, ConsoleInput, ConsoleSelect, Field, GhostBtn, PageHead, Panel, PanelTitle, PrimaryBtn } from "./widgets";
 
 const MODES = [
   { id: "dmr", label: "DMR" },
@@ -13,80 +23,16 @@ const MODES = [
   { id: "pocsag", label: "POCSAG" },
 ] as const;
 
-type ModeId = (typeof MODES)[number]["id"];
-
-type Network = {
-  id: "bm" | "dmrplus" | "tgif" | "xlx";
-  section: string;
-  name: string;
-  enabled: boolean;
-  address: string;
-  port: number;
-  password: string;
-};
-
-type Heard = {
-  timeUtc: string;
-  mode: string;
-  callsign: string;
-  target: string;
-  src: "RF" | "Net";
-  duration: string;
-  loss: string;
-  ber: string;
-  rssi?: string;
-};
-
-type MmdvmApi = {
-  ok: boolean;
-  installed: boolean;
-  appliance?: boolean;
-  hostRunning: boolean;
-  gatewayRunning: boolean;
-  ysfRunning: boolean;
-  dstarRunning: boolean;
-  nextionRunning: boolean;
-  hostBinary: string;
-  gatewayBinary: string;
-  ysfBinary: string;
-  dstarBinary: string;
-  nextionBinary: string;
-  hostIni: string;
-  gatewayIni: string;
-  ysfIni: string;
-  dstarIni: string;
-  logDir: string;
-  callsign: string;
-  dmrId: string;
-  duplex: boolean;
-  rxHz: number;
-  txHz: number;
-  colorCode: number;
-  latitude: string;
-  longitude: string;
-  location: string;
-  modemBoard: string;
-  modemPort: string;
-  uartSpeed: number;
-  remotePort: number;
-  dstarReflector: string;
-  dstarModule: string;
-  ysfStartup: string;
-  displayType: "None" | "Nextion" | "OLED";
-  displayPort: string;
-  screenLayout: number;
-  brightness: number;
-  idleBrightness: number;
-  nextionDriver: boolean;
-  oledType: number;
-  modes: Record<ModeId, boolean>;
-  networks: Network[];
-  paused: Record<ModeId, boolean>;
-  tx: boolean;
-  currentMode: string;
-  lastHeard: Heard[];
-  error: string;
-};
+const emptyCatalog = (): MmdvmCatalog => ({
+  dstarReflectors: [],
+  bmMasters: [],
+  dmrPlusMasters: [],
+  tgifMasters: [],
+  xlxMasters: [],
+  ysfServers: [],
+  talkgroups: [],
+  sources: {},
+});
 
 const CORE_MODES: ModeId[] = ["dmr", "dstar", "ysf"];
 const LATER_MODES: ModeId[] = ["p25", "nxdn", "m17", "pocsag"];
@@ -173,6 +119,7 @@ export function MmdvmPage() {
   const [busy, setBusy] = useState(false);
   const [st, setSt] = useState<MmdvmApi | null>(null);
   const [serials, setSerials] = useState<string[]>([]);
+  const [catalog, setCatalog] = useState<MmdvmCatalog>(emptyCatalog);
   const [tg, setTg] = useState("91");
   const [slot, setSlot] = useState("2");
   /** Rascunho MHz enquanto o campo está em foco — evita toFixed a cada tecla. */
@@ -252,6 +199,7 @@ export function MmdvmPage() {
           currentMode: j.currentMode,
           error: j.error,
           paused: j.paused ?? p.paused,
+          networkStatus: j.networkStatus ?? p.networkStatus,
         };
       }
       return {
@@ -276,6 +224,10 @@ export function MmdvmPage() {
 
   useEffect(() => {
     void pull(true);
+    void fetch("/api/mmdvm/catalog")
+      .then((r) => r.json() as Promise<MmdvmCatalog>)
+      .then((j) => setCatalog(j))
+      .catch(() => undefined);
     void fetch("/api/serials")
       .then((r) => r.json() as Promise<SerialsApi>)
       .then((j) => {
@@ -396,11 +348,49 @@ export function MmdvmPage() {
   const modes = st?.modes ?? emptyModes();
   const paused = st?.paused ?? emptyPaused();
   const nets = st?.networks ?? [];
-  const heard = st?.lastHeard ?? [];
   const mhzRx = rxDraft ?? mhz(st?.rxHz ?? 433_475_000);
   const mhzTx = txDraft ?? mhz(st?.txHz ?? 433_475_000);
   const ports = Array.from(new Set(["/dev/ttyAMA0", "/dev/ttyUSB0", "/dev/ttyACM0", st?.modemPort ?? "", ...serials].filter(Boolean)));
   const anyPaused = MODES.some((m) => paused[m.id]);
+
+  const netStatus = (id: NetworkId): NetworkLinkStatus => st?.networkStatus?.[id] ?? "desconectado";
+
+  const netStatusLabel = (id: NetworkId) => {
+    const s = netStatus(id);
+    if (s === "conectado") return tx("mmdvmNetUp");
+    if (s === "conectando") return tx("mmdvmNetLinking");
+    return tx("mmdvmNetDown");
+  };
+
+  const mastersFor = (id: NetworkId) => {
+    if (id === "bm") return catalog.bmMasters;
+    if (id === "dmrplus") return catalog.dmrPlusMasters;
+    if (id === "tgif") return catalog.tgifMasters;
+    return catalog.xlxMasters;
+  };
+
+  const masterSelectValue = (n: Network) => {
+    const hit = mastersFor(n.id).find((m) => m.address === n.address && m.port === n.port);
+    if (hit) return hit.value;
+    return dmrMasterValue(n);
+  };
+
+  const applyMaster = (nets: Network[], i: number, value: string) => {
+    const parsed = parseDmrMasterValue(value);
+    return nets.map((x, j) =>
+      j === i
+        ? {
+            ...x,
+            address: parsed.address || x.address,
+            port: parsed.port || x.port,
+            password: parsed.password || x.password,
+            name: parsed.name.replace(/_/g, " ") || x.name,
+          }
+        : x,
+    );
+  };
+
+  const dstarRefValue = (ref: string) => (ref ? ref.toUpperCase().slice(0, 6) : "");
 
   return (
     <div>
@@ -708,44 +698,6 @@ export function MmdvmPage() {
             <ConsoleInput value={st?.location ?? ""} onChange={(e) => patch({ location: e.target.value })} />
           </Field>
         </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <PrimaryBtn disabled={busy} onClick={() => void save(false)}>
-            {tx("save")}
-          </PrimaryBtn>
-          <PrimaryBtn disabled={busy} onClick={() => void save(true)}>
-            {tx("mmdvmRestart")}
-          </PrimaryBtn>
-          <GhostBtn
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                applyFull(await callMmdvm("/api/mmdvm/up", "POST"));
-                pushLog("MMDVM", "mmdvmhost + dmrgateway start");
-                toast.success(tx("mmdvmStarted"));
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            {tx("startService")}
-          </GhostBtn>
-          <GhostBtn
-            danger
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              try {
-                applyFull(await callMmdvm("/api/mmdvm/down", "POST"));
-                pushLog("MMDVM", "mmdvmhost + dmrgateway stop");
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            {tx("stopService")}
-          </GhostBtn>
-        </div>
       </Panel>
 
       <Panel className="mt-4">
@@ -753,11 +705,17 @@ export function MmdvmPage() {
         <p className="mb-3 max-w-3xl text-sm leading-relaxed text-[#8ea0b3]">{tx("mmdvmYsfHint")}</p>
         <div className="flex flex-wrap items-end gap-3">
           <Field label={tx("mmdvmYsfStartup")}>
-            <ConsoleInput
+            <ConsoleSelect
               value={st?.ysfStartup ?? ""}
-              placeholder="FCS00120"
               onChange={(e) => patch({ ysfStartup: e.target.value })}
-            />
+            >
+              <option value="">—</option>
+              {catalog.ysfServers.map((s) => (
+                <option key={s.value} value={s.value}>
+                  {s.label}
+                </option>
+              ))}
+            </ConsoleSelect>
           </Field>
           <GhostBtn
             disabled={busy}
@@ -803,12 +761,17 @@ export function MmdvmPage() {
         <p className="mb-3 max-w-3xl text-sm leading-relaxed text-[#8ea0b3]">{tx("mmdvmDstarHint")}</p>
         <div className="flex flex-wrap items-end gap-3">
           <Field label={tx("mmdvmDstarRef")}>
-            <ConsoleInput
-              value={st?.dstarReflector ?? ""}
-              placeholder="REF001"
-              maxLength={8}
-              onChange={(e) => patch({ dstarReflector: e.target.value.toUpperCase() })}
-            />
+            <ConsoleSelect
+              value={dstarRefValue(st?.dstarReflector ?? "")}
+              onChange={(e) => patch({ dstarReflector: e.target.value })}
+            >
+              <option value="">—</option>
+              {catalog.dstarReflectors.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.id} ({r.kind})
+                </option>
+              ))}
+            </ConsoleSelect>
           </Field>
           <Field label={tx("mmdvmDstarMod")}>
             <ConsoleSelect
@@ -884,32 +847,54 @@ export function MmdvmPage() {
         <p className="mb-4 max-w-3xl text-sm leading-relaxed text-[#8ea0b3]">{tx("mmdvmNetworksHint")}</p>
         <div className="grid gap-3">
           {nets.map((n, i) => (
-            <div key={n.id} className="grid gap-3 rounded-lg border border-[rgba(79,195,247,0.12)] bg-[#101c28] p-3 md:grid-cols-[auto_1fr_7rem_1fr]">
-              <Chip active={n.enabled} tone="ok" onClick={() => void toggleNetworkLive(n)}>
-                {n.name}
-              </Chip>
-              <ConsoleInput
-                value={n.address}
-                placeholder="host"
-                onChange={(e) => patch({ networks: nets.map((x, j) => (j === i ? { ...x, address: e.target.value } : x)) })}
-              />
-              <ConsoleInput
-                type="number"
-                value={n.port}
-                onChange={(e) => patch({ networks: nets.map((x, j) => (j === i ? { ...x, port: Number(e.target.value) || x.port } : x)) })}
-              />
-              <ConsoleInput
-                type="password"
-                value={n.password}
-                placeholder="password"
-                onChange={(e) => patch({ networks: nets.map((x, j) => (j === i ? { ...x, password: e.target.value } : x)) })}
-              />
+            <div key={n.id} className="grid gap-3 rounded-lg border border-[rgba(79,195,247,0.12)] bg-[#101c28] p-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+              <div className="flex flex-wrap items-center gap-2">
+                <Chip active={n.enabled} tone="ok" onClick={() => void toggleNetworkLive(n)}>
+                  {n.name}
+                </Chip>
+                <span
+                  className={`font-['IBM_Plex_Mono'] text-[11px] ${
+                    netStatus(n.id) === "conectado"
+                      ? "text-[#34d399]"
+                      : netStatus(n.id) === "conectando"
+                        ? "text-[#ffb300]"
+                        : "text-[#8ea0b3]"
+                  }`}
+                >
+                  {netStatusLabel(n.id)}
+                </span>
+              </div>
+              <Field label={tx("mmdvmNetMaster")}>
+                <ConsoleSelect
+                  value={masterSelectValue(n)}
+                  onChange={(e) => patch({ networks: applyMaster(nets, i, e.target.value) })}
+                >
+                  {mastersFor(n.id).map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
+                  {!mastersFor(n.id).some((m) => m.address === n.address && m.port === n.port) ? (
+                    <option value={masterSelectValue(n)}>{`${n.address}:${n.port}`}</option>
+                  ) : null}
+                </ConsoleSelect>
+              </Field>
             </div>
           ))}
         </div>
         <div className="mt-4 flex flex-wrap items-end gap-3">
           <Field label={tx("mmdvmTalkgroup")}>
-            <ConsoleInput value={tg} onChange={(e) => setTg(e.target.value.replace(/\D/g, "").slice(0, 8))} />
+            <ConsoleSelect value={tg} onChange={(e) => setTg(e.target.value)}>
+              {catalog.talkgroups.length === 0 ? (
+                <option value={tg}>{tg}</option>
+              ) : (
+                catalog.talkgroups.map((row) => (
+                  <option key={row.id} value={row.id}>
+                    {row.label}
+                  </option>
+                ))
+              )}
+            </ConsoleSelect>
           </Field>
           <Field label={tx("mmdvmSlot")}>
             <ConsoleSelect value={slot} onChange={(e) => setSlot(e.target.value)}>
@@ -941,49 +926,59 @@ export function MmdvmPage() {
         </div>
       </Panel>
 
-      <Panel className="mt-4">
-        <PanelTitle>{tx("mmdvmLastHeard")}</PanelTitle>
-        <Lcd className="mb-3">
-          <p className="text-[11px] tracking-widest text-[#4fc3f7]/70 uppercase">{tx("mmdvmLive")}</p>
-          <p className="mt-1 text-lg text-[#7ee0ff]">
-            {heard[0] ? `${heard[0].callsign} → ${heard[0].target} · ${heard[0].mode}` : tx("mmdvmEmptyHeard")}
-          </p>
-        </Lcd>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="text-[11px] tracking-wide text-[#ffb300] uppercase">
-              <tr>
-                <th className="py-2">{tx("mmdvmColTime")}</th>
-                <th>{tx("mmdvmColCall")}</th>
-                <th>{tx("mode")}</th>
-                <th>{tx("mmdvmColTarget")}</th>
-                <th>{tx("mmdvmColSrc")}</th>
-                <th>{tx("mmdvmColDur")}</th>
-                <th>{tx("mmdvmColLoss")}</th>
-              </tr>
-            </thead>
-            <tbody className="font-['IBM_Plex_Mono'] text-[#c5d4e0]">
-              {heard.length === 0 ? (
-                <tr>
-                  <td className="py-3 text-[#8ea0b3]" colSpan={7}>
-                    {tx("mmdvmEmptyHeard")}
-                  </td>
-                </tr>
-              ) : (
-                heard.map((row, i) => (
-                  <tr key={`${row.timeUtc}-${row.callsign}-${i}`} className="border-t border-[rgba(79,195,247,0.08)]">
-                    <td className="py-2 text-[#8ea0b3]">{row.timeUtc.slice(11)}</td>
-                    <td className="text-[#4fc3f7]">{row.callsign}</td>
-                    <td>{row.mode}</td>
-                    <td>{row.target}</td>
-                    <td className={row.src === "RF" ? "text-[#ffb300]" : "text-[#34d399]"}>{row.src}</td>
-                    <td>{row.duration || (st?.tx ? "TX" : "—")}</td>
-                    <td>{row.loss || "—"}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      <Panel className="mt-6 border-t border-[rgba(79,195,247,0.15)] pt-4">
+        <div className="flex flex-wrap gap-2">
+          <PrimaryBtn disabled={busy} onClick={() => void save(false)}>
+            {tx("save")}
+          </PrimaryBtn>
+          <PrimaryBtn disabled={busy} onClick={() => void save(true)}>
+            {tx("mmdvmRestart")}
+          </PrimaryBtn>
+          <GhostBtn
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                applyFull(await callMmdvm("/api/mmdvm/restart", "POST"));
+                pushLog("MMDVM", "mmdvmhost + dmrgateway restart");
+                toast.success(tx("mmdvmRestarted"));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {tx("reboot")}
+          </GhostBtn>
+          <GhostBtn
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                applyFull(await callMmdvm("/api/mmdvm/up", "POST"));
+                pushLog("MMDVM", "mmdvmhost + dmrgateway start");
+                toast.success(tx("mmdvmStarted"));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {tx("startService")}
+          </GhostBtn>
+          <GhostBtn
+            danger
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                applyFull(await callMmdvm("/api/mmdvm/down", "POST"));
+                pushLog("MMDVM", "mmdvmhost + dmrgateway stop");
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            {tx("stopService")}
+          </GhostBtn>
         </div>
         <p className="mt-3 font-['IBM_Plex_Mono'] text-[11px] text-[#8ea0b3]">
           {st?.hostIni || "/opt/ham-cockpit/mmdvm/mmdvmhost.ini"} · {st?.logDir || "/var/log/mmdvm"} · Remote {st?.remotePort ?? 7642}

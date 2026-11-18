@@ -1,8 +1,8 @@
 {
-  "version": "0.1.15",
+  "version": "0.1.15.01",
   "channel": "main",
-  "file": "ham-cockpit-0.1.15.tgz",
-  "sha256": "5426b19101c6f4b38019da90830bdec1e0aef9e687c073c012a32995ed7017d4",
-  "bytes": 5143482,
-  "notes": "Ham Cockpit v0.1.15 — Imagem e OTA cumulativos: consolida toda a linha 0.1.14 (Processos CPU/memória, Admin Contêineres, upload manual OTA até 600 MB, chip Hotspot MMDVM, MAC na rede, failover Wi-Fi, libhamlib-utils no instalador). Nova base de imagem para instalação limpa no Pi."
+  "file": "ham-cockpit-0.1.15.01.tgz",
+  "sha256": "b59679afd91efd75dd337c0d11b1501962af1893acabf22d1d6deb025ac7c7a8",
+  "bytes": 5147674,
+  "notes": "MMDVM: combos de catálogo, duplex persistente, status de rede DMR, Hotspot Monitor e hints operacionais."
 }

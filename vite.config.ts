@@ -973,6 +973,10 @@ function vitePluginMmdvm(): Plugin {
             mmdvmSave,
             mmdvmStatus,
           } = await import("./server/mmdvm");
+          if (req.method === "GET" && url === "/api/mmdvm/catalog") {
+            const { loadMmdvmCatalog } = await import("./server/mmdvm-catalog");
+            return sendJson(res, 200, loadMmdvmCatalog());
+          }
           if (req.method === "GET" && url === "/api/mmdvm") {
             return sendJson(res, 200, await mmdvmStatus());
           }

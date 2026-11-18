@@ -16,6 +16,7 @@ import { Ser2netPage } from "@/console/ser2net";
 import { WizardPage } from "@/console/wizard";
 import { WavelogPage } from "@/console/wavelog";
 import { MmdvmPage } from "@/console/mmdvm";
+import { MmdvmHotspotMonitorPage } from "@/console/mmdvm-hotspot-monitor";
 import { AUTH_KEY, AUTH_USER_KEY, POST_LOGIN_KEY, onConsoleSessionExpired } from "@/console/console-auth";
 import { DigitalPage } from "@/console/digital-modes";
 import { useIsMobile } from "@/hooks/useMobile";
@@ -62,6 +63,7 @@ type PageId =
   | "bluetooth"
   | "wavelog"
   | "mmdvm"
+  | "mmdvmMonitor"
   | "digital"
   | "ser2net"
   | "logs"
@@ -88,6 +90,7 @@ const NAV: { group: "navSetup" | "navOp" | "navDev" | "navNet" | "navSys"; items
       { id: "digital", icon: AudioLines },
       { id: "wavelog", icon: BookMarked },
       { id: "mmdvm", icon: TowerControl },
+      { id: "mmdvmMonitor", icon: TowerControl },
       { id: "ser2net", icon: Cable },
     ],
   },
@@ -171,6 +174,7 @@ const PAGES: Record<PageId, ComponentType> = {
   bluetooth: BluetoothPage,
   wavelog: WavelogPage,
   mmdvm: MmdvmPage,
+  mmdvmMonitor: MmdvmHotspotMonitorPage,
   digital: DigitalPage,
   ser2net: Ser2netPage,
   logs: AdminPage,
