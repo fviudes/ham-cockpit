@@ -139,6 +139,81 @@ let sppLockCom = "";
 let attachedAt = 0;
 let lastRemapAt = 0;
 
+type RfSnapshot = { state: string; macOk: boolean; at: number };
+let rfSnap: RfSnapshot | null = null;
+
+const RFCOMM_UP = new Set(["connected", "clean", "connecting", "config"]);
+
+async function queryRfcomm(force = false): Promise<RfSnapshot | null> {
+  if (process.platform !== "linux" || !helperExists()) return null;
+  const mac = bluetoothMac(saved.addr);
+  if (!mac) return null;
+  const now = Date.now();
+  if (!force && rfSnap && now - rfSnap.at < 2500) return rfSnap;
+  try {
+    const out = await runHelper(["rfstate", mac], 5000);
+    const state = (out.match(/STATE=(\w+)/) || [])[1] || "other";
+    const macOk = /MAC_OK=1/.test(out);
+    rfSnap = { state, macOk, at: now };
+    return rfSnap;
+  } catch {
+    return rfSnap;
+  }
+}
+
+function rfcommSessionUp(snap: RfSnapshot | null): boolean {
+  if (!snap?.macOk) return false;
+  return RFCOMM_UP.has(snap.state);
+}
+
+/** UI e chips: SPP pretendido ou pump abrindo — não piscar só porque o pump caiu um instante. */
+function sppUiConnected(): boolean {
+  if (!wantOpen) return false;
+  if (linkAlive() || sppEstablishing()) return true;
+  if (opening && pathOpen) return true;
+  if (phase === "streaming") return true;
+  return phase === "connecting" && Boolean(pathOpen) && Date.now() - attachedAt < 120_000;
+}
+
+/** RFCOMM do MAC salvo ainda válido: religa só o pump, sem paired/channel/reconnect. */
+async function tryLightPumpRecover(): Promise<boolean> {
+  if (process.platform !== "linux" || !wantOpen) return false;
+  if (linkAlive() || sppEstablishing() || opening) return linkAlive();
+  const snap = await queryRfcomm(true);
+  if (!rfcommSessionUp(snap)) return false;
+  if (snap?.state === "closed") return false;
+  recoverBusy = true;
+  if (phase !== "scanning" && phase !== "pairing") phase = "connecting";
+  try {
+    error = "";
+    rfcommStale = false;
+    attach(RFCOMM);
+    reconnectDelay = 600;
+    return true;
+  } finally {
+    recoverBusy = false;
+  }
+}
+
+async function reopenQuietPump() {
+  const now = Date.now();
+  if (now - lastStallReopen < CAPTURE_STALL_MS) return;
+  if (!wantOpen || recoverBusy || connectBusy || opening) return;
+  const snap = await queryRfcomm();
+  if (!rfcommSessionUp(snap) || snap?.state === "closed") {
+    reopenStalledPump();
+    return;
+  }
+  lastStallReopen = now;
+  recoverBusy = true;
+  try {
+    closeStream();
+    attachPump(RFCOMM);
+  } finally {
+    recoverBusy = false;
+  }
+}
+
 function dataDir(): string {
   if (existsSync(OPT_DIR)) return OPT_DIR;
   const local = join(ROOT, "data", "lextel");
@@ -875,6 +950,10 @@ async function recoverLink() {
     reconnectDelay = 600;
     return;
   }
+  if (await tryLightPumpRecover()) {
+    if (!linkAlive() && wantOpen && !opening) scheduleReconnect();
+    return;
+  }
   recoverBusy = true;
   if (phase !== "scanning" && phase !== "pairing") phase = "connecting";
   try {
@@ -899,9 +978,9 @@ async function recoverLink() {
       void lextelConnect(next);
       return;
     }
-    // Enquanto o open() do rfcomm está pendente, outro bind solta o nó.
-    if (wantOpen && !linkAlive() && !opening) scheduleReconnect();
-    else if (linkAlive()) reconnectDelay = 600;
+    if (wantOpen && !linkAlive() && !opening) {
+      if (!(await tryLightPumpRecover())) scheduleReconnect();
+    } else if (linkAlive()) reconnectDelay = 600;
   }
 }
 
@@ -1262,7 +1341,7 @@ export function lextelStatus(): LextelSnapshot {
     folder: dataDir(),
     sppUuid: SPP_UUID,
     phase,
-    connected: phase === "streaming" && linkAlive(),
+    connected: sppUiConnected(),
     decoded: Boolean(r) || Boolean(decoder.layout && bytes > 0),
     addr: saved.addr,
     name: saved.name,
@@ -1442,6 +1521,12 @@ async function lextelConnectBody(body: { addr?: string; pin?: string; name?: str
   }
 
   try {
+    const snap = await queryRfcomm(true);
+    if (rfcommSessionUp(snap) && snap!.state !== "closed" && !rfcommStale) {
+      clearSppOpenMisses();
+      attach(RFCOMM);
+      return lextelStatus();
+    }
     const listed = devices.find((d) => d.addr.toUpperCase() === addr.toUpperCase());
     // MAC já trusted ou pareado: não pareia de novo e não liga scan.
     // O scan LE no adaptador compartilhado estoura o HCI e o IC-705 cai junto.
@@ -1479,13 +1564,15 @@ async function lextelConnectBody(body: { addr?: string; pin?: string; name?: str
     saved.addr = addr.toUpperCase();
     saved.name = saved.name || listed?.name || "Monitor Station";
     persist();
-    // rebind só quando o open anterior devolveu ENODEV (o nó sumiu).
-    // clean do mesmo MAC não é link morto: o helper tem de manter esse bind.
-    if (rfcommStale || sppOpenMisses >= 1) {
+    const snapLate = (await queryRfcomm(true)) ?? snap;
+    const closed = snapLate?.state === "closed" || snapLate?.state === "absent";
+    if (rfcommStale || sppOpenMisses >= 2 || closed) {
       await runHelper(["reconnect", addr, saved.pin, String(ch)], 22_000);
-    } else {
+    } else if (!rfcommSessionUp(snapLate)) {
       await runHelper(["bind", addr, saved.pin, String(ch), ""], 12_000);
     }
+    clearSppOpenMisses();
+    rfSnap = null;
     attach(RFCOMM);
   } catch (err) {
     const msg = helperText(err);
@@ -1532,9 +1619,12 @@ export async function lextelKeepalive(): Promise<LextelSnapshot> {
     !linkAlive() &&
     !sppEstablishing()
   ) {
-    reconnectDelay = 400;
     clearReconnect();
-    void recoverLink();
+    void (async () => {
+      if (await tryLightPumpRecover()) return;
+      reconnectDelay = 800;
+      void recoverLink();
+    })();
   }
   return lextelStatus();
 }
@@ -1596,7 +1686,7 @@ const recoverWatch = setInterval(() => {
       process.platform === "linux" &&
       captureStreamStalled(Date.now(), updatedAt, attachedAt, CAPTURE_STALL_MS)
     ) {
-      reopenStalledPump();
+      void reopenQuietPump();
       return;
     }
     if (process.platform === "win32" && bytes === 0 && attachedAt && Date.now() - attachedAt > 5000) {

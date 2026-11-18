@@ -325,8 +325,9 @@ function Shell({ onLogout }: { onLogout: () => void }) {
   const route = resolvePrimaryRoute(s.radios.items, { bleReady });
   const via = route.live ? route.transport : "none";
   const equipmentId = route.radio?.equipmentId;
-  const bleScope = via === "ble" && (civScopeOn(equipmentId, "bluetooth") || !equipmentId);
-  const lanScope = via === "lan" && (civScopeOn(equipmentId, "lan") || (!equipmentId && route.radio?.maker === "icom"));
+  const bleScope =
+    via === "ble" && Boolean(route.radio?.scope) && civScopeOn(equipmentId, "bluetooth");
+  const lanScope = via === "lan" && Boolean(route.radio?.scope) && civScopeOn(equipmentId, "lan");
   const serialScope = via === "hamlib" && Boolean(route.radio?.scope) && civScopeOn(equipmentId, "serial");
   const wfFeed = bleScope ? "ble" : lanScope ? "lan" : serialScope ? "serial" : "off";
   const wfRfScope = wfFeed !== "off";

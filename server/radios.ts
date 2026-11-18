@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { randomBytes } from "node:crypto";
 import { SER2NET_RADIO_ID } from "../shared/const";
+import { civScopeOn, type CivScopeLink } from "../shared/icom-scope";
 import {
   EQUIPMENT_MAKERS,
   getEquipment,
@@ -12,6 +13,7 @@ import {
   rigctldCivOverride,
   type EquipmentMaker,
 } from "../shared/equipment";
+import { hubRigctl } from "./hamlib-hub";
 import {
   icomLanConnect,
   icomLanDisconnect,
@@ -21,7 +23,7 @@ import {
   resolveIcomLanModel,
 } from "./icom-lan";
 import { listSerialDevices } from "./list-serials";
-import { hamlibCtl, loadSer2net, saveSer2net, ser2netDialHost } from "./ser2net-store";
+import { hamlibCtl, loadSer2net, probeHamlibNet, saveSer2net, ser2netDialHost } from "./ser2net-store";
 
 const execFileAsync = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -299,10 +301,11 @@ function sanitize(raw: Partial<StationRadio>, fallback?: StationRadio): StationR
   const serialHamlib = Boolean(eq && eq.hamlibBackend === "ser2net" && eq.hamlibModel);
   const hamlibModel = serialHamlib ? eq!.hamlibModel! : undefined;
   const civOverride = eq && serialHamlib ? rigctldCivOverride(eq, civAddr, proto) : null;
+  const scopeLink: CivScopeLink | null =
+    link === "usb" ? "serial" : link === "network" ? "lan" : link === "bluetooth" ? "bluetooth" : null;
+  const scopeWanted = raw.scope === undefined ? Boolean(fallback?.scope) : Boolean(raw.scope);
   const scope =
-    link === "usb" &&
-    proto === "civ" &&
-    (raw.scope === undefined ? Boolean(fallback?.scope) : Boolean(raw.scope));
+    proto === "civ" && scopeLink && civScopeOn(equipmentId, scopeLink) ? scopeWanted : false;
   return {
     id: String(raw.id ?? fallback?.id ?? newId()),
     name,
@@ -598,11 +601,11 @@ export async function radiosConnect(raw: Partial<StationRadio>): Promise<RadiosS
             : `Falha Icom LAN (${next.host}:${next.port || 50001}). Confira IP, Network User, senha e Network Control`);
       }
     } else {
-      // Flex / HL2 / Anan: ainda sem driver nativo — marca conectado só se host:porta ok.
       next.device = next.host;
       next.deviceName = next.deviceName || `${next.host}:${next.port}`;
-      next.connected = true;
-      next.error = "";
+      next.connected = false;
+      next.error =
+        "Conexão de rede ainda sem driver no console — use Cat-USB (ser2net + Hamlib) ou Icom LAN para operar o Painel.";
     }
     const idx = radios.findIndex((r) => r.id === next.id);
     if (idx >= 0) radios[idx] = next;
@@ -666,6 +669,31 @@ export async function radiosConnect(raw: Partial<StationRadio>): Promise<RadiosS
             device: x.id === svc.id ? SER2NET_RADIO_ID : x.device === SER2NET_RADIO_ID ? "" : x.device,
           })),
         });
+      }
+      const model = hamlibModelFor(next);
+      if (model <= 0) {
+        next.connected = false;
+        next.error = "Este modelo não tem Hamlib na serial — escolha outro equipamento no catálogo.";
+      } else {
+        const wantBaud = (next.equipmentId ? getEquipment(next.equipmentId)?.defaultBaud : 0) || 0;
+        if (wantBaud > 0 && svc.baud > 0 && wantBaud !== svc.baud) {
+          next.error = `Aviso: baud ser2net ${svc.baud} ≠ padrão do modelo (${wantBaud}).`;
+        }
+        await hamlibCtl("start");
+        await new Promise((r) => setTimeout(r, 700));
+        const listening = await probeHamlibNet();
+        if (!listening) {
+          next.connected = false;
+          next.error =
+            "rigctld não está na porta 4532 — confira ser2net (device=radio), modelo Hamlib e o serviço rigctld.";
+        } else {
+          const freq = await hubRigctl(4532, "f", "127.0.0.1", 3500);
+          if (!freq.ok || !freq.reply?.trim()) {
+            next.connected = false;
+            next.error =
+              "Hamlib não respondeu na serial — baud, cabo CAT ou endereço CI-V incorretos.";
+          }
+        }
       }
     }
   } else {

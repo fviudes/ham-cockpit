@@ -56,6 +56,9 @@ describe("SPP MS-2000", () => {
     expect(bt).toContain('[[ "$st" == "closed" ]]');
     expect(bt).toContain("bluetoothctl connect");
     expect(bt).toMatch(/scan bredr/);
+    expect(bt).toContain("rfstate");
+    expect(src).toContain("tryLightPumpRecover");
+    expect(src).toContain("sppUiConnected");
     expect(src).toMatch(/reconnect.*addr.*saved\.pin/);
     expect(bt).toContain("bluetoothctl connect");
   });

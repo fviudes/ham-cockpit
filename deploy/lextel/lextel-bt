@@ -4,7 +4,7 @@
 # ou um segundo SPP. Este helper nunca dá rfkill, power off, hciconfig ou
 # disconnect fora do MAC pedido — isso derrubaria a outra sessão.
 #
-# Usage: lextel-bt scan|pair|paired|bind|reconnect|reconnect-saved|reconnect-after-restart|pump|release|disconnect|devices|channel <args>
+# Usage: lextel-bt scan|pair|paired|bind|reconnect|reconnect-saved|reconnect-after-restart|pump|release|disconnect|devices|channel|rfstate <args>
 set -euo pipefail
 
 # pump é o open() do SPP num processo que o SIGTERM interrompe. Não passa
@@ -505,6 +505,15 @@ case "$cmd" in
     valid_mac || { echo "ERR missing MAC" >&2; exit 1; }
     pair_mac
     ;;
+  rfstate)
+    # Estado do rfcomm0 sem release/bind — o Node decide se só religa o pump.
+    valid_mac || { echo "STATE=absent MAC_OK=0"; exit 0; }
+    line="$(rfcomm_line)"
+    st="$(rfcomm_state "$line")"
+    mac_ok=0
+    if same_binding "$line"; then mac_ok=1; fi
+    echo "STATE=${st:-other} MAC_OK=${mac_ok}"
+    ;;
   paired)
     valid_mac || { echo "paired=no trusted=no"; exit 0; }
     info="$(bt_info)"
@@ -566,7 +575,7 @@ case "$cmd" in
     echo "OK disconnect $mac"
     ;;
   *)
-    echo "ERR usage: lextel-bt scan|devices|pair|paired|channel|bind|reconnect|reconnect-saved|reconnect-after-restart|pump|release|disconnect" >&2
+    echo "ERR usage: lextel-bt scan|devices|pair|paired|channel|bind|reconnect|reconnect-saved|reconnect-after-restart|pump|release|disconnect|rfstate" >&2
     exit 1
     ;;
 esac

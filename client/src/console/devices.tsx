@@ -369,6 +369,9 @@ export function Ic705Page() {
   };
 
   const radioProto: RadioProto = selectedEq?.protocol === "civ" ? proto : "cat";
+  const scopeLink: "serial" | "lan" | "bluetooth" | null =
+    link === "usb" ? "serial" : link === "network" ? "lan" : link === "bluetooth" ? "bluetooth" : null;
+  const showScope = radioProto === "civ" && Boolean(scopeLink && civScopeOn(equipmentId, scopeLink));
 
   const resolvedName = () =>
     name.trim() || selectedEq?.family || suggestRadioName(maker, civAddr, radioProto);
@@ -393,6 +396,7 @@ export function Ic705Page() {
         netUser: needNetAuth ? netUser : undefined,
         netPassword: needNetAuth ? netPassword : undefined,
         name: radioName,
+        ...(showScope && scope ? { scope: true } : {}),
       };
     }
     if (catUsb && s2nRow) {
@@ -408,7 +412,7 @@ export function Ic705Page() {
         port: endpoint,
         baud: s2nRow.baud,
         civAddr,
-        scope: radioProto === "civ" && scope,
+        ...(showScope && scope ? { scope: true } : {}),
         name: radioName,
       };
     }
@@ -423,6 +427,7 @@ export function Ic705Page() {
       port: port || device,
       baud,
       civAddr,
+      ...(showScope && scope ? { scope: true } : {}),
       name: radioName,
     };
   };
@@ -1013,7 +1018,7 @@ export function Ic705Page() {
               </ConsoleSelect>
             </Field>
           ) : null}
-          {catUsb && radioProto === "civ" && civScopeOn(equipmentId, "serial") ? (
+          {showScope ? (
             <label className="flex items-start gap-2 text-sm text-[#c5d4e0] md:col-span-2">
               <input
                 type="checkbox"

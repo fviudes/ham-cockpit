@@ -602,6 +602,8 @@ export function applyConfig(host: Ini, gw: Ini, ysf: Ini, dstar: Conf, cfg: Part
     if (n.password !== undefined) setKv(gw, n.section, "Password", n.password);
     if (n.id !== "xlx") setKv(gw, n.section, "Id", id);
   }
+  setKv(gw, "Remote Control", "Enable", "1");
+  setKv(gw, "Remote Control", "Port", "7643");
   setKv(ysf, "General", "Callsign", call);
   setKv(ysf, "General", "Id", id);
   setKv(ysf, "General", "RptAddress", "127.0.0.1");
@@ -807,6 +809,17 @@ function mmdvmOperatorHints(logText: string, cfg: MmdvmConfig, fw: string): stri
       "Firmware MMDVM_HS_Dual_Hat, mas Duplex=0 — use o preset «MMDVM HS Dual (v1.3 / HAT)» e salve",
     );
   }
+  if (cfg.callsign === "N0CALL" || cfg.dmrId === "0000000" || Number(cfg.dmrId) < 1001) {
+    parts.push("Salve indicativo e ID DMR reais (>1000) — BrandMeister e o Host rejeitam N0CALL/Id 0");
+  }
+  if (/cannot open (?:the )?UART|failed to open (?:the )?modem|modem not responding/i.test(logText)) {
+    parts.push(
+      "UART do modem inacessível — confira preset da placa (/dev/ttyAMA0), sem ser2net na mesma porta e UART habilitada no boot",
+    );
+  }
+  if (/overflow in the DMR slot RF queue/i.test(logText)) {
+    parts.push("Fila RF DMR cheia — color code, slot ou potência do rádio podem não bater com o Host");
+  }
   const wrong = logText.match(/wrong repeater\s*\([^)]*?\b([A-Z])\b[^)]*\)/i);
   if (wrong) {
     const radioMod = wrong[1]!.toUpperCase();
@@ -866,58 +879,118 @@ function modeGatewayTarget(mode: MmdvmMode): GwUnit | "host" {
   return "host";
 }
 
-/** WPSD/Pi-Star last-heard: MMDVMHost M: lines with from/to (see WPSD-WebCode mmdvmhost/functions.php getHeardList). */
+/** WPSD/Pi-Star last-heard (g4klx/WPSD-WebCode mmdvmhost/functions.php getHeardList). */
 export function parseLastHeard(logText: string, limit = 40): MmdvmHeard[] {
-  const rows: MmdvmHeard[] = [];
-  const seen = new Map<string, MmdvmHeard>();
-  const lines = logText.split(/\r?\n/).reverse();
-  const skip =
-    /BS_Dwn_Act|invalid access|packet received from an invalid source|received RF header for wrong repeater|unable to decode the network CSBK|overflow in the DMR slot RF queue|overflow in the System Fusion RF queue|non repeater RF header|Embedded Talker Alias|DMR Talker Alias|CSBK Preamble|Preamble CSBK|Downlink/i;
-  for (const line of lines) {
-    if (!line.startsWith("M:")) continue;
-    if (skip.test(line)) continue;
-    if (!/\bfrom\b/i.test(line) || !/\bto\b/i.test(line)) continue;
-    const m = line.match(
-      /^M:\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\.\d+\s+([^,]+),\s+received\s+(RF|network)\b.+?\bfrom\s+(.+?)\s+to\s+(.+)$/i,
+  const lines = logText.split(/\r?\n/).filter(Boolean);
+  const heard: MmdvmHeard[] = [];
+  const tail: Record<string, { duration: string; loss: string; ber: string; rssi: string }> = {};
+
+  const skipLine = (line: string) =>
+    /BS_Dwn_Act|invalid access|packet received from an invalid source|received RF header for wrong repeater|unable to decode the network CSBK|overflow in the DMR slot RF queue|overflow in the System Fusion RF queue|overflow in the M17 RF queue|non repeater RF header|Embedded Talker Alias|DMR Talker Alias|,\s*Talker Alias |,\s*text Data:|,\s*data text|CSBK Preamble|Preamble CSBK/i.test(
+      line,
     );
-    if (!m) continue;
-    const mode = m[2]!.trim();
-    const src: "RF" | "Net" = m[3]!.toLowerCase() === "rf" ? "RF" : "Net";
-    let callsign = m[4]!.trim();
-    if (callsign.includes("/")) callsign = callsign.split("/").pop()!.trim();
-    const extra = m[5]!.trim().split(",").map((s) => s.trim());
-    const target = (extra[0] ?? "").replace(/\s+via\s+.*$/i, "").trim();
+
+  const modeKey = (line: string) => {
+    const i = line.indexOf(",", 27);
+    return i > 27 ? line.slice(27, i).trim() : "";
+  };
+
+  const parseEndMetrics = (line: string, mode: string) => {
+    const tokens = line.split(", ");
     let duration = "";
     let loss = "";
     let ber = "";
     let rssi = "";
-    for (const part of extra.slice(1)) {
-      if (/seconds/i.test(part)) duration = part.replace(/\s*seconds.*/i, "").trim();
-      else if (/RSSI/i.test(part)) rssi = part.replace(/^RSSI:\s*/i, "").trim();
-      else if (/loss/i.test(part) || /packet loss/i.test(part)) loss = part.replace(/\s*packet loss.*/i, "").trim();
-      else if (/BER/i.test(part)) ber = part.replace(/^BER:\s*/i, "").trim();
+    if (tokens[2]) duration = tokens[2]!.split(/\s+/)[0] ?? "";
+    if (tokens[3]) loss = tokens[3]!;
+    if (/user has timed out|watchdog has expired|Mode set/i.test(line)) {
+      if (tokens[2]?.includes("seconds")) duration = tokens[2]!.split(/\s+/)[0] ?? "Timeout";
+      else duration = "Timeout";
+      ber = "---";
     }
-    const kind =
+    if (/^RSSI/i.test(loss)) {
+      tokens[4] = loss;
+      loss = "BER: ---";
+    }
+    if (/^BER/i.test(loss)) {
+      ber = loss.slice(5);
+      loss = "0%";
+      if (tokens[4]?.startsWith("RSSI")) rssi = tokens[4]!.replace(/^RSSI:\s*/i, "").trim();
+    } else if (loss) {
+      loss = loss.split(/\s+/)[0] ?? "";
+      if (tokens[4]?.startsWith("BER")) {
+        ber = tokens[4]!.slice(5).replace(/ - Name.*/, "");
+      }
+    }
+    tail[mode] = { duration, loss, ber, rssi };
+  };
+
+  for (const line of lines) {
+    if (!line.startsWith("M:")) continue;
+    if (skipLine(line)) continue;
+
+    if (
+      /end of|watchdog has expired|ended RF data|d network data|user has timed out|transmission lost|POCSAG/.test(
+        line,
+      )
+    ) {
+      const mode = modeKey(line);
+      if (mode) parseEndMetrics(line, mode);
+      continue;
+    }
+
+    const fromPos = line.indexOf("from");
+    const toPos = line.indexOf(" to ", fromPos);
+    if (fromPos < 0 || toPos < fromPos) continue;
+
+    const mode = modeKey(line);
+    if (!mode) continue;
+    const modeOk =
+      mode === "D-Star" ||
       mode.startsWith("DMR") ||
-      mode.startsWith("D-Star") ||
-      mode.startsWith("YSF") ||
-      mode.startsWith("P25") ||
-      mode.startsWith("NXDN") ||
-      mode.startsWith("M17") ||
-      mode.startsWith("POCSAG");
-    if (!kind || !callsign || callsign === "??????") continue;
-    const uuid = `${callsign}#${mode}#${src}`;
-    const row: MmdvmHeard = { timeUtc: m[1]!, mode, callsign, target, src, duration, loss, ber, rssi };
+      mode === "YSF" ||
+      mode === "P25" ||
+      mode === "NXDN" ||
+      mode === "M17" ||
+      mode === "POCSAG";
+    if (!modeOk) continue;
+
+    let callsign = line.slice(fromPos + 5, toPos).trim();
+    if (callsign.includes("/")) callsign = callsign.split("/").pop()!.trim();
+    if (callsign.includes("/")) callsign = callsign.split("/")[0]!.trim();
+    if (!callsign || callsign === "??????" || callsign.length >= 11) continue;
+
+    let target = line.slice(toPos + 4).trim().replace(/ - Name.*/, "");
+    target = target.split(",")[0]!.trim();
+    target = target.replace(/\s+via\s+.*$/i, "").trim();
+
+    const src: "RF" | "Net" = /network/i.test(line) || /POCSAG/i.test(line) ? "Net" : "RF";
+    const stamp = line.slice(3, 22).trim();
+    const m = stamp.match(/^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})/);
+    const timeUtc = m?.[1] ?? stamp;
+    const metrics = tail[mode] ?? { duration: "", loss: "", ber: "", rssi: "" };
+    heard.push({
+      timeUtc,
+      mode,
+      callsign,
+      target,
+      src,
+      duration: metrics.duration,
+      loss: metrics.loss,
+      ber: metrics.ber,
+      rssi: metrics.rssi,
+    });
+    tail[mode] = { duration: "", loss: "", ber: "", rssi: "" };
+  }
+
+  const seen = new Map<string, MmdvmHeard>();
+  for (const row of heard) {
+    const uuid = `${row.callsign}#${row.mode}#${row.src}`;
     const prev = seen.get(uuid);
-    // Preferir fim de QSO (com duração), como getLastHeard do WPSD.
     if (!prev || (!prev.duration && row.duration)) seen.set(uuid, row);
-    if (seen.size >= limit * 2) break;
   }
-  for (const row of Array.from(seen.values())) {
-    rows.push(row);
-    if (rows.length >= limit) break;
-  }
-  return rows;
+  const rows = Array.from(seen.values());
+  return rows.slice(-limit).reverse();
 }
 
 function currentTx(rows: MmdvmHeard[]): boolean {
