@@ -1,0 +1,4 @@
+# Fallback dev — FCS;nome
+FCS00120;FCS Brazil
+FCS00290;FCS Portugal
+FCS00390;FCS International

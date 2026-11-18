@@ -1,0 +1,5 @@
+# Fallback dev — formato WPSD: id;nome;descrição
+00003;Wires-X;International Wires-X Room
+16880;YSF_PT;Portugal YSF
+16894;YSF_BR;Brazil YSF
+42020;PARROT;Parrot / Echo

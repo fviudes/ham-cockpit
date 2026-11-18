@@ -1,0 +1,10 @@
+# Fallback dev — no Pi use /usr/local/etc/DMR_Hosts.txt
+BM_3101 Hotspot 3101.repeater.net passw0rd 62031
+BM_3102 Hotspot 3102.repeater.net passw0rd 62031
+BM_3103 Hotspot 3103.repeater.net passw0rd 62031
+BM_3108 Brazil 3108.brandmeister.network passw0rd 62031
+BM_3109 Chile 3109.brandmeister.network passw0rd 62031
+DMR+_Europe DMR+ 94.198.196.128 passw0rd 8880
+DMR+_France DMR+ 195.154.166.230 passw0rd 8880
+TGIF_Network TGIF tgif.network passw0rd 62031
+XLX_950 XLX 62.210.152.36 passw0rd 62030
