@@ -37,7 +37,8 @@ export const CAPTURE_RING_MAX = 32 * 1024;
 /** De quanto em quanto o anel e a janela do decoder são esvaziados. A última leitura fica. */
 export const CAPTURE_RESET_MS = 15_000;
 /** Silêncio com o SPP ainda “conectado”: o HCI já perdeu o quadro e o read não volta. */
-export const CAPTURE_STALL_MS = 8_000;
+/** MS-2000 pode ficar minutos sem quadro PEP quando o operador não transmite. */
+export const CAPTURE_STALL_MS = 45_000;
 /** Teto da espera entre tentativas. O crescimento para aqui. */
 export const RECONNECT_CAP_MS = 90_000;
 /**

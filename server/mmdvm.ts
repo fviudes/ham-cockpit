@@ -567,7 +567,19 @@ export function applyConfig(host: Ini, gw: Ini, ysf: Ini, dstar: Conf, cfg: Part
   if (!iniGet(host, "Modem", "PTTInvert")) setKv(host, "Modem", "PTTInvert", "0");
   if (!iniGet(host, "Modem", "Trace")) setKv(host, "Modem", "Trace", "0");
   setKv(host, "Remote Control", "Enable", "1");
+  setKv(host, "Remote Control", "Address", "127.0.0.1");
   setKv(host, "Remote Control", "Port", String(cur.remotePort || 7642));
+  setKv(host, "DMR", "Beacons", cur.duplex ? "0" : "1");
+  setKv(host, "DMR", "BeaconDuration", "3");
+  if (!cur.duplex) {
+    // WPSD «Network Beacon Mode»: sem BeaconInterval no INI (baliza ao conectar na rede).
+    if (host.DMR) delete host.DMR.BeaconInterval;
+  } else if (!iniGet(host, "DMR", "BeaconInterval")) {
+    setKv(host, "DMR", "BeaconInterval", "60");
+  }
+  setKv(gw, "Voice", "Enabled", "1");
+  setKv(gw, "Voice", "Language", "en_US");
+  setKv(gw, "Voice", "Directory", "/usr/local/etc/DMRGateway/Audio");
   setKv(host, "DMR Network", "Type", "Gateway");
   setKv(host, "DMR Network", "Address", "127.0.0.1");
   setKv(host, "DMR Network", "Port", "62031");
@@ -1238,6 +1250,28 @@ function upgradeHostDisplaySections(hostPath: string) {
   if (changed) writeFileSync(hostPath, stringifyIni(host), "utf8");
 }
 
+function upgradeHostRemoteAndBeacons(hostPath: string) {
+  if (!existsSync(hostPath)) return;
+  const host = parseIniFile(hostPath);
+  let changed = false;
+  if (iniGet(host, "Remote Control", "Enable", "0") !== "1") {
+    setKv(host, "Remote Control", "Enable", "1");
+    changed = true;
+  }
+  if (!iniGet(host, "Remote Control", "Address")) {
+    setKv(host, "Remote Control", "Address", "127.0.0.1");
+    changed = true;
+  }
+  const duplex = iniGet(host, "General", "Duplex", "0") === "1";
+  if (!duplex && iniGet(host, "DMR", "Beacons", "0") !== "1") {
+    setKv(host, "DMR", "Beacons", "1");
+    if (!iniGet(host, "DMR", "BeaconDuration")) setKv(host, "DMR", "BeaconDuration", "3");
+    if (host.DMR) delete host.DMR.BeaconInterval;
+    changed = true;
+  }
+  if (changed) writeFileSync(hostPath, stringifyIni(host), "utf8");
+}
+
 function seedIfMissing() {
   const dir = dataDir();
   mkdirSync(dir, { recursive: true });
@@ -1262,7 +1296,10 @@ function seedIfMissing() {
     }
   }
   const hostPath = hostIniPath();
-  if (!hostPath.includes(`${join("deploy", "mmdvm")}`)) upgradeHostDisplaySections(hostPath);
+  if (!hostPath.includes(`${join("deploy", "mmdvm")}`)) {
+    upgradeHostDisplaySections(hostPath);
+    upgradeHostRemoteAndBeacons(hostPath);
+  }
 }
 
 const NET_REMOTE_KEY: Record<MmdvmNetwork["id"], string> = {
@@ -1600,6 +1637,7 @@ export async function mmdvmNetworkSet(body: { id?: string; section?: string; ena
     stringifyIni(gw),
   );
   await controlUnit("restart", "dmrgateway");
+  await controlUnit("restart", "mmdvmhost");
   return mmdvmStatus();
 }
 
@@ -1647,6 +1685,49 @@ export async function mmdvmLink(body: {
   return { ...st, error: "mode deve ser ysf ou dstar" };
 }
 
+function ensureHostRemoteIni(hostPath: string) {
+  if (!existsSync(hostPath)) return false;
+  const host = parseIniFile(hostPath);
+  const rc = host["Remote Control"] || {};
+  const enable = rc.Enable ?? "0";
+  const addr = rc.Address ?? "";
+  let changed = false;
+  if (enable !== "1") {
+    setKv(host, "Remote Control", "Enable", "1");
+    changed = true;
+  }
+  if (!addr || addr === "0.0.0.0") {
+    setKv(host, "Remote Control", "Address", "127.0.0.1");
+    changed = true;
+  }
+  if (!rc.Port) {
+    setKv(host, "Remote Control", "Port", "7642");
+    changed = true;
+  }
+  if (changed) writeFileSync(hostPath, stringifyIni(host), "utf8");
+  return changed;
+}
+
+async function ensureMmdvmRemoteReady(port: number): Promise<string | ""> {
+  let res = await remoteTcp(port, "mode");
+  if (res.ok) return "";
+  const hostPath = hostIniPath();
+  const patched = ensureHostRemoteIni(hostPath);
+  if (!(await unitActive("mmdvmhost"))) {
+    await controlUnit("start", "mmdvmhost");
+    await new Promise((r) => setTimeout(r, 2000));
+  } else if (patched) {
+    await controlUnit("restart", "mmdvmhost");
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  res = await remoteTcp(port, "mode");
+  if (res.ok) return "";
+  if (/ECONNREFUSED|connect ECONN/i.test(res.error || "")) {
+    return "MMDVMHost sem controle remoto na 7642 — confira «Salvar e reiniciar» no MMDVM e se o serviço mmdvmhost está ativo";
+  }
+  return res.error || "controle remoto indisponível";
+}
+
 function remoteTcp(port: number, line: string): Promise<{ ok: boolean; reply: string; error?: string }> {
   return new Promise((resolve) => {
     const sock = createConnection({ host: "127.0.0.1", port, timeout: 2500 });
@@ -1675,7 +1756,10 @@ function remoteTcp(port: number, line: string): Promise<{ ok: boolean; reply: st
 }
 
 export async function mmdvmRemote(cmd: string): Promise<{ ok: boolean; reply: string; error?: string }> {
+  seedIfMissing();
   const port = configFromFiles().remotePort || 7642;
+  const prep = await ensureMmdvmRemoteReady(port);
+  if (prep) return { ok: false, reply: "", error: prep };
   let line = cmd.replace(/[\r\n]/g, " ").trim();
   if (!line) return { ok: false, reply: "", error: "comando vazio" };
   // Atalhos amigáveis → Remote Control do MMDVMHost (g4klx).

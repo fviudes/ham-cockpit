@@ -104,6 +104,8 @@ export function serviceLinuxRunning(id: ServiceId, facts: ServiceLinuxFacts): bo
   }
   if (id === "web") return facts.states.web === "active" && facts.nginx === "active";
   if (id === "lextel") return false;
+  if (id === "wavelog") return facts.states.wavelog === "active";
+  if (id === "db") return facts.states.db === "active";
   if (!UNITS[id]) return false;
   return facts.states[id] === "active";
 }

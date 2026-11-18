@@ -86,9 +86,9 @@ export function buildHeaderServiceChips({ s, tx, menusOpen, onNavigate }: Header
   });
   return [
     chip("lextel", "Lextel", s.lextel.connected, "/console/lextel"),
-    chip("wavelog", tx(SVC_LABEL.wavelog), s.wavelog.running, "/console/wavelog"),
+    chip("wavelog", tx(SVC_LABEL.wavelog), running("wavelog"), "/console/wavelog"),
     chip("db", tx(SVC_LABEL.db), running("db"), "/console/wavelog"),
-    chip("wlg", tx(SVC_LABEL.wlg), s.wlg.running, "/console/wavelog"),
+    chip("wlg", tx(SVC_LABEL.wlg), running("wlg"), "/console/wavelog"),
     chip("hamlib", tx(SVC_LABEL.hamlib), s.ser2net.hamlibRunning, "/console/ser2net"),
     chip("ser2net", tx(SVC_LABEL.ser2net), s.ser2net.running, "/console/ser2net"),
     chip(

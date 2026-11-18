@@ -1374,7 +1374,14 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
         return { id, autostart: hit?.autostart !== false, running: Boolean(hit?.running) };
       });
       servicesRef.current = items;
-      setS((p) => ({ ...p, services: items }));
+      const wlOn = Boolean(items.find((row) => row.id === "wavelog")?.running);
+      const wlgOn = Boolean(items.find((row) => row.id === "wlg")?.running);
+      setS((p) => ({
+        ...p,
+        services: items,
+        wavelog: { ...p.wavelog, running: wlOn },
+        wlg: { ...p.wlg, running: wlgOn },
+      }));
     };
     const pull = () => {
       void fetch("/api/services")
@@ -1383,7 +1390,7 @@ export function ConsoleProvider({ children, active = true }: { children: ReactNo
         .catch(() => undefined);
     };
     pull();
-    const id = window.setInterval(pull, 5000);
+    const id = window.setInterval(pull, 2500);
     return () => window.clearInterval(id);
   }, []);
 

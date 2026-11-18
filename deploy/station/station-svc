@@ -55,6 +55,10 @@ db_running() {
   [[ "$(docker inspect -f '{{.State.Running}}' wavelog-db 2>/dev/null || true)" == "true" ]]
 }
 
+wavelog_main_running() {
+  [[ "$(docker inspect -f '{{.State.Running}}' wavelog-main 2>/dev/null || true)" == "true" ]]
+}
+
 # start com fallback para ciclo de ordem do systemd ("Transaction order is cyclic").
 unit_start() {
   systemctl reset-failed "$1" >/dev/null 2>&1 || true
@@ -72,6 +76,8 @@ if [[ "$cmd" == "is-active-all" ]]; then
     printf '%s=%s\n' "${ids[$i]}" "${st[$i]:-inactive}"
   done
   if command -v docker >/dev/null 2>&1 && db_running; then echo "db=active"; else echo "db=inactive"; fi
+  # oneshot wavelog.service fica "active" mesmo com stack parada — o chip segue o container.
+  if command -v docker >/dev/null 2>&1 && wavelog_main_running; then echo "wavelog=active"; else echo "wavelog=inactive"; fi
   exit 0
 fi
 

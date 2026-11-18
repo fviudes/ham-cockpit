@@ -1603,6 +1603,7 @@ async function lextelConnectBody(body: { addr?: string; pin?: string; name?: str
 }
 
 export async function lextelKeepalive(): Promise<LextelSnapshot> {
+  if (wantOpen && linkAlive() && phase === "streaming") return lextelStatus();
   const stuckLong =
     wantOpen &&
     !linkAlive() &&
@@ -1695,7 +1696,7 @@ const recoverWatch = setInterval(() => {
     return;
   }
   scheduleReconnect();
-}, 2000);
+}, 8000);
 recoverWatch.unref();
 
 void SPP_UUID;

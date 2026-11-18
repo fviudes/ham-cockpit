@@ -425,6 +425,97 @@ PY
 }
 merge_nextion_ini || true
 
+# Remote Control (TG na 7642) + beacons DMR em hotspot simplex (modo rede WPSD).
+merge_mmdvm_host_ota() {
+  local ini=/opt/ham-cockpit/mmdvm/mmdvmhost.ini
+  [[ -f "$ini" ]] || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+  python3 - "$ini" <<'PY'
+import re
+import shutil
+import sys
+from pathlib import Path
+
+p = Path(sys.argv[1])
+text = p.read_text(encoding="utf-8", errors="replace")
+lines = text.splitlines(True)
+
+def get_kv(lines, section, key):
+    in_s = False
+    for ln in lines:
+        if ln.strip() == f"[{section}]":
+            in_s = True
+            continue
+        if ln.lstrip().startswith("[") and in_s:
+            break
+        s = ln.lstrip()
+        if in_s and s.startswith(f"{key}="):
+            return s.split("=", 1)[1].strip()
+    return None
+
+def upsert(lines, section, key, value):
+    sec = f"[{section}]"
+    i = 0
+    while i < len(lines):
+        if lines[i].strip() == sec:
+            i += 1
+            while i < len(lines) and not lines[i].lstrip().startswith("["):
+                s = lines[i].lstrip()
+                if s.startswith(f"{key}="):
+                    nl = "\n" if lines[i].endswith("\n") else ""
+                    lines[i] = f"{key}={value}{nl}"
+                    return lines
+                i += 1
+            lines.insert(i, f"{key}={value}\n")
+            return lines
+        i += 1
+    if lines and not lines[-1].endswith("\n"):
+        lines[-1] += "\n"
+    lines.extend([f"\n{sec}\n", f"{key}={value}\n"])
+    return lines
+
+def delete_key(lines, section, key):
+    in_s = False
+    out = []
+    for ln in lines:
+        if ln.strip() == f"[{section}]":
+            in_s = True
+            out.append(ln)
+            continue
+        if ln.lstrip().startswith("[") and in_s:
+            in_s = False
+        if in_s and ln.lstrip().startswith(f"{key}="):
+            continue
+        out.append(ln)
+    return out
+
+duplex = get_kv(lines, "General", "Duplex") == "1"
+lines = upsert(lines, "Remote Control", "Enable", "1")
+cur_addr = get_kv(lines, "Remote Control", "Address") or ""
+if not cur_addr or cur_addr == "0.0.0.0":
+    lines = upsert(lines, "Remote Control", "Address", "127.0.0.1")
+lines = upsert(lines, "Remote Control", "Port", get_kv(lines, "Remote Control", "Port") or "7642")
+if not duplex:
+    lines = upsert(lines, "DMR", "Beacons", "1")
+    lines = upsert(lines, "DMR", "BeaconDuration", get_kv(lines, "DMR", "BeaconDuration") or "3")
+    lines = delete_key(lines, "DMR", "BeaconInterval")
+new = "".join(lines)
+if new != text:
+    bak = p.with_name(p.name + ".ota-bak")
+    if not bak.exists():
+        shutil.copy2(p, bak)
+    p.write_text(new, encoding="utf-8")
+    print("ota-hooks: INI mmdvmhost — Remote Control + beacons DMR (hotspot)", file=sys.stderr)
+PY
+  local gw=/opt/ham-cockpit/mmdvm/dmrgateway.ini
+  [[ -f "$gw" ]] || return 0
+  grep -q '^\[Voice\]' "$gw" 2>/dev/null || {
+    printf '\n[Voice]\nEnabled=1\nLanguage=en_US\nDirectory=/usr/local/etc/DMRGateway/Audio\n' >>"$gw"
+    echo "ota-hooks: dmrgateway.ini [Voice] adicionado" >&2
+  }
+}
+merge_mmdvm_host_ota || true
+
 # Copia o tarball MMDVM para /opt para reuso e instala se faltar.
 if [[ -f "$ROOT/mmdvm-arm64.tgz" ]]; then
   cp -a "$ROOT/mmdvm-arm64.tgz" /opt/ham-cockpit/mmdvm-arm64.tgz 2>/dev/null || true
@@ -901,7 +992,13 @@ elif [[ ! -f /opt/ser2net/services.json && -f "$ROOT/ser2net/services.json" && -
   install -o hamcockpit -g hamcockpit -m 0644 "$ROOT/ser2net/services.json" /opt/ser2net/services.json
 fi
 
+ota_hooks_progress() {
+  local pct="${1:-80}"
+  python3 -c 'import json,sys; print("HC_PROGRESS "+json.dumps({"id":"app","pct":int(sys.argv[1]),"stage":"hooks","determinate":True}), file=sys.stderr, flush=True)' "$pct" 2>/dev/null || true
+}
+
 # Docker + Wavelog no boot (units/perms). Sem docker.io no apt → só bake resolve.
+ota_hooks_progress 79
 getent group docker >/dev/null 2>&1 || groupadd --system docker 2>/dev/null || true
 if getent passwd hamcockpit >/dev/null 2>&1; then
   getent group docker >/dev/null 2>&1 && usermod -aG docker hamcockpit 2>/dev/null || true
@@ -919,17 +1016,33 @@ if command -v docker >/dev/null 2>&1 || [[ -x /usr/bin/docker ]]; then
   # O station-upd agenda o restart depois de devolver o JSON.
   if systemctl cat wavelog.service >/dev/null 2>&1; then
     systemctl reset-failed wavelog.service 2>/dev/null || true
-    # Não faz restart (derrubava MariaDB/Wavelog a cada OTA e pesava no Pi 3). Só sobe se parado.
-    if ! systemctl is-active --quiet wavelog.service; then
-      systemctl start --no-block wavelog.service 2>/dev/null || true
+    stack_ok=0
+    if docker inspect -f '{{.State.Running}}' wavelog-main 2>/dev/null | grep -qx true \
+      && docker inspect -f '{{.State.Running}}' wavelog-db 2>/dev/null | grep -qx true; then
+      stack_ok=1
+    fi
+    ota_hooks_progress 85
+    if [[ "$stack_ok" != 1 ]]; then
+      if [[ -x /opt/wavelog/wavelog-ctl.sh ]]; then
+        echo "ota-hooks: wavelog stack parada — compose up" >&2
+        /opt/wavelog/wavelog-ctl.sh start >/var/log/wavelog-ota-start.log 2>&1 || true
+      elif ! systemctl is-active --quiet wavelog.service; then
+        systemctl start --no-block wavelog.service 2>/dev/null || true
+      fi
     elif [[ "${COMPOSE_CHANGED:-0}" == 1 && -x /opt/wavelog/wavelog-ctl.sh ]]; then
-      # Compose novo (ex.: MariaDB enxuto): recria só o que mudou, em segundo plano.
       nohup /opt/wavelog/wavelog-ctl.sh start >/var/log/wavelog-recompose.log 2>&1 </dev/null &
+    fi
+    if systemctl cat waveloggate.service >/dev/null 2>&1; then
+      systemctl reset-failed waveloggate.service 2>/dev/null || true
+      if ! systemctl is-active --quiet waveloggate.service; then
+        systemctl start --no-block waveloggate.service 2>/dev/null || true
+      fi
     fi
   fi
 else
   echo "ota-hooks: docker ausente neste host — grave imagem bake com docker.io" >&2
 fi
+ota_hooks_progress 88
 
 # Religa o SPP do MAC salvo. Não grava /opt/lextel/config.json, não reinicia
 # o ser2net, não mexe em VPN, firewall, Hamlib nem no overlay. O helper não
