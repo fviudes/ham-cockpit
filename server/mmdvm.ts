@@ -3,7 +3,7 @@ import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameS
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { createConnection } from "node:net";
+import { createSocket } from "node:dgram";
 import { networkInterfaces } from "node:os";
 import { hostStatus } from "./host-status";
 
@@ -53,7 +53,7 @@ export const MMDVM_BOARD_PRESETS: readonly MmdvmBoardPreset[] = [
   { id: "mmdvmhshat", label: "MMDVM_HS_Hat (DB9MAT & DF2ET) GPIO", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: false, slot1: false },
   // WPSD Hardware=mmdvmhsdualhatgpio → MMDVM_HS_Dual_Hat (ADF7021 duplex) @ 115200 / ttyAMA0.
   // Cartão WPSD conhecido (PY2MED) era Hardware=dvmpis + Port=/dev/ttyACM0 + Duplex=0 — outro perfil; não copiar para este preset.
-  { id: "mmdvmhsdualhatgpio", label: "MMDVM HS Dual (v1.3 / HAT)", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: true, slot1: true },
+  { id: "mmdvmhsdualhatgpio", label: "MMDVM HS Dual (v1.3 / HAT)", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: false, slot1: true },
   { id: "mmdvmhsdualbandgpio", label: "MMDVM_HS_Dual_Band GPIO", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: false, slot1: false },
   { id: "zumspotgpio", label: "ZUMspot HAT simplex GPIO", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: false, slot1: false },
   { id: "zumspotduplexgpio", label: "ZUMspot HAT duplex GPIO", port: "/dev/ttyAMA0", uartSpeed: 115200, duplex: true, slot1: true },
@@ -593,7 +593,11 @@ export function applyConfig(host: Ini, gw: Ini, ysf: Ini, dstar: Conf, cfg: Part
   const id = cur.dmrId.replace(/\D/g, "").slice(0, 9) || "0000000";
   const mod = (cur.dstarModule || "B").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 1) || "B";
   const rxHz = Number.isFinite(cur.rxHz) && cur.rxHz > 0 ? Math.round(cur.rxHz) : 433_475_000;
-  const txHz = Number.isFinite(cur.txHz) && cur.txHz > 0 ? Math.round(cur.txHz) : rxHz;
+  const txHz = !cur.duplex
+    ? rxHz
+    : Number.isFinite(cur.txHz) && cur.txHz > 0
+      ? Math.round(cur.txHz)
+      : rxHz;
   setKv(host, "General", "Callsign", call);
   setKv(host, "General", "Id", id);
   setKv(host, "General", "Duplex", cur.duplex ? "1" : "0");
@@ -889,9 +893,9 @@ function effectiveModemBoard(stored: MmdvmBoardId, fw: string, duplexIni: boolea
 /** Avisos não bloqueantes (operador / console) — verificado no log vivo, sem RemoteCommand. */
 function mmdvmOperatorHints(logText: string, cfg: MmdvmConfig, fw: string): string {
   const parts: string[] = [];
-  if (/MMDVM_HS_Dual_Hat/i.test(fw) && !cfg.duplex) {
+  if (cfg.duplex && Math.abs(cfg.txHz - cfg.rxHz) > 50_000) {
     parts.push(
-      "Firmware MMDVM_HS_Dual_Hat, mas Duplex=0 — use o preset «MMDVM HS Dual (v1.3 / HAT)» e salve",
+      `Duplex com TX ${(cfg.txHz / 1e6).toFixed(4)} MHz e RX ${(cfg.rxHz / 1e6).toFixed(4)} MHz — o HT simplex na RX não ouve a TX; hotspot usa Simplex (TX=RX)`,
     );
   }
   if (cfg.callsign === "N0CALL" || cfg.dmrId === "0000000" || Number(cfg.dmrId) < 1001) {
@@ -1421,7 +1425,7 @@ async function dmrgatewayNetworkStatus(
   const remotePort = iniNum(gw, "Remote Control", "Port", 7643);
   let remoteMap: Record<string, string> = {};
   if (remoteOn && remotePort > 0) {
-    const res = await remoteTcp(remotePort, "status");
+    const res = await remoteUdp(remotePort, "status");
     if (res.ok && res.reply) remoteMap = parseDmrgatewayStatus(res.reply);
   }
   for (const n of networks) {
@@ -1472,7 +1476,7 @@ export async function mmdvmStatus(): Promise<MmdvmStatus> {
   const error = [baseErr, hints].filter(Boolean).join(" — ");
   const networkStatus = await dmrgatewayNetworkStatus(cfg.networks, gatewayRunning);
   const remotePort = cfg.remotePort || 7642;
-  const remoteOk = hostRunning ? (await remoteTcp(remotePort, "mode")).ok : false;
+  const remoteOk = hostRunning ? (await remoteUdp(remotePort, "status")).ok : false;
   const bmOn = cfg.networks.some((n) => n.id === "bm" && n.enabled);
   const stackOk =
     hostRunning &&
@@ -1816,7 +1820,7 @@ export async function mmdvmLink(body: {
     await controlUnit("restart", "ircddbgateway");
     // Tentativa de link imediato via remote do ircDDBGateway (se ativo).
     if (reflector) {
-      await remoteTcp(7643, `link ${reflector} ${mod}`).catch(() => undefined);
+      await remoteUdp(7643, `link ${reflector} ${mod}`).catch(() => undefined);
     }
     return mmdvmStatus();
   }
@@ -1848,7 +1852,7 @@ function ensureHostRemoteIni(hostPath: string) {
 }
 
 async function ensureMmdvmRemoteReady(port: number): Promise<string | ""> {
-  let res = await remoteTcp(port, "mode");
+  let res = await remoteUdp(port, "status");
   if (res.ok) return "";
   const hostPath = hostIniPath();
   const patched = ensureHostRemoteIni(hostPath);
@@ -1859,38 +1863,35 @@ async function ensureMmdvmRemoteReady(port: number): Promise<string | ""> {
     await controlUnit("restart", "mmdvmhost");
     await new Promise((r) => setTimeout(r, 2000));
   }
-  res = await remoteTcp(port, "mode");
+  res = await remoteUdp(port, "status");
   if (res.ok) return "";
-  if (/ECONNREFUSED|connect ECONN/i.test(res.error || "")) {
-    return "MMDVMHost sem controle remoto na 7642 — confira «Salvar e reiniciar» no MMDVM e se o serviço mmdvmhost está ativo";
-  }
-  return res.error || "controle remoto indisponível";
+  return res.error || "controle remoto UDP 7642 indisponível (WPSD RemoteCommand)";
 }
 
-function remoteTcp(port: number, line: string): Promise<{ ok: boolean; reply: string; error?: string }> {
+/** g4klx/WPSD RemoteCommand: UDP, sem \\n no payload. TCP recusa; status\\n responde KO. */
+function remoteUdp(port: number, line: string): Promise<{ ok: boolean; reply: string; error?: string }> {
   return new Promise((resolve) => {
-    const sock = createConnection({ host: "127.0.0.1", port, timeout: 2500 });
-    let reply = "";
+    const sock = createSocket("udp4");
     let settled = false;
-    const done = (ok: boolean, error?: string) => {
+    const payload = line.replace(/[\r\n]+$/g, "").trim();
+    const done = (ok: boolean, reply: string, error?: string) => {
       if (settled) return;
       settled = true;
       try {
-        sock.destroy();
+        sock.close();
       } catch {
         /* ignore */
       }
-      resolve({ ok, reply: reply.trim(), error });
+      const text = reply.trim();
+      const ko = text === "KO";
+      resolve({ ok: ok && !ko, reply: text, error: ko ? "comando remoto recusado" : error });
     };
-    sock.on("data", (d) => {
-      reply += d.toString("utf8");
+    sock.on("message", (msg) => done(true, msg.toString("utf8")));
+    sock.on("error", (err) => done(false, "", err.message));
+    sock.send(Buffer.from(payload), port, "127.0.0.1", (err) => {
+      if (err) done(false, "", err.message);
     });
-    sock.on("connect", () => {
-      sock.write(`${line}\n`);
-      setTimeout(() => done(true), 500);
-    });
-    sock.on("error", (err) => done(false, err.message));
-    sock.on("timeout", () => done(Boolean(reply.trim()), reply.trim() ? undefined : "timeout"));
+    setTimeout(() => done(false, "", "timeout"), 1500);
   });
 }
 
@@ -1913,7 +1914,7 @@ export async function mmdvmRemote(cmd: string): Promise<{ ok: boolean; reply: st
   if (/^page\s+/i.test(line)) {
     /* POCSAG page — keep as-is */
   }
-  return remoteTcp(port, line);
+  return remoteUdp(port, line);
 }
 
 let serviceHealthCache = { at: 0, ok: false };

@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.15.04** (`version.json`).
+Versão atual neste canal: **0.1.15.05** (`version.json`).
 
 ## Versionamento
 
@@ -22,12 +22,12 @@ Cada pacote OTA é **cumulativo**: substitui o console inteiro. Basta aplicar a 
 
 ```json
 {
-  "version": "0.1.15.04",
+  "version": "0.1.15.05",
   "channel": "main",
-  "file": "ham-cockpit-0.1.15.04.tgz",
-  "sha256": "be1c09b2700e9881f9cfa0e9e894249545d1a56788ab0406203e862096e5b767",
-  "bytes": 5197980,
-  "notes": "MMDVM: salvar aplica host+gateway, baliza de rede, voz pt_PT, BM 3108, TG via API BM; Wi-Fi scan/conectar 5 GHz; correções 0.1.15.03"
+  "file": "ham-cockpit-0.1.15.05.tgz",
+  "sha256": "8c19208f6395150b84b631159293c67d8a1cf2803d24e8e63c5e1df1bc2b8766",
+  "bytes": 5198618,
+  "notes": "MMDVM hotspot simplex: remote UDP WPSD, Dual Hat sem forçar repetidor, TX=RX; lab 251 Duplex=0 433.800"
 }
 ```
 
