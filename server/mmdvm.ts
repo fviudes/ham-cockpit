@@ -1177,29 +1177,37 @@ const HAT_LABELS: Record<MmdvmMode | "idle", string> = {
   pocsag: "POCSAG",
 };
 
+/** Modos e pause podem faltar no snapshot (pause não vive no INI). Ausência não pode derrubar o GET. */
+export type HatModeCfg = {
+  modes?: Partial<Record<MmdvmMode, boolean>> | null;
+  paused?: Partial<Record<MmdvmMode, boolean>> | null;
+};
+
 export function resolveHatActiveMode(
   logText: string,
-  cfg: Pick<MmdvmConfig, "modes" | "paused">,
+  cfg: HatModeCfg | null | undefined,
   heard: MmdvmHeard[],
   hostRunning: boolean,
 ): HatActiveMode {
   const idle: HatActiveMode = { id: "idle", label: HAT_LABELS.idle, via: "idle", paused: false };
   if (!hostRunning) return idle;
+  const modes = cfg?.modes ?? {};
+  const paused = cfg?.paused ?? {};
 
   const live = heard.find((r) => !r.duration);
   if (live) {
     const id = mapHeardModeToId(live.mode);
-    if (id !== "idle" && cfg.modes[id]) {
-      return { id, label: HAT_LABELS[id], via: "qso", paused: Boolean(cfg.paused[id]) };
+    if (id !== "idle" && modes[id]) {
+      return { id, label: HAT_LABELS[id], via: "qso", paused: Boolean(paused[id]) };
     }
   }
 
   const fromLog = parseHatModeFromLog(logText);
-  if (fromLog !== "idle" && cfg.modes[fromLog]) {
-    return { id: fromLog, label: HAT_LABELS[fromLog], via: "modem", paused: Boolean(cfg.paused[fromLog]) };
+  if (fromLog !== "idle" && modes[fromLog]) {
+    return { id: fromLog, label: HAT_LABELS[fromLog], via: "modem", paused: Boolean(paused[fromLog]) };
   }
 
-  const enabled = MMDVM_MODES.filter((m) => cfg.modes[m] && !cfg.paused[m]);
+  const enabled = MMDVM_MODES.filter((m) => Boolean(modes[m]) && !paused[m]);
   if (enabled.length === 1) {
     const id = enabled[0]!;
     return { id, label: HAT_LABELS[id], via: "modem", paused: false };
@@ -1592,16 +1600,17 @@ export async function mmdvmStatus(): Promise<MmdvmStatus> {
   const nextion = await buildNextion(cfg, heard, hostRunning);
   const hintCfg = { ...cfg, modemBoard };
   let hints = mmdvmOperatorHints(hostLog, hintCfg, fw);
-  if (cfg.modes.dstar && cfg.dstarReflector && dstarRunning && dstarLinksEmpty(logs)) {
+  if (cfg.modes?.dstar && cfg.dstarReflector && dstarRunning && dstarLinksEmpty(logs)) {
     hints = [hints, "D-Star: Links.log vazio — REF ainda não linkado no ircDDBGateway"].filter(Boolean).join(" · ");
   }
   const baseErr = hostBin || !onAppliance ? "" : "MMDVM Host não está neste host — instale o binário WPSD/g4klx em /usr/local/bin/MMDVMHost";
   const error = [baseErr, hints].filter(Boolean).join(" — ");
-  const hatActiveMode = resolveHatActiveMode(hostLog, cfg, heard, hostRunning);
-  const networkStatus = await dmrgatewayNetworkStatus(cfg.networks, gatewayRunning);
+  const hatActiveMode = resolveHatActiveMode(hostLog, { modes: cfg.modes, paused }, heard, hostRunning);
+  const networks = Array.isArray(cfg.networks) ? cfg.networks : [];
+  const networkStatus = await dmrgatewayNetworkStatus(networks, gatewayRunning);
   const remotePort = cfg.remotePort || 7642;
   const remoteOk = hostRunning ? (await remoteUdp(remotePort, "status")).ok : false;
-  const bmOn = cfg.networks.some((n) => n.id === "bm" && n.enabled);
+  const bmOn = networks.some((n) => n.id === "bm" && n.enabled);
   const stackOk =
     hostRunning &&
     gatewayRunning &&

@@ -54,4 +54,21 @@ describe("resolveHatActiveMode", () => {
     expect(hat.id).toBe("dstar");
     expect(hat.via).toBe("modem");
   });
+
+  it("não lê dstar em pause ausente quando o Host está idle", () => {
+    const onlyDstar = { ...modes, dmr: false, ysf: false, p25: false, nxdn: false, m17: false, pocsag: false };
+    const hat = resolveHatActiveMode("", { modes: onlyDstar }, [], true);
+    expect(hat.id).toBe("dstar");
+    expect(hat.via).toBe("modem");
+    expect(hat.paused).toBe(false);
+  });
+
+  it("trata modes e paused ausentes sem derrubar o status", () => {
+    expect(resolveHatActiveMode("M: Mode set to D-Star", {}, [], true).id).toBe("idle");
+    expect(resolveHatActiveMode("M: Mode set to DMR", { modes: { dmr: true } }, [], true)).toMatchObject({
+      id: "dmr",
+      paused: false,
+    });
+    expect(resolveHatActiveMode("", null, [], true).id).toBe("idle");
+  });
 });
