@@ -489,7 +489,7 @@ function defaultConfig(): MmdvmConfig {
     idleBrightness: 20,
     nextionDriver: true,
     oledType: 3,
-    modes: { dstar: false, dmr: true, ysf: false, p25: false, nxdn: false, m17: false, pocsag: false },
+    modes: { dstar: true, dmr: true, ysf: true, p25: false, nxdn: false, m17: false, pocsag: false },
     networkBeacon: true,
     bmApiKey: "",
     voiceLanguage: "pt_PT",
@@ -547,7 +547,7 @@ function configFromFiles(): MmdvmConfig {
     modemPort,
     uartSpeed: iniNum(host, "Modem", "UARTSpeed", base.uartSpeed),
     remotePort: iniNum(host, "Remote Control", "Port", base.remotePort),
-    dstarReflector: (dstar.reflector1 || "").toUpperCase(),
+    dstarReflector: parseDstarReflector(dstar.reflector1 || ""),
     dstarModule: String(module || "B").toUpperCase().slice(0, 1),
     ysfStartup: iniGet(ysf, "Network", "Startup", base.ysfStartup),
     displayType: (() => {
@@ -602,8 +602,9 @@ export function applyConfig(host: Ini, gw: Ini, ysf: Ini, dstar: Conf, cfg: Part
   setKv(host, "General", "Id", id);
   setKv(host, "General", "Duplex", cur.duplex ? "1" : "0");
   setKv(host, "Info", "RXFrequency", String(rxHz));
-  // TX é sempre persistido (editável no console); não forçar TX=RX no save.
   setKv(host, "Info", "TXFrequency", String(txHz));
+  setKv(gw, "Info", "RXFrequency", String(rxHz));
+  setKv(gw, "Info", "TXFrequency", String(txHz));
   setKv(host, "Info", "Latitude", cur.latitude);
   setKv(host, "Info", "Longitude", cur.longitude);
   setKv(host, "Info", "Location", cur.location);
@@ -638,7 +639,12 @@ export function applyConfig(host: Ini, gw: Ini, ysf: Ini, dstar: Conf, cfg: Part
   if (networkBeacon) {
     setKv(host, "DMR", "Beacons", "1");
     setKv(host, "DMR", "BeaconDuration", "3");
-    if (host.DMR) delete host.DMR.BeaconInterval;
+    if (cur.duplex) {
+      if (host.DMR) delete host.DMR.BeaconInterval;
+    } else if (!iniGet(host, "DMR", "BeaconInterval")) {
+      // Simplex: sem intervalo a baliza é só de rede — o ADF7021 fica mudo em idle.
+      setKv(host, "DMR", "BeaconInterval", "60");
+    }
   } else if (cur.duplex) {
     setKv(host, "DMR", "Beacons", "1");
     setKv(host, "DMR", "BeaconDuration", "3");
@@ -713,18 +719,35 @@ export function applyConfig(host: Ini, gw: Ini, ysf: Ini, dstar: Conf, cfg: Part
   dstar.gatewayAddress = "0.0.0.0";
   dstar.localAddress = "0.0.0.0";
   dstar.dplusEnabled = "1";
+  // DExtra/DCS/CCS: getaddrinfo síncrono em cada host trava o daemon e o REF DPlus não chega a linkar.
+  dstar.dextraEnabled = "0";
+  dstar.dcsEnabled = "0";
+  dstar.ccsEnabled = "0";
   dstar.latitude = cur.latitude;
   dstar.longitude = cur.longitude;
   dstar.latitude1 = cur.latitude;
   dstar.longitude1 = cur.longitude;
   dstar.frequency1 = (rxHz / 1_000_000).toFixed(6);
-  dstar.reflector1 = (cur.dstarReflector || "").toUpperCase().slice(0, 8);
-  dstar.atStartup1 = cur.dstarReflector ? "1" : "0";
-  dstar.reconnect1 = cur.dstarReflector ? "2" : "0";
+  dstar.repeaterBand1 = mod;
+  dstar.repeaterType1 = "0";
+  dstar.repeaterAddress1 = "127.0.0.1";
+  dstar.repeaterPort1 = "20011";
+  dstar.reflector1 = formatDstarReflector(cur.dstarReflector || "", mod);
+  dstar.atStartup1 = dstar.reflector1 ? "1" : "0";
+  dstar.reconnect1 = dstar.reflector1 ? "2" : "0";
   dstar.name = cur.location || "Ham Cockpit";
   dstar.remoteEnabled = "1";
-  dstar.remotePort = "7643";
+  dstar.remotePort = "7462";
+  // 20010/20011 são do handshake Host↔ircDDB (hb). gateway/local iguais = bind falha e o REF nunca linka.
+  dstar.hbAddress = "127.0.0.1";
+  dstar.hbPort = "20010";
+  dstar.gatewayPort = "40000";
+  dstar.localPort = "40001";
   dstar.logPath = "/var/log/mmdvm";
+  const ircUser = String(dstar.ircDDBUsername || "").trim();
+  const ircPass = String(dstar.ircDDBPassword || "").trim();
+  if (!ircUser || ircUser === "N0CALL") dstar.ircDDBUsername = call === "N0CALL" ? "" : call;
+  if (!ircPass) dstar.ircDDBEnabled = "0";
 
   // Display dedicado (Nextion no HAT / OLED I2C) — padrão WPSD + ON7LDS NextionDriver.
   const dtype = cur.displayType || "None";
@@ -890,13 +913,32 @@ function effectiveModemBoard(stored: MmdvmBoardId, fw: string, duplexIni: boolea
   return stored;
 }
 
+/** g4klx: 8 caracteres, call do REF + módulo (ex. REF018 C). */
+export function formatDstarReflector(raw: string, module: string): string {
+  const compact = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!compact) return "";
+  const base = compact.slice(0, 6).padEnd(6, " ");
+  const mod = (module || "C").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 1) || "C";
+  return `${base} ${mod}`;
+}
+
+export function parseDstarReflector(raw: string): string {
+  return raw.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+}
+
 /** Avisos não bloqueantes (operador / console) — verificado no log vivo, sem RemoteCommand. */
 function mmdvmOperatorHints(logText: string, cfg: MmdvmConfig, fw: string): string {
   const parts: string[] = [];
-  if (cfg.duplex && Math.abs(cfg.txHz - cfg.rxHz) > 50_000) {
-    parts.push(
-      `Duplex com TX ${(cfg.txHz / 1e6).toFixed(4)} MHz e RX ${(cfg.rxHz / 1e6).toFixed(4)} MHz — o HT simplex na RX não ouve a TX; hotspot usa Simplex (TX=RX)`,
-    );
+  if (Math.abs(cfg.txHz - cfg.rxHz) > 50_000) {
+    if (cfg.duplex) {
+      parts.push(
+        `Duplex com TX ${(cfg.txHz / 1e6).toFixed(4)} MHz e RX ${(cfg.rxHz / 1e6).toFixed(4)} MHz — o HT simplex na RX não ouve a TX; hotspot usa Simplex (TX=RX)`,
+      );
+    } else {
+      parts.push(
+        `Duplex=0 com TX ${(cfg.txHz / 1e6).toFixed(4)} MHz ≠ RX ${(cfg.rxHz / 1e6).toFixed(4)} MHz — o HAT transmite fora da frequência do HT; TX tem de ser igual à RX`,
+      );
+    }
   }
   if (cfg.callsign === "N0CALL" || cfg.dmrId === "0000000" || Number(cfg.dmrId) < 1001) {
     parts.push("Salve indicativo e ID DMR reais (>1000) — BrandMeister e o Host rejeitam N0CALL/Id 0");
@@ -1458,6 +1500,7 @@ export async function mmdvmStatus(): Promise<MmdvmStatus> {
   const heard = parseLastHeard(hostLog);
   const fw = modemFirmwareFromLog(hostLog);
   const modemBoard = effectiveModemBoard(cfg.modemBoard, fw, cfg.duplex);
+  if (modemBoard !== cfg.modemBoard) writeModemBoard(modemBoard);
   const hostRunning = await unitActive("mmdvmhost");
   const gatewayRunning = await unitActive("dmrgateway");
   const ysfRunning = await unitActive("ysfgateway");
@@ -1629,9 +1672,11 @@ export async function mmdvmSave(body: Record<string, unknown>): Promise<MmdvmSta
     if (cfg.displayType === "Nextion" && cfg.nextionDriver) await controlUnit("restart", "nextiondriver");
     else await controlUnit("stop", "nextiondriver");
     if (restart) {
-      await controlUnit("restart", "dmrgateway");
-      await new Promise((r) => setTimeout(r, 800));
       await controlUnit("restart", "mmdvmhost");
+      await new Promise((r) => setTimeout(r, 800));
+      await controlUnit("start", "dmrgateway");
+      await controlUnit("start", "ysfgateway");
+      await controlUnit("start", "ircddbgateway");
     }
   }
   return mmdvmStatus();
@@ -1741,7 +1786,6 @@ export async function mmdvmNetworkSet(body: { id?: string; section?: string; ena
     stringifyIni(gw),
   );
   await controlUnit("restart", "dmrgateway");
-  await controlUnit("restart", "mmdvmhost");
   return mmdvmStatus();
 }
 
@@ -1808,10 +1852,14 @@ export async function mmdvmLink(body: {
       .toUpperCase()
       .replace(/[^A-Z]/g, "")
       .slice(0, 1) || "B";
-    const reflector = target.toUpperCase().slice(0, 8);
+    const reflector = formatDstarReflector(target, mod);
     dstar.reflector1 = reflector;
     dstar.atStartup1 = reflector ? "1" : "0";
     dstar.reconnect1 = reflector ? "2" : "0";
+    dstar.remotePort = "7462";
+    dstar.hbPort = "20010";
+    dstar.gatewayPort = "40000";
+    dstar.localPort = "40001";
     const hostPath = hostIniPath();
     const host = parseIniFile(existsSync(hostPath) ? hostPath : shippedHostIni());
     setKv(host, "D-Star", "Module", mod);
@@ -1820,7 +1868,7 @@ export async function mmdvmLink(body: {
     await controlUnit("restart", "ircddbgateway");
     // Tentativa de link imediato via remote do ircDDBGateway (se ativo).
     if (reflector) {
-      await remoteUdp(7643, `link ${reflector} ${mod}`).catch(() => undefined);
+      await remoteUdp(7462, `link ${reflector}`).catch(() => undefined);
     }
     return mmdvmStatus();
   }
@@ -1862,6 +1910,9 @@ async function ensureMmdvmRemoteReady(port: number): Promise<string | ""> {
   } else if (patched) {
     await controlUnit("restart", "mmdvmhost");
     await new Promise((r) => setTimeout(r, 2000));
+    await controlUnit("start", "dmrgateway");
+    await controlUnit("start", "ysfgateway");
+    await controlUnit("start", "ircddbgateway");
   }
   res = await remoteUdp(port, "status");
   if (res.ok) return "";

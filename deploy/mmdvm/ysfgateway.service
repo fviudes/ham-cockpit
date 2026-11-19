@@ -3,8 +3,7 @@ Description=YSFGateway (WPSD / Pi-Star stack) — Ham Cockpit
 Documentation=https://wpsd.radio
 After=network-online.target mmdvmhost.service
 Wants=network-online.target
-# Sem BindsTo: junto com Nextion Before/Wants gerava "Transaction order is cyclic".
-PartOf=mmdvmhost.service
+# Sem PartOf/BindsTo no Host: o mesmo restart do mmdvmhost derrubava o YSFGateway.
 ConditionPathExists=/usr/local/bin/YSFGateway
 StartLimitIntervalSec=600
 StartLimitBurst=20

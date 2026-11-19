@@ -3,8 +3,8 @@ Description=DMRGateway (WPSD / Pi-Star stack) — Ham Cockpit
 Documentation=https://wpsd.radio
 After=network-online.target mmdvmhost.service
 Wants=network-online.target
-# Sem BindsTo: junto com Nextion Before/Wants gerava "Transaction order is cyclic".
-PartOf=mmdvmhost.service
+# Sem PartOf/BindsTo no Host: restart do mmdvmhost (Apply, OTA, errno=5) mandava
+# SIGTERM no DMRGateway e o BrandMeister ficava morto — o Host voltava sozinho.
 ConditionPathExists=/usr/local/bin/DMRGateway
 StartLimitIntervalSec=600
 StartLimitBurst=20

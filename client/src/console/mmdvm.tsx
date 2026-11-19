@@ -61,8 +61,8 @@ type SerialsApi = { devices?: { path: string; label: string }[] };
 
 const emptyModes = (): Record<ModeId, boolean> => ({
   dmr: true,
-  dstar: false,
-  ysf: false,
+  dstar: true,
+  ysf: true,
   p25: false,
   nxdn: false,
   m17: false,

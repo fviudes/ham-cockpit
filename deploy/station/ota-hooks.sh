@@ -8,8 +8,8 @@
 # - Merge conservador: só chaves de display/LCD/PTY se faltarem.
 #   NUNCA resetar [General] Callsign/Id, [DMR] Id, frequências, senhas, redes, [Modem].
 # - Dual Hat = ttyAMA0 / miniuart-bt (Bluetooth na mini-UART; no Pi 4 core_freq_min=500 e arm_boost=1, sem core_freq fixo). NÃO ttyACM0. NÃO ttyS0 no modem. NÃO systemctl restart mmdvmhost
-#   (ciclo PartOf DMR/YSF). Host inativo: start UMA vez. Host já up: não parar.
-#   stop+start do Host derruba filhos PartOf e apaga indicativo/ID no Nextion.
+#   Host inativo: start UMA vez. Host já up: não parar.
+#   DMR/YSF NÃO usam PartOf no Host (restart do Host matava o BrandMeister).
 #
 # MMDVM: imagem bake recente JÁ tem os bins em /usr/local/bin.
 # mmdvm-arm64.tgz é ponte OTA (estações antigas / reparo Nextion sem HC_FD2_GUARD),

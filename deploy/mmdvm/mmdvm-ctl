@@ -70,6 +70,13 @@ case "$cmd" in
       start_unit "$u"
       if [[ "$u" == "$nextion_unit" ]]; then wait_pty || true; fi
     done
+    # Restart só do Host não sobe DMR/YSF/ircDDB. Units antigas com PartOf
+    # ainda matam os gateways no stop do Host — recoloca se estiverem parados.
+    if [[ "$target" == "host" || "$target" == "mmdvmhost" ]]; then
+      start_unit "$dmr_unit"
+      start_unit "$ysf_unit"
+      start_unit "$dstar_unit"
+    fi
     echo ok
     ;;
   is-active-all)
