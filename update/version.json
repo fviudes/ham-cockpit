@@ -1,8 +1,8 @@
 {
-  "version": "0.1.16.04",
+  "version": "0.1.16.05",
   "channel": "main",
-  "file": "ham-cockpit-0.1.16.04.tgz",
-  "sha256": "f5094f087cd0c5b09af47132c6903f210fee19d86788ff00666ecc171b3d6313",
-  "bytes": 5211743,
-  "notes": "Correção OTA: hooks idempotentes (hc-voice-tap) e mmdvm-decode no apply."
+  "file": "ham-cockpit-0.1.16.05.tgz",
+  "sha256": "9d1ef3cb342c142a2b296dba0153a1a88e32b7966c23c7da60dd8697ed71e732",
+  "bytes": 5212167,
+  "notes": "build MMDVM: apt sem PackageKit mascarado; recompila Host se faltar HC_VOICE_TAP."
 }

@@ -37,6 +37,22 @@ for b in "${BINS[@]}"; do
 done
 export DEBIAN_FRONTEND=noninteractive
 
+# Imagem Ham Cockpit mascara packagekit; apt via D-Bus falha com UnitMasked.
+APT_HC_OPTS=()
+if systemctl is-masked packagekit.service &>/dev/null \
+  || systemctl is-enabled packagekit.service 2>/dev/null | grep -q masked; then
+  APT_HC_OPTS=(
+    -o APT::Update::Pre-Invoke::=
+    -o APT::Update::Post-Invoke::=
+    -o APT::Update::Post-Invoke-Success::=
+    -o DPkg::Post-Invoke::=
+  )
+fi
+
+hc_apt_get() {
+  apt-get "${APT_HC_OPTS[@]}" "$@"
+}
+
 # Instala só pacotes com Candidate real (apt-cache show ainda lista
 # pacotes obsoletos tipo libwxgtk3.0-dev sem candidato no 24.04).
 apt_try_install() {
@@ -53,27 +69,44 @@ apt_try_install() {
   if [[ ${#ok[@]} -eq 0 ]]; then
     return 0
   fi
-  apt-get install -y --no-install-recommends "${ok[@]}"
+  hc_apt_get install -y --no-install-recommends "${ok[@]}" || {
+    echo "AVISO: apt install falhou (${ok[*]}) — runtime opcional" >&2
+    return 0
+  }
 }
 
 # Runtime de ircddbgatewayd (/usr/local): apt não liga sozinho após purge -dev.
 # mosquitto + libdlt2: broker MQTT local (daemon recente); libdlt2 evita exit 127 no arm64.
 ensure_ircddb_runtime() {
   command -v apt-get >/dev/null 2>&1 || return 0
-  apt-get update -qq || true
+  hc_apt_get update -qq 2>/dev/null || true
   apt_try_install libmosquitto1 mosquitto libdlt2 \
     libwxbase3.2-1t64 libwxgtk3.2-1t64 \
-    libwxbase3.2-1 libwxgtk3.2-1
+    libwxbase3.2-1 libwxgtk3.2-1 || true
+}
+
+need_voice_tap_rebuild() {
+  [[ -x "$PREFIX/bin/MMDVMHost" ]] || return 1
+  if ! strings -a "$PREFIX/bin/MMDVMHost" 2>/dev/null | grep -q 'HC_VOICE_TAP'; then
+    echo "MMDVMHost sem HC_VOICE_TAP — recompilando para monitor de voz no PC" >&2
+    return 0
+  fi
+  return 1
 }
 
 if [[ "$have_all" == "1" && "${MMDVM_FORCE:-0}" != "1" ]]; then
-  echo "binários MMDVM já em $PREFIX/bin (MMDVM_FORCE=1 para recompilar)"
-  ensure_ircddb_runtime
-  exit 0
+  if need_voice_tap_rebuild; then
+    MMDVM_FORCE=1
+    have_all=0
+  else
+    echo "binários MMDVM já em $PREFIX/bin (MMDVM_FORCE=1 para recompilar)"
+    ensure_ircddb_runtime || true
+    exit 0
+  fi
 fi
 
 if command -v apt-get >/dev/null 2>&1; then
-  apt-get update -qq
+  hc_apt_get update -qq 2>/dev/null || true
   # Ubuntu 24.04: libwxgtk3.2-dev. Nomes 3.0 ficam só como fallback em releases antigas.
   apt_try_install \
     build-essential git cmake pkg-config \
@@ -132,6 +165,11 @@ install_bin() {
 }
 
 # v1.0 = último layout WPSD (arquivo de log + Nextion). Não usar master MQTT.
+if [[ -d MMDVMHost/.git ]] && [[ -x "$PREFIX/bin/MMDVMHost" ]] \
+  && ! strings -a "$PREFIX/bin/MMDVMHost" 2>/dev/null | grep -q 'HC_VOICE_TAP'; then
+  echo "removendo árvore MMDVMHost antiga (sem tap de voz)…" >&2
+  rm -rf MMDVMHost
+fi
 clone_once https://github.com/M17-Project/MMDVMHost.git MMDVMHost v1.0
 clone_once https://github.com/g4klx/DMRGateway.git DMRGateway v1.0
 # v1.0 = layout WPSD sem nlohmann/json (master exige nlohmann-json3-dev).
@@ -154,6 +192,9 @@ elif [[ -x MMDVMHost/MMDVM-Host ]]; then
 else
   echo "MMDVMHost não foi gerado" >&2
   exit 1
+fi
+if ! strings -a "$PREFIX/bin/MMDVMHost" 2>/dev/null | grep -q 'HC_VOICE_TAP'; then
+  echo "AVISO: MMDVMHost sem HC_VOICE_TAP — falta apply-hc-voice-tap ou build -DHAM_COCKPIT_VOICE_TAP" >&2
 fi
 
 echo "compilando DMRGateway (g4klx v1.0)…"
@@ -297,13 +338,13 @@ if [[ "$PURGE" == "1" ]]; then
   echo "removendo fontes e pacotes -dev do bake…"
   rm -rf "$SRC"
   if command -v apt-get >/dev/null 2>&1; then
-    apt-get purge -y \
+    hc_apt_get purge -y \
       libusb-1.0-0-dev libsamplerate0-dev libmosquitto-dev \
       nlohmann-json3-dev \
       libwxgtk3.2-dev libwxgtk3.0-gtk3-dev libwxgtk3.0-dev \
       cmake 2>/dev/null || true
-    apt-get autoremove -y 2>/dev/null || true
-    apt-get clean 2>/dev/null || true
+    hc_apt_get autoremove -y 2>/dev/null || true
+    hc_apt_get clean 2>/dev/null || true
   fi
 fi
 

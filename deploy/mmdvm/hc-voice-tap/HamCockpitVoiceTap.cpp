@@ -13,6 +13,9 @@
 #include "DStarDefines.h"
 #include "YSFDefines.h"
 
+// Marca no ELF (auditar tap de voz sem depender de strings de log).
+const char hc_voice_tap_marker[] __attribute__((used)) = "HC_VOICE_TAP";
+
 namespace {
 
 int g_sock = -1;
