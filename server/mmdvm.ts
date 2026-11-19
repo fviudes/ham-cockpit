@@ -204,6 +204,8 @@ export type MmdvmStatus = MmdvmConfig & {
   logDir: string;
   tx: boolean;
   currentMode: string;
+  /** Modo que o modem HAT está a usar agora (um protocolo por vez). */
+  hatActiveMode: HatActiveMode;
   lastHeard: MmdvmHeard[];
   /** Campos da emulação LCD Nextion (layout 4). */
   nextion: MmdvmNextion;
@@ -1123,6 +1125,89 @@ function currentTx(rows: MmdvmHeard[]): boolean {
   return rows.some((r) => !r.duration);
 }
 
+export type HatActiveMode = {
+  id: MmdvmMode | "idle";
+  label: string;
+  /** De onde veio a leitura (último QSO, linha Mode set do Host, ou inativo). */
+  via: "qso" | "modem" | "idle";
+  /** Gateways em pause (IMM) para este modo — o HAT pode ainda estar no modo. */
+  paused: boolean;
+};
+
+const MODE_SET_RE = /Mode set to\s+([A-Za-z0-9][\w\-\s]*?)(?:\s*$|\s+from|\s+with)/i;
+
+/** Último "Mode set to …" no diário do MMDVMHost (modem HAT em um modo de cada vez). */
+export function parseHatModeFromLog(logText: string): MmdvmMode | "idle" {
+  let last = "";
+  for (const line of logText.split(/\r?\n/)) {
+    if (!/Mode set/i.test(line)) continue;
+    const m = line.match(MODE_SET_RE);
+    if (m?.[1]) last = m[1].trim();
+  }
+  return mapHatModeLabel(last);
+}
+
+function mapHatModeLabel(raw: string): MmdvmMode | "idle" {
+  const u = raw.toUpperCase().replace(/\s+/g, " ").trim();
+  if (!u) return "idle";
+  if (u === "DMR" || u.startsWith("DMR ")) return "dmr";
+  if (u.includes("D-STAR") || u.includes("DSTAR") || u === "DSTAR") return "dstar";
+  if (u.includes("FUSION") || u === "YSF" || u.startsWith("YSF")) return "ysf";
+  if (u === "P25" || u.startsWith("P25 ")) return "p25";
+  if (u === "NXDN" || u.startsWith("NXDN ")) return "nxdn";
+  if (u === "M17" || u.startsWith("M17 ")) return "m17";
+  if (u.includes("POCSAG")) return "pocsag";
+  return "idle";
+}
+
+function mapHeardModeToId(mode: string): MmdvmMode | "idle" {
+  const page = heardPage(mode);
+  if (page === "idle") return "idle";
+  return page === "dstar" ? "dstar" : page;
+}
+
+const HAT_LABELS: Record<MmdvmMode | "idle", string> = {
+  idle: "MMDVM",
+  dmr: "DMR",
+  dstar: "D-Star",
+  ysf: "YSF",
+  p25: "P25",
+  nxdn: "NXDN",
+  m17: "M17",
+  pocsag: "POCSAG",
+};
+
+export function resolveHatActiveMode(
+  logText: string,
+  cfg: Pick<MmdvmConfig, "modes" | "paused">,
+  heard: MmdvmHeard[],
+  hostRunning: boolean,
+): HatActiveMode {
+  const idle: HatActiveMode = { id: "idle", label: HAT_LABELS.idle, via: "idle", paused: false };
+  if (!hostRunning) return idle;
+
+  const live = heard.find((r) => !r.duration);
+  if (live) {
+    const id = mapHeardModeToId(live.mode);
+    if (id !== "idle" && cfg.modes[id]) {
+      return { id, label: HAT_LABELS[id], via: "qso", paused: Boolean(cfg.paused[id]) };
+    }
+  }
+
+  const fromLog = parseHatModeFromLog(logText);
+  if (fromLog !== "idle" && cfg.modes[fromLog]) {
+    return { id: fromLog, label: HAT_LABELS[fromLog], via: "modem", paused: Boolean(cfg.paused[fromLog]) };
+  }
+
+  const enabled = MMDVM_MODES.filter((m) => cfg.modes[m] && !cfg.paused[m]);
+  if (enabled.length === 1) {
+    const id = enabled[0]!;
+    return { id, label: HAT_LABELS[id], via: "modem", paused: false };
+  }
+
+  return idle;
+}
+
 function lanIpv4(): string {
   const ifs = networkInterfaces();
   const preferred = ["eth0", "enp0s3", "enp1s0", "wlan0", "wlp2s0", "Ethernet", "Wi-Fi"];
@@ -1512,6 +1597,7 @@ export async function mmdvmStatus(): Promise<MmdvmStatus> {
   }
   const baseErr = hostBin || !onAppliance ? "" : "MMDVM Host não está neste host — instale o binário WPSD/g4klx em /usr/local/bin/MMDVMHost";
   const error = [baseErr, hints].filter(Boolean).join(" — ");
+  const hatActiveMode = resolveHatActiveMode(hostLog, cfg, heard, hostRunning);
   const networkStatus = await dmrgatewayNetworkStatus(cfg.networks, gatewayRunning);
   const remotePort = cfg.remotePort || 7642;
   const remoteOk = hostRunning ? (await remoteUdp(remotePort, "status")).ok : false;
@@ -1544,6 +1630,7 @@ export async function mmdvmStatus(): Promise<MmdvmStatus> {
     logDir: logs,
     tx: currentTx(heard),
     currentMode: heard[0]?.mode ?? "",
+    hatActiveMode,
     lastHeard: heard,
     nextion,
     paused,

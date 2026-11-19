@@ -140,6 +140,11 @@ clone_once https://github.com/g4klx/ircDDBGateway.git ircDDBGateway
 clone_once https://github.com/on7lds/NextionDriver.git NextionDriver
 
 echo "compilando MMDVMHost (M17-Project v1.0 · WPSD)…"
+APPLY_VT="$_SCRIPT_DIR/apply-hc-voice-tap.sh"
+[[ -x "$APPLY_VT" ]] || APPLY_VT="$_SCRIPT_DIR/../apply-hc-voice-tap.sh"
+if [[ -x "$APPLY_VT" ]]; then
+  bash "$APPLY_VT" "$SRC/MMDVMHost"
+fi
 make -C MMDVMHost -j"$JOBS"
 # Aceita MMDVMHost (clássico) ou MMDVM-Host (MQTT) e instala com o nome WPSD.
 if [[ -x MMDVMHost/MMDVMHost ]]; then

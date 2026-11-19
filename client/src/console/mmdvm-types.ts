@@ -78,6 +78,12 @@ export type MmdvmApi = {
   networkStatus?: Record<NetworkId, NetworkLinkStatus>;
   tx: boolean;
   currentMode: string;
+  hatActiveMode?: {
+    id: ModeId | "idle";
+    label: string;
+    via: "qso" | "modem" | "idle";
+    paused?: boolean;
+  };
   lastHeard: Heard[];
   error: string;
 };

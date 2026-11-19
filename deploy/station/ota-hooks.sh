@@ -345,6 +345,58 @@ if [[ -d "$ROOT/systemd" ]]; then
   fi
 fi
 
+# Monitor MMDVM no PC: FIFO + loopback ALSA (decoder na Pi, sem dongle USB).
+if [[ -f "$ROOT/bin/hc-mmdvm-voice-pump.sh" ]]; then
+  sed -i 's/\r$//' "$ROOT/bin/hc-mmdvm-voice-pump.sh" 2>/dev/null || true
+  safe_install -m 0755 "$ROOT/bin/hc-mmdvm-voice-pump.sh" /opt/ham-cockpit/bin/hc-mmdvm-voice-pump.sh
+fi
+if [[ -f "$ROOT/systemd/ham-cockpit-mmdvm-voice.service" ]]; then
+  safe_install -m 0644 "$ROOT/systemd/ham-cockpit-mmdvm-voice.service" /etc/systemd/system/ham-cockpit-mmdvm-voice.service
+  systemctl daemon-reload 2>/dev/null || true
+fi
+mkdir -p /etc/modules-load.d /run/ham-cockpit
+grep -qxF 'snd-aloop' /etc/modules-load.d/ham-cockpit-mmdvm-monitor.conf 2>/dev/null \
+  || printf '%s\n' 'snd-aloop' >/etc/modules-load.d/ham-cockpit-mmdvm-monitor.conf
+modprobe snd-aloop 2>/dev/null || true
+[[ -p /run/ham-cockpit/mmdvm-monitor.pcm ]] || mkfifo /run/ham-cockpit/mmdvm-monitor.pcm 2>/dev/null || true
+chgrp hamcockpit /run/ham-cockpit/mmdvm-monitor.pcm 2>/dev/null || true
+chmod 0660 /run/ham-cockpit/mmdvm-monitor.pcm 2>/dev/null || true
+
+if [[ -d "$ROOT/bin/hc-voice-tap" ]]; then
+  install -d /opt/ham-cockpit/bin/hc-voice-tap
+  cp -a "$ROOT/bin/hc-voice-tap/." /opt/ham-cockpit/bin/hc-voice-tap/
+fi
+if [[ -f "$ROOT/bin/apply-hc-voice-tap.sh" ]]; then
+  safe_install -m 0755 "$ROOT/bin/apply-hc-voice-tap.sh" /opt/ham-cockpit/bin/apply-hc-voice-tap.sh
+  sed -i 's/\r$//' /opt/ham-cockpit/bin/apply-hc-voice-tap.sh 2>/dev/null || true
+fi
+
+ensure_hc_mmdvm_decode() {
+  if [[ -d "$ROOT/mmdvm-decode" ]]; then
+    rm -rf /opt/ham-cockpit/mmdvm-decode
+    mkdir -p /opt/ham-cockpit
+    cp -a "$ROOT/mmdvm-decode" /opt/ham-cockpit/mmdvm-decode
+  fi
+  if [[ -f "$ROOT/bin/build-hc-mmdvm-decode.sh" ]]; then
+    install -m 0755 "$ROOT/bin/build-hc-mmdvm-decode.sh" /opt/ham-cockpit/bin/build-hc-mmdvm-decode.sh
+    sed -i 's/\r$//' /opt/ham-cockpit/bin/build-hc-mmdvm-decode.sh 2>/dev/null || true
+  fi
+  if [[ -x /opt/ham-cockpit/bin/hc-mmdvm-decode ]]; then
+    return 0
+  fi
+  local script="/opt/ham-cockpit/bin/build-hc-mmdvm-decode.sh"
+  if [[ ! -x "$script" ]]; then
+    echo "ota-hooks: AVISO — sem build-hc-mmdvm-decode.sh; monitor MMDVM sem decoder" >&2
+    return 0
+  fi
+  if [[ "${HC_OTA_APPLY:-}" == "1" ]]; then
+    schedule_ota_background "hc-mmdvm-decode (mbelib)" bash "$script"
+    return 0
+  fi
+  bash "$script" || echo "ota-hooks: AVISO — hc-mmdvm-decode não compilou" >&2
+}
+ensure_hc_mmdvm_decode || true
+
 if [[ -d "$ROOT/bin" ]]; then
   find "$ROOT/bin" -maxdepth 1 -type f -exec chmod 0755 {} +
   chown root:root "$ROOT"/bin/* 2>/dev/null || true

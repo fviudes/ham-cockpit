@@ -181,6 +181,7 @@ const mmdvmBase = {
   logDir: "/var/log/mmdvm",
   tx: false,
   currentMode: "DMR",
+  hatActiveMode: { id: "dmr", label: "DMR", via: "modem", paused: false },
   paused: { dstar: false, dmr: false, ysf: false, p25: false, nxdn: false, m17: false, pocsag: false },
   error: "",
 };

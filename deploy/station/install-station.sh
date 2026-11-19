@@ -284,6 +284,33 @@ install_unit dmrgateway.service
 install_unit ysfgateway.service
 install_unit ircddbgateway.service
 install_unit ham-cockpit-mmdvm-build.service
+install_unit ham-cockpit-mmdvm-voice.service
+install -o root -g root -m 0755 "$ROOT/deploy/mmdvm/hc-mmdvm-voice-pump.sh" /opt/ham-cockpit/bin/hc-mmdvm-voice-pump.sh
+install -o root -g root -m 0755 "$ROOT/deploy/mmdvm/hc-mmdvm-pc-audio.sh" /opt/ham-cockpit/bin/mmdvm-pc-audio.sh
+if [[ -f "$ROOT/deploy/mmdvm/build-hc-mmdvm-decode.sh" ]]; then
+  install -o root -g root -m 0755 "$ROOT/deploy/mmdvm/build-hc-mmdvm-decode.sh" /opt/ham-cockpit/bin/build-hc-mmdvm-decode.sh
+  sed -i 's/\r$//' /opt/ham-cockpit/bin/build-hc-mmdvm-decode.sh 2>/dev/null || true
+fi
+if [[ -d "$ROOT/deploy/mmdvm/hc-mmdvm-decode" ]]; then
+  rm -rf /opt/ham-cockpit/mmdvm-decode
+  cp -a "$ROOT/deploy/mmdvm/hc-mmdvm-decode" /opt/ham-cockpit/mmdvm-decode
+fi
+if [[ -d "$ROOT/deploy/mmdvm/hc-voice-tap" ]]; then
+  install -d /opt/ham-cockpit/bin/hc-voice-tap
+  cp -a "$ROOT/deploy/mmdvm/hc-voice-tap/." /opt/ham-cockpit/bin/hc-voice-tap/
+fi
+if [[ -f "$ROOT/deploy/mmdvm/apply-hc-voice-tap.sh" ]]; then
+  install -o root -g root -m 0755 "$ROOT/deploy/mmdvm/apply-hc-voice-tap.sh" /opt/ham-cockpit/bin/apply-hc-voice-tap.sh
+fi
+if [[ -x /opt/ham-cockpit/bin/build-hc-mmdvm-decode.sh ]]; then
+  bash /opt/ham-cockpit/bin/build-hc-mmdvm-decode.sh 2>/dev/null \
+    || echo "install: AVISO — hc-mmdvm-decode não compilou (mbelib na primeira boot)"
+fi
+sed -i 's/\r$//' /opt/ham-cockpit/bin/hc-mmdvm-voice-pump.sh /opt/ham-cockpit/bin/mmdvm-pc-audio.sh 2>/dev/null || true
+mkdir -p /etc/modules-load.d
+grep -qxF 'snd-aloop' /etc/modules-load.d/ham-cockpit-mmdvm-monitor.conf 2>/dev/null \
+  || printf '%s\n' 'snd-aloop' >/etc/modules-load.d/ham-cockpit-mmdvm-monitor.conf
+modprobe snd-aloop 2>/dev/null || true
 # Unit Nextion real — SEMPRE /etc/systemd/system + cópia em /opt/ham-cockpit/systemd.
 # Detector de stub só em diretivas ATIVAS (comentários não contam; 0.1.05.01 apagava a unit).
 systemctl unmask nextiondriver.service 2>/dev/null || true

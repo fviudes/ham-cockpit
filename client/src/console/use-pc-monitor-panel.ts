@@ -4,7 +4,7 @@ import { PcAudioPlayer, type PcAudioStart } from "./pc-audio";
 import { getPcMonitor, setPcMonitor, subscribePcMonitor, type PcMonitorSource } from "./pc-monitor-bus";
 import { readPcVolume } from "@shared/pc-audio";
 
-function hintFor(result: PcAudioStart): I18nKey {
+function hintFor(result: PcAudioStart, source: PcMonitorSource): I18nKey {
   if (!result.ok) {
     if (result.reason === "cancelled") return "pcAudioOff";
     if (result.reason === "auth") return "pcAudioAuth";
@@ -12,7 +12,7 @@ function hintFor(result: PcAudioStart): I18nKey {
     if (result.reason === "no-decoder") return "pcMonitorMmdvmNoDecoder";
     return "pcAudioNone";
   }
-  return "pcMonitorOn";
+  return source === "mmdvm" ? "pcMonitorMmdvmMode" : "pcMonitorOn";
 }
 
 /** Monitor de áudio exclusivo no card do Painel (rádio ou MMDVM). */
@@ -59,11 +59,11 @@ export function usePcMonitorPanel(source: PcMonitorSource) {
       const result = await player.start();
       if (!result.ok) {
         setPcMonitor(null);
-        setHint(hintFor(result));
+        setHint(hintFor(result, source));
         return;
       }
       setPcMonitor(source);
-      setHint(hintFor(result));
+      setHint(hintFor(result, source));
     } catch {
       setPcMonitor(null);
       setHint(source === "mmdvm" ? "pcMonitorMmdvmNoDecoder" : "pcAudioNone");

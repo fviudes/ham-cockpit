@@ -32,9 +32,17 @@ type NextionSnap = {
   qso: Qso[];
 };
 
+type HatActiveMode = {
+  id: string;
+  label: string;
+  via: string;
+  paused?: boolean;
+};
+
 type MmdvmApi = {
   hostRunning?: boolean;
   nextionRunning?: boolean;
+  hatActiveMode?: HatActiveMode;
   callsign?: string;
   dmrId?: string;
   location?: string;
@@ -98,6 +106,7 @@ export function NextionViz() {
   const [hostOn, setHostOn] = useState(false);
   const [nxOn, setNxOn] = useState(false);
   const [lcd, setLcd] = useState<NextionSnap | null>(null);
+  const [hatMode, setHatMode] = useState<HatActiveMode | null>(null);
 
   useEffect(() => {
     const id = window.setInterval(() => setClock(clockNow()), 1000);
@@ -113,6 +122,7 @@ export function NextionViz() {
           if (!live) return;
           setHostOn(Boolean(j.hostRunning));
           setNxOn(Boolean(j.nextionRunning));
+          setHatMode(j.hatActiveMode ?? null);
           setLcd(fromApi(j));
         })
         .catch(() => undefined);
@@ -134,17 +144,29 @@ export function NextionViz() {
   const rxOn = liveQso && qso.some((q) => q.src === "Net");
   const txOn = liveQso && qso.some((q) => q.src === "RF");
   const mode = modeLabel(page, qso);
+  const protocol =
+    hatMode && hatMode.id !== "idle"
+      ? `${hatMode.label}${hatMode.paused ? ` · ${tx("mmdvmHatPaused")}` : ""}`
+      : tx("mmdvmHatIdle");
   const bars = rssiBars(qso[0]?.rssi ?? "");
 
   return (
     <div>
       <PanelTitle
         monitor={
-          <PanelMonitorButton on={mmdvmMon.on} busy={mmdvmMon.busy} onClick={() => void mmdvmMon.toggle()} title={mmdvmMon.hint} />
+          <PanelMonitorButton
+            on={mmdvmMon.on}
+            busy={mmdvmMon.busy}
+            onClick={() => void mmdvmMon.toggle()}
+            title={mmdvmMon.on ? "pcMonitorOn" : hatMode?.id === "idle" ? "pcMonitorMmdvmNoDecoder" : "pcMonitorMmdvmMode"}
+          />
         }
       >
         {tx("panelNextion")}
       </PanelTitle>
+      <p className="-mt-2 mb-2 font-['IBM_Plex_Mono'] text-[10px] tracking-wide text-[#8ea0b3]">
+        {tx("mmdvmHatProtocol")}: <span className="text-[#4fc3f7]">{protocol}</span>
+      </p>
       <Lcd>
         <div className={dim ? "opacity-70" : ""}>
           <div className="mb-2 flex items-center justify-between border-b border-[#0c2236] pb-2">

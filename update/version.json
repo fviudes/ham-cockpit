@@ -1,8 +1,8 @@
 {
-  "version": "0.1.16.02",
+  "version": "0.1.16.03",
   "channel": "main",
-  "file": "ham-cockpit-0.1.16.02.tgz",
-  "sha256": "b774ac116a4f0ba87844571d6078c0d530a29c31b3c77d5484829a03c08e77f5",
-  "bytes": 5202199,
-  "notes": "Ham Cockpit v0.1.16.02 — OTA mais rápido: fila serial, watchdog por atividade e hooks pesados em segundo plano."
+  "file": "ham-cockpit-0.1.16.03.tgz",
+  "sha256": "a5e2dada964159f9b296d6fc94be2236e31c785eadb38c54d6711669b62f49e5",
+  "bytes": 5211631,
+  "notes": "Monitor MMDVM: hc-mmdvm-decode (mbelib-neo), tap de voz no Host e protocolo ativo no HAT."
 }

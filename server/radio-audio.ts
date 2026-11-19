@@ -7,8 +7,8 @@
  * A escuta de FT8 pode ser dona do arecord. O websocket da página só recebe o PCM:
  * sair do menu não mata o processo. Desabilitar mata.
  */
-import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
+import { spawn, execFileSync, type ChildProcess } from "node:child_process";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { IncomingMessage, Server } from "node:http";
@@ -26,7 +26,20 @@ function mmdvmPcmScript(): string {
   ];
   return candidates.find((p) => existsSync(p)) ?? "";
 }
+
+function mmdvmDecoderReady(): boolean {
+  if (process.platform !== "linux") return false;
+  const dec = "/opt/ham-cockpit/bin/hc-mmdvm-decode";
+  if (!existsSync(dec)) return false;
+  try {
+    const out = execFileSync("file", [dec], { encoding: "utf8" });
+    return /ELF/i.test(out);
+  } catch {
+    return true;
+  }
+}
 import { consoleSessionOk } from "./console-session";
+import { mmdvmStatus } from "./mmdvm";
 import { tryWsSendBinary, tryWsSendText } from "./ws-backpressure";
 
 const attached = new WeakSet<Server>();
@@ -212,11 +225,42 @@ async function spawnRadioCapture(kind: "socket" | "digital", owner: WebSocket | 
 async function spawnMmdvmCapture(owner: WebSocket | null): Promise<"on" | "none"> {
   if (playbackHold) return "none";
   if (capture) return "none";
-  formatAnnounced = { type: "format", sampleRate: 48000, channels: 1, via: "mmdvm" };
+  let hatLabel = "MMDVM";
+  let hatMode = "idle";
+  try {
+    const st = await mmdvmStatus();
+    hatLabel = st.hatActiveMode.label;
+    hatMode = st.hatActiveMode.id;
+    if (process.platform === "linux") {
+      mkdirSync("/run/ham-cockpit", { recursive: true });
+      writeFileSync(
+        "/run/ham-cockpit/mmdvm-hat-mode.json",
+        `${JSON.stringify(st.hatActiveMode)}\n`,
+        "utf8",
+      );
+      if (existsSync("/usr/bin/systemctl")) {
+        spawn("systemctl", ["start", "--no-block", "ham-cockpit-mmdvm-voice.service"], {
+          detached: true,
+          stdio: "ignore",
+        }).unref();
+      }
+    }
+  } catch {
+    /* status opcional */
+  }
+  formatAnnounced = {
+    type: "format",
+    sampleRate: 48000,
+    channels: 1,
+    via: "mmdvm",
+    hatLabel,
+    hatMode,
+  };
+  const mmdvmFail = mmdvmDecoderReady() ? "no-device" : "no-decoder";
   const script = mmdvmPcmScript();
   if (script) {
     const child = spawn("bash", [script], { stdio: ["ignore", "pipe", "pipe"] });
-    wireCaptureChild(child, "mmdvm", "mmdvm", owner, "no-decoder");
+    wireCaptureChild(child, "mmdvm", "mmdvm", owner, mmdvmFail);
     return "on";
   }
   const listing = await listCapture();
@@ -227,7 +271,7 @@ async function spawnMmdvmCapture(owner: WebSocket | null): Promise<"on" | "none"
     ["-D", `plughw:${hit.card},${hit.device}`, "-f", "S16_LE", "-r", "48000", "-c", "1", "-t", "raw"],
     { stdio: ["ignore", "pipe", "pipe"] },
   );
-  wireCaptureChild(child, "mmdvm", "mmdvm", owner, "no-decoder");
+  wireCaptureChild(child, "mmdvm", "mmdvm", owner, mmdvmFail);
   return "on";
 }
 
@@ -348,7 +392,7 @@ async function bindRadioAudio(ws: WebSocket, role: "pc-audio" | "tap", source: "
     return;
   }
   if (started === "none") {
-    const reason = capture ? "busy" : source === "mmdvm" ? "no-decoder" : "no-device";
+    const reason = capture ? "busy" : source === "mmdvm" ? (mmdvmDecoderReady() ? "no-device" : "no-decoder") : "no-device";
     sendJson(ws, { type: "error", reason });
     ws.close();
   }

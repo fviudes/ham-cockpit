@@ -1,0 +1,15 @@
+[Unit]
+Description=Ham Cockpit — decoder PCM MMDVM para monitor no PC
+After=network.target mmdvmhost.service
+Wants=mmdvmhost.service
+
+[Service]
+Type=simple
+ExecStart=/opt/ham-cockpit/bin/hc-mmdvm-voice-pump.sh
+Restart=on-failure
+RestartSec=5
+# Não compete com o codec USB do rádio (PC Audio).
+Nice=5
+
+[Install]
+WantedBy=multi-user.target
