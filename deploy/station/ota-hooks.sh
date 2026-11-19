@@ -106,6 +106,14 @@ nextion_needs_patch() {
   return 0
 }
 
+# Host g4klx/WPSD sem tap Ham Cockpit (OTA antigo ou mmdvm-arm64.tgz velho).
+mmdvm_need_voice_tap() {
+  [[ -x /usr/local/bin/MMDVMHost ]] || return 1
+  strings -a /usr/local/bin/MMDVMHost 2>/dev/null | grep -q 'HC_VOICE_TAP' && return 1
+  echo "ota-hooks: MMDVMHost sem HC_VOICE_TAP — precisa recompilar" >&2
+  return 0
+}
+
 # Stub de verdade: diretivas ativas. Comentários da unit real NÃO contam
 # (0.1.05.01 apagava a unit porque o texto de aviso batia no grep).
 nextion_unit_is_stub() {
@@ -241,7 +249,7 @@ ensure_mmdvm_bins() {
     tgz="$(pick_mmdvm_tgz || true)"
   fi
 
-  if ! mmdvm_missing && ! nextion_needs_patch; then
+  if ! mmdvm_missing && ! nextion_needs_patch && ! mmdvm_need_voice_tap; then
     # Não extrai o tgz só para hosts — isso sozinho mantinha a UI em ~93% no Pi.
     echo "ota-hooks: binários MMDVM OK — pulando tarball/apt hosts" >&2
     enable_mmdvm_units
@@ -262,8 +270,8 @@ ensure_mmdvm_bins() {
     echo "ota-hooks: AVISO — falha ao instalar mmdvm-arm64.tgz do pacote; tentando fallback" >&2
   fi
 
-  # Sem tarball no pacote (ou falha): só repara se faltar bin ou Nextion sem marca.
-  if ! mmdvm_missing && ! nextion_needs_patch; then
+  # Sem tarball no pacote (ou falha): só repara se faltar bin, Nextion sem marca ou Host sem tap.
+  if ! mmdvm_missing && ! nextion_needs_patch && ! mmdvm_need_voice_tap; then
     return 0
   fi
   if nextion_needs_patch && ! mmdvm_missing; then
@@ -860,6 +868,15 @@ if [[ -x /usr/local/bin/NextionDriver && -f /etc/systemd/system/nextiondriver.se
       sleep 2
       systemctl start --job-mode=ignore-dependencies mmdvmhost.service 2>/dev/null || true
     fi
+  else
+    echo "ota-hooks: PTY Nextion ainda não pronto — tentando mmdvm-ctl start" >&2
+    if [[ -x /opt/ham-cockpit/bin/mmdvm-ctl ]]; then
+      /opt/ham-cockpit/bin/mmdvm-ctl start all 2>/dev/null || true
+    fi
+  fi
+else
+  if [[ -x /opt/ham-cockpit/bin/mmdvm-ctl ]] && ! systemctl is-active --quiet mmdvmhost.service; then
+    /opt/ham-cockpit/bin/mmdvm-ctl start all 2>/dev/null || true
   fi
 fi
 # Filhos PartOf não voltam no start ignore-dependencies do Host — sobe se inativos.

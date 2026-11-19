@@ -351,4 +351,22 @@ fi
 # Garante runtime mesmo sem PURGE (OTA / build incremental).
 ensure_ircddb_runtime
 
+# OTA / Pi: após rebuild o ota-hooks não faz restart do Host — stack ficava parado horas.
+start_mmdvm_stack_after_build() {
+  if [[ "${MMDVM_SKIP_STACK_START:-0}" == "1" ]]; then
+    return 0
+  fi
+  if [[ "${HAMCOCKPIT_CHROOT:-0}" == "1" ]]; then
+    return 0
+  fi
+  if [[ ! -d /run/systemd/system ]]; then
+    return 0
+  fi
+  if [[ -x /opt/ham-cockpit/bin/mmdvm-ctl ]]; then
+    echo "subindo stack MMDVM após compilação…" >&2
+    /opt/ham-cockpit/bin/mmdvm-ctl start all 2>/dev/null || true
+  fi
+}
+start_mmdvm_stack_after_build
+
 echo "ok · MMDVMHost · DMRGateway · YSFGateway · ircddbgatewayd · NextionDriver → $PREFIX/bin"

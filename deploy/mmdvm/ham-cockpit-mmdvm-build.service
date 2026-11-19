@@ -11,6 +11,7 @@ Environment=MMDVM_PURGE_BUILD=1
 ExecStart=/opt/ham-cockpit/bin/mmdvm-build-binaries.sh
 ExecStartPost=/bin/systemctl daemon-reload
 ExecStartPost=-/bin/systemctl enable nextiondriver.service mmdvmhost.service dmrgateway.service ysfgateway.service ircddbgateway.service
+ExecStartPost=-/opt/ham-cockpit/bin/mmdvm-ctl start all
 RemainAfterExit=yes
 
 [Install]
