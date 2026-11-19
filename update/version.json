@@ -1,8 +1,8 @@
 {
-  "version": "0.1.16.05",
+  "version": "0.1.17",
   "channel": "main",
-  "file": "ham-cockpit-0.1.16.05.tgz",
-  "sha256": "9d1ef3cb342c142a2b296dba0153a1a88e32b7966c23c7da60dd8697ed71e732",
-  "bytes": 5212167,
-  "notes": "build MMDVM: apt sem PackageKit mascarado; recompila Host se faltar HC_VOICE_TAP."
+  "file": "ham-cockpit-0.1.17.tgz",
+  "sha256": "f2929ee28d09e7ee9b8d66b35f35812a029cfc041f5516b1a7b1733aa752ea5f",
+  "bytes": 5212152,
+  "notes": "Ham Cockpit v0.1.17 — imagem completa: MMDVMHost com tap de voz (HC_VOICE_TAP), decoder hc-mmdvm-decode (mbelib-neo), unit ham-cockpit-mmdvm-voice e monitor MMDVM no console; MMDVM/Nextion/IRCDDB compilados no bake; OTA alinhado à imagem."
 }
