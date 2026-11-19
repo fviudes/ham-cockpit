@@ -90,6 +90,42 @@ type Shipped = {
 
 const jobs = new Map<UpdateId, UpdateJob>();
 
+/** Sem saída do station-upd por esse intervalo → SIGTERM (apply travado). */
+export const APPLY_STALL_MS = 25 * 60 * 1000;
+/** Teto absoluto do apply — Pi 3 + hooks + apt podem passar de 15 min. */
+export const APPLY_MAX_MS = 90 * 60 * 1000;
+
+type ApplyWatchdog = { bump: () => void; clear: () => void };
+
+/** Mata o filho só após stall ou teto absoluto; reinicia o stall a cada byte de saída. */
+export function armApplyProcessWatchdog(onKill: () => void): ApplyWatchdog {
+  let lastActivity = Date.now();
+  let stallTimer: ReturnType<typeof setTimeout> | null = null;
+  const maxTimer = setTimeout(onKill, APPLY_MAX_MS);
+
+  const scheduleStallCheck = () => {
+    if (stallTimer) clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => {
+      if (Date.now() - lastActivity >= APPLY_STALL_MS) {
+        onKill();
+        return;
+      }
+      scheduleStallCheck();
+    }, 30_000);
+  };
+
+  scheduleStallCheck();
+  return {
+    bump: () => {
+      lastActivity = Date.now();
+    },
+    clear: () => {
+      if (stallTimer) clearTimeout(stallTimer);
+      clearTimeout(maxTimer);
+    },
+  };
+}
+
 function loadShipped(): Shipped {
   const fallback: Shipped = {
     app: APP_VERSION,
@@ -522,19 +558,28 @@ function spawnApplyArgs(sid: UpdateId, args: string[]): Promise<UpdatesSnapshot>
     });
     let stdout = "";
     let stderr = "";
-    const killer = setTimeout(() => child.kill("SIGTERM"), 900_000);
+    let killed = false;
+    const watchdog = armApplyProcessWatchdog(() => {
+      if (killed) return;
+      killed = true;
+      child.kill("SIGTERM");
+    });
+    const onChunk = (buf: Buffer) => {
+      watchdog.bump();
+      return String(buf);
+    };
     child.stdout?.on("data", (buf: Buffer) => {
-      const chunk = String(buf);
+      const chunk = onChunk(buf);
       stdout += chunk;
       ingestProgress(sid, chunk);
     });
     child.stderr?.on("data", (buf: Buffer) => {
-      const chunk = String(buf);
+      const chunk = onChunk(buf);
       stderr += chunk;
       ingestProgress(sid, chunk);
     });
     const finish = async (code: number | null, errMsg = "") => {
-      clearTimeout(killer);
+      watchdog.clear();
       const parsed = parseHelperOut(lastJsonObject(stdout.trim()));
       const errText =
         errMsg ||
@@ -586,7 +631,9 @@ function spawnApplyArgs(sid: UpdateId, args: string[]): Promise<UpdatesSnapshot>
       job.stage = "error";
       job.error =
         errText ||
-        `falha ao aplicar ${sid} (código ${code == null ? "sinal/timeout" : code})`;
+        (killed
+          ? `tempo esgotado ao aplicar ${sid} (sem progresso ou limite de ${Math.round(APPLY_MAX_MS / 60_000)} min)`
+          : `falha ao aplicar ${sid} (código ${code == null ? "sinal/timeout" : code})`);
       const cur = cache?.snap ?? (await updatesStatus(true));
       const failed = snapshot(
         cur.items.map((row) => (row.id === sid ? { ...row, error: job.error } : row)),
@@ -614,6 +661,23 @@ function spawnApply(sid: UpdateId): Promise<UpdatesSnapshot> {
 }
 
 let applyChain: Promise<void> = Promise.resolve();
+const applyInflight = new Map<UpdateId, Promise<UpdatesSnapshot>>();
+
+function enqueueApply(sid: UpdateId, run: () => Promise<UpdatesSnapshot>): Promise<UpdatesSnapshot> {
+  const existing = applyInflight.get(sid);
+  if (existing) return existing;
+  const task = applyChain
+    .then(() => run())
+    .finally(() => {
+      if (applyInflight.get(sid) === task) applyInflight.delete(sid);
+    });
+  applyInflight.set(sid, task);
+  applyChain = task.then(
+    () => undefined,
+    () => undefined,
+  );
+  return task;
+}
 
 export async function updatesApplyManualFile(pkgPath: string, sha256 = ""): Promise<UpdatesSnapshot> {
   const sid: UpdateId = "app";
@@ -631,27 +695,10 @@ export async function updatesApplyManualFile(pkgPath: string, sha256 = ""): Prom
     };
   }
   try {
-    jobs.set(sid, {
-      id: sid,
-      status: "running",
-      pct: 1,
-      determinate: true,
-      stage: "queued",
-      error: "",
-      bytes: 0,
-      totalBytes: 0,
-      etaSec: 0,
-      doneSeen: false,
-    });
     const helperArgs = ["apply-file", pkgPath];
     const sha = sha256.trim().toLowerCase();
     if (sha) helperArgs.push(sha);
-    const run = applyChain.then(() => spawnApplyArgs("app", helperArgs));
-    applyChain = run.then(
-      () => undefined,
-      () => undefined,
-    );
-    return await run;
+    return await enqueueApply("app", () => spawnApplyArgs("app", helperArgs));
   } catch (err) {
     const cur = await updatesStatus(true);
     return { ...cur, ok: false, error: String(err) };
@@ -679,24 +726,7 @@ export async function updatesApply(id: string): Promise<UpdatesSnapshot> {
   }
   try {
     // Um apply por vez (apt + docker pull + npm em paralelo derrubava o Pi 3).
-    jobs.set(sid, {
-      id: sid,
-      status: "running",
-      pct: 1,
-      determinate: true,
-      stage: "queued",
-      error: "",
-      bytes: 0,
-      totalBytes: 0,
-      etaSec: 0,
-      doneSeen: false,
-    });
-    const run = applyChain.then(() => spawnApply(sid));
-    applyChain = run.then(
-      () => undefined,
-      () => undefined,
-    );
-    return await run;
+    return await enqueueApply(sid, () => spawnApply(sid));
   } catch (err) {
     const cur = await updatesStatus(true);
     return { ...cur, ok: false, error: String(err) };

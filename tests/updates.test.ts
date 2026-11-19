@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { lastJsonObject } from "../server/updates";
+import { describe, expect, it, vi } from "vitest";
+import { APPLY_MAX_MS, APPLY_STALL_MS, armApplyProcessWatchdog, lastJsonObject } from "../server/updates";
 import {
   OTA_NGINX_CLIENT_MAX_BODY,
   OTA_UPLOAD_MAX,
@@ -10,6 +10,25 @@ import {
 } from "../server/updates-upload";
 
 describe("updates", () => {
+  it("define limites de tempo do apply (stall vs teto absoluto)", () => {
+    expect(APPLY_STALL_MS).toBeGreaterThan(20 * 60 * 1000);
+    expect(APPLY_MAX_MS).toBeGreaterThan(APPLY_STALL_MS);
+  });
+
+  it("watchdog do apply só dispara após stall", () => {
+    vi.useFakeTimers();
+    const kills: number[] = [];
+    const wd = armApplyProcessWatchdog(() => kills.push(1));
+    vi.advanceTimersByTime(APPLY_STALL_MS - 60_000);
+    wd.bump();
+    vi.advanceTimersByTime(APPLY_STALL_MS - 45_000);
+    expect(kills).toHaveLength(0);
+    vi.advanceTimersByTime(90_000);
+    expect(kills).toHaveLength(1);
+    wd.clear();
+    vi.useRealTimers();
+  });
+
   it("extrai o último JSON do stdout do station-upd", () => {
     const mixed = [
       "HC_PROGRESS {\"id\":\"app\",\"pct\":97,\"stage\":\"hooks\"}",

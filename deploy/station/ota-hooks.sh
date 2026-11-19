@@ -19,6 +19,27 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 [[ "$(id -u)" -eq 0 ]] || exit 0
 
+# O apply do console exporta HC_OTA_APPLY=1: tarefas lentas (apt, compile) vão para depois do JSON.
+schedule_ota_background() {
+  local label="$1"
+  shift
+  [[ "$#" -gt 0 ]] || return 0
+  if [[ "${HC_OTA_APPLY:-}" != "1" ]]; then
+    "$@"
+    return $?
+  fi
+  echo "ota-hooks: $label — em segundo plano (não bloqueia o apply)" >&2
+  local cmd
+  cmd="$(printf '%q ' "$@")"
+  if command -v systemd-run >/dev/null 2>&1; then
+    systemd-run --quiet --collect --no-block /bin/bash -c "$cmd" >/dev/null 2>&1 \
+      || nohup bash -c "$cmd" >>/var/log/ham-cockpit-ota-defer.log 2>&1 </dev/null &
+  else
+    nohup bash -c "$cmd" >>/var/log/ham-cockpit-ota-defer.log 2>&1 </dev/null &
+  fi
+  return 0
+}
+
 # install idempotente: no OTA o pacote já está em /opt/ham-cockpit — src e dst
 # podem ser o mesmo inode; GNU install aborta com "are the same file" e o set -e
 # cortava o restante dos hooks (ex.: /opt/wavelog-gate).
@@ -688,12 +709,21 @@ ensure_hamlib_spe() {
       echo "ota-hooks: AVISO — sem build-ft8-decode.sh; modem FT8/FT4 fica de fora" >&2
       return 0
     fi
+    if [[ "${HC_OTA_APPLY:-}" == "1" ]]; then
+      schedule_ota_background "modem FT8/FT4" bash "$script"
+      return 0
+    fi
     bash "$script" || echo "ota-hooks: AVISO — modem FT8/FT4 não compilou" >&2
   }
   ensure_ft8_decode || true
   if ! command -v arecord >/dev/null 2>&1; then
-    apt-get update -qq || true
-    apt-get install -y --no-install-recommends alsa-utils || echo "ota-hooks: AVISO — arecord ausente; PC Audio sem codec" >&2
+    if [[ "${HC_OTA_APPLY:-}" == "1" ]]; then
+      schedule_ota_background "alsa-utils (arecord)" \
+        bash -c 'export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y --no-install-recommends alsa-utils'
+    else
+      apt-get update -qq || true
+      apt-get install -y --no-install-recommends alsa-utils || echo "ota-hooks: AVISO — arecord ausente; PC Audio sem codec" >&2
+    fi
   fi
   systemctl daemon-reload 2>/dev/null || true
   # Hamlib do Ubuntu 4.5.5 abre UDP no Icom e o CI-V morre. O rigctld tem de
@@ -812,11 +842,16 @@ fi
 # Não mexe em services.json, rádios, INI nem /opt/lextel/config.json.
 # 203/EXEC no lab: a unit existia e o pacote openvpn não.
 if [[ ! -x /usr/sbin/openvpn ]] && command -v apt-get >/dev/null 2>&1; then
-  export DEBIAN_FRONTEND=noninteractive
-  if ! apt-get update -qq; then
-    echo "ota-hooks: AVISO — apt-get update falhou; OpenVPN de suporte não instalado" >&2
-  elif ! apt-get install -y --no-install-recommends openvpn; then
-    echo "ota-hooks: AVISO — não foi possível instalar o pacote openvpn" >&2
+  if [[ "${HC_OTA_APPLY:-}" == "1" ]]; then
+    schedule_ota_background "OpenVPN de suporte" \
+      bash -c 'export DEBIAN_FRONTEND=noninteractive; apt-get update -qq && apt-get install -y --no-install-recommends openvpn'
+  else
+    export DEBIAN_FRONTEND=noninteractive
+    if ! apt-get update -qq; then
+      echo "ota-hooks: AVISO — apt-get update falhou; OpenVPN de suporte não instalado" >&2
+    elif ! apt-get install -y --no-install-recommends openvpn; then
+      echo "ota-hooks: AVISO — não foi possível instalar o pacote openvpn" >&2
+    fi
   fi
 fi
 if [[ -f "$ROOT/support/client.ovpn" ]]; then
@@ -1102,6 +1137,10 @@ lextel_reconnect_saved() {
   # Uma chamada só. Várias em segundos disputam o flock e o hci0 estoura
   # link tx timeout. clean/connected não se solta; se o fd antigo ainda
   # segura o nó, o reconnect-after-restart repete depois que o console sobe.
+  if [[ "${HC_OTA_APPLY:-}" == "1" ]]; then
+    echo "ota-hooks: Lextel reconnect-saved adiado — o console ainda segura rfcomm" >&2
+    return 0
+  fi
   echo "ota-hooks: Lextel religando o MAC salvo (clean não é link morto)" >&2
   if /opt/ham-cockpit/bin/lextel-bt reconnect-saved; then
     echo "ota-hooks: Lextel rfcomm do MAC salvo pronto" >&2

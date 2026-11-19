@@ -659,7 +659,7 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
     }
   };
 
-  const applyOne = async (id: UpdateId) => {
+  const applyOne = async (id: UpdateId): Promise<boolean> => {
     setS((p) => ({
       ...p,
       updates: {
@@ -689,7 +689,7 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
       applySnap(j);
       if (!r.ok || j.ok === false) {
         toast.error(j.error || tx("updFail"));
-        return;
+        return false;
       }
       // Força 100% na UI mesmo se o job já foi limpo / console reiniciou.
       setS((p) => ({
@@ -714,6 +714,7 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
         toast.success(tx("updOk"));
       }
       pushLog("SYS", `${tx(UPD_LABEL[id])} → ${after?.current || ""}`);
+      return true;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : tx("updFail"));
       setS((p) => ({
@@ -724,6 +725,15 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
           jobs: p.updates.jobs.filter((row) => row.id !== id),
         },
       }));
+      return false;
+    }
+  };
+
+  const applyAllReady = async () => {
+    const ids = s.updates.items.filter((row) => row.updatable && !row.applying).map((row) => row.id);
+    for (const id of ids) {
+      const ok = await applyOne(id);
+      if (!ok) break;
     }
   };
 
@@ -734,7 +744,7 @@ export function UpdatesPage({ embedded = false }: { embedded?: boolean }) {
       {embedded ? null : <PageHead kicker={tx("admin")} title={tx("update")} />}
       <p className="mb-4 max-w-3xl text-sm leading-relaxed text-[#8ea0b3]">{tx("updateHelp")}</p>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <PrimaryBtn disabled={ready.length === 0} onClick={() => ready.forEach((row) => void applyOne(row.id))}>
+        <PrimaryBtn disabled={ready.length === 0} onClick={() => void applyAllReady()}>
           {tx("updApplyAll")}
         </PrimaryBtn>
         <GhostBtn disabled={checking} onClick={() => void checkNow()}>

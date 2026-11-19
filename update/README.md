@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.16.01** (`version.json`).
+Versão atual neste canal: **0.1.16.02** (`version.json`).
 
 ## Versionamento
 
@@ -22,12 +22,12 @@ Cada pacote OTA é **cumulativo**: substitui o console inteiro. Basta aplicar a 
 
 ```json
 {
-  "version": "0.1.16.01",
+  "version": "0.1.16.02",
   "channel": "main",
-  "file": "ham-cockpit-0.1.16.01.tgz",
-  "sha256": "f0c089a31d8461325bf23bd22720a1850c0237295b449d11912b2b2e1a243139",
-  "bytes": 5201203,
-  "notes": "Ham Cockpit v0.1.16.01 — botão MONITOR nos cards Rádio e MMDVM Painel (áudio exclusivo no PC)."
+  "file": "ham-cockpit-0.1.16.02.tgz",
+  "sha256": "b774ac116a4f0ba87844571d6078c0d530a29c31b3c77d5484829a03c08e77f5",
+  "bytes": 5202199,
+  "notes": "Ham Cockpit v0.1.16.02 — OTA mais rápido: fila serial, watchdog por atividade e hooks pesados em segundo plano."
 }
 ```
 

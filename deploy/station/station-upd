@@ -456,8 +456,8 @@ apply_app_install() {
     echo "OTA: package.json inalterado + node_modules OK — pulando npm install" >&2
     emit_progress app 78 install 1
   elif [[ -f "$APP_HOME/package.json" ]]; then
-    run_with_heartbeat app install 70 78 15 \
-      bash -c "cd \"$APP_HOME\" && HC_OTA_APPLY=1 npm install --omit=dev" || true
+    run_with_heartbeat app install 70 78 20 \
+      bash -c "cd \"$APP_HOME\" && HC_OTA_APPLY=1 npm install --omit=dev --no-audit --no-fund --prefer-offline --maxsockets=2" || true
   fi
   mkdir -p "$APP_HOME/mmdvm"
   if [[ -f "$APP_HOME/mmdvm/mmdvmhost.ini" ]]; then
@@ -470,7 +470,7 @@ apply_app_install() {
   done
   if [[ -x "$APP_HOME/ota-hooks.sh" ]]; then
     emit_progress app 78 hooks 1
-    if ! run_with_heartbeat app hooks 78 92 180 bash "$APP_HOME/ota-hooks.sh"; then
+    if ! run_with_heartbeat app hooks 78 92 600 env HC_OTA_APPLY=1 bash "$APP_HOME/ota-hooks.sh"; then
       echo "ota-hooks.sh falhou — VERSION não avançada (reaplicável)" >&2
       return 1
     fi
