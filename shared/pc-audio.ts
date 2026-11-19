@@ -69,3 +69,34 @@ export function pickAlsaCapture(listing: string): AlsaCapture | null {
 export function pickAlsaPlayback(listing: string, capture: AlsaCapture | null = pickAlsaCapture(listing)): AlsaCapture | null {
   return capture;
 }
+
+const MMDVM_PCM = /loopback|mmdvm|dv3000|thumb|ambe|monitor/i;
+
+/**
+ * Captura PCM decodificado do hotspot (não o codec USB do rádio).
+ * Prefere loopback AMBE/Analog_Bridge; senão um segundo USB de áudio.
+ */
+export function pickAlsaMmdvmMonitor(listing: string): AlsaCapture | null {
+  const found: { card: number; device: number; id: string; name: string }[] = [];
+  const re = /^card (\d+):\s*(\S+)\s*\[([^\]]+)\],\s*device (\d+):/gm;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(listing))) {
+    found.push({
+      card: Number(match[1]),
+      id: match[2] ?? "",
+      name: match[3] ?? "",
+      device: Number(match[4]),
+    });
+  }
+  const radio = pickAlsaCapture(listing);
+  const usable = found.filter((d) => !ONBOARD.test(d.id) && !ONBOARD.test(d.name));
+  const loop = usable.find((d) => MMDVM_PCM.test(`${d.id} ${d.name}`));
+  if (loop) return { card: loop.card, device: loop.device };
+  for (const d of usable) {
+    if (RADIO_USB.test(`${d.id} ${d.name}`) || /usb/i.test(`${d.id} ${d.name}`)) {
+      if (radio && d.card === radio.card && d.device === radio.device) continue;
+      return { card: d.card, device: d.device };
+    }
+  }
+  return null;
+}

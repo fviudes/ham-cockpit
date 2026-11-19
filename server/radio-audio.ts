@@ -9,10 +9,23 @@
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
-import { pickAlsaCapture } from "../shared/pc-audio";
+import { pickAlsaCapture, pickAlsaMmdvmMonitor } from "../shared/pc-audio";
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+function mmdvmPcmScript(): string {
+  const candidates = [
+    join(ROOT, "deploy", "mmdvm", "hc-mmdvm-pc-audio.sh"),
+    join(ROOT, "bin", "mmdvm-pc-audio.sh"),
+    "/opt/ham-cockpit/bin/mmdvm-pc-audio.sh",
+    "/opt/ham-cockpit/deploy/mmdvm/hc-mmdvm-pc-audio.sh",
+  ];
+  return candidates.find((p) => existsSync(p)) ?? "";
+}
 import { consoleSessionOk } from "./console-session";
 import { tryWsSendBinary, tryWsSendText } from "./ws-backpressure";
 
@@ -20,7 +33,8 @@ const attached = new WeakSet<Server>();
 let capture: ChildProcess | null = null;
 let captureOwner: WebSocket | null = null;
 let captureReserved: WebSocket | "digital" | null = null;
-let captureKind: "socket" | "digital" | null = null;
+let captureKind: "socket" | "digital" | "mmdvm" | null = null;
+let captureSource: "radio" | "mmdvm" | null = null;
 let playbackHold = false;
 let digitalWanted = false;
 let announced = false;
@@ -28,7 +42,7 @@ let captureFault: "none" | null = null;
 const taps = new Set<WebSocket>();
 let pcmSink: ((chunk: Buffer) => void) | null = null;
 
-const FORMAT = { type: "format", sampleRate: 48000, channels: 1, via: "usb" };
+let formatAnnounced = { type: "format", sampleRate: 48000, channels: 1, via: "usb" as string };
 
 /** O decodificador de FT8 lê o mesmo PCM, sem abrir outro arecord. */
 export function setRadioPcmSink(fn: ((chunk: Buffer) => void) | null) {
@@ -54,6 +68,7 @@ function sendJson(ws: WebSocket, body: unknown) {
 function killChild() {
   captureOwner = null;
   captureKind = null;
+  captureSource = null;
   announced = false;
   const child = capture;
   capture = null;
@@ -116,31 +131,28 @@ function fanPcm(chunk: Buffer) {
 }
 
 function fanFormat() {
-  if (captureOwner) sendJson(captureOwner, FORMAT);
-  for (const ws of taps) sendJson(ws, FORMAT);
+  if (captureOwner) sendJson(captureOwner, formatAnnounced);
+  for (const ws of taps) sendJson(ws, formatAnnounced);
 }
 
 function attachTap(ws: WebSocket) {
   taps.add(ws);
-  if (announced) sendJson(ws, FORMAT);
+  if (announced) sendJson(ws, formatAnnounced);
   ws.on("close", () => {
     taps.delete(ws);
   });
 }
 
-async function spawnCapture(kind: "socket" | "digital", owner: WebSocket | null): Promise<"on" | "none"> {
-  const listing = await listCapture();
-  if (playbackHold) return "none";
-  if (capture) return "none";
-  const hit = pickAlsaCapture(listing);
-  if (!hit) return "none";
-  const child = spawn(
-    arecordBin(),
-    ["-D", `plughw:${hit.card},${hit.device}`, "-f", "S16_LE", "-r", "48000", "-c", "1", "-t", "raw"],
-    { stdio: ["ignore", "pipe", "pipe"] },
-  );
+function wireCaptureChild(
+  child: ChildProcess,
+  kind: "socket" | "digital" | "mmdvm",
+  source: "radio" | "mmdvm" | null,
+  owner: WebSocket | null,
+  failReason: string,
+) {
   capture = child;
   captureKind = kind;
+  captureSource = source;
   captureOwner = owner;
   announced = false;
   captureFault = null;
@@ -150,31 +162,72 @@ async function spawnCapture(kind: "socket" | "digital", owner: WebSocket | null)
     if (capture === child) killChild();
     if (owner && owner.readyState === WebSocket.OPEN) owner.close();
   };
-  child.on("error", () => fail("no-device"));
-  child.stderr.on("data", (chunk: Buffer) => {
+  child.on("error", () => fail(failReason));
+  child.stderr?.on("data", (chunk: Buffer) => {
     const text = chunk.toString("utf8");
-    if (/audio open error|não encontrado|No such file|Permission denied/i.test(text)) fail("no-device");
+    if (/audio open error|não encontrado|No such file|Permission denied/i.test(text)) fail(failReason);
   });
-  child.stdout.on("data", (chunk: Buffer) => {
+  child.stdout?.on("data", (chunk: Buffer) => {
     if (!announced) {
       announced = true;
       fanFormat();
     }
     fanPcm(chunk);
   });
-  child.on("close", () => {
+  child.on("close", (code) => {
     if (capture !== child) return;
+    if (code && code !== 0 && owner && owner.readyState === WebSocket.OPEN && !announced) {
+      sendJson(owner, { type: "error", reason: failReason });
+    }
     capture = null;
     captureOwner = null;
     captureKind = null;
+    captureSource = null;
     announced = false;
     if (owner && owner.readyState === WebSocket.OPEN) owner.close();
-    if (digitalWanted && !playbackHold && captureFault !== "none") {
+    if (digitalWanted && !playbackHold && captureFault !== "none" && kind !== "mmdvm") {
       setTimeout(() => {
         if (digitalWanted && !playbackHold && !capture && captureFault !== "none") void beginDigitalCapture();
       }, 500);
     }
   });
+}
+
+async function spawnRadioCapture(kind: "socket" | "digital", owner: WebSocket | null): Promise<"on" | "none"> {
+  const listing = await listCapture();
+  if (playbackHold) return "none";
+  if (capture) return "none";
+  const hit = pickAlsaCapture(listing);
+  if (!hit) return "none";
+  formatAnnounced = { type: "format", sampleRate: 48000, channels: 1, via: "usb" };
+  const child = spawn(
+    arecordBin(),
+    ["-D", `plughw:${hit.card},${hit.device}`, "-f", "S16_LE", "-r", "48000", "-c", "1", "-t", "raw"],
+    { stdio: ["ignore", "pipe", "pipe"] },
+  );
+  wireCaptureChild(child, kind, "radio", owner, "no-device");
+  return "on";
+}
+
+async function spawnMmdvmCapture(owner: WebSocket | null): Promise<"on" | "none"> {
+  if (playbackHold) return "none";
+  if (capture) return "none";
+  formatAnnounced = { type: "format", sampleRate: 48000, channels: 1, via: "mmdvm" };
+  const script = mmdvmPcmScript();
+  if (script) {
+    const child = spawn("bash", [script], { stdio: ["ignore", "pipe", "pipe"] });
+    wireCaptureChild(child, "mmdvm", "mmdvm", owner, "no-decoder");
+    return "on";
+  }
+  const listing = await listCapture();
+  const hit = pickAlsaMmdvmMonitor(listing);
+  if (!hit) return "none";
+  const child = spawn(
+    arecordBin(),
+    ["-D", `plughw:${hit.card},${hit.device}`, "-f", "S16_LE", "-r", "48000", "-c", "1", "-t", "raw"],
+    { stdio: ["ignore", "pipe", "pipe"] },
+  );
+  wireCaptureChild(child, "mmdvm", "mmdvm", owner, "no-decoder");
   return "on";
 }
 
@@ -194,7 +247,7 @@ export async function beginDigitalCapture(): Promise<"on" | "none" | "busy"> {
   if (captureReserved) return "busy";
   captureReserved = "digital";
   try {
-    const started = await spawnCapture("digital", null);
+    const started = await spawnRadioCapture("digital", null);
     if (started === "on") return "on";
     if (capture && captureKind === "socket") {
       captureKind = "digital";
@@ -220,55 +273,83 @@ export function endDigitalCapture() {
   killChild();
 }
 
-function radioAudioRole(req: IncomingMessage): "pc-audio" | "tap" {
+function radioAudioRole(req: IncomingMessage): { role: "pc-audio" | "tap"; source: "radio" | "mmdvm" } {
   try {
     const url = new URL(req.url || "/", "http://127.0.0.1");
-    if (url.searchParams.get("role") === "pc-audio") return "pc-audio";
+    const source = url.searchParams.get("source") === "mmdvm" ? "mmdvm" : "radio";
+    if (url.searchParams.get("role") === "pc-audio") return { role: "pc-audio", source };
+    return { role: "tap", source: "radio" };
   } catch {
-    /* padrão */
+    return { role: "tap", source: "radio" };
   }
-  return "tap";
 }
 
-async function bindRadioAudio(ws: WebSocket, role: "pc-audio" | "tap") {
+async function bindRadioAudio(ws: WebSocket, role: "pc-audio" | "tap", source: "radio" | "mmdvm") {
   releaseStaleCapture();
   if (playbackHold) {
     sendJson(ws, { type: "error", reason: "busy" });
     ws.close();
     return;
   }
-  if (digitalWanted || captureKind === "digital" || capture) {
-    if (role === "pc-audio" || digitalWanted) attachTap(ws);
+  if (role !== "pc-audio") {
+    if (digitalWanted || captureKind === "digital" || capture) attachTap(ws);
     else {
       sendJson(ws, { type: "error", reason: "off" });
       ws.close();
     }
     return;
   }
-  if (role !== "pc-audio") {
-    sendJson(ws, { type: "error", reason: "off" });
+  if (capture && captureOwner && captureOwner !== ws) {
+    sendJson(ws, { type: "error", reason: "busy" });
     ws.close();
     return;
+  }
+  if (source === "radio" && (digitalWanted || captureKind === "digital")) {
+    attachTap(ws);
+    return;
+  }
+  if (source === "mmdvm" && captureKind === "mmdvm" && capture) {
+    attachTap(ws);
+    return;
+  }
+  if (source === "radio" && captureKind === "socket" && capture) {
+    attachTap(ws);
+    return;
+  }
+  if (source === "mmdvm" && capture && captureKind !== "mmdvm") {
+    stopSocketCapture();
+    killChild();
+  }
+  if (source === "radio" && capture && captureKind === "mmdvm") {
+    killChild();
   }
   captureReserved = ws;
   let gone = ws.readyState !== WebSocket.OPEN;
   ws.on("close", () => {
     gone = true;
     if (captureReserved === ws) captureReserved = null;
-    if (captureOwner === ws) stopSocketCapture();
+    if (captureOwner === ws) {
+      if (captureKind === "mmdvm") killChild();
+      else stopSocketCapture();
+    }
   });
   if (gone || ws.readyState !== WebSocket.OPEN) {
     if (captureReserved === ws) captureReserved = null;
     return;
   }
-  const started = await spawnCapture("socket", ws);
+  const started =
+    source === "mmdvm" ? await spawnMmdvmCapture(ws) : await spawnRadioCapture("socket", ws);
   if (captureReserved === ws) captureReserved = null;
   if (gone || ws.readyState !== WebSocket.OPEN) {
-    if (captureOwner === ws) stopSocketCapture();
+    if (captureOwner === ws) {
+      if (captureKind === "mmdvm") killChild();
+      else stopSocketCapture();
+    }
     return;
   }
   if (started === "none") {
-    sendJson(ws, { type: "error", reason: capture ? "busy" : "no-device" });
+    const reason = capture ? "busy" : source === "mmdvm" ? "no-decoder" : "no-device";
+    sendJson(ws, { type: "error", reason });
     ws.close();
   }
 }
@@ -285,9 +366,9 @@ export function attachRadioAudio(server: Server) {
       socket.destroy();
       return;
     }
-    const role = radioAudioRole(req);
+    const { role, source } = radioAudioRole(req);
     wss.handleUpgrade(req, socket, head, (ws) => {
-      void bindRadioAudio(ws, role);
+      void bindRadioAudio(ws, role, source);
     });
   });
 }

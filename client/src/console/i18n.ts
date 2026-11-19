@@ -7,7 +7,7 @@ const dict = {
   pt: {
     brand: "Ham Cockpit",
     tagline: "Gateway da estação",
-    version: "v0.1.16",
+    version: "v0.1.16.01",
     vfoHdmiExit: "Tecle CTRL+X para sair para o console",
     loginTitle: "Acessar o console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -118,6 +118,11 @@ const dict = {
     pcAudioNone: "Nenhum áudio USB do rádio neste computador nem na estação",
     pcAudioAuth: "Entre no console para ouvir o rádio",
     pcAudioBusy: "O áudio da estação já está aberto em outro console",
+    panelMonitor: "MONITOR",
+    pcMonitorOff: "Ouvir o áudio deste card no alto-falante deste computador",
+    pcMonitorOn: "Monitor de áudio ativo neste computador",
+    pcMonitorMmdvmNoDecoder:
+      "Sem PCM decodificado do MMDVM — configure loopback ALSA, FIFO /run/ham-cockpit/mmdvm-monitor.pcm ou dongle AMBE",
     freqDown: "Descer 1 kHz",
     selectVfoA: "Selecionar VFO A",
     selectVfoB: "Selecionar VFO B",
@@ -1002,7 +1007,7 @@ const dict = {
   en: {
     brand: "Ham Cockpit",
     tagline: "Station gateway",
-    version: "v0.1.16",
+    version: "v0.1.16.01",
     vfoHdmiExit: "Press CTRL+X to return to the console",
     loginTitle: "Sign in to the console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -1113,6 +1118,11 @@ const dict = {
     pcAudioNone: "No radio USB audio on this computer or the station",
     pcAudioAuth: "Sign in to the console to hear the radio",
     pcAudioBusy: "Station audio is already open on another console",
+    panelMonitor: "MONITOR",
+    pcMonitorOff: "Play this card audio on this computer's speakers",
+    pcMonitorOn: "Audio monitor active on this computer",
+    pcMonitorMmdvmNoDecoder:
+      "No decoded MMDVM PCM — set up ALSA loopback, FIFO /run/ham-cockpit/mmdvm-monitor.pcm, or an AMBE dongle",
     freqDown: "Down 1 kHz",
     selectVfoA: "Select VFO A",
     selectVfoB: "Select VFO B",

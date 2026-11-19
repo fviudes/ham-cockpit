@@ -51,7 +51,15 @@ export function PanelChromeProvider({ value, children }: { value: PanelChrome; c
   return <PanelChromeContext.Provider value={value}>{children}</PanelChromeContext.Provider>;
 }
 
-export function PanelTitle({ children }: { children: ReactNode }) {
+export function PanelTitle({
+  children,
+  monitor,
+  id,
+}: {
+  children: ReactNode;
+  monitor?: ReactNode;
+  id?: string;
+}) {
   const chrome = useContext(PanelChromeContext);
   if (!chrome) {
     return (
@@ -61,7 +69,10 @@ export function PanelTitle({ children }: { children: ReactNode }) {
     );
   }
   return (
-    <h2 className="mb-4 flex items-center gap-1 font-['Space_Grotesk'] text-sm font-semibold tracking-wide text-[#ffb300]">
+    <h2
+      id={id}
+      className="mb-4 flex items-center gap-1 font-['Space_Grotesk'] text-sm font-semibold tracking-wide text-[#ffb300]"
+    >
       <button
         type="button"
         className="grid size-4 shrink-0 cursor-grab place-items-center text-[#5d7184] hover:text-[#4fc3f7] active:cursor-grabbing"
@@ -73,7 +84,8 @@ export function PanelTitle({ children }: { children: ReactNode }) {
       >
         <GripVertical size={12} />
       </button>
-      <span className="min-w-0 flex-1">{children}</span>
+      <span className="min-w-0 flex-1 truncate">{children}</span>
+      {monitor ? <span className="ml-auto flex shrink-0 items-center gap-1">{monitor}</span> : null}
       {chrome.onRemove ? (
         <button
           type="button"

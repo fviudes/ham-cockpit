@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { PanelMonitorButton } from "./panel-monitor-button";
+import { usePcMonitorPanel } from "./use-pc-monitor-panel";
 import { useConsole } from "./state";
 import { Lcd, PanelTitle } from "./widgets";
 
@@ -91,6 +93,7 @@ function modeLabel(page: NextionSnap["page"], qso: Qso[]) {
 
 export function NextionViz() {
   const { tx } = useConsole();
+  const mmdvmMon = usePcMonitorPanel("mmdvm");
   const [clock, setClock] = useState(clockNow);
   const [hostOn, setHostOn] = useState(false);
   const [nxOn, setNxOn] = useState(false);
@@ -135,7 +138,13 @@ export function NextionViz() {
 
   return (
     <div>
-      <PanelTitle>{tx("panelNextion")}</PanelTitle>
+      <PanelTitle
+        monitor={
+          <PanelMonitorButton on={mmdvmMon.on} busy={mmdvmMon.busy} onClick={() => void mmdvmMon.toggle()} title={mmdvmMon.hint} />
+        }
+      >
+        {tx("panelNextion")}
+      </PanelTitle>
       <Lcd>
         <div className={dim ? "opacity-70" : ""}>
           <div className="mb-2 flex items-center justify-between border-b border-[#0c2236] pb-2">

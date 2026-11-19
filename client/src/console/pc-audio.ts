@@ -1,14 +1,15 @@
 import { pcVolumeGain, pickAudioOutput } from "@shared/pc-audio";
+import type { PcMonitorSource } from "./pc-monitor-bus";
 
 export type PcAudioStart =
   | { ok: true; via: "station" }
-  | { ok: false; reason: "auth" | "busy" | "no-device" | "cancelled" | "stopped" };
+  | { ok: false; reason: "auth" | "busy" | "no-device" | "no-decoder" | "cancelled" | "stopped" };
 
 type SinkAudioContext = AudioContext & { setSinkId?: (sinkId: string) => Promise<void> };
 type OutputPicker = MediaDevices & { selectAudioOutput?: () => Promise<{ deviceId: string }> };
 
 type FormatMsg = { type: "format"; sampleRate?: number; channels?: number; via?: string };
-type ErrorMsg = { type: "error"; reason?: string };
+type ErrorMsg = { type: "error"; reason?: "auth" | "busy" | "no-device" | "no-decoder" | string };
 
 /** Toca o áudio de recepção na saída padrão deste computador. */
 export class PcAudioPlayer {
@@ -20,7 +21,10 @@ export class PcAudioPlayer {
   private sampleRate = 48000;
   private muted = false;
 
-  constructor(private volume = 6) {}
+  constructor(
+    private volume = 6,
+    private source: PcMonitorSource = "radio",
+  ) {}
 
   setVolume(value: number) {
     this.volume = value;
@@ -131,10 +135,10 @@ export class PcAudioPlayer {
     this.nextAt += buffer.duration;
   }
 
-  private openStation(gen: number): Promise<"ok" | "auth" | "busy" | "no-device"> {
+  private openStation(gen: number): Promise<"ok" | "auth" | "busy" | "no-device" | "no-decoder"> {
     return new Promise((resolve) => {
       let settled = false;
-      const finish = (result: "ok" | "auth" | "busy" | "no-device") => {
+      const finish = (result: "ok" | "auth" | "busy" | "no-device" | "no-decoder") => {
         if (settled) return;
         settled = true;
         window.clearTimeout(timer);
@@ -147,7 +151,11 @@ export class PcAudioPlayer {
       let socket: WebSocket;
       try {
         const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-        socket = new WebSocket(`${proto}//${window.location.host}/ws/radio-audio?role=pc-audio`);
+        const q =
+          this.source === "mmdvm"
+            ? "/ws/radio-audio?role=pc-audio&source=mmdvm"
+            : "/ws/radio-audio?role=pc-audio&source=radio";
+        socket = new WebSocket(`${proto}//${window.location.host}${q}`);
       } catch {
         finish("no-device");
         return;
@@ -164,7 +172,10 @@ export class PcAudioPlayer {
             return;
           }
           if (msg.type === "error") {
-            const reason = msg.reason === "auth" || msg.reason === "busy" ? msg.reason : "no-device";
+            const reason =
+              msg.reason === "auth" || msg.reason === "busy" || msg.reason === "no-decoder"
+                ? msg.reason
+                : "no-device";
             finish(reason);
             socket.close();
             return;

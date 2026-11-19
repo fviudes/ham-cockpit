@@ -59,6 +59,7 @@ const BIN_EXTRA = [
   [join(ROOT, "deploy", "lextel", "lextel-bt"), "lextel-bt"],
   [join(ROOT, "deploy", "ser2net", "ser2net-clear-locks"), "ser2net-clear-locks"],
   [join(ROOT, "deploy", "mmdvm", "mmdvm-ctl"), "mmdvm-ctl"],
+  [join(ROOT, "deploy", "mmdvm", "hc-mmdvm-pc-audio.sh"), "mmdvm-pc-audio.sh"],
   [join(ROOT, "deploy", "mmdvm", "build-binaries.sh"), "mmdvm-build-binaries.sh"],
   [join(ROOT, "deploy", "hamlib", "ampctld-spe"), "ampctld-spe"],
   [join(ROOT, "deploy", "hamlib", "rigctld-ic705"), "rigctld-ic705"],

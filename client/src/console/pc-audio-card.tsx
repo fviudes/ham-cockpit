@@ -1,8 +1,9 @@
 import { Volume2, VolumeX } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { I18nKey } from "@/console/i18n";
 import { useConsole } from "@/console/state";
 import { PcAudioPlayer, type PcAudioStart } from "@/console/pc-audio";
+import { getPcMonitor, setPcMonitor, subscribePcMonitor } from "@/console/pc-monitor-bus";
 import { readPcVolume, stepPcVolume } from "@shared/pc-audio";
 
 const VOL_KEY = "hc-pc-audio-vol";
@@ -29,7 +30,8 @@ function hintFor(result: PcAudioStart): I18nKey {
 /** Card do menu superior: liga o áudio do rádio numa saída deste computador. */
 export function PcAudioCard() {
   const { tx } = useConsole();
-  const [on, setOn] = useState(false);
+  const monitor = useSyncExternalStore(subscribePcMonitor, getPcMonitor, getPcMonitor);
+  const on = monitor === "radio";
   const [busy, setBusy] = useState(false);
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(readVolume);
@@ -75,12 +77,21 @@ export function PcAudioCard() {
 
   useEffect(() => () => playerRef.current?.stop(), []);
 
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return;
+    if (monitor !== "radio") {
+      player.stop();
+      if (monitor === null) setHint("pcAudioOff");
+    }
+  }, [monitor]);
+
   async function toggle() {
     const player = playerRef.current;
     if (!player || busy) return;
     if (on) {
       player.stop();
-      setOn(false);
+      setPcMonitor(null);
       setHint("pcAudioOff");
       return;
     }
@@ -89,14 +100,14 @@ export function PcAudioCard() {
     try {
       const result = await player.start();
       if (!result.ok) {
-        setOn(false);
+        setPcMonitor(null);
         setHint(hintFor(result));
         return;
       }
-      setOn(true);
+      setPcMonitor("radio");
       setHint(hintFor(result));
     } catch {
-      setOn(false);
+      setPcMonitor(null);
       setHint("pcAudioNone");
     } finally {
       setBusy(false);

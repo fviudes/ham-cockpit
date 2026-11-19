@@ -3,6 +3,8 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { resolvePrimaryRoute, sendPrimaryCmd } from "./radio-cmd";
 import { useEasedNumber, useSmoothedSmeter } from "./smeter-motion";
 import { BANDS, formatVfo, MODES, radioCardTitle, sMeterLabel, useConsole } from "./state";
+import { PanelMonitorButton } from "./panel-monitor-button";
+import { usePcMonitorPanel } from "./use-pc-monitor-panel";
 import { Chip, ConsoleSelect, Lcd, PanelTitle } from "./widgets";
 
 const AGC = ["OFF", "FAST", "MID", "SLOW"] as const;
@@ -10,6 +12,7 @@ const PRE = ["OFF", "ON1", "ON2"] as const;
 
 export function VfoPanel() {
   const { s, setS, setFreq, tx, pushLog } = useConsole();
+  const radioMon = usePcMonitorPanel("radio");
   const bleReady = s.ic705.phase === "ready" && s.ic705.ble;
   const route = resolvePrimaryRoute(s.radios.items, { bleReady });
   const liveCat = route.live;
@@ -113,7 +116,13 @@ export function VfoPanel() {
   return (
     <div className="relative overflow-hidden">
       {/* Mesmas classes do título "MMDVM Painel" (PanelTitle). */}
-      <PanelTitle>{radioTitle}</PanelTitle>
+      <PanelTitle
+        monitor={
+          <PanelMonitorButton on={radioMon.on} busy={radioMon.busy} onClick={() => void radioMon.toggle()} title={radioMon.hint} />
+        }
+      >
+        {radioTitle}
+      </PanelTitle>
       <Lcd className="min-w-0">
         <div className="mb-3 flex items-center justify-between border-b border-[#0c2236] pb-3">
           <span
