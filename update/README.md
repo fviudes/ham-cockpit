@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.17** (`version.json`).
+Versão atual neste canal: **0.1.17.01** (`version.json`).
 
 ## Versionamento
 
@@ -22,12 +22,12 @@ Cada pacote OTA é **cumulativo**: substitui o console inteiro. Basta aplicar a 
 
 ```json
 {
-  "version": "0.1.17",
+  "version": "0.1.17.01",
   "channel": "main",
-  "file": "ham-cockpit-0.1.17.tgz",
-  "sha256": "f2929ee28d09e7ee9b8d66b35f35812a029cfc041f5516b1a7b1733aa752ea5f",
-  "bytes": 5212152,
-  "notes": "Ham Cockpit v0.1.17 — imagem completa: MMDVMHost com tap de voz (HC_VOICE_TAP), decoder hc-mmdvm-decode (mbelib-neo), unit ham-cockpit-mmdvm-voice e monitor MMDVM no console; MMDVM/Nextion/IRCDDB compilados no bake; OTA alinhado à imagem."
+  "file": "ham-cockpit-0.1.17.01.tgz",
+  "sha256": "1b9621892a2bbd5ccf4cae525d0ad01547e12a1d8aa9448138f2e0d91ce32b95",
+  "bytes": 5212537,
+  "notes": "OTA 0.1.17.01: corrige loop infinito em apply-hc-voice-tap ao recompilar MMDVMHost (monitor de voz)."
 }
 ```
 

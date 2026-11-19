@@ -45,14 +45,26 @@ def add_include(path: pathlib.Path, header: str = "HamCockpitVoiceTap.h"):
     path.write_text("".join(lines), encoding="utf-8")
 
 def insert_all_after(text: str, anchor: str, insert: str) -> str:
-    if insert.strip() in text:
+    if not anchor:
         return text
+    insert_mark = insert.strip()
+    pos = 0
+    loops = 0
     while True:
-        idx = text.find(anchor)
+        idx = text.find(anchor, pos)
         if idx < 0:
             break
+        loops += 1
+        if loops > 512:
+            raise SystemExit(f"apply-hc-voice-tap: âncora repetida demais ({anchor[:48]!r})")
         end = idx + len(anchor)
+        # Idempotente: não re-inserir no mesmo ponto (evita loop infinito no 1º match).
+        following = text[end : end + len(insert) + 64]
+        if insert_mark in following:
+            pos = end + 1
+            continue
         text = text[:end] + insert + text[end:]
+        pos = end + len(insert)
     return text
 
 # DMRSlot — após FEC em frames de voz RF e rede
