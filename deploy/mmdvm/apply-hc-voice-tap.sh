@@ -47,6 +47,8 @@ def add_include(path: pathlib.Path, header: str = "HamCockpitVoiceTap.h"):
 def insert_all_after(text: str, anchor: str, insert: str) -> str:
     if not anchor:
         return text
+    if insert and not insert.startswith("\n"):
+        insert = "\n" + insert
     insert_mark = insert.strip()
     pos = 0
     loops = 0

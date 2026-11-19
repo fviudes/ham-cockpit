@@ -24,7 +24,9 @@ function loadEnv() {
       if (i < 0) continue;
       const k = t.slice(0, i).trim();
       const v = t.slice(i + 1).trim();
-      if (process.env[k] === undefined) process.env[k] = v;
+      const cur = process.env[k];
+      if (cur !== undefined && String(cur).trim() !== "") continue;
+      process.env[k] = v;
     }
   }
 }
@@ -266,6 +268,10 @@ async function handlePayload(buf) {
     if (looksAdif(text)) adif = text.includes("<eor>") ? text : `${text}<eor>`;
   }
   if (!adif) return;
+  if (!CFG.key) {
+    log("UDP QSO recebido mas WAVELOG_API_KEY vazia — configure /opt/wavelog-gate/wavelog-gate.env");
+    return;
+  }
   if (seen(adif)) {
     log("QSO duplicado ignorado");
     return;
@@ -334,7 +340,10 @@ udp.on("message", (msg) => {
   void handlePayload(msg);
 });
 udp.on("error", (err) => log(`udp: ${err.message}`));
-udp.bind(CFG.udpPort, "0.0.0.0", () => log(`UDP :${CFG.udpPort} → ${CFG.url}`));
+udp.bind(CFG.udpPort, "0.0.0.0", () => {
+  log(`UDP :${CFG.udpPort} → ${CFG.url}`);
+  if (!CFG.key) log("AVISO: WAVELOG_API_KEY vazia — QSO UDP não vão para o logbook até configurar");
+});
 
 const http = createServer((req, res) => {
   const url = req.url?.split("?")[0] || "/";

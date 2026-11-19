@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.18.01** (`version.json`).
+Versão atual neste canal: **0.1.18.02** (`version.json`).
 
 ## Versionamento
 
@@ -22,12 +22,12 @@ Cada pacote OTA é **cumulativo**: substitui o console inteiro. Basta aplicar a 
 
 ```json
 {
-  "version": "0.1.18.01",
+  "version": "0.1.18.02",
   "channel": "main",
-  "file": "ham-cockpit-0.1.18.01.tgz",
-  "sha256": "196c0857d58da23f56d44afeaa659aa9cbc9ba99503c4c6bbffe3d6297e27d2c",
-  "bytes": 5212893,
-  "notes": "OTA 0.1.18.01: sobe stack MMDVM após rebuild OTA; detecta Host sem HC_VOICE_TAP; fallback mmdvm-ctl start."
+  "file": "ham-cockpit-0.1.18.02.tgz",
+  "sha256": "910f99eb133f3653cc5319127a454eaf5a8fd7ea4363244900f0aaf4552e7665",
+  "bytes": 5214241,
+  "notes": "OTA 0.1.18.02: corrige patch D-Star no voice-tap (quebrava make), restart MMDVM pós-OTA, WaveLogGate env no console."
 }
 ```
 

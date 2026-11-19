@@ -76,6 +76,38 @@ async function callWlg(path: "/api/wlg/status" | "/api/wlg/up" | "/api/wlg/down"
   return (await res.json()) as WlgApi;
 }
 
+type WlgEnvApi = {
+  ok: boolean;
+  wavelogUrl: string;
+  stationId: string;
+  radioName: string;
+  hamlibHost: string;
+  hamlibPort: number;
+  udpPort: number;
+  qsyPort: number;
+  publishCat: boolean;
+  hasApiKey: boolean;
+  error?: string;
+};
+
+async function loadWlgEnv(): Promise<WlgEnvApi | null> {
+  try {
+    const res = await fetch("/api/wlg/env");
+    return await readJson<WlgEnvApi>(res);
+  } catch {
+    return null;
+  }
+}
+
+async function persistWlgEnv(body: Record<string, unknown>): Promise<WlgEnvApi> {
+  const res = await fetch("/api/wlg/env", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return await readJson<WlgEnvApi>(res);
+}
+
 function fmtBytes(n: number) {
   if (!Number.isFinite(n) || n <= 0) return "—";
   const units = ["B", "KiB", "MiB", "GiB"];
@@ -120,6 +152,26 @@ export function WavelogPage() {
     void callWlg("/api/wlg/status")
       .then((st) => setS((p) => ({ ...p, wlg: { ...p.wlg, running: st.ok } })))
       .catch(() => undefined);
+    void loadWlgEnv().then((env) => {
+      if (!env?.ok) return;
+      setS((p) => ({
+        ...p,
+        wavelog: {
+          ...p.wavelog,
+          url: env.wavelogUrl,
+          stationId: env.stationId,
+        },
+        wlg: {
+          ...p.wlg,
+          radioName: env.radioName,
+          hamlibHost: env.hamlibHost,
+          hamlibPort: env.hamlibPort,
+          udpPort: env.udpPort,
+          qsyPort: env.qsyPort,
+          publishCat: env.publishCat,
+        },
+      }));
+    });
     void callWavelogDb("/api/wavelog/database")
       .then(setDb)
       .catch(() => undefined);
@@ -433,9 +485,27 @@ export function WavelogPage() {
             {tx("testApi")}
           </GhostBtn>
           <PrimaryBtn
-            onClick={() => {
-              pushLog("WLOG", `Config ${w.folder} :${w.port}`);
-              toast.success(tx("wavelogSaved"));
+            onClick={async () => {
+              try {
+                const env = await persistWlgEnv({
+                  wavelogUrl: w.url,
+                  apiKey: w.apiKey,
+                  stationId: w.stationId,
+                  radioName: g.radioName,
+                  hamlibHost: g.hamlibHost,
+                  hamlibPort: g.hamlibPort,
+                  udpPort: g.udpPort,
+                  qsyPort: g.qsyPort,
+                  publishCat: g.publishCat,
+                });
+                void callWlg("/api/wlg/status").then((st) =>
+                  setS((p) => ({ ...p, wlg: { ...p.wlg, running: st.ok } })),
+                );
+                pushLog("WLOG", `Gate env · API ${env.hasApiKey ? "OK" : "falta chave"} · UDP :${env.udpPort}`);
+                toast.success(env.hasApiKey ? tx("wavelogSaved") : tx("wlgNeedApiKey"));
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : String(err));
+              }
             }}
           >
             {tx("save")}
@@ -539,9 +609,27 @@ export function WavelogPage() {
             {tx("stopService")}
           </GhostBtn>
           <PrimaryBtn
-            onClick={() => {
-              pushLog("WLOG", `Gate UDP :${g.udpPort} (QSO) · QSY ${g.qsyPort}`);
-              toast.success(tx("wlgSaved"));
+            onClick={async () => {
+              try {
+                const env = await persistWlgEnv({
+                  wavelogUrl: w.url,
+                  apiKey: w.apiKey,
+                  stationId: w.stationId,
+                  radioName: g.radioName,
+                  hamlibHost: g.hamlibHost,
+                  hamlibPort: g.hamlibPort,
+                  udpPort: g.udpPort,
+                  qsyPort: g.qsyPort,
+                  publishCat: g.publishCat,
+                });
+                void callWlg("/api/wlg/status").then((st) =>
+                  setS((p) => ({ ...p, wlg: { ...p.wlg, running: st.ok } })),
+                );
+                pushLog("WLOG", `Gate UDP :${env.udpPort} · QSY ${env.qsyPort} · API ${env.hasApiKey ? "OK" : "falta"}`);
+                toast.success(env.hasApiKey ? tx("wlgSaved") : tx("wlgNeedApiKey"));
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : String(err));
+              }
             }}
           >
             {tx("save")}
