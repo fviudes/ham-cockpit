@@ -22,4 +22,15 @@ describe("parseLastHeard (WPSD)", () => {
     expect(rows[0]?.callsign).toBe("PY3ZZZ");
     expect(rows[0]?.src).toBe("RF");
   });
+
+  it("mantém as 20 recepções mais novas no topo", () => {
+    const lines = Array.from({ length: 21 }, (_, i) => {
+      const n = String(i + 1).padStart(2, "0");
+      return `M: 2026-03-28 15:${n}:00.000 DMR Slot 2, received RF voice header from PY${n}AAA to TG 1`;
+    });
+    const rows = parseLastHeard(lines.join("\n"));
+    expect(rows).toHaveLength(20);
+    expect(rows[0]!.callsign).toBe("PY21AAA");
+    expect(rows[19]!.callsign).toBe("PY02AAA");
+  });
 });

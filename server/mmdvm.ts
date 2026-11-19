@@ -913,13 +913,15 @@ function effectiveModemBoard(stored: MmdvmBoardId, fw: string, duplexIni: boolea
   return stored;
 }
 
-/** g4klx: 8 caracteres, call do REF + módulo (ex. REF018 C). */
-export function formatDstarReflector(raw: string, module: string): string {
-  const compact = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+/** g4klx: 8 caracteres, call do REF + módulo do reflector (ex. REF018 C). Não é o módulo local do HAT. */
+export function formatDstarReflector(raw: string, _localModule?: string): string {
+  const up = raw.toUpperCase().trim();
+  const compact = up.replace(/[^A-Z0-9]/g, "");
   if (!compact) return "";
   const base = compact.slice(0, 6).padEnd(6, " ");
-  const mod = (module || "C").toUpperCase().replace(/[^A-Z]/g, "").slice(0, 1) || "C";
-  return `${base} ${mod}`;
+  const spaced = up.match(/^[A-Z0-9]{3,6}\s+([A-Z])$/);
+  const refMod = spaced?.[1] || (compact.length >= 7 ? compact[6] : "C");
+  return `${base} ${refMod}`;
 }
 
 export function parseDstarReflector(raw: string): string {
@@ -1010,8 +1012,8 @@ function modeGatewayTarget(mode: MmdvmMode): GwUnit | "host" {
   return "host";
 }
 
-/** WPSD/Pi-Star last-heard (g4klx/WPSD-WebCode mmdvmhost/functions.php getHeardList). */
-export function parseLastHeard(logText: string, limit = 40): MmdvmHeard[] {
+/** Últimas recepções do log MMDVM (mais nova no topo). */
+export function parseLastHeard(logText: string, limit = 20): MmdvmHeard[] {
   const lines = logText.split(/\r?\n/).filter(Boolean);
   const heard: MmdvmHeard[] = [];
   const tail: Record<string, { duration: string; loss: string; ber: string; rssi: string }> = {};
@@ -1114,14 +1116,7 @@ export function parseLastHeard(logText: string, limit = 40): MmdvmHeard[] {
     tail[mode] = { duration: "", loss: "", ber: "", rssi: "" };
   }
 
-  const seen = new Map<string, MmdvmHeard>();
-  for (const row of heard) {
-    const uuid = `${row.callsign}#${row.mode}#${row.src}`;
-    const prev = seen.get(uuid);
-    if (!prev || (!prev.duration && row.duration)) seen.set(uuid, row);
-  }
-  const rows = Array.from(seen.values());
-  return rows.slice(-limit).reverse();
+  return heard.slice(-limit).reverse();
 }
 
 function currentTx(rows: MmdvmHeard[]): boolean {

@@ -1,8 +1,8 @@
 {
-  "version": "0.1.15.06",
+  "version": "0.1.16",
   "channel": "main",
-  "file": "ham-cockpit-0.1.15.06.tgz",
-  "sha256": "bfd4bdd257898473ed2c5998ac5919d540e64642d9ae7d78daa24cdc98744e49",
-  "bytes": 5199230,
-  "notes": "Dual Hat DV/DMR/YSF, DMRGateway sem PartOf no Host, ircDDB REF DPlus e baliza RF simplex."
+  "file": "ham-cockpit-0.1.16.tgz",
+  "sha256": "4468a271cbcb793e8d8f106f442a5d992be71256e170170892e31f064fbe3def",
+  "bytes": 5198674,
+  "notes": "Ham Cockpit v0.1.16 — Hotspot Monitor com as 20 recepções mais novas no topo, D-Star módulo B local separado da REF."
 }

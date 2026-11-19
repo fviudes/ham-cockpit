@@ -69,10 +69,11 @@ describe("applyConfig duplex", () => {
       duplex: false,
       callsign: "PR2PT",
       dmrId: "7242679",
-      dstarReflector: "REF018",
-      dstarModule: "C",
+      dstarReflector: "REF018 C",
+      dstarModule: "B",
     });
-    expect(formatDstarReflector("REF018", "C")).toBe("REF018 C");
+    expect(formatDstarReflector("REF018", "B")).toBe("REF018 C");
+    expect(formatDstarReflector("REF018 C", "B")).toBe("REF018 C");
     expect(parseDstarReflector("REF018 C")).toBe("REF018");
     expect(dstar.reflector1).toBe("REF018 C");
     expect(dstar.hbPort).toBe("20010");
@@ -80,7 +81,7 @@ describe("applyConfig duplex", () => {
     expect(dstar.localPort).toBe("40001");
     expect(dstar.remotePort).toBe("7462");
     expect(dstar.ircDDBEnabled).toBe("0");
-    expect(dstar.repeaterBand1).toBe("C");
+    expect(dstar.repeaterBand1).toBe("B");
     expect(dstar.repeaterPort1).toBe("20011");
     expect(dstar.dextraEnabled).toBe("0");
   });

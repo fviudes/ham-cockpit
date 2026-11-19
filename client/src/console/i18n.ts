@@ -7,7 +7,7 @@ const dict = {
   pt: {
     brand: "Ham Cockpit",
     tagline: "Gateway da estação",
-    version: "v0.1.15.05",
+    version: "v0.1.16",
     vfoHdmiExit: "Tecle CTRL+X para sair para o console",
     loginTitle: "Acessar o console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -776,7 +776,7 @@ const dict = {
     mmdvmNetDown: "desconectado",
     mmdvmMonitorTitle: "Hotspot Monitor",
     mmdvmMonitorHelp:
-      "Painel ao vivo no estilo do dashboard WPSD: status dos serviços e últimos ouvidos do log MMDVM. Atualiza a cada ~3,5 s.",
+      "Painel ao vivo: status dos serviços e as últimas 20 recepções do log MMDVM (mais nova no topo). Atualiza a cada ~3,5 s.",
     mmdvmMonitorMax: "Maximizar",
     mmdvmMonitorRestore: "Restaurar",
     mmdvmColTime: "Hora UTC",
@@ -1002,7 +1002,7 @@ const dict = {
   en: {
     brand: "Ham Cockpit",
     tagline: "Station gateway",
-    version: "v0.1.15.05",
+    version: "v0.1.16",
     vfoHdmiExit: "Press CTRL+X to return to the console",
     loginTitle: "Sign in to the console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -1771,7 +1771,7 @@ const dict = {
     mmdvmNetDown: "disconnected",
     mmdvmMonitorTitle: "Hotspot Monitor",
     mmdvmMonitorHelp:
-      "Live panel in the WPSD dashboard style: service status and MMDVM log last heard. Polls about every 3.5 s.",
+      "Live panel: service status and the last 20 MMDVM log receptions (newest on top). Polls about every 3.5 s.",
     mmdvmMonitorMax: "Maximize",
     mmdvmMonitorRestore: "Restore",
     mmdvmColTime: "UTC time",

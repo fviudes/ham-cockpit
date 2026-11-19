@@ -64,7 +64,7 @@ export function MmdvmHotspotMonitorPage() {
     return () => document.removeEventListener("fullscreenchange", onFs);
   }, []);
 
-  const heard = st?.lastHeard ?? [];
+  const heard = (st?.lastHeard ?? []).slice(0, 20);
 
   const shellClass = fullscreen
     ? "fixed inset-0 z-[80] overflow-auto bg-[#071018] p-4 sm:p-6"
@@ -122,39 +122,40 @@ function HeardTable({
   hostRunning?: boolean;
   liveTx?: boolean;
 }) {
+  const slots: (Heard | null)[] = Array.from({ length: 20 }, (_, i) => heard[i] ?? null);
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-left text-sm">
+    <div className="overflow-hidden">
+      <table className="w-full table-fixed text-left text-[13px]">
         <thead className="text-[11px] tracking-wide text-[#ffb300] uppercase">
           <tr>
-            <th className="py-2">{tx("mmdvmColTime")}</th>
-            <th>{tx("mmdvmColCall")}</th>
-            <th>{tx("mode")}</th>
-            <th>{tx("mmdvmColTarget")}</th>
-            <th>{tx("mmdvmColSrc")}</th>
-            <th>{tx("mmdvmColDur")}</th>
-            <th>{tx("mmdvmColLoss")}</th>
+            <th className="w-[14%] py-1.5">{tx("mmdvmColTime")}</th>
+            <th className="w-[16%]">{tx("mmdvmColCall")}</th>
+            <th className="w-[16%]">{tx("mode")}</th>
+            <th className="w-[22%]">{tx("mmdvmColTarget")}</th>
+            <th className="w-[10%]">{tx("mmdvmColSrc")}</th>
+            <th className="w-[11%]">{tx("mmdvmColDur")}</th>
+            <th className="w-[11%]">{tx("mmdvmColLoss")}</th>
           </tr>
         </thead>
         <tbody className="font-['IBM_Plex_Mono'] text-[#c5d4e0]">
-          {heard.length === 0 ? (
-            <tr>
-              <td className="py-3 text-[#8ea0b3]" colSpan={7}>
-                {tx("mmdvmEmptyHeard")}
-              </td>
-            </tr>
-          ) : (
-            heard.map((row, i) => (
+          {slots.map((row, i) =>
+            row ? (
               <tr key={`${row.timeUtc}-${row.callsign}-${i}`} className="border-t border-[rgba(79,195,247,0.08)]">
-                <td className="py-2 text-[#8ea0b3]">{row.timeUtc.slice(11)}</td>
-                <td className="text-[#4fc3f7]">{row.callsign}</td>
-                <td>{row.mode}</td>
-                <td>{row.target}</td>
+                <td className="truncate py-1 text-[#8ea0b3]">{row.timeUtc.slice(11)}</td>
+                <td className="truncate text-[#4fc3f7]">{row.callsign}</td>
+                <td className="truncate">{row.mode}</td>
+                <td className="truncate">{row.target}</td>
                 <td className={row.src === "RF" ? "text-[#ffb300]" : "text-[#34d399]"}>{row.src}</td>
-                <td>{row.duration || (liveTx && hostRunning ? "TX" : "—")}</td>
-                <td>{row.loss || "—"}</td>
+                <td>{row.duration || (liveTx && i === 0 && hostRunning ? "TX" : "—")}</td>
+                <td className="truncate">{row.loss || "—"}</td>
               </tr>
-            ))
+            ) : (
+              <tr key={`empty-${i}`} className="border-t border-[rgba(79,195,247,0.08)]">
+                <td className="py-1 text-[#3d4d5c]" colSpan={7}>
+                  {i === 0 ? tx("mmdvmEmptyHeard") : "\u00a0"}
+                </td>
+              </tr>
+            ),
           )}
         </tbody>
       </table>
