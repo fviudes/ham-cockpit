@@ -107,11 +107,63 @@ nextion_needs_patch() {
 }
 
 # Host g4klx/WPSD sem tap Ham Cockpit (OTA antigo ou mmdvm-arm64.tgz velho).
-mmdvm_need_voice_tap() {
+# Sem o binário, devolve falso: o caso é "falta bin", não "falta a marca".
+mmdvm_host_lacks_voice_tap() {
   [[ -x /usr/local/bin/MMDVMHost ]] || return 1
   strings -a /usr/local/bin/MMDVMHost 2>/dev/null | grep -q 'HC_VOICE_TAP' && return 1
+  return 0
+}
+
+mmdvm_need_voice_tap() {
+  mmdvm_host_lacks_voice_tap || return 1
   echo "ota-hooks: MMDVMHost sem HC_VOICE_TAP — precisa recompilar" >&2
   return 0
+}
+
+# O .tgz pré-compilado só "resolve" o tap se o MMDVMHost de dentro tiver a marca.
+tgz_host_has_voice_tap() {
+  local tgz="$1" tmp
+  [[ -f "$tgz" ]] || return 1
+  tmp="$(mktemp -d)"
+  if ! tar -xzf "$tgz" -C "$tmp" bin/MMDVMHost 2>/dev/null \
+    || [[ ! -f "$tmp/bin/MMDVMHost" ]]; then
+    rm -rf "$tmp"
+    return 1
+  fi
+  if strings -a "$tmp/bin/MMDVMHost" 2>/dev/null | grep -q 'HC_VOICE_TAP'; then
+    rm -rf "$tmp"
+    return 0
+  fi
+  rm -rf "$tmp"
+  return 1
+}
+
+# Mesmo caminho do "falta binário": o oneshot recompila e o restart da stack
+# fica no fim (ExecStartPost / start all), só se o script sair 0.
+schedule_mmdvm_rebuild() {
+  local why="${1:-compilação MMDVM}"
+  if [[ ! -x /opt/ham-cockpit/bin/mmdvm-build-binaries.sh ]]; then
+    echo "ota-hooks: $why — não há mmdvm-build-binaries.sh" >&2
+    return 0
+  fi
+  echo "ota-hooks: agendando $why em segundo plano…" >&2
+  systemctl daemon-reload 2>/dev/null || true
+  systemctl reset-failed ham-cockpit-mmdvm-build.service 2>/dev/null || true
+  local state
+  state="$(systemctl is-active ham-cockpit-mmdvm-build.service 2>/dev/null || true)"
+  if [[ "$state" == "activating" ]]; then
+    echo "ota-hooks: compilação MMDVM já em andamento" >&2
+    return 0
+  fi
+  if [[ "$state" == "active" ]]; then
+    systemctl restart --no-block ham-cockpit-mmdvm-build.service 2>/dev/null \
+      || nohup /opt/ham-cockpit/bin/mmdvm-build-binaries.sh \
+        >/var/log/mmdvm-build.log 2>&1 &
+    return 0
+  fi
+  systemctl start --no-block ham-cockpit-mmdvm-build.service 2>/dev/null \
+    || nohup /opt/ham-cockpit/bin/mmdvm-build-binaries.sh \
+      >/var/log/mmdvm-build.log 2>&1 &
 }
 
 # Stub de verdade: diretivas ativas. Comentários da unit real NÃO contam
@@ -123,8 +175,10 @@ nextion_unit_is_stub() {
     'lab: disabled|ConditionPathExists=/nonexistent|^ExecStart=/bin/true([[:space:]]|$)'
 }
 
+# Segundo argumento "1": não sobrescreve o MMDVMHost (tarball sem HC_VOICE_TAP).
 install_mmdvm_tgz() {
   local tgz="$1"
+  local skip_host="${2:-0}"
   [[ -f "$tgz" ]] || return 1
   local tmp b f
   tmp="$(mktemp -d)"
@@ -133,6 +187,10 @@ install_mmdvm_tgz() {
     return 1
   fi
   for b in "${MMDVM_BINS[@]}"; do
+    if [[ "$skip_host" == "1" && "$b" == "MMDVMHost" ]]; then
+      echo "ota-hooks: preservando /usr/local/bin/MMDVMHost (tarball sem HC_VOICE_TAP)" >&2
+      continue
+    fi
     if [[ -f "$tmp/bin/$b" ]]; then
       install -m 0755 "$tmp/bin/$b" "/usr/local/bin/$b"
     fi
@@ -233,14 +291,15 @@ enable_mmdvm_units() {
 }
 
 ensure_mmdvm_bins() {
-  local tgz="" from_pkg=0
+  local tgz="" from_pkg=0 skip_host=0
   # Imagem: os bins são compilados no chroot. Baixar o tarball aqui faz o
   # build-binaries achar o binário e pular a compilação.
   if [[ "${HAMCOCKPIT_CHROOT:-0}" == "1" ]]; then
     echo "ota-hooks: chroot de bake — MMDVM será compilado na imagem, sem baixar tarball" >&2
     return 0
   fi
-  # Pacote OTA embutiu o tarball — só reinstala se faltar bin ou Nextion sem HC_FD2_GUARD.
+  # Pacote OTA embutiu o tarball — reinstala se faltar bin ou Nextion sem HC_FD2_GUARD.
+  # Host sem HC_VOICE_TAP NÃO fica pronto só porque o tarball instalou.
   # Extrair/instalar o tgz a cada OTA (antes: always) saturava o Pi e a UI em ~93%.
   if [[ -f "$ROOT/mmdvm-arm64.tgz" ]]; then
     tgz="$ROOT/mmdvm-arm64.tgz"
@@ -249,29 +308,55 @@ ensure_mmdvm_bins() {
     tgz="$(pick_mmdvm_tgz || true)"
   fi
 
-  if ! mmdvm_missing && ! nextion_needs_patch && ! mmdvm_need_voice_tap; then
+  if ! mmdvm_missing && ! nextion_needs_patch && ! mmdvm_host_lacks_voice_tap; then
     # Não extrai o tgz só para hosts — isso sozinho mantinha a UI em ~93% no Pi.
     echo "ota-hooks: binários MMDVM OK — pulando tarball/apt hosts" >&2
     enable_mmdvm_units
     return 0
   fi
 
+  # Bins e Nextion ok, só falta o tap. Tarball sem a marca não é atalho:
+  # não instala por cima do Host e não retorna sucesso.
+  if ! mmdvm_missing && ! nextion_needs_patch && mmdvm_need_voice_tap; then
+    if [[ -n "$tgz" ]] && tgz_host_has_voice_tap "$tgz"; then
+      echo "ota-hooks: instalando MMDVM de $tgz (tarball tem HC_VOICE_TAP)…" >&2
+      if install_mmdvm_tgz "$tgz" && ! mmdvm_host_lacks_voice_tap; then
+        enable_mmdvm_units
+        return 0
+      fi
+    else
+      echo "ota-hooks: tarball sem HC_VOICE_TAP — não instala; recompilando com o patch" >&2
+    fi
+    enable_mmdvm_units
+    schedule_mmdvm_rebuild "recompilação MMDVM (HC_VOICE_TAP)"
+    return 0
+  fi
+
   if [[ -n "$tgz" ]]; then
     refresh_mmdvm_data_from_tgz "$tgz" || true
+    if ! tgz_host_has_voice_tap "$tgz" && [[ -x /usr/local/bin/MMDVMHost ]]; then
+      skip_host=1
+      echo "ota-hooks: $tgz sem HC_VOICE_TAP — não substitui o MMDVMHost em uso" >&2
+    fi
   fi
 
   if [[ "$from_pkg" -eq 1 ]]; then
     echo "ota-hooks: instalando MMDVM do pacote OTA ($tgz)…" >&2
-    if install_mmdvm_tgz "$tgz"; then
+    if install_mmdvm_tgz "$tgz" "$skip_host"; then
       echo "ota-hooks: MMDVM instalado/atualizado de $tgz" >&2
       enable_mmdvm_units
+      if ! mmdvm_missing && ! nextion_needs_patch && ! mmdvm_host_lacks_voice_tap; then
+        return 0
+      fi
+      echo "ota-hooks: pacote não deixou HC_VOICE_TAP no MMDVMHost — compilação local" >&2
+      schedule_mmdvm_rebuild "recompilação MMDVM (HC_VOICE_TAP)"
       return 0
     fi
     echo "ota-hooks: AVISO — falha ao instalar mmdvm-arm64.tgz do pacote; tentando fallback" >&2
   fi
 
   # Sem tarball no pacote (ou falha): só repara se faltar bin, Nextion sem marca ou Host sem tap.
-  if ! mmdvm_missing && ! nextion_needs_patch && ! mmdvm_need_voice_tap; then
+  if ! mmdvm_missing && ! nextion_needs_patch && ! mmdvm_host_lacks_voice_tap; then
     return 0
   fi
   if nextion_needs_patch && ! mmdvm_missing; then
@@ -285,44 +370,53 @@ ensure_mmdvm_bins() {
       fi
       rm -rf "$tmp"
     fi
-    if ! nextion_needs_patch; then
+    if ! nextion_needs_patch && ! mmdvm_host_lacks_voice_tap; then
+      return 0
+    fi
+    if ! nextion_needs_patch && mmdvm_host_lacks_voice_tap; then
+      echo "ota-hooks: Nextion ok; MMDVMHost sem HC_VOICE_TAP — compilação local" >&2
+      enable_mmdvm_units
+      schedule_mmdvm_rebuild "recompilação MMDVM (HC_VOICE_TAP)"
       return 0
     fi
   else
     echo "ota-hooks: binários MMDVM ausentes — tentando instalar…" >&2
   fi
-  if [[ -n "$tgz" ]] && install_mmdvm_tgz "$tgz"; then
+  if [[ -n "$tgz" ]] && install_mmdvm_tgz "$tgz" "$skip_host"; then
     echo "ota-hooks: MMDVM instalado de $tgz" >&2
   else
-    local dl
+    local dl skip_dl=0
     dl="$(mktemp)"
     if curl -fsSL -A "Ham-Cockpit/ota" \
       "https://raw.githubusercontent.com/fviudes/ham-cockpit/main/update/mmdvm-arm64.tgz" \
-      -o "$dl" \
-      && install_mmdvm_tgz "$dl"; then
-      echo "ota-hooks: MMDVM baixado do canal update/" >&2
-      cp -a "$dl" /opt/ham-cockpit/mmdvm-arm64.tgz 2>/dev/null || true
+      -o "$dl"; then
+      if ! tgz_host_has_voice_tap "$dl" && [[ -x /usr/local/bin/MMDVMHost ]]; then
+        skip_dl=1
+        echo "ota-hooks: tarball do canal sem HC_VOICE_TAP — não substitui o MMDVMHost" >&2
+      fi
+      if install_mmdvm_tgz "$dl" "$skip_dl"; then
+        echo "ota-hooks: MMDVM baixado do canal update/" >&2
+        cp -a "$dl" /opt/ham-cockpit/mmdvm-arm64.tgz 2>/dev/null || true
+      fi
     else
       echo "ota-hooks: AVISO — sem mmdvm-arm64.tgz; rode bake ou workflow MMDVM ARM64" >&2
     fi
     rm -f "$dl"
   fi
-  if ! mmdvm_missing; then
+  if ! mmdvm_missing && ! nextion_needs_patch && ! mmdvm_host_lacks_voice_tap; then
     enable_mmdvm_units
     return 0
   fi
-
-  # Fallback: compila na própria Pi (oneshot, até ~1 h). Precisa de rede + apt.
-  if [[ -x /opt/ham-cockpit/bin/mmdvm-build-binaries.sh ]]; then
-    echo "ota-hooks: agendando compilação MMDVM em segundo plano…" >&2
-    systemctl daemon-reload 2>/dev/null || true
-    systemctl reset-failed ham-cockpit-mmdvm-build.service 2>/dev/null || true
-    systemctl start --no-block ham-cockpit-mmdvm-build.service 2>/dev/null \
-      || nohup /opt/ham-cockpit/bin/mmdvm-build-binaries.sh \
-        >/var/log/mmdvm-build.log 2>&1 &
-  else
-    echo "ota-hooks: ainda faltam binários e não há mmdvm-build-binaries.sh" >&2
+  # Bins no disco sem a marca não são "pronto". Compila com apply-hc-voice-tap.
+  # O restart da stack continua só depois do sucesso, no oneshot.
+  if ! mmdvm_missing || mmdvm_host_lacks_voice_tap; then
+    enable_mmdvm_units
+    schedule_mmdvm_rebuild "recompilação MMDVM (HC_VOICE_TAP)"
+    return 0
   fi
+
+  # Ainda falta binário: mesmo oneshot (compila e sobe a stack no fim).
+  schedule_mmdvm_rebuild "compilação MMDVM"
 }
 
 if [[ -d "$ROOT/systemd" ]]; then

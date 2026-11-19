@@ -197,7 +197,8 @@ else
   exit 1
 fi
 if ! strings -a "$PREFIX/bin/MMDVMHost" 2>/dev/null | grep -q 'HC_VOICE_TAP'; then
-  echo "AVISO: MMDVMHost sem HC_VOICE_TAP — falta apply-hc-voice-tap ou build -DHAM_COCKPIT_VOICE_TAP" >&2
+  echo "ERRO: MMDVMHost sem HC_VOICE_TAP — falta apply-hc-voice-tap ou build -DHAM_COCKPIT_VOICE_TAP" >&2
+  exit 1
 fi
 
 echo "compilando DMRGateway (g4klx v1.0)…"

@@ -410,6 +410,13 @@ nextion_needs_patch() {
   grep -a -q 'HC_FD2_GUARD' /usr/local/bin/NextionDriver && return 1
   return 0
 }
+# Host existente sem a marca não é "já instalado" — o tarball velho não traz o tap.
+mmdvm_host_needs_voice_tap() {
+  [[ -x /usr/local/bin/MMDVMHost ]] || return 1
+  strings -a /usr/local/bin/MMDVMHost 2>/dev/null | grep -q 'HC_VOICE_TAP' && return 1
+  echo "install: MMDVMHost sem HC_VOICE_TAP — recompilando" >&2
+  return 0
+}
 # Tarball patched (bake/OTA). Não basta o bin existir — stock Ubuntu 24 aborta sem a marca.
 # No chroot o arquivo já pode estar em /opt/ham-cockpit — cp origem=destino aborta com set -e.
 for tgz in "$ROOT/update/mmdvm-arm64.tgz" "$ROOT/image/out/mmdvm-arm64.tgz" /opt/ham-cockpit/mmdvm-arm64.tgz; do
@@ -433,7 +440,7 @@ fi
 # Binários g4klx + NextionDriver. MMDVM_BUILD_BINARIES=0 para pular.
 # No bake (CHROOT=1 ou MMDVM_BUILD_BINARIES=1) a falha aborta a imagem.
 if [[ "${MMDVM_BUILD_BINARIES:-auto}" != "0" ]]; then
-  if [[ "${MMDVM_BUILD_BINARIES:-}" == "1" || ! -x /usr/local/bin/MMDVMHost ]] || nextion_needs_patch; then
+  if [[ "${MMDVM_BUILD_BINARIES:-}" == "1" || ! -x /usr/local/bin/MMDVMHost ]] || nextion_needs_patch || mmdvm_host_needs_voice_tap; then
     chmod +x "$ROOT/deploy/mmdvm/build-binaries.sh"
     if [[ "${MMDVM_BUILD_BINARIES:-}" == "1" || "$CHROOT" == "1" ]]; then
       export MMDVM_PURGE_BUILD="${MMDVM_PURGE_BUILD:-1}"
@@ -446,6 +453,10 @@ if [[ "${MMDVM_BUILD_BINARIES:-auto}" != "0" ]]; then
       done
       if ! grep -a -q 'HC_FD2_GUARD' /usr/local/bin/NextionDriver; then
         echo "ERRO: bake sem marca HC_FD2_GUARD no NextionDriver" >&2
+        exit 1
+      fi
+      if ! strings -a /usr/local/bin/MMDVMHost 2>/dev/null | grep -q 'HC_VOICE_TAP'; then
+        echo "ERRO: bake sem marca HC_VOICE_TAP no MMDVMHost" >&2
         exit 1
       fi
     else

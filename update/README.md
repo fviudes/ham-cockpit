@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.19** (`version.json`).
+Versão atual neste canal: **0.1.19.01** (`version.json`).
 
 ## Versionamento
 
@@ -22,12 +22,12 @@ Cada pacote OTA é **cumulativo**: substitui o console inteiro. Basta aplicar a 
 
 ```json
 {
-  "version": "0.1.19",
+  "version": "0.1.19.01",
   "channel": "main",
-  "file": "ham-cockpit-0.1.19.tgz",
-  "sha256": "8603ca0b9cfe385cf34f57f4f463fcfd3e64659dd21ace4d74a773dbcbd9e694",
-  "bytes": 5216058,
-  "notes": "OTA 0.1.19: persiste a chave API do WaveLogGate no Salvar, QSO UDP ate o logbook, ircddbgatewayd na subpasta no rebuild MMDVM."
+  "file": "ham-cockpit-0.1.19.01.tgz",
+  "sha256": "c534866c553c531bd2f8e49d718f37a6d47440239a917ba5837ca1aacba38f8a",
+  "bytes": 5216772,
+  "notes": "OTA 0.1.19.01: recompila o MMDVMHost quando o binário não tem o tap de voz."
 }
 ```
 
