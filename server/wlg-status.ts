@@ -4,6 +4,7 @@ import { request as httpRequest } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { readWlgEnv } from "./wlg-env";
 
 const execFileAsync = promisify(execFile);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -60,7 +61,10 @@ async function systemctl(action: "start" | "stop" | "enable" | "is-active"): Pro
   }
 }
 
-export async function wlgStatus(udpPort = 2333, qsyPort = 54321): Promise<WlgStatus> {
+export async function wlgStatus(udpPort?: number, qsyPort?: number): Promise<WlgStatus> {
+  const env = readWlgEnv();
+  udpPort = udpPort ?? env.udpPort;
+  qsyPort = qsyPort ?? env.qsyPort;
   const ok = await probe(qsyPort);
   if (ok) return { ok: true, udpPort, qsyPort, reason: "ok" };
   const unit = process.platform === "linux" ? await systemctl("is-active") : Boolean(child && !child.killed);
@@ -72,7 +76,7 @@ export async function wlgStatus(udpPort = 2333, qsyPort = 54321): Promise<WlgSta
   };
 }
 
-export async function wlgUp(udpPort = 2333, qsyPort = 54321): Promise<WlgStatus> {
+export async function wlgUp(udpPort?: number, qsyPort?: number): Promise<WlgStatus> {
   const already = await wlgStatus(udpPort, qsyPort);
   if (already.ok) return already;
   if (process.platform === "linux") {
@@ -93,7 +97,7 @@ export async function wlgUp(udpPort = 2333, qsyPort = 54321): Promise<WlgStatus>
   return wlgStatus(udpPort, qsyPort);
 }
 
-export async function wlgDown(udpPort = 2333, qsyPort = 54321): Promise<WlgStatus> {
+export async function wlgDown(udpPort?: number, qsyPort?: number): Promise<WlgStatus> {
   if (process.platform === "linux") {
     await systemctl("stop");
   } else if (child) {

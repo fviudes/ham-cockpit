@@ -25,6 +25,7 @@ import {
 import { supportVpnSet, supportVpnStatus } from "./server/support-vpn";
 import { wavelogDatabase, wavelogDbUpdate, wavelogDown, wavelogStatus, wavelogUp } from "./server/wavelog-status";
 import { wlgDown, wlgStatus, wlgUp } from "./server/wlg-status";
+import { parseWlgEnvPatch, readWlgEnv, writeWlgEnv } from "./server/wlg-env";
 import { netConnect, netForget, netSave, netScan, netSetAp, netSetHostname, netSetIp, netSetLink, netStatus } from "./server/net";
 import { processesAction, processesList } from "./server/processes";
 import { containersAction, containersList } from "./server/containers";
@@ -1094,6 +1095,23 @@ function vitePluginWavelog(): Plugin {
       handle("/api/wlg/status", "GET", () => wlgStatus());
       handle("/api/wlg/up", "POST", () => wlgUp());
       handle("/api/wlg/down", "POST", () => wlgDown());
+      server.middlewares.use("/api/wlg/env", (req, res, next) => {
+        if (req.method === "GET") {
+          try {
+            return sendJson(res, 200, { ok: true, ...readWlgEnv() });
+          } catch (err: unknown) {
+            return sendJson(res, 500, { ok: false, error: String(err) });
+          }
+        }
+        if (req.method !== "POST") return next();
+        void readBody(req)
+          .then((raw) => {
+            const body = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+            return writeWlgEnv(parseWlgEnvPatch(body));
+          })
+          .then((saved) => sendJson(res, 200, { ok: true, ...saved }))
+          .catch((err: unknown) => sendJson(res, 500, { ok: false, error: String(err) }));
+      });
     },
   };
 }

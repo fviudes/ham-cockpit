@@ -15,6 +15,8 @@ const MAGIC = 0xadbccbda;
 const QUEUE = join(HERE, "queue.jsonl");
 
 function loadEnv() {
+  // systemd EnvironmentFile injeta WAVELOG_API_KEY= (vazio) e isso tapa o valor do arquivo.
+  // Valor vazio ou só espaços NÃO conta — o arquivo preenche.
   for (const f of [process.env.WAVELOG_GATE_ENV, join(HERE, "wavelog-gate.env"), "/opt/wavelog-gate/wavelog-gate.env"]) {
     if (!f || !existsSync(f)) continue;
     for (const line of readFileSync(f, "utf8").split(/\r?\n/)) {
@@ -23,7 +25,13 @@ function loadEnv() {
       const i = t.indexOf("=");
       if (i < 0) continue;
       const k = t.slice(0, i).trim();
-      const v = t.slice(i + 1).trim();
+      let v = t.slice(i + 1).trim();
+      if (
+        (v.startsWith('"') && v.endsWith('"')) ||
+        (v.startsWith("'") && v.endsWith("'"))
+      ) {
+        v = v.slice(1, -1);
+      }
       const cur = process.env[k];
       if (cur !== undefined && String(cur).trim() !== "") continue;
       process.env[k] = v;
@@ -216,8 +224,9 @@ async function postJson(path, body) {
   const url = apiUrl(path);
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(body),
+    redirect: "follow",
   });
   const text = await res.text();
   if (!res.ok) throw new Error(`${res.status} ${text.slice(0, 180)}`);
@@ -268,12 +277,13 @@ async function handlePayload(buf) {
     if (looksAdif(text)) adif = text.includes("<eor>") ? text : `${text}<eor>`;
   }
   if (!adif) return;
-  if (!CFG.key) {
-    log("UDP QSO recebido mas WAVELOG_API_KEY vazia — configure /opt/wavelog-gate/wavelog-gate.env");
-    return;
-  }
   if (seen(adif)) {
     log("QSO duplicado ignorado");
+    return;
+  }
+  if (!CFG.key) {
+    log("UDP QSO recebido mas WAVELOG_API_KEY vazia — na fila até configurar /opt/wavelog-gate/wavelog-gate.env");
+    enqueue(adif);
     return;
   }
   try {
@@ -335,15 +345,21 @@ function qsy(freqHz, mode) {
 
 mkdirSync(HERE, { recursive: true });
 
-const udp = createSocket("udp4");
-udp.on("message", (msg) => {
-  void handlePayload(msg);
-});
-udp.on("error", (err) => log(`udp: ${err.message}`));
-udp.bind(CFG.udpPort, "0.0.0.0", () => {
-  log(`UDP :${CFG.udpPort} → ${CFG.url}`);
-  if (!CFG.key) log("AVISO: WAVELOG_API_KEY vazia — QSO UDP não vão para o logbook até configurar");
-});
+const udpSocks = [];
+function listenUdp(port) {
+  const sock = createSocket("udp4");
+  sock.on("message", (msg) => {
+    void handlePayload(msg);
+  });
+  sock.on("error", (err) => log(`udp :${port}: ${err.message}`));
+  sock.bind(port, "0.0.0.0", () => {
+    log(`UDP :${port} → ${CFG.url}`);
+  });
+  udpSocks.push(sock);
+}
+listenUdp(CFG.udpPort);
+if (CFG.udpPort !== 2333) listenUdp(2333);
+if (!CFG.key) log("AVISO: WAVELOG_API_KEY vazia — QSO UDP ficam na fila até configurar");
 
 const http = createServer((req, res) => {
   const url = req.url?.split("?")[0] || "/";
@@ -376,7 +392,7 @@ if (CFG.publishCat) setInterval(() => void publishCat(), 4000);
 
 for (const sig of ["SIGINT", "SIGTERM"]) {
   process.on(sig, () => {
-    udp.close();
+    for (const s of udpSocks) s.close();
     http.close();
     process.exit(0);
   });

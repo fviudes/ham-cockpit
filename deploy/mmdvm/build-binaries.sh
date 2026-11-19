@@ -212,18 +212,42 @@ if [[ -f YSFClients/YSFGateway/YSFHosts.txt ]]; then
 fi
 
 echo "compilando ircddbgatewayd (só o daemon)…"
-# Só o target do daemon — evita GUI; precisa wx + libmosquitto.
-make -C ircDDBGateway -j"$JOBS" BUILD=release \
-  BINDIR="$PREFIX/bin" CONFDIR=/etc LOGDIR=/var/log/mmdvm \
-  ircDDBGateway/ircddbgatewayd
-if [[ -x ircDDBGateway/ircDDBGateway/ircddbgatewayd ]]; then
-  install_bin ircDDBGateway/ircDDBGateway/ircddbgatewayd ircddbgatewayd
-elif [[ -x ircDDBGateway/ircddbgatewayd ]]; then
-  install_bin ircDDBGateway/ircddbgatewayd ircddbgatewayd
-else
+# Clone em $SRC/ircDDBGateway. O Makefile da RAIZ do repo tem o alvo
+# `ircDDBGateway/ircddbgatewayd` → `$(MAKE) -C ircDDBGateway`.
+# O binário sai em ircDDBGateway/ircDDBGateway/ircddbgatewayd.
+# NÃO usar `make -C ircDDBGateway ircDDBGateway/ircddbgatewayd` a partir de $SRC:
+# o make procura o arquivo-alvo na subpasta e falha (No such file or directory).
+(
+  cd ircDDBGateway
+  make -j"$JOBS" BUILD=release \
+    BINDIR="$PREFIX/bin" CONFDIR=/etc LOGDIR=/var/log/mmdvm \
+    ircDDBGateway/ircddbgatewayd
+)
+ircd_bin=""
+for cand in \
+  ircDDBGateway/ircDDBGateway/ircddbgatewayd \
+  ircDDBGateway/ircddbgatewayd \
+  "$PREFIX/bin/ircddbgatewayd"
+do
+  if [[ -f "$cand" && -x "$cand" ]]; then
+    ircd_bin="$cand"
+    break
+  fi
+done
+if [[ -z "$ircd_bin" ]]; then
+  while IFS= read -r cand; do
+    if [[ -f "$cand" && -x "$cand" ]]; then
+      ircd_bin="$cand"
+      break
+    fi
+  done < <(find ircDDBGateway -type f -name ircddbgatewayd 2>/dev/null || true)
+fi
+if [[ -z "$ircd_bin" ]]; then
   echo "ircddbgatewayd não foi gerado" >&2
+  find ircDDBGateway -name '*ircddb*' -o -name '*gatewayd*' 2>/dev/null | head -40 >&2 || true
   exit 1
 fi
+install_bin "$ircd_bin" ircddbgatewayd
 # Listas de refletores D-Star (REF*/XRF*/DCS*) — sem isso o gateway sobe mas não liga REF.
 mkdir -p /usr/share/ircddbgateway "$PREFIX/etc"
 for hf in DPlus_Hosts.txt DExtra_Hosts.txt DCS_Hosts.txt CCS_Hosts.txt; do

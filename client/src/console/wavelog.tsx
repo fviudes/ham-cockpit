@@ -87,6 +87,10 @@ type WlgEnvApi = {
   qsyPort: number;
   publishCat: boolean;
   hasApiKey: boolean;
+  apiKeyHint?: string;
+  folder?: string;
+  wavelogFolder?: string;
+  wavelogHttpPort?: number;
   error?: string;
 };
 
@@ -105,7 +109,11 @@ async function persistWlgEnv(body: Record<string, unknown>): Promise<WlgEnvApi> 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  return await readJson<WlgEnvApi>(res);
+  const env = await readJson<WlgEnvApi>(res);
+  if (!res.ok || env.ok === false) {
+    throw new Error(env.error || `falha ao salvar env (${res.status})`);
+  }
+  return env;
 }
 
 function fmtBytes(n: number) {
@@ -133,6 +141,54 @@ export function WavelogPage() {
   const [showPass, setShowPass] = useState(false);
   const [passBusy, setPassBusy] = useState(false);
   const [dbPower, setDbPower] = useState(false);
+  const [wlgHasKey, setWlgHasKey] = useState(false);
+  const [wlgKeyHint, setWlgKeyHint] = useState("");
+
+  const gateEnvPatch = (): Record<string, unknown> => {
+    const body: Record<string, unknown> = {
+      wavelogUrl: w.url,
+      stationId: w.stationId,
+      radioName: g.radioName,
+      hamlibHost: g.hamlibHost,
+      hamlibPort: g.hamlibPort,
+      udpPort: g.udpPort,
+      qsyPort: g.qsyPort,
+      publishCat: g.publishCat,
+      folder: g.folder,
+      wavelogFolder: w.folder,
+      wavelogHttpPort: w.port,
+    };
+    const key = w.apiKey.trim();
+    if (key) body.apiKey = key;
+    return body;
+  };
+
+  const applySavedEnv = (env: WlgEnvApi) => {
+    setWlgHasKey(Boolean(env.hasApiKey));
+    setWlgKeyHint(env.apiKeyHint || "");
+    setS((p) => ({
+      ...p,
+      wavelog: {
+        ...p.wavelog,
+        url: env.wavelogUrl || p.wavelog.url,
+        stationId: env.stationId || p.wavelog.stationId,
+        folder: env.wavelogFolder || p.wavelog.folder,
+        port: env.wavelogHttpPort || p.wavelog.port,
+        apiKey: "",
+      },
+      wlg: {
+        ...p.wlg,
+        folder: env.folder || p.wlg.folder,
+        radioName: env.radioName || p.wlg.radioName,
+        hamlibHost: env.hamlibHost || p.wlg.hamlibHost,
+        hamlibPort: env.hamlibPort || p.wlg.hamlibPort,
+        udpPort: env.udpPort || p.wlg.udpPort,
+        qsyPort: env.qsyPort || p.wlg.qsyPort,
+        publishCat: Boolean(env.publishCat),
+      },
+    }));
+    void callWlg("/api/wlg/status").then((st) => setS((p) => ({ ...p, wlg: { ...p.wlg, running: st.ok } })));
+  };
 
   const applyStatus = (st: WlStatus) => {
     setS((p) => ({ ...p, wavelog: { ...p.wavelog, running: st.ok } }));
@@ -154,15 +210,21 @@ export function WavelogPage() {
       .catch(() => undefined);
     void loadWlgEnv().then((env) => {
       if (!env?.ok) return;
+      setWlgHasKey(Boolean(env.hasApiKey));
+      setWlgKeyHint(env.apiKeyHint || "");
       setS((p) => ({
         ...p,
         wavelog: {
           ...p.wavelog,
           url: env.wavelogUrl,
           stationId: env.stationId,
+          folder: env.wavelogFolder || p.wavelog.folder,
+          port: env.wavelogHttpPort || p.wavelog.port,
+          apiKey: "",
         },
         wlg: {
           ...p.wlg,
+          folder: env.folder || p.wlg.folder,
           radioName: env.radioName,
           hamlibHost: env.hamlibHost,
           hamlibPort: env.hamlibPort,
@@ -400,9 +462,17 @@ export function WavelogPage() {
           <Field label={tx("apiKey")}>
             <ConsoleInput
               type="password"
+              autoComplete="off"
+              placeholder={wlgHasKey ? tx("apiKeyKeep") : tx("apiKeyPlaceholder")}
               value={w.apiKey}
               onChange={(e) => setS((p) => ({ ...p, wavelog: { ...p.wavelog, apiKey: e.target.value } }))}
             />
+            {wlgHasKey && !w.apiKey.trim() ? (
+              <p className="mt-1 font-['IBM_Plex_Mono'] text-[11px] tracking-wide text-[#4fc3f7]">
+                {tx("apiKeyStored")}
+                {wlgKeyHint ? ` · ${wlgKeyHint}` : ""}
+              </p>
+            ) : null}
           </Field>
           <Field label={tx("stationId")}>
             <ConsoleInput
@@ -487,20 +557,8 @@ export function WavelogPage() {
           <PrimaryBtn
             onClick={async () => {
               try {
-                const env = await persistWlgEnv({
-                  wavelogUrl: w.url,
-                  apiKey: w.apiKey,
-                  stationId: w.stationId,
-                  radioName: g.radioName,
-                  hamlibHost: g.hamlibHost,
-                  hamlibPort: g.hamlibPort,
-                  udpPort: g.udpPort,
-                  qsyPort: g.qsyPort,
-                  publishCat: g.publishCat,
-                });
-                void callWlg("/api/wlg/status").then((st) =>
-                  setS((p) => ({ ...p, wlg: { ...p.wlg, running: st.ok } })),
-                );
+                const env = await persistWlgEnv(gateEnvPatch());
+                applySavedEnv(env);
                 pushLog("WLOG", `Gate env · API ${env.hasApiKey ? "OK" : "falta chave"} · UDP :${env.udpPort}`);
                 toast.success(env.hasApiKey ? tx("wavelogSaved") : tx("wlgNeedApiKey"));
               } catch (err) {
@@ -611,20 +669,8 @@ export function WavelogPage() {
           <PrimaryBtn
             onClick={async () => {
               try {
-                const env = await persistWlgEnv({
-                  wavelogUrl: w.url,
-                  apiKey: w.apiKey,
-                  stationId: w.stationId,
-                  radioName: g.radioName,
-                  hamlibHost: g.hamlibHost,
-                  hamlibPort: g.hamlibPort,
-                  udpPort: g.udpPort,
-                  qsyPort: g.qsyPort,
-                  publishCat: g.publishCat,
-                });
-                void callWlg("/api/wlg/status").then((st) =>
-                  setS((p) => ({ ...p, wlg: { ...p.wlg, running: st.ok } })),
-                );
+                const env = await persistWlgEnv(gateEnvPatch());
+                applySavedEnv(env);
                 pushLog("WLOG", `Gate UDP :${env.udpPort} · QSY ${env.qsyPort} · API ${env.hasApiKey ? "OK" : "falta"}`);
                 toast.success(env.hasApiKey ? tx("wlgSaved") : tx("wlgNeedApiKey"));
               } catch (err) {

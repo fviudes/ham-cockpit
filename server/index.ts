@@ -26,7 +26,7 @@ import {
   wavelogStatus,
   wavelogUp,
 } from "./wavelog-status";
-import { readWlgEnv, writeWlgEnv } from "./wlg-env";
+import { parseWlgEnvPatch, readWlgEnv, writeWlgEnv } from "./wlg-env";
 import { wlgDown, wlgStatus, wlgUp } from "./wlg-status";
 import { netConnect, netForget, netSave, netScan, netSetAp, netSetHostname, netSetIp, netSetLink, netStatus } from "./net";
 import { processesAction, processesList } from "./processes";
@@ -879,7 +879,7 @@ async function startServer() {
   });
   app.post("/api/wlg/env", async (req, res) => {
     try {
-      const body = await writeWlgEnv(req.body ?? {});
+      const body = await writeWlgEnv(parseWlgEnvPatch(req.body ?? {}));
       res.json({ ok: true, ...body });
     } catch (err) {
       res.status(500).json({ ok: false, error: String(err) });

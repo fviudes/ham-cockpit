@@ -438,8 +438,14 @@ apply_app_install() {
   fi
   if [[ -d "$src/wavelog-gate" ]]; then
     mkdir -p "$APP_HOME/wavelog-gate" /opt/wavelog-gate
-    cp -a "$src/wavelog-gate/." "$APP_HOME/wavelog-gate/"
-    cp -a "$src/wavelog-gate/." /opt/wavelog-gate/
+    # Só o programa + VERSION. Nunca copiar *.env (chave API do operador).
+    for f in wavelog-gate.mjs VERSION; do
+      if [[ -f "$src/wavelog-gate/$f" ]]; then
+        cp -a "$src/wavelog-gate/$f" "$APP_HOME/wavelog-gate/$f"
+        install -o hamcockpit -g hamcockpit -m 0644 "$src/wavelog-gate/$f" "/opt/wavelog-gate/$f"
+      fi
+    done
+    [[ -f /opt/wavelog-gate/wavelog-gate.mjs ]] && chmod 0755 /opt/wavelog-gate/wavelog-gate.mjs
     chown -R hamcockpit:hamcockpit /opt/wavelog-gate 2>/dev/null || true
   fi
   if [[ -d "$src/wavelog" ]]; then

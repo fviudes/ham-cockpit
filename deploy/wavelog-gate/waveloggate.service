@@ -12,6 +12,7 @@ Type=simple
 User=hamcockpit
 Group=hamcockpit
 WorkingDirectory=/opt/wavelog-gate
+# Variáveis do .env; chave vazia é preenchida pelo loadEnv do Node (não apagar o arquivo).
 EnvironmentFile=-/opt/wavelog-gate/wavelog-gate.env
 ExecStart=/usr/bin/node /opt/wavelog-gate/wavelog-gate.mjs
 Restart=always

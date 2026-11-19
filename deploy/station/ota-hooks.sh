@@ -900,6 +900,10 @@ if [[ -f "$ROOT/bin/station-user" ]]; then
   sed -i 's/\r$//' "$ROOT/bin/station-user" 2>/dev/null || true
   safe_install -o root -g root -m 0755 "$ROOT/bin/station-user" /opt/ham-cockpit/bin/station-user
 fi
+if [[ -f "$ROOT/bin/station-svc" ]]; then
+  sed -i 's/\r$//' "$ROOT/bin/station-svc" 2>/dev/null || true
+  safe_install -o root -g root -m 0755 "$ROOT/bin/station-svc" /opt/ham-cockpit/bin/station-svc
+fi
 if [[ -x /opt/ham-cockpit/bin/ensure-support-user ]]; then
   /opt/ham-cockpit/bin/ensure-support-user || true
 fi
@@ -1094,7 +1098,12 @@ if [[ -f "$ROOT/wavelog-gate/wavelog-gate.mjs" ]]; then
   if [[ -f "$ROOT/wavelog-gate/VERSION" ]]; then
     safe_install -o hamcockpit -g hamcockpit -m 0644 "$ROOT/wavelog-gate/VERSION" /opt/wavelog-gate/VERSION
   fi
-  chown -R hamcockpit:hamcockpit /opt/wavelog-gate 2>/dev/null || true
+  # Nunca sobrescrever wavelog-gate.env (WAVELOG_API_KEY do operador).
+  if [[ ! -f /opt/wavelog-gate/wavelog-gate.env && -f "$ROOT/wavelog-gate/wavelog-gate.env" ]]; then
+    safe_install -o hamcockpit -g hamcockpit -m 0640 "$ROOT/wavelog-gate/wavelog-gate.env" /opt/wavelog-gate/wavelog-gate.env
+  fi
+  chown hamcockpit:hamcockpit /opt/wavelog-gate /opt/wavelog-gate/wavelog-gate.mjs /opt/wavelog-gate/VERSION 2>/dev/null || true
+  chown hamcockpit:hamcockpit /opt/wavelog-gate/wavelog-gate.env 2>/dev/null || true
 fi
 
 # Pastas de dados graváveis pelo serviço (OTA em aparelhos já instalados).

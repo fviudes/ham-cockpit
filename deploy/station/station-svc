@@ -4,6 +4,7 @@
 #   station-svc list-running             → JSON (systemctl list-units --type=service --state=running)
 #   station-svc list-containers          → JSON (docker allowlist)
 #   station-svc container-stop|restart|set-limits NAME [MEM_MIB CPUS]
+#   station-svc write-wlg-env                → stdin → /opt/wavelog-gate/wavelog-gate.env (não apaga chave)
 #   station-svc stop-unit|restart-unit UNIT  → systemctl stop|restart, nome validado (sem path)
 #   station-svc enable|disable|start|stop|is-enabled|is-active ID
 # IDs com unit própria: ser2net wavelog wlg mmdvm hamlib spe wifi bluetooth web docker
@@ -66,6 +67,40 @@ unit_start() {
 }
 
 cmd="${1:-}"
+
+if [[ "$cmd" == "write-wlg-env" ]]; then
+  dest=/opt/wavelog-gate/wavelog-gate.env
+  mkdir -p /opt/wavelog-gate
+  tmp="$(mktemp)"
+  cat >"$tmp"
+  grep -qE '^WAVELOG_URL=' "$tmp" || { rm -f "$tmp"; echo "env inválido" >&2; exit 2; }
+  # Não apagar chave existente se o POST/stdin veio com WAVELOG_API_KEY vazio.
+  python3 - "$tmp" "$dest" <<'PY' || true
+import pathlib, re, sys
+new_p, old_p = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+text = new_p.read_text(encoding="utf-8", errors="replace")
+m = re.search(r"(?m)^WAVELOG_API_KEY=(.*)$", text)
+incoming = (m.group(1).strip().strip('"').strip("'") if m else "")
+if incoming:
+    raise SystemExit(0)
+if not old_p.is_file():
+    raise SystemExit(0)
+old = old_p.read_text(encoding="utf-8", errors="replace")
+om = re.search(r"(?m)^WAVELOG_API_KEY=(.*)$", old)
+keep = (om.group(1).strip() if om else "")
+if not keep:
+    raise SystemExit(0)
+if m:
+    text = re.sub(r"(?m)^WAVELOG_API_KEY=.*$", "WAVELOG_API_KEY=" + keep, text, count=1)
+else:
+    text = text.rstrip() + "\nWAVELOG_API_KEY=" + keep + "\n"
+new_p.write_text(text, encoding="utf-8")
+PY
+  install -o hamcockpit -g hamcockpit -m 0640 "$tmp" "$dest"
+  rm -f "$tmp"
+  echo ok
+  exit 0
+fi
 
 if [[ "$cmd" == "is-active-all" ]]; then
   ids=(ser2net wavelog wlg mmdvm hamlib spe wifi bluetooth web)
@@ -499,7 +534,7 @@ case "$cmd" in
     systemctl is-active "$unit" 2>/dev/null || echo inactive
     ;;
   *)
-    echo "uso: station-svc is-active-all | list-running | list-containers | container-stop|restart|set-limits NAME … | stop-unit|restart-unit UNIT | enable|disable|start|stop|is-enabled|is-active ID" >&2
+    echo "uso: station-svc is-active-all | list-running | list-containers | container-stop|restart|set-limits NAME … | write-wlg-env | stop-unit|restart-unit UNIT | enable|disable|start|stop|is-enabled|is-active ID" >&2
     exit 1
     ;;
 esac
