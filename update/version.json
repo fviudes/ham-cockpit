@@ -1,8 +1,8 @@
 {
-  "version": "0.1.17.01",
+  "version": "0.1.18",
   "channel": "main",
-  "file": "ham-cockpit-0.1.17.01.tgz",
-  "sha256": "1b9621892a2bbd5ccf4cae525d0ad01547e12a1d8aa9448138f2e0d91ce32b95",
-  "bytes": 5212537,
-  "notes": "OTA 0.1.17.01: corrige loop infinito em apply-hc-voice-tap ao recompilar MMDVMHost (monitor de voz)."
+  "file": "ham-cockpit-0.1.18.tgz",
+  "sha256": "639116183aa748704b043fa14bd81852e2225292e2386fa49daa1a08a2340e62",
+  "bytes": 5212342,
+  "notes": "Ham Cockpit v0.1.18 — imagem: apply-hc-voice-tap sem loop na recompilação do MMDVMHost (monitor MMDVM); demais stack 0.1.17 (tap mbelib, voice unit)."
 }
