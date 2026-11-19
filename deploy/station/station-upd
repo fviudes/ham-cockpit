@@ -432,6 +432,10 @@ apply_app_install() {
     done
     find "$APP_HOME/bin" -maxdepth 1 -type f -exec chmod 0755 {} +
   fi
+  if [[ -d "$src/mmdvm-decode" ]]; then
+    rm -rf "$APP_HOME/mmdvm-decode"
+    cp -a "$src/mmdvm-decode" "$APP_HOME/mmdvm-decode"
+  fi
   if [[ -d "$src/wavelog-gate" ]]; then
     mkdir -p "$APP_HOME/wavelog-gate" /opt/wavelog-gate
     cp -a "$src/wavelog-gate/." "$APP_HOME/wavelog-gate/"

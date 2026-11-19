@@ -54,6 +54,25 @@ safe_install() {
   install "${opts[@]}" "$src" "$dest"
 }
 
+# Árvore já veio no bin/ do pacote OTA (ROOT=/opt/ham-cockpit) — evita cp para o mesmo path.
+safe_copy_tree() {
+  local src="${1:-}" dest="${2:-}"
+  [[ -d "$src" ]] || return 0
+  [[ -n "$dest" ]] || return 0
+  mkdir -p "$(dirname "$dest")"
+  if [[ -e "$dest" && "$src" -ef "$dest" ]]; then
+    return 0
+  fi
+  local s d
+  s="$(readlink -f "$src" 2>/dev/null || realpath "$src" 2>/dev/null || echo "$src")"
+  d="$(readlink -f "$dest" 2>/dev/null || realpath "$dest" 2>/dev/null || echo "$dest")"
+  if [[ "$s" == "$d" ]]; then
+    return 0
+  fi
+  rm -rf "$dest"
+  cp -a "$src" "$dest"
+}
+
 ensure_nginx_upload_limit() {
   local src="$ROOT/nginx-ham-cockpit.conf"
   [[ -f "$src" ]] || return 0
@@ -362,23 +381,15 @@ modprobe snd-aloop 2>/dev/null || true
 chgrp hamcockpit /run/ham-cockpit/mmdvm-monitor.pcm 2>/dev/null || true
 chmod 0660 /run/ham-cockpit/mmdvm-monitor.pcm 2>/dev/null || true
 
-if [[ -d "$ROOT/bin/hc-voice-tap" ]]; then
-  install -d /opt/ham-cockpit/bin/hc-voice-tap
-  cp -a "$ROOT/bin/hc-voice-tap/." /opt/ham-cockpit/bin/hc-voice-tap/
-fi
 if [[ -f "$ROOT/bin/apply-hc-voice-tap.sh" ]]; then
   safe_install -m 0755 "$ROOT/bin/apply-hc-voice-tap.sh" /opt/ham-cockpit/bin/apply-hc-voice-tap.sh
   sed -i 's/\r$//' /opt/ham-cockpit/bin/apply-hc-voice-tap.sh 2>/dev/null || true
 fi
 
 ensure_hc_mmdvm_decode() {
-  if [[ -d "$ROOT/mmdvm-decode" ]]; then
-    rm -rf /opt/ham-cockpit/mmdvm-decode
-    mkdir -p /opt/ham-cockpit
-    cp -a "$ROOT/mmdvm-decode" /opt/ham-cockpit/mmdvm-decode
-  fi
+  safe_copy_tree "$ROOT/mmdvm-decode" /opt/ham-cockpit/mmdvm-decode
   if [[ -f "$ROOT/bin/build-hc-mmdvm-decode.sh" ]]; then
-    install -m 0755 "$ROOT/bin/build-hc-mmdvm-decode.sh" /opt/ham-cockpit/bin/build-hc-mmdvm-decode.sh
+    safe_install -m 0755 "$ROOT/bin/build-hc-mmdvm-decode.sh" /opt/ham-cockpit/bin/build-hc-mmdvm-decode.sh
     sed -i 's/\r$//' /opt/ham-cockpit/bin/build-hc-mmdvm-decode.sh 2>/dev/null || true
   fi
   if [[ -x /opt/ham-cockpit/bin/hc-mmdvm-decode ]]; then
