@@ -2,7 +2,7 @@
 
 Pasta **pública** lida pelo card **Ham Cockpit** em Admin → Atualização.
 
-Versão atual neste canal: **0.1.19.02** (`version.json`).
+Versão atual neste canal: **0.1.20** (`version.json`).
 
 ## Versionamento
 
@@ -22,12 +22,12 @@ Cada pacote OTA é **cumulativo**: substitui o console inteiro. Basta aplicar a 
 
 ```json
 {
-  "version": "0.1.19.02",
+  "version": "0.1.20",
   "channel": "main",
-  "file": "ham-cockpit-0.1.19.02.tgz",
-  "sha256": "8a5226aa1c2b95df8d6b34e436e39911becac3ec5552ba613aaa16aa7e41d2b8",
-  "bytes": 5216820,
-  "notes": "OTA 0.1.19.02: a página MMDVM não cai com HTTP 500 quando o modo dstar não vem no status."
+  "file": "ham-cockpit-0.1.20.tgz",
+  "sha256": "9f09496408450b66f2a2c333630b0e5fa1fab95c6f19b10f3f3253c25f82fb81",
+  "bytes": 5217811,
+  "notes": "OTA 0.1.20: monitor do MMDVM toca a voz decodificada no PC; monitor do rádio assume o alto-falante e desliga o do MMDVM."
 }
 ```
 

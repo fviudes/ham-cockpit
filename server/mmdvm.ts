@@ -82,7 +82,10 @@ const MODE_INI: Record<MmdvmMode, { section: string; net: string }> = {
 export type MmdvmHeard = {
   timeUtc: string;
   mode: string;
+  /** Indicativo da estação, sem o sufixo de rádio do header. Vazio se só veio o equipamento. */
   callsign: string;
+  /** Equipamento do header (MyCall2 / sufixo), no formato `/ID51`. Vazio se não houver. */
+  radio: string;
   target: string;
   src: "RF" | "Net";
   duration: string;
@@ -99,6 +102,8 @@ export type MmdvmNextionQso = {
   slot: number | null;
   src: "RF" | "Net";
   callsign: string;
+  /** Mesmo sufixo de equipamento de `MmdvmHeard.radio`. */
+  radio: string;
   name: string;
   target: string;
   tgName: string;
@@ -853,7 +858,8 @@ function logDate(offsetSec = 0): string {
 }
 
 function readLogTail(dir: string, prefix: string, maxBytes = 400_000): string {
-  const names = [`${prefix}-${logDate()}.log`, `${prefix}-${logDate(86_340)}.log`];
+  // Ontem primeiro e hoje depois: parseLastHeard inverte a lista e o log de hoje fica no topo.
+  const names = [`${prefix}-${logDate(86_340)}.log`, `${prefix}-${logDate()}.log`];
   let buf = "";
   for (const name of names) {
     const path = join(dir, name);
@@ -1014,6 +1020,88 @@ function modeGatewayTarget(mode: MmdvmMode): GwUnit | "host" {
   return "host";
 }
 
+const HEARD_OPS_SUFFIX = /^(?:P|M|MM|AM|QRP|A|B|AA|[0-9])$/;
+/** Modelos que o header D-Star/YSF cola no indicativo (MyCall2): ID51, IC92, 7100, FT5D, … */
+const HEARD_RADIO_MODEL =
+  /^(?:ID\d{2,4}[A-Z]?|IC\d{2,4}[A-Z]?|ICOM\d*|THD?\d{2,3}|D7[0-9]|FT\d[A-Z0-9]{0,4}|FTM\d{2,4}[A-Z0-9]*|VX\d[A-Z0-9]{0,4}|\d{3,4}[A-Z]?)$/;
+
+function isRadioModel(token: string): boolean {
+  const u = token.toUpperCase().replace(/[\s-]/g, "").replace(/^\/+/, "");
+  return Boolean(u) && HEARD_RADIO_MODEL.test(u);
+}
+
+/** Indicativo de estação: tem dígito, termina em letra e não é modelo de rádio. */
+function isStationCall(token: string): boolean {
+  const u = token.toUpperCase();
+  if (!/^[A-Z0-9]{3,8}$/.test(u)) return false;
+  if (!/[A-Z]$/.test(u) || !/\d/.test(u)) return false;
+  if (isRadioModel(u)) return false;
+  return true;
+}
+
+function formatRadioSuffix(token: string): string {
+  const t = token.toUpperCase().replace(/\s+/g, "").replace(/^\/+/, "");
+  return t ? `/${t}` : "";
+}
+
+/**
+ * Separa o indicativo do sufixo de rádio no campo "from" do log MMDVM.
+ * `PU2ABC/ID51` e `PR2PT /7100` viram indicativo + `/ID51` ou `/7100`.
+ * Sufixo sozinho (`/IC92`, `ID52`) não inventa indicativo.
+ * Sufixo operacional (`/P`, `/M`, `/2`) permanece no indicativo.
+ * ID DMR numérico seguido de indicativo (`7240001/PU2ABC`) fica só com o indicativo.
+ */
+export function splitHeardIdentity(raw: string): { callsign: string; radio: string } {
+  let text = raw.replace(/\s+/g, " ").trim();
+  text = text.replace(/\s+via\s+.*$/i, "").trim();
+  if (!text || text.includes("??????")) return { callsign: "", radio: "" };
+
+  const spaced = text.toUpperCase().match(/^([A-Z0-9]{3,8})\s+(\/?[A-Z0-9-]{2,10})$/);
+  if (spaced && !text.includes("/")) {
+    const head = spaced[1]!;
+    const tail = spaced[2]!.replace(/^\/+/, "");
+    if (isStationCall(head) && (isRadioModel(tail) || /^\d{3,4}$/.test(tail))) {
+      return { callsign: head, radio: formatRadioSuffix(tail) };
+    }
+  }
+
+  const glued = text.replace(/\s*\/\s*/g, "/").toUpperCase();
+  const parts = glued.split("/");
+  const head = (parts[0] ?? "").trim();
+  const tails = parts
+    .slice(1)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  if (tails.length === 0) {
+    if (isRadioModel(head)) return { callsign: "", radio: formatRadioSuffix(head) };
+    return { callsign: head, radio: "" };
+  }
+
+  const tail = tails.join("/");
+  if (/^\d{5,8}$/.test(head) && tails.length === 1 && isStationCall(tails[0]!)) {
+    return { callsign: tails[0]!, radio: "" };
+  }
+
+  if (isStationCall(head)) {
+    if (tails.length === 1 && HEARD_OPS_SUFFIX.test(tails[0]!)) {
+      return { callsign: `${head}/${tails[0]}`, radio: "" };
+    }
+    if (tails.every((t) => isStationCall(t))) {
+      return { callsign: `${head}/${tails.join("/")}`, radio: "" };
+    }
+    return { callsign: head, radio: formatRadioSuffix(tail) };
+  }
+
+  if (!head) {
+    if (tails.length === 1 && isStationCall(tails[0]!)) return { callsign: tails[0]!, radio: "" };
+    return { callsign: "", radio: formatRadioSuffix(tail) };
+  }
+
+  if (isRadioModel(head)) return { callsign: "", radio: formatRadioSuffix(head) };
+  return { callsign: glued, radio: "" };
+}
+
 /** Últimas recepções do log MMDVM (mais nova no topo). */
 export function parseLastHeard(logText: string, limit = 20): MmdvmHeard[] {
   const lines = logText.split(/\r?\n/).filter(Boolean);
@@ -1090,10 +1178,9 @@ export function parseLastHeard(logText: string, limit = 20): MmdvmHeard[] {
       mode === "POCSAG";
     if (!modeOk) continue;
 
-    let callsign = line.slice(fromPos + 5, toPos).trim();
-    if (callsign.includes("/")) callsign = callsign.split("/").pop()!.trim();
-    if (callsign.includes("/")) callsign = callsign.split("/")[0]!.trim();
-    if (!callsign || callsign === "??????" || callsign.length >= 11) continue;
+    const rawIdent = line.slice(fromPos + 5, toPos).trim();
+    const ident = splitHeardIdentity(rawIdent);
+    if ((!ident.callsign && !ident.radio) || ident.callsign.length >= 11) continue;
 
     let target = line.slice(toPos + 4).trim().replace(/ - Name.*/, "");
     target = target.split(",")[0]!.trim();
@@ -1107,7 +1194,8 @@ export function parseLastHeard(logText: string, limit = 20): MmdvmHeard[] {
     heard.push({
       timeUtc,
       mode,
-      callsign,
+      callsign: ident.callsign,
+      radio: ident.radio,
       target,
       src,
       duration: metrics.duration,
@@ -1337,6 +1425,7 @@ function toQso(row: MmdvmHeard): MmdvmNextionQso {
     slot: heardSlot(row.mode),
     src: row.src,
     callsign: row.callsign,
+    radio: row.radio,
     name: lookupUser(row.callsign),
     target: row.target,
     tgName: lookupGroup(row.target),
@@ -1351,7 +1440,11 @@ async function buildNextion(cfg: MmdvmConfig, heard: MmdvmHeard[], hostRunning: 
   const page = hostRunning && live[0] ? heardPage(live[0].mode) : "idle";
   let status = "MMDVM IDLE";
   if (!hostRunning) status = "MMDVM IDLE";
-  else if (live[0]) status = `${live[0].src === "RF" ? "RF" : "net"} ${live[0].callsign}`;
+  else if (live[0]) {
+    const who = live[0].callsign || live[0].radio;
+    const rig = live[0].callsign && live[0].radio ? ` ${live[0].radio}` : "";
+    status = `${live[0].src === "RF" ? "RF" : "net"} ${who}${rig}`.trim();
+  }
   let cpuTempC: number | null = null;
   let diskFreePct: number | null = null;
   if (linux()) {

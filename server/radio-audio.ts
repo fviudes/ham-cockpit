@@ -134,6 +134,40 @@ function releaseStaleCapture() {
   if (captureReserved && captureReserved !== "digital" && captureReserved.readyState !== WebSocket.OPEN) captureReserved = null;
 }
 
+/** Troca só o dono do websocket. A captura que já está no ar continua. */
+function handoffPcAudio(next: WebSocket) {
+  const prev = captureOwner;
+  captureOwner = next;
+  if (prev && prev !== next && prev.readyState === WebSocket.OPEN) {
+    try {
+      prev.close();
+    } catch {
+      /* a sessão antiga já caiu */
+    }
+  }
+  next.on("close", () => {
+    if (captureOwner === next) {
+      if (captureKind === "mmdvm") killChild();
+      else stopSocketCapture();
+    }
+  });
+}
+
+/** O clique novo fica com o alto-falante. A sessão anterior não deixa o botão desligado. */
+function takeOverPcAudio(next: WebSocket) {
+  const prev = captureOwner;
+  if (prev && prev !== next && prev.readyState === WebSocket.OPEN) {
+    try {
+      prev.close();
+    } catch {
+      /* a sessão antiga já caiu */
+    }
+  }
+  captureOwner = null;
+  if (captureReserved && captureReserved !== "digital" && captureReserved !== next) captureReserved = null;
+  if (capture) killChild();
+}
+
 function fanPcm(chunk: Buffer) {
   if (!pcmSink && !captureOwner && taps.size === 0) return;
   pcmSink?.(chunk);
@@ -175,6 +209,13 @@ function wireCaptureChild(
     if (capture === child) killChild();
     if (owner && owner.readyState === WebSocket.OPEN) owner.close();
   };
+  // O botão do console espera esta mensagem para ficar ligado. Sem amostra
+  // (rádio em silêncio ou FIFO do MMDVM ainda sem voz) ela não pode depender do stdout.
+  child.on("spawn", () => {
+    if (capture !== child || announced) return;
+    announced = true;
+    fanFormat();
+  });
   child.on("error", () => fail(failReason));
   child.stderr?.on("data", (chunk: Buffer) => {
     const text = chunk.toString("utf8");
@@ -343,23 +384,30 @@ async function bindRadioAudio(ws: WebSocket, role: "pc-audio" | "tap", source: "
     }
     return;
   }
-  if (capture && captureOwner && captureOwner !== ws) {
-    sendJson(ws, { type: "error", reason: "busy" });
-    ws.close();
-    return;
-  }
-  if (source === "radio" && (digitalWanted || captureKind === "digital")) {
+  if (source === "radio" && (digitalWanted || captureKind === "digital") && capture) {
     attachTap(ws);
+    if (announced) sendJson(ws, formatAnnounced);
     return;
   }
   if (source === "mmdvm" && captureKind === "mmdvm" && capture) {
-    attachTap(ws);
+    handoffPcAudio(ws);
+    if (announced) sendJson(ws, formatAnnounced);
     return;
   }
   if (source === "radio" && captureKind === "socket" && capture) {
-    attachTap(ws);
+    handoffPcAudio(ws);
+    if (announced) sendJson(ws, formatAnnounced);
     return;
   }
+  if (source === "radio" && capture && captureKind === "mmdvm") {
+    const listing = await listCapture();
+    if (!pickAlsaCapture(listing)) {
+      sendJson(ws, { type: "error", reason: "no-device" });
+      ws.close();
+      return;
+    }
+  }
+  takeOverPcAudio(ws);
   if (source === "mmdvm" && capture && captureKind !== "mmdvm") {
     stopSocketCapture();
     killChild();

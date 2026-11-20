@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { PanelMonitorButton } from "./panel-monitor-button";
 import { usePcMonitorPanel } from "./use-pc-monitor-panel";
+import { HeardCall } from "./mmdvm-heard-call";
 import { useConsole } from "./state";
 import { Lcd, PanelTitle } from "./widgets";
 
@@ -9,6 +10,7 @@ type Qso = {
   slot: number | null;
   src: "RF" | "Net";
   callsign: string;
+  radio?: string;
   name: string;
   target: string;
   tgName: string;
@@ -158,7 +160,7 @@ export function NextionViz() {
             on={mmdvmMon.on}
             busy={mmdvmMon.busy}
             onClick={() => void mmdvmMon.toggle()}
-            title={mmdvmMon.on ? "pcMonitorOn" : hatMode?.id === "idle" ? "pcMonitorMmdvmNoDecoder" : "pcMonitorMmdvmMode"}
+            title={mmdvmMon.hint}
           />
         }
       >
@@ -217,7 +219,8 @@ export function NextionViz() {
               {qso.map((q, i) => (
                 <div key={`${q.slot}-${q.callsign}-${i}`} className={i > 0 ? "mt-2 border-t border-[#0c2236] pt-2" : ""}>
                   <p className="text-sm font-semibold text-[#ffb300]">
-                    {q.slot ?? i + 1} {q.src === "RF" ? "RF" : "net"} {q.callsign}
+                    {q.slot ?? i + 1} {q.src === "RF" ? "RF" : "net"}{" "}
+                    <HeardCall callsign={q.callsign} radio={q.radio} />
                   </p>
                   <p className="text-[12px] text-[#4fc3f7]">{q.target || " "}</p>
                   {q.name ? <p className="truncate text-[12px] text-[#e8eef4]">{q.name}</p> : null}

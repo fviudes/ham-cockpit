@@ -307,6 +307,8 @@ if [[ -x /opt/ham-cockpit/bin/build-hc-mmdvm-decode.sh ]]; then
     || echo "install: AVISO — hc-mmdvm-decode não compilou (mbelib na primeira boot)"
 fi
 sed -i 's/\r$//' /opt/ham-cockpit/bin/hc-mmdvm-voice-pump.sh /opt/ham-cockpit/bin/mmdvm-pc-audio.sh 2>/dev/null || true
+systemctl enable ham-cockpit-mmdvm-voice.service 2>/dev/null || true
+systemctl restart ham-cockpit-mmdvm-voice.service 2>/dev/null || true
 mkdir -p /etc/modules-load.d
 grep -qxF 'snd-aloop' /etc/modules-load.d/ham-cockpit-mmdvm-monitor.conf 2>/dev/null \
   || printf '%s\n' 'snd-aloop' >/etc/modules-load.d/ham-cockpit-mmdvm-monitor.conf

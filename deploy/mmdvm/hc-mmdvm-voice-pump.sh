@@ -16,10 +16,12 @@ fi
 chgrp hamcockpit "$FIFO" 2>/dev/null || true
 chmod 0660 "$FIFO" 2>/dev/null || true
 
-if [[ -x "$DEC" ]] && file "$DEC" 2>/dev/null | grep -qi ELF; then
-  exec "$DEC" --fifo "$FIFO" --state "$STATE"
-fi
-
-echo "hc-mmdvm-voice: aguardando hc-mmdvm-decode em $DEC (FIFO $FIFO criado)" >&2
-# Mantém o unit vivo sem consumir o FIFO (só o decoder e o arecord/cat do console leem).
-while sleep 3600; do :; done
+# O binário pode aparecer depois do OTA. Enquanto isso o FIFO fica intacto
+# para o cat do console. Quando o ELF existe, este processo vira o decoder.
+while true; do
+  if [[ -x "$DEC" ]] && file "$DEC" 2>/dev/null | grep -qi ELF; then
+    exec "$DEC" --fifo "$FIFO" --state "$STATE"
+  fi
+  echo "hc-mmdvm-voice: aguardando hc-mmdvm-decode em $DEC" >&2
+  sleep 15
+done

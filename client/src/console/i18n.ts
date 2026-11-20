@@ -7,7 +7,7 @@ const dict = {
   pt: {
     brand: "Ham Cockpit",
     tagline: "Gateway da estação",
-    version: "v0.1.19.02",
+    version: "v0.1.20",
     vfoHdmiExit: "Tecle CTRL+X para sair para o console",
     loginTitle: "Acessar o console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -123,7 +123,10 @@ const dict = {
     pcMonitorOn: "Monitor de áudio ativo neste computador",
     pcMonitorMmdvmNoDecoder:
       "Sem PCM decodificado do MMDVM — configure loopback ALSA, FIFO /run/ham-cockpit/mmdvm-monitor.pcm ou dongle AMBE",
-    pcMonitorMmdvmMode: "Ouvir voz decodificada do protocolo ativo do HAT no alto-falante deste computador",
+    pcMonitorRadioMode:
+      "Ouvir o áudio USB do rádio neste computador. O monitor do MMDVM desliga.",
+    pcMonitorMmdvmMode:
+      "Ouvir a voz decodificada do MMDVM neste computador. O monitor do rádio desliga.",
     mmdvmHatProtocol: "Protocolo no HAT",
     mmdvmHatIdle: "Inativo / ocioso",
     mmdvmHatPaused: "gateway pausado",
@@ -1015,7 +1018,7 @@ const dict = {
   en: {
     brand: "Ham Cockpit",
     tagline: "Station gateway",
-    version: "v0.1.19.02",
+    version: "v0.1.20",
     vfoHdmiExit: "Press CTRL+X to return to the console",
     loginTitle: "Sign in to the console",
     loginHint: "SSID Ham-Cockpit-A4F2 · 192.168.4.1",
@@ -1131,7 +1134,10 @@ const dict = {
     pcMonitorOn: "Audio monitor active on this computer",
     pcMonitorMmdvmNoDecoder:
       "No decoded MMDVM PCM — set up ALSA loopback, FIFO /run/ham-cockpit/mmdvm-monitor.pcm, or an AMBE dongle",
-    pcMonitorMmdvmMode: "Play decoded voice from the HAT's active protocol on this computer's speakers",
+    pcMonitorRadioMode:
+      "Play the radio USB audio on this computer. Turns the MMDVM monitor off.",
+    pcMonitorMmdvmMode:
+      "Play decoded MMDVM voice on this computer. Turns the radio monitor off.",
     mmdvmHatProtocol: "HAT protocol",
     mmdvmHatIdle: "Idle",
     mmdvmHatPaused: "gateway paused",

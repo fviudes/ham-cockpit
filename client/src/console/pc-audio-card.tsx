@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 import type { I18nKey } from "@/console/i18n";
 import { useConsole } from "@/console/state";
 import { PcAudioPlayer, type PcAudioStart } from "@/console/pc-audio";
-import { getPcMonitor, setPcMonitor, subscribePcMonitor } from "@/console/pc-monitor-bus";
+import { getPcMonitor, setPcMonitor, subscribePcMonitor, type PcMonitorSource } from "@/console/pc-monitor-bus";
 import { readPcVolume, stepPcVolume } from "@shared/pc-audio";
 
 const VOL_KEY = "hc-pc-audio-vol";
@@ -31,7 +31,8 @@ function hintFor(result: PcAudioStart): I18nKey {
 export function PcAudioCard() {
   const { tx } = useConsole();
   const monitor = useSyncExternalStore(subscribePcMonitor, getPcMonitor, getPcMonitor);
-  const on = monitor === "radio";
+  const [owned, setOwned] = useState<PcMonitorSource | null>(null);
+  const on = owned !== null && monitor === owned;
   const [busy, setBusy] = useState(false);
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(readVolume);
@@ -40,7 +41,15 @@ export function PcAudioCard() {
   const btnRef = useRef<HTMLButtonElement>(null);
   const [barW, setBarW] = useState(0);
   const playerRef = useRef<PcAudioPlayer | null>(null);
-  if (!playerRef.current) playerRef.current = new PcAudioPlayer(readVolume());
+  if (!playerRef.current) {
+    const player = new PcAudioPlayer(readVolume());
+    player.setOnDrop(() => {
+      setOwned(null);
+      setPcMonitor(null);
+      setHint("pcAudioNone");
+    });
+    playerRef.current = player;
+  }
 
   useEffect(() => {
     const player = playerRef.current;
@@ -80,16 +89,23 @@ export function PcAudioCard() {
   useEffect(() => {
     const player = playerRef.current;
     if (!player) return;
-    if (monitor !== "radio") {
+    if (monitor === null) {
+      setOwned(null);
       player.stop();
-      if (monitor === null) setHint("pcAudioOff");
+      setHint("pcAudioOff");
+      return;
     }
-  }, [monitor]);
+    if (owned && monitor !== owned) {
+      setOwned(null);
+      player.stop();
+    }
+  }, [monitor, owned]);
 
   async function toggle() {
     const player = playerRef.current;
     if (!player || busy) return;
     if (on) {
+      setOwned(null);
       player.stop();
       setPcMonitor(null);
       setHint("pcAudioOff");
@@ -98,15 +114,23 @@ export function PcAudioCard() {
     setBusy(true);
     setHint("pcAudioWait");
     try {
-      const result = await player.start();
+      let source: PcMonitorSource = "radio";
+      let result = await player.start("radio");
+      if (!result.ok && (result.reason === "no-device" || result.reason === "busy")) {
+        source = "mmdvm";
+        result = await player.start("mmdvm");
+      }
       if (!result.ok) {
+        setOwned(null);
         setPcMonitor(null);
-        setHint(hintFor(result));
+        setHint(result.reason === "no-decoder" ? "pcMonitorMmdvmNoDecoder" : hintFor(result));
         return;
       }
-      setPcMonitor("radio");
-      setHint(hintFor(result));
+      setOwned(source);
+      setPcMonitor(source);
+      setHint(source === "mmdvm" ? "pcMonitorMmdvmMode" : hintFor(result));
     } catch {
+      setOwned(null);
       setPcMonitor(null);
       setHint("pcAudioNone");
     } finally {

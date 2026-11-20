@@ -12,13 +12,13 @@ function hintFor(result: PcAudioStart, source: PcMonitorSource): I18nKey {
     if (result.reason === "no-decoder") return "pcMonitorMmdvmNoDecoder";
     return "pcAudioNone";
   }
-  return source === "mmdvm" ? "pcMonitorMmdvmMode" : "pcMonitorOn";
+  return source === "mmdvm" ? "pcMonitorMmdvmMode" : "pcMonitorRadioMode";
 }
 
 /** Monitor de áudio exclusivo no card do Painel (rádio ou MMDVM). */
 export function usePcMonitorPanel(source: PcMonitorSource) {
   const [busy, setBusy] = useState(false);
-  const [hint, setHint] = useState<I18nKey>("pcMonitorOff");
+  const [hint, setHint] = useState<I18nKey>(source === "mmdvm" ? "pcMonitorMmdvmMode" : "pcMonitorRadioMode");
   const playerRef = useRef<PcAudioPlayer | null>(null);
   if (!playerRef.current) {
     let vol = 6;
@@ -40,7 +40,7 @@ export function usePcMonitorPanel(source: PcMonitorSource) {
     if (!player) return;
     if (active !== source) {
       player.stop();
-      if (active === null) setHint("pcMonitorOff");
+      setHint(source === "mmdvm" ? "pcMonitorMmdvmMode" : "pcMonitorRadioMode");
     }
   }, [active, source]);
 
@@ -58,7 +58,7 @@ export function usePcMonitorPanel(source: PcMonitorSource) {
     try {
       const result = await player.start();
       if (!result.ok) {
-        setPcMonitor(null);
+        if (getPcMonitor() === null || getPcMonitor() === source) setPcMonitor(null);
         setHint(hintFor(result, source));
         return;
       }

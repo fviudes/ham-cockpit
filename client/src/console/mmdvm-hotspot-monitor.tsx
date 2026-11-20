@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useConsole } from "./state";
 import { GhostBtn, Lcd, PageHead, Panel, PanelTitle } from "./widgets";
 import type { I18nKey } from "./i18n";
+import { HeardCall } from "./mmdvm-heard-call";
 import type { Heard, MmdvmApi } from "./mmdvm-types";
 
 function StatusTile({ label, value, on, amber }: { label: string; value: string; on?: boolean; amber?: boolean }) {
@@ -101,7 +102,14 @@ export function MmdvmHotspotMonitorPage() {
           <Lcd className="mb-3">
             <p className="text-[11px] tracking-widest text-[#4fc3f7]/70 uppercase">{tx("mmdvmLive")}</p>
             <p className="mt-1 text-lg text-[#7ee0ff]">
-              {heard[0] ? `${heard[0].callsign} → ${heard[0].target} · ${heard[0].mode}` : tx("mmdvmEmptyHeard")}
+              {heard[0] ? (
+                <>
+                  <HeardCall callsign={heard[0].callsign} radio={heard[0].radio} />
+                  {` → ${heard[0].target} · ${heard[0].mode}`}
+                </>
+              ) : (
+                tx("mmdvmEmptyHeard")
+              )}
             </p>
           </Lcd>
           <HeardTable heard={heard} tx={tx} hostRunning={st?.hostRunning} liveTx={st?.tx} />
@@ -129,9 +137,9 @@ function HeardTable({
         <thead className="text-[11px] tracking-wide text-[#ffb300] uppercase">
           <tr>
             <th className="w-[14%] py-1.5">{tx("mmdvmColTime")}</th>
-            <th className="w-[16%]">{tx("mmdvmColCall")}</th>
-            <th className="w-[16%]">{tx("mode")}</th>
-            <th className="w-[22%]">{tx("mmdvmColTarget")}</th>
+            <th className="w-[22%]">{tx("mmdvmColCall")}</th>
+            <th className="w-[14%]">{tx("mode")}</th>
+            <th className="w-[18%]">{tx("mmdvmColTarget")}</th>
             <th className="w-[10%]">{tx("mmdvmColSrc")}</th>
             <th className="w-[11%]">{tx("mmdvmColDur")}</th>
             <th className="w-[11%]">{tx("mmdvmColLoss")}</th>
@@ -142,7 +150,9 @@ function HeardTable({
             row ? (
               <tr key={`${row.timeUtc}-${row.callsign}-${i}`} className="border-t border-[rgba(79,195,247,0.08)]">
                 <td className="truncate py-1 text-[#8ea0b3]">{row.timeUtc.slice(11)}</td>
-                <td className="truncate text-[#4fc3f7]">{row.callsign}</td>
+                <td className="truncate text-[#4fc3f7]">
+                  <HeardCall callsign={row.callsign} radio={row.radio} />
+                </td>
                 <td className="truncate">{row.mode}</td>
                 <td className="truncate">{row.target}</td>
                 <td className={row.src === "RF" ? "text-[#ffb300]" : "text-[#34d399]"}>{row.src}</td>

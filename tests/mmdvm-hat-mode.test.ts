@@ -35,6 +35,7 @@ describe("resolveHatActiveMode", () => {
         timeUtc: "2026-03-28 12:00:00",
         mode: "YSF",
         callsign: "PY2ABC",
+        radio: "",
         target: "BR",
         src: "Net" as const,
         duration: "",

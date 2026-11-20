@@ -9,9 +9,18 @@ set -euo pipefail
 FIFO=/run/ham-cockpit/mmdvm-monitor.pcm
 RATE=48000
 
-if [[ -p "$FIFO" ]]; then
-  exec cat "$FIFO"
-fi
+# Sem o FIFO o script saía na hora e o botão PC Audio apagava.
+# Cria (ou espera o serviço de voz criar) e fica bloqueado até chegar PCM.
+mkdir -p "$(dirname "$FIFO")" 2>/dev/null || true
+for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+  if [[ ! -p "$FIFO" ]]; then
+    mkfifo "$FIFO" 2>/dev/null || true
+  fi
+  if [[ -p "$FIFO" ]]; then
+    exec cat "$FIFO"
+  fi
+  sleep 0.2
+done
 
 if command -v arecord >/dev/null 2>&1 && arecord -l 2>/dev/null | grep -qi loopback; then
   exec arecord -q -D plughw:Loopback,1 -f S16_LE -r "$RATE" -c 1 -t raw

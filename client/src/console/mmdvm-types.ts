@@ -17,6 +17,8 @@ export type Heard = {
   timeUtc: string;
   mode: string;
   callsign: string;
+  /** Sufixo de equipamento (`/ID51`, `/7100`). Ausente em snapshots antigos. */
+  radio?: string;
   target: string;
   src: "RF" | "Net";
   duration: string;

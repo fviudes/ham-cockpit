@@ -503,12 +503,18 @@ ensure_hc_mmdvm_decode() {
     return 0
   fi
   if [[ "${HC_OTA_APPLY:-}" == "1" ]]; then
-    schedule_ota_background "hc-mmdvm-decode (mbelib)" bash "$script"
+    schedule_ota_background "hc-mmdvm-decode (mbelib)" \
+      bash -c "bash $(printf '%q' "$script") && systemctl restart ham-cockpit-mmdvm-voice.service"
     return 0
   fi
   bash "$script" || echo "ota-hooks: AVISO — hc-mmdvm-decode não compilou" >&2
 }
 ensure_hc_mmdvm_decode || true
+
+if [[ -f /etc/systemd/system/ham-cockpit-mmdvm-voice.service ]]; then
+  systemctl enable ham-cockpit-mmdvm-voice.service 2>/dev/null || true
+  systemctl restart ham-cockpit-mmdvm-voice.service 2>/dev/null || true
+fi
 
 if [[ -d "$ROOT/bin" ]]; then
   find "$ROOT/bin" -maxdepth 1 -type f -exec chmod 0755 {} +

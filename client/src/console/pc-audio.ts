@@ -20,6 +20,8 @@ export class PcAudioPlayer {
   private generation = 0;
   private sampleRate = 48000;
   private muted = false;
+  private userStop = false;
+  private drop: ((reason: "no-device" | "no-decoder" | "busy" | "auth") => void) | null = null;
 
   constructor(
     private volume = 6,
@@ -40,7 +42,13 @@ export class PcAudioPlayer {
     if (this.gain) this.gain.gain.value = this.muted ? 0 : pcVolumeGain(this.volume);
   }
 
+  /** A captura caiu depois de ligar. O botão do menu precisa apagar. */
+  setOnDrop(fn: ((reason: "no-device" | "no-decoder" | "busy" | "auth") => void) | null) {
+    this.drop = fn;
+  }
+
   stop() {
+    this.userStop = true;
     this.generation += 1;
     this.ws?.close();
     this.ws = null;
@@ -51,8 +59,10 @@ export class PcAudioPlayer {
     void ctx?.close();
   }
 
-  async start(): Promise<PcAudioStart> {
+  async start(source?: PcMonitorSource): Promise<PcAudioStart> {
+    if (source) this.source = source;
     this.stop();
+    this.userStop = false;
     const gen = this.generation;
     this.arm();
     const sink = await this.chooseOutput();
@@ -68,6 +78,7 @@ export class PcAudioPlayer {
     this.stop();
     if (station === "auth") return { ok: false, reason: "auth" };
     if (station === "busy") return { ok: false, reason: "busy" };
+    if (station === "no-decoder") return { ok: false, reason: "no-decoder" };
     return { ok: false, reason: "no-device" };
   }
 
@@ -147,7 +158,7 @@ export class PcAudioPlayer {
       const timer = window.setTimeout(() => {
         this.ws?.close();
         finish("no-device");
-      }, 2500);
+      }, 8000);
       let socket: WebSocket;
       try {
         const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -176,7 +187,8 @@ export class PcAudioPlayer {
               msg.reason === "auth" || msg.reason === "busy" || msg.reason === "no-decoder"
                 ? msg.reason
                 : "no-device";
-            finish(reason);
+            if (settled) this.drop?.(reason);
+            else finish(reason);
             socket.close();
             return;
           }
@@ -190,7 +202,9 @@ export class PcAudioPlayer {
       };
       socket.onerror = () => finish("no-device");
       socket.onclose = () => {
+        if (gen !== this.generation) return;
         if (!settled) finish("no-device");
+        else if (!this.userStop) this.drop?.("no-device");
       };
     });
   }
